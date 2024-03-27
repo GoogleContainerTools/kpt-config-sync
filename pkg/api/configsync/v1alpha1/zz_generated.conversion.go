@@ -532,6 +532,7 @@ func autoConvert_v1alpha1_HelmBase_To_v1beta1_HelmBase(in *HelmBase, out *v1beta
 	out.Auth = configsync.AuthType(in.Auth)
 	out.GCPServiceAccountEmail = in.GCPServiceAccountEmail
 	out.SecretRef = (*v1beta1.SecretReference)(unsafe.Pointer(in.SecretRef))
+	out.CACertSecretRef = (*v1beta1.SecretReference)(unsafe.Pointer(in.CACertSecretRef))
 	return nil
 }
 
@@ -552,6 +553,7 @@ func autoConvert_v1beta1_HelmBase_To_v1alpha1_HelmBase(in *v1beta1.HelmBase, out
 	out.Auth = configsync.AuthType(in.Auth)
 	out.GCPServiceAccountEmail = in.GCPServiceAccountEmail
 	out.SecretRef = (*SecretReference)(unsafe.Pointer(in.SecretRef))
+	out.CACertSecretRef = (*SecretReference)(unsafe.Pointer(in.CACertSecretRef))
 	return nil
 }
 
@@ -632,6 +634,7 @@ func autoConvert_v1alpha1_Oci_To_v1beta1_Oci(in *Oci, out *v1beta1.Oci, s conver
 	out.Period = in.Period
 	out.Auth = configsync.AuthType(in.Auth)
 	out.GCPServiceAccountEmail = in.GCPServiceAccountEmail
+	out.CACertSecretRef = (*v1beta1.SecretReference)(unsafe.Pointer(in.CACertSecretRef))
 	return nil
 }
 
@@ -646,6 +649,7 @@ func autoConvert_v1beta1_Oci_To_v1alpha1_Oci(in *v1beta1.Oci, out *Oci, s conver
 	out.Period = in.Period
 	out.Auth = configsync.AuthType(in.Auth)
 	out.GCPServiceAccountEmail = in.GCPServiceAccountEmail
+	out.CACertSecretRef = (*SecretReference)(unsafe.Pointer(in.CACertSecretRef))
 	return nil
 }
 

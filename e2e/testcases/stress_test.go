@@ -26,11 +26,13 @@ import (
 	v1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
+	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/iam"
@@ -44,7 +46,9 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
+	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
@@ -224,9 +228,34 @@ func TestStressLargeRequest(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	rootSyncFilePath := "../testdata/root-sync-crontab-crs.yaml"
-	nt.T.Logf("Apply the RootSync object defined in %s", rootSyncFilePath)
-	nt.MustKubectl("apply", "-f", rootSyncFilePath)
+	rootSync := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	reconcilerOverride := v1beta1.ContainerResourcesSpec{
+		ContainerName: reconcilermanager.Reconciler,
+		MemoryLimit:   resource.MustParse("1500Mi"),
+	}
+	if *e2e.GKEAutopilot {
+		reconcilerOverride.MemoryRequest = resource.MustParse("1500Mi")
+	}
+	rootSync.Spec = v1beta1.RootSyncSpec{
+		SourceFormat: string(filesystem.SourceFormatUnstructured),
+		Git: &v1beta1.Git{
+			Repo:      "https://github.com/config-sync-examples/crontab-crs",
+			Branch:    "main",
+			Dir:       "configs",
+			Auth:      configsync.AuthNone,
+			SecretRef: nil,
+		},
+		Override: &v1beta1.RootSyncOverrideSpec{
+			OverrideSpec: v1beta1.OverrideSpec{
+				StatusMode: applier.StatusDisabled,
+				Resources:  []v1beta1.ContainerResourcesSpec{reconcilerOverride},
+			},
+		},
+	}
+	nt.T.Logf("Apply the RootSync object to sync to %s", rootSync.Spec.Git.Repo)
+	if err := nt.KubeClient.Apply(rootSync); err != nil {
+		nt.T.Fatal(err)
+	}
 
 	nt.T.Logf("Verify that the source errors are truncated")
 	err = nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), "root-sync", configmanagement.ControllerNamespace,

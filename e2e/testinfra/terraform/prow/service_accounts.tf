@@ -38,8 +38,8 @@ resource "google_service_account_iam_member" "admin-account-iam" {
   member             = "serviceAccount:e2e-test-runner@oss-prow-build-kpt-config-sync.iam.gserviceaccount.com"
 }
 
-# Grant source reader permissions to the RootSync's KSA with Fleet workload identity.
-resource "google_project_iam_member" "root-reconciler-fwi-sa-iam" {
+# Grant source reader permissions to the RootSync's KSA with cross-project Fleet workload identity.
+resource "google_project_iam_member" "root-reconciler-fwi-sa-iam-ubermint" {
   for_each = toset([
     "roles/source.reader",
     "roles/artifactregistry.reader",
@@ -50,8 +50,8 @@ resource "google_project_iam_member" "root-reconciler-fwi-sa-iam" {
   project = data.google_project.project.id
 }
 
-# Grant source reader permissions to the RepoSync's KSA with Fleet workload identity.
-resource "google_project_iam_member" "ns-reconciler-fwi-sa-iam" {
+# Grant source reader permissions to the RepoSync's KSA with cross-project Fleet workload identity.
+resource "google_project_iam_member" "ns-reconciler-fwi-sa-iam-ubermint" {
   for_each = toset([
     "roles/source.reader",
     "roles/artifactregistry.reader",
@@ -60,4 +60,28 @@ resource "google_project_iam_member" "ns-reconciler-fwi-sa-iam" {
   role    = each.value
   member  = "serviceAccount:cs-dev-hub.svc.id.goog[config-management-system/ns-reconciler-test-ns]"
   project = data.google_project.project.id
+}
+
+# Create IAM binding between the RootSync's KSA and the reader GSAs for cross-project Fleet workload identity.
+resource "google_service_account_iam_member" "root-reconciler-fwi-sa-iam-impersonation" {
+  for_each = toset([
+    "${data.google_project.project.id}/serviceAccounts/e2e-test-csr-reader@${data.google_project.project.project_id}.iam.gserviceaccount.com",
+    "${data.google_project.project.id}/serviceAccounts/e2e-test-ar-reader@${data.google_project.project.project_id}.iam.gserviceaccount.com",
+    "${data.google_project.project.id}/serviceAccounts/e2e-test-gcr-reader@${data.google_project.project.project_id}.iam.gserviceaccount.com",
+  ])
+  service_account_id = each.value
+  role               = "roles/iam.workloadIdentityUser"
+  member             = "serviceAccount:cs-dev-hub.svc.id.goog[config-management-system/root-reconciler]"
+}
+
+# Create IAM binding between the RepoSync's KSA and the reader GSAs for cross-project Fleet workload identity.
+resource "google_service_account_iam_member" "ns-reconciler-fwi-sa-iam-impersonation" {
+  for_each = toset([
+    "${data.google_project.project.id}/serviceAccounts/e2e-test-csr-reader@${data.google_project.project.project_id}.iam.gserviceaccount.com",
+    "${data.google_project.project.id}/serviceAccounts/e2e-test-ar-reader@${data.google_project.project.project_id}.iam.gserviceaccount.com",
+    "${data.google_project.project.id}/serviceAccounts/e2e-test-gcr-reader@${data.google_project.project.project_id}.iam.gserviceaccount.com",
+  ])
+  service_account_id = each.value
+  role               = "roles/iam.workloadIdentityUser"
+  member             = "serviceAccount:cs-dev-hub.svc.id.goog[config-management-system/ns-reconciler-test-ns]"
 }

@@ -123,7 +123,7 @@ func TestGCENodeOCI(t *testing.T) {
 	rootSyncRef := nomostest.RootSyncNN(rootSync.Name)
 	rootImage, err := nt.BuildAndPushOCIImage(
 		rootSyncRef,
-		registryproviders.ImageSourcePackage("kustomize-components"),
+		registryproviders.ImageSourcePackage("hydration/kustomize-components"),
 		registryproviders.ImageVersion("v1"))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -137,7 +137,7 @@ func TestGCENodeOCI(t *testing.T) {
 	repoSyncRef := nomostest.RepoSyncNN(testNs, configsync.RepoSyncName)
 	nsImage, err := nt.BuildAndPushOCIImage(
 		repoSyncRef,
-		registryproviders.ImageSourcePackage("namespace-repo"),
+		registryproviders.ImageSourcePackage("hydration/namespace-repo"),
 		registryproviders.ImageVersion("v1"))
 	if err != nil {
 		nt.T.Fatal(err)

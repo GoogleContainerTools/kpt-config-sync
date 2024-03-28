@@ -50,7 +50,7 @@ import (
 
 const (
 	// HelmVersion is the recommended version of Helm for hydration.
-	HelmVersion = "v3.13.3-gke.3"
+	HelmVersion = "v3.14.3-gke.1"
 	// KustomizeVersion is the recommended version of Kustomize for hydration.
 	KustomizeVersion = "v5.3.0-gke.1"
 	// Helm is the binary name of the installed Helm.

@@ -750,6 +750,7 @@ func TestNomosHydrateAndVetDryRepos(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
+		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			tw, opts := nomostest.NewTestWrapper(t, nomostesting.NomosCLI)
 			tmpDir := opts.TmpDir

@@ -116,15 +116,6 @@ const (
 	// This annotation is set by Config Sync on a managed namespace resource.
 	OriginalHNCManagedByValue = configsync.ConfigSyncPrefix + "original-hnc-managed-by-value"
 
-	// WebhookconfigurationKey annotation declares if the webhook configuration
-	// should be updated.
-	// This annotation is set by Config Sync users on the Config Sync ValidatingWebhookConfiguration object.
-	WebhookconfigurationKey = configsync.ConfigSyncPrefix + "webhook-configuration-update"
-
-	// WebhookConfigurationUpdateDisabled is the value for WebhookConfigurationKey
-	// to disable updating the webhook configuration.
-	WebhookConfigurationUpdateDisabled = "disabled"
-
 	// UnknownScopeAnnotationKey is the annotation that indicates the scope of a resource is unknown.
 	// This annotation is set by Config Sync on a managed resource whose scope is unknown.
 	UnknownScopeAnnotationKey = configsync.ConfigSyncPrefix + "unknown-scope"

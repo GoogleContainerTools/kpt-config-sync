@@ -20,9 +20,7 @@ import (
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
-	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/util/discovery"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -67,10 +65,6 @@ func Update(ctx context.Context, c client.Client, dc discovery.ServerResourcer, 
 		return status.APIServerError(err, "getting admission webhook from API Server")
 	}
 
-	// skip updating the webhook configuration if the update is disabled.
-	if core.GetAnnotation(oldCfg, metadata.WebhookconfigurationKey) == metadata.WebhookConfigurationUpdateDisabled {
-		return nil
-	}
 	// We aren't yet concerned with removing stale rules, so just merge the two
 	// together.
 	newCfg = Merge(oldCfg, newCfg)

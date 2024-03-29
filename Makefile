@@ -60,7 +60,7 @@ KUSTOMIZE_VERSION := v5.3.0-gke.1
 KUSTOMIZE := $(BIN_DIR)/kustomize
 KUSTOMIZE_STAGING_DIR := $(OUTPUT_DIR)/third_party/kustomize
 
-HELM_VERSION := v3.14.3-gke.1
+HELM_VERSION := v3.14.3-gke.2
 HELM := $(BIN_DIR)/helm
 HELM_STAGING_DIR := $(OUTPUT_DIR)/third_party/helm
 

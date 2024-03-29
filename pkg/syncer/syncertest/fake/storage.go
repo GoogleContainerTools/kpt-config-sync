@@ -40,6 +40,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
+	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/util/log"
 	"sigs.k8s.io/cli-utils/pkg/testutil"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -470,7 +471,9 @@ func (ms *MemoryStorage) validateCreateOptions(opts *client.CreateOptions) error
 			return fmt.Errorf("invalid dry run option: %+v", opts.DryRun)
 		}
 	}
-	if opts.FieldManager != "" && opts.FieldManager != configsync.FieldManager {
+	if opts.FieldManager != "" &&
+		opts.FieldManager != configsync.FieldManager &&
+		opts.FieldManager != reconcilermanager.FieldManager {
 		return fmt.Errorf("invalid field manager option: %v", opts.FieldManager)
 	}
 	return nil
@@ -751,7 +754,9 @@ func (ms *MemoryStorage) validateUpdateOptions(opts *client.UpdateOptions) error
 			return fmt.Errorf("invalid dry run option: %+v", opts.DryRun)
 		}
 	}
-	if opts.FieldManager != "" && opts.FieldManager != configsync.FieldManager {
+	if opts.FieldManager != "" &&
+		opts.FieldManager != configsync.FieldManager &&
+		opts.FieldManager != reconcilermanager.FieldManager {
 		return fmt.Errorf("invalid field manager option: %v", opts.FieldManager)
 	}
 	return nil
@@ -929,7 +934,9 @@ func (ms *MemoryStorage) validatePatchOptions(opts *client.PatchOptions, patch c
 			return fmt.Errorf("invalid dry run option: %+v", opts.DryRun)
 		}
 	}
-	if opts.FieldManager != "" && opts.FieldManager != configsync.FieldManager {
+	if opts.FieldManager != "" &&
+		opts.FieldManager != configsync.FieldManager &&
+		opts.FieldManager != reconcilermanager.FieldManager {
 		return fmt.Errorf("invalid field manager option: %v", opts.FieldManager)
 	}
 	if patch != client.Apply && opts.Force != nil {

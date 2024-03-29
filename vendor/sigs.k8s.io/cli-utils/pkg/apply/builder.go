@@ -27,6 +27,7 @@ type commonBuilder struct {
 	restConfig                   *rest.Config
 	unstructuredClientForMapping func(*meta.RESTMapping) (resource.RESTClient, error)
 	statusWatcher                watcher.StatusWatcher
+	statusWatcherFilters         *watcher.Filters
 }
 
 func (cb *commonBuilder) finalize() (*commonBuilder, error) {
@@ -78,7 +79,15 @@ func (cb *commonBuilder) finalize() (*commonBuilder, error) {
 		cx.unstructuredClientForMapping = cx.factory.UnstructuredClientForMapping
 	}
 	if cx.statusWatcher == nil {
-		cx.statusWatcher = watcher.NewDefaultStatusWatcher(cx.client, cx.mapper)
+		statusWatcher := watcher.NewDefaultStatusWatcher(cx.client, cx.mapper)
+		if cx.statusWatcherFilters != nil {
+			statusWatcher.Filters = cx.statusWatcherFilters
+		}
+		cx.statusWatcher = statusWatcher
+	} else if cx.statusWatcherFilters != nil {
+		// If you want to use a custom status watcher with a label selector,
+		// configure it before injecting the status watcher.
+		return nil, errors.New("status watcher and status watcher filters must not both be provided")
 	}
 	return &cx, nil
 }

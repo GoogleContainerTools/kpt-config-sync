@@ -77,10 +77,10 @@ func ReconcilerContainerResourceDefaultsForAutopilot() map[string]v1beta1.Contai
 	return map[string]v1beta1.ContainerResourcesSpec{
 		reconcilermanager.Reconciler: {
 			ContainerName: reconcilermanager.Reconciler,
-			CPURequest:    resource.MustParse("700m"),
-			CPULimit:      resource.MustParse("700m"),
-			MemoryRequest: resource.MustParse("512Mi"),
-			MemoryLimit:   resource.MustParse("512Mi"),
+			CPURequest:    resource.MustParse("125m"),
+			CPULimit:      resource.MustParse("125m"),
+			MemoryRequest: resource.MustParse("128Mi"),
+			MemoryLimit:   resource.MustParse("128Mi"),
 		},
 		reconcilermanager.HydrationController: {
 			ContainerName: reconcilermanager.HydrationController,

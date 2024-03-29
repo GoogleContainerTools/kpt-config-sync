@@ -18,7 +18,9 @@ import (
 	"context"
 	"fmt"
 
+	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/applier"
+	"kpt.dev/configsync/pkg/applier/stats"
 	"kpt.dev/configsync/pkg/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -31,9 +33,7 @@ type Applier struct {
 	ApplyInputs  []ApplierInputs
 	ApplyOutputs []ApplierOutputs
 
-	ApplyCalls, ErrorsCalls int
-
-	currentErrors status.MultiError
+	ApplyCalls int
 }
 
 // ApplierInputs stores inputs for fake.Applier.Apply()
@@ -43,11 +43,13 @@ type ApplierInputs struct {
 
 // ApplierOutputs stores outputs for fake.Applier.Apply()
 type ApplierOutputs struct {
-	Errors status.MultiError
+	Errors          []status.Error
+	ObjectStatusMap applier.ObjectStatusMap
+	SyncStats       *stats.SyncStats
 }
 
 // Apply fakes applier.Applier.Apply()
-func (a *Applier) Apply(_ context.Context, objects []client.Object) status.MultiError {
+func (a *Applier) Apply(_ context.Context, superEventHandler func(applier.SuperEvent), objects []client.Object) (applier.ObjectStatusMap, *stats.SyncStats) {
 	a.ApplyInputs = append(a.ApplyInputs, ApplierInputs{
 		Objects: objects,
 	})
@@ -56,13 +58,20 @@ func (a *Applier) Apply(_ context.Context, objects []client.Object) status.Multi
 	}
 	outputs := a.ApplyOutputs[a.ApplyCalls]
 	a.ApplyCalls++
-	a.currentErrors = outputs.Errors
-	return outputs.Errors
-}
 
-// Errors fakes applier.Applier.Errors()
-func (a *Applier) Errors() status.MultiError {
-	return a.currentErrors
+	superEventHandler(applier.SuperInventoryEvent{
+		Inventory: &v1alpha1.ResourceGroup{},
+	})
+	for _, err := range outputs.Errors {
+		superEventHandler(applier.SuperErrorEvent{
+			Error: err,
+		})
+	}
+	superEventHandler(applier.SuperInventoryEvent{
+		Inventory: &v1alpha1.ResourceGroup{},
+	})
+
+	return outputs.ObjectStatusMap, outputs.SyncStats
 }
 
 var _ applier.Applier = &Applier{}

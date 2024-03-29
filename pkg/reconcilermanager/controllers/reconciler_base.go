@@ -711,3 +711,28 @@ func (r *reconcilerBase) isWebhookEnabled(ctx context.Context) (bool, error) {
 	}
 	return err == nil, err
 }
+
+func (r *reconcilerBase) patchSyncMetadata(ctx context.Context, rs client.Object) (bool, error) {
+	packageID := metadata.PackageID(rs.GetName(), rs.GetNamespace(), r.syncKind)
+	currentPackageID := core.GetLabel(rs, metadata.PackageIDLabel)
+	if currentPackageID == packageID {
+		r.logger(ctx).V(5).Info("Sync metadata update skipped: no change")
+		return false, nil
+	}
+
+	if r.logger(ctx).V(5).Enabled() {
+		r.logger(ctx).Info("Updating sync metadata: package ID label",
+			logFieldResourceVersion, rs.GetResourceVersion(),
+			"labelKey", metadata.PackageIDLabel,
+			"labelValueOld", currentPackageID, "labelValue", packageID)
+	}
+
+	patch := fmt.Sprintf(`{"metadata": {"labels": {%q: %q}}}`, metadata.PackageIDLabel, packageID)
+	err := r.client.Patch(ctx, rs, client.RawPatch(types.MergePatchType, []byte(patch)),
+		client.FieldOwner(reconcilermanager.FieldManager))
+	if err != nil {
+		return true, fmt.Errorf("Sync metadata update failed: %w", err)
+	}
+	r.logger(ctx).Info("Sync metadata update successful")
+	return true, nil
+}

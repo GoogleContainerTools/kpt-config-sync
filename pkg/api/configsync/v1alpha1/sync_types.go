@@ -71,6 +71,11 @@ type SourceStatus struct {
 	// +optional
 	Commit string `json:"commit,omitempty"`
 
+	// objectCount is the number of objects detected in the source of truth,
+	// after rendering, if applicable.
+	// +optional
+	ObjectCount int `json:"objectCount,omitempty"`
+
 	// lastUpdate is the timestamp of when this status was last updated by a
 	// reconciler.
 	// +nullable
@@ -141,6 +146,10 @@ type SyncStatus struct {
 	// It can be a git commit hash, or an OCI image digest.
 	// +optional
 	Commit string `json:"commit,omitempty"`
+
+	// objectCount is the number of objects intended to be synced to the cluster.
+	// +optional
+	ObjectCount int `json:"objectCount,omitempty"`
 
 	// lastUpdate is the timestamp of when this status was last updated by a
 	// reconciler.

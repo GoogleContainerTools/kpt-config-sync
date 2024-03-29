@@ -27,6 +27,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/klog/v2"
@@ -73,9 +74,7 @@ const maxWatchRetryFactor = 18
 type Runnable interface {
 	Stop()
 	Run(ctx context.Context) status.Error
-	ManagementConflict() bool
 	SetManagementConflict(object client.Object, commit string)
-	ClearManagementConflict()
 	removeAllManagementConflictErrorsWithGVK(gvk schema.GroupVersionKind)
 }
 
@@ -94,21 +93,21 @@ const errorLoggingInterval = time.Second
 // - either present in the declared resources,
 // - or managed by the same reconciler.
 type filteredWatcher struct {
-	gvk        string
-	startWatch WatchFunc
-	resources  *declared.Resources
-	queue      *queue.ObjectQueue
-	scope      declared.Scope
-	syncName   string
+	gvk           string
+	startWatch    WatchFunc
+	resources     *declared.Resources
+	labelSelector labels.Selector
+	queue         *queue.ObjectQueue
+	scope         declared.Scope
+	syncName      string
 	// errorTracker maps an error to the time when the same error happened last time.
 	errorTracker map[string]time.Time
 
 	// The following fields are guarded by the mutex.
-	mux                sync.Mutex
-	base               watch.Interface
-	stopped            bool
-	managementConflict bool
-	conflictHandler    conflict.Handler
+	mux             sync.Mutex
+	base            watch.Interface
+	stopped         bool
+	conflictHandler conflict.Handler
 }
 
 // filteredWatcher implements the Runnable interface.
@@ -126,6 +125,7 @@ func NewFiltered(cfg watcherConfig) Runnable {
 		base:            watch.NewEmptyWatch(),
 		errorTracker:    make(map[string]time.Time),
 		conflictHandler: cfg.conflictHandler,
+		labelSelector:   cfg.labelSelector,
 	}
 }
 
@@ -156,25 +156,9 @@ func (w *filteredWatcher) addError(errorID string) bool {
 	return false
 }
 
-func (w *filteredWatcher) ManagementConflict() bool {
-	w.mux.Lock()
-	defer w.mux.Unlock()
-	return w.managementConflict
-}
-
 func (w *filteredWatcher) SetManagementConflict(object client.Object, commit string) {
 	w.mux.Lock()
 	defer w.mux.Unlock()
-
-	// The resource should be managed by a namespace reconciler, but now is updated.
-	// Most likely the resource is now managed by a root reconciler.
-	// In this case, set `managementConflict` true to trigger the namespace reconciler's
-	// parse-apply-watch loop. The kpt_applier should report the ManagementConflictError (KNV1060).
-	// No need to add the conflictError to the remediator because it will be surfaced by kpt_applier.
-	if w.scope != declared.RootReconciler {
-		w.managementConflict = true
-		return
-	}
 
 	manager, found := object.GetAnnotations()[metadata.ResourceManagerKey]
 	// There should be no conflict if the resource manager key annotation is not found
@@ -183,31 +167,27 @@ func (w *filteredWatcher) SetManagementConflict(object client.Object, commit str
 		klog.Warningf("No management conflict as the object %q is not managed by Config Sync", core.IDOf(object))
 		return
 	}
+
 	// Root reconciler can override resource managed by namespace reconciler.
 	// It is not a conflict in this case.
-	if !declared.IsRootManager(manager) {
+	if w.scope == declared.RootReconciler && !declared.IsRootManager(manager) {
 		klog.Warningf("No management conflict as the root reconciler %q should update the object %q that is managed by the namespace reconciler %q",
 			w.syncName, core.IDOf(object), manager)
 		return
 	}
 
-	// The remediator detects conflict between two root reconcilers.
-	// Add the conflict error to the remediator, and the updateStatus goroutine will surface the ManagementConflictError (KNV1060).
-	// It also sets `managementConflict` true to keep retrying the parse-apply-watch loop
-	// so that the error can auto-resolve if the resource is removed from the conflicting manager's repository.
-	w.managementConflict = true
+	// The remediator detected a conflict between two reconcilers.
+	// Add the conflict error to the conflictHandler, and the updateStatus
+	// goroutine will surface it in the RSync status.
+	// This will also trigger the parse-apply-watch loop to retry, so the
+	// applier can remove the error, after the conflict has been resolved by the
+	// user, by removing it from the conflicting manager's source.
 	newManager := declared.ResourceManager(w.scope, w.syncName)
 	klog.Warningf("The remediator detects a management conflict for object %q between root reconcilers: %q and %q",
 		core.GKNN(object), newManager, manager)
 	gvknn := queue.GVKNNOf(object)
 	w.conflictHandler.AddConflictError(gvknn, status.ManagementConflictErrorWrap(object, newManager))
 	metrics.RecordResourceConflict(context.Background(), commit)
-}
-
-func (w *filteredWatcher) ClearManagementConflict() {
-	w.mux.Lock()
-	w.managementConflict = false
-	w.mux.Unlock()
 }
 
 func (w *filteredWatcher) removeAllManagementConflictErrorsWithGVK(gvk schema.GroupVersionKind) {
@@ -379,6 +359,7 @@ func (w *filteredWatcher) start(ctx context.Context, resourceVersion string) (bo
 	timeoutSeconds := int64(minWatchTimeout.Seconds() * (rand.Float64() + 1.0))
 	options := metav1.ListOptions{
 		AllowWatchBookmarks: true,
+		LabelSelector:       w.labelSelector.String(),
 		ResourceVersion:     resourceVersion,
 		TimeoutSeconds:      &timeoutSeconds,
 		Watch:               true,
@@ -458,27 +439,31 @@ func (w *filteredWatcher) handle(ctx context.Context, event watch.Event) (string
 		return "", false, nil
 	}
 
-	if klog.V(5).Enabled() {
-		klog.V(5).Infof("Received watch event for object: %q (generation: %d): %s",
-			core.IDOf(object), object.GetGeneration(), log.AsJSON(object))
-	} else {
-		klog.V(3).Infof("Received watch event for object: %q (generation: %d)",
-			core.IDOf(object), object.GetGeneration())
-	}
+	klog.V(3).Infof("Received %s watch event for object: %q (generation: %d)",
+		event.Type, core.IDOf(object), object.GetGeneration())
+	// Log object JSON at higher log level
+	klog.V(5).Infof("Object from %s watch event: %q (generation: %d): %s",
+		event.Type, core.IDOf(object), object.GetGeneration(), log.AsJSON(object))
 
 	// filter objects.
 	if !w.shouldProcess(object) {
-		klog.V(4).Infof("Ignoring event for object: %q (generation: %d)",
+		klog.V(3).Infof("Ignoring event for object: %q (generation: %d)",
 			core.IDOf(object), object.GetGeneration())
 		return object.GetResourceVersion(), true, nil
 	}
 
 	if deleted {
-		klog.V(2).Infof("Received watch event for deleted object %q (generation: %d)",
+		// When watching with label filtering, removing or changing a watched
+		// label results in a deletion event with the last known object state
+		// before label change. But to efficiently handle watch events, we don't
+		// want to query the apiserver from the event handler. So instead, we
+		// just enqueue the object as deleted and let the queue worker handle
+		// double-checking whether the object was actually deleted or not.
+		klog.V(2).Infof("Enqueuing deleted object for remediation: %q (generation: %d)",
 			core.IDOf(object), object.GetGeneration())
 		object = queue.MarkDeleted(ctx, object)
 	} else {
-		klog.V(2).Infof("Received watch event for created/updated object %q (generation: %d)",
+		klog.V(2).Infof("Enqueuing created/updated object for remediation: %q (generation: %d)",
 			core.IDOf(object), object.GetGeneration())
 	}
 

@@ -36,6 +36,11 @@ func (h *ConflictHandler) ConflictErrors() []status.ManagementConflictError {
 	return nil
 }
 
+// HasConflictErrors is a fake implementation of HasConflictErrors of conflict.Handler.
+func (h *ConflictHandler) HasConflictErrors() bool {
+	return false
+}
+
 // RemoveAllConflictErrors is a fake implementation of RemoveAllConflictErrors of conflict.Handler.
 func (h *ConflictHandler) RemoveAllConflictErrors(schema.GroupVersionKind) {
 }

@@ -18,7 +18,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
@@ -38,14 +37,13 @@ func addAnnotationsAndLabels(objs []ast.FileObject, scope declared.Scope, syncNa
 	if err != nil {
 		return fmt.Errorf("marshaling sourceContext: %w", err)
 	}
-	var inventoryID string
-	if scope == declared.RootReconciler {
-		inventoryID = applier.InventoryID(syncName, configmanagement.ControllerNamespace)
-	} else {
-		inventoryID = applier.InventoryID(syncName, string(scope))
-	}
+	// TODO: Package Ref Label
+	syncNamespace := declared.SyncNamespaceFromScope(scope)
+	packageID := metadata.PackageID(syncName, syncNamespace, declared.SyncKindFromScope(scope))
+	inventoryID := applier.InventoryID(syncName, syncNamespace)
 	for _, obj := range objs {
 		core.SetLabel(obj, metadata.ManagedByKey, metadata.ManagedByValue)
+		core.SetLabel(obj, metadata.ParentPackageIDLabel, packageID)
 		core.SetAnnotation(obj, metadata.GitContextKey, string(gcVal))
 		core.SetAnnotation(obj, metadata.ResourceManagerKey, declared.ResourceManager(scope, syncName))
 		core.SetAnnotation(obj, metadata.SyncTokenAnnotationKey, commitHash)

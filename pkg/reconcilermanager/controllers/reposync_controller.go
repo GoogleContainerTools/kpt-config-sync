@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 	"sync"
@@ -31,6 +32,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation"
@@ -39,6 +41,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	hubv1 "kpt.dev/configsync/pkg/api/hub/v1"
+	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/kinds"
@@ -47,6 +50,7 @@ import (
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reposync"
 	"kpt.dev/configsync/pkg/status"
+	"kpt.dev/configsync/pkg/util/bytes"
 	"kpt.dev/configsync/pkg/util/compare"
 	"kpt.dev/configsync/pkg/util/mutate"
 	"kpt.dev/configsync/pkg/validate/raw/validate"
@@ -320,11 +324,15 @@ func (r *RepoSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 }
 
 // setup performs the following steps:
+// - Patch RepoSync to upsert package-id label
 // - Create or update managed objects
 // - Convert any error into RepoSync status conditions
 // - Update the RepoSync status
 func (r *RepoSyncReconciler) setup(ctx context.Context, reconcilerRef types.NamespacedName, rs *v1beta1.RepoSync) error {
-	err := r.upsertManagedObjects(ctx, reconcilerRef, rs)
+	_, err := r.patchSyncMetadata(ctx, rs)
+	if err == nil {
+		err = r.upsertManagedObjects(ctx, reconcilerRef, rs)
+	}
 	updated, updateErr := r.updateSyncStatus(ctx, rs, reconcilerRef, func(syncObj *v1beta1.RepoSync) error {
 		// Modify the sync status,
 		// but keep the upsert error separate from the status update error.
@@ -897,7 +905,7 @@ func (r *RepoSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 			ociConfig:         rs.Spec.Oci,
 			helmConfig:        reposync.GetHelmBase(rs.Spec.Helm),
 			pollPeriod:        r.reconcilerPollingPeriod.String(),
-			statusMode:        rs.Spec.SafeOverride().StatusMode,
+			statusMode:        applier.InventoryStatusMode(rs.Spec.SafeOverride().StatusMode),
 			reconcileTimeout:  v1beta1.GetReconcileTimeout(rs.Spec.SafeOverride().ReconcileTimeout),
 			apiServerTimeout:  v1beta1.GetAPIServerTimeout(rs.Spec.SafeOverride().APIServerTimeout),
 			requiresRendering: annotationEnabled(metadata.RequiresRenderingAnnotationKey, rs.GetAnnotations()),
@@ -1103,7 +1111,7 @@ func (r *RepoSyncReconciler) updateSyncStatus(ctx context.Context, rs *v1beta1.R
 					cmp.Diff(before.Status, rs.Status)))
 		}
 		return nil
-	})
+	}, client.FieldOwner(reconcilermanager.FieldManager))
 	if err != nil {
 		return updated, fmt.Errorf("Sync status update failed: %w", err)
 	}
@@ -1183,6 +1191,32 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 		var containerResourceDefaults map[string]v1beta1.ContainerResourcesSpec
 		if autopilot {
 			containerResourceDefaults = ReconcilerContainerResourceDefaultsForAutopilot()
+			// Use the larger of the old or new source size for scaling.
+			// This helps keep memory high for large additions.
+			objectCount := rs.Status.Sync.ObjectCount
+			if rs.Status.Source.ObjectCount > objectCount {
+				objectCount = rs.Status.Source.ObjectCount
+			}
+
+			memoryMinimum := float64(128)
+			memoryStepSize := float64(32)
+			memoryUsage := float64(objectCount)/5 + memoryMinimum
+			memoryLimit := math.Max(math.Ceil(memoryUsage/memoryStepSize)*memoryStepSize, memoryMinimum)
+			memoryQuantity := resource.NewQuantity(int64(memoryLimit*float64(bytes.MiB)), resource.BinarySI)
+			klog.V(3).Infof("%s reconciler container memory: %s - %s", r.syncKind, memoryQuantity, memoryQuantity)
+
+			cpuMinimum := float64(125)
+			cpuRatio := float64(bytes.KB) / float64(bytes.KiB)
+			cpuLimit := math.Max(math.Ceil(memoryLimit*cpuRatio), cpuMinimum)
+			cpuQuantity := resource.NewMilliQuantity(int64(cpuLimit), resource.DecimalSI)
+			klog.V(3).Infof("%s reconciler container cpu: %s - %s", r.syncKind, cpuQuantity, cpuQuantity)
+
+			defaults := containerResourceDefaults[reconcilermanager.Reconciler]
+			defaults.CPURequest = *cpuQuantity
+			defaults.CPULimit = *cpuQuantity
+			defaults.MemoryRequest = *memoryQuantity
+			defaults.MemoryLimit = *memoryQuantity
+			containerResourceDefaults[reconcilermanager.Reconciler] = defaults
 		} else {
 			containerResourceDefaults = ReconcilerContainerResourceDefaults()
 		}

@@ -94,10 +94,11 @@ func TestApply(t *testing.T) {
 		"example-to-not-delete":          "anything",
 	})
 	abandonObj.SetLabels(map[string]string{
-		metadata.ManagedByKey:   metadata.ManagedByValue,
-		metadata.SystemLabel:    "anything",
-		metadata.ArchLabel:      "anything",
-		"example-to-not-delete": "anything",
+		metadata.ManagedByKey:         metadata.ManagedByValue,
+		metadata.ParentPackageIDLabel: "anything",
+		metadata.SystemLabel:          "anything",
+		metadata.ArchLabel:            "anything",
+		"example-to-not-delete":       "anything",
 	})
 
 	testObj2 := newTestObj("test-2")
@@ -280,8 +281,22 @@ func TestApply(t *testing.T) {
 			applier, err := NewNamespaceSupervisor(cs, syncScope, syncName, 5*time.Minute)
 			require.NoError(t, err)
 
-			errs := applier.Apply(context.Background(), objs)
+			var errs status.MultiError
+			superEventHandler := func(event SuperEvent) {
+				if errEvent, ok := event.(SuperErrorEvent); ok {
+					if errs == nil {
+						errs = errEvent.Error
+					} else {
+						errs = status.Append(errs, errEvent.Error)
+					}
+				}
+			}
+
+			// TODO: Test statusMap & stats
+			_, _ = applier.Apply(context.Background(), superEventHandler, objs)
+			// testutil.AssertEqual(t, tc.expectedGVKs, gvks)
 			testerrors.AssertEqual(t, tc.expectedError, errs)
+
 			fakeClient.Check(t, tc.expectedServerObjs...)
 		})
 	}

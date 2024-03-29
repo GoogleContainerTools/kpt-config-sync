@@ -84,6 +84,7 @@ func newParser(t *testing.T, fs FileSource, renderingEnabled bool, retryPeriod t
 					{}, // One Apply call, no errors
 				},
 			},
+			StatusUpdatePeriod: configsync.DefaultReconcilerSyncStatusUpdatePeriod,
 		},
 		mux:              &sync.Mutex{},
 		RenderingEnabled: renderingEnabled,
@@ -91,7 +92,8 @@ func newParser(t *testing.T, fs FileSource, renderingEnabled bool, retryPeriod t
 		ResyncPeriod:     2 * time.Second,
 		PollingPeriod:    pollingPeriod,
 	}
-
+	// Updater uses the root options to known how to update the RootSync sync status.
+	parser.Options.Updater.SyncStatusUpdater = parser
 	return parser
 }
 

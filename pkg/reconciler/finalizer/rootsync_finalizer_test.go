@@ -28,7 +28,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/applier"
+	"kpt.dev/configsync/pkg/applier/stats"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
@@ -300,7 +302,9 @@ func TestRootSyncFinalize(t *testing.T) {
 			}
 			fakeDestroyer := newFakeDestroyer(tc.destroyErrs, destroyFunc)
 			finalizer := &RootSyncFinalizer{
-				Destroyer:          fakeDestroyer,
+				baseFinalizer: baseFinalizer{
+					Destroyer: fakeDestroyer,
+				},
 				Client:             fakeClient,
 				StopControllers:    stopFunc,
 				ControllersStopped: continueCh,
@@ -632,13 +636,38 @@ func newFakeDestroyer(errs status.MultiError, destroyFunc func(context.Context) 
 	}
 }
 
-func (d *fakeDestroyer) Destroy(ctx context.Context) status.MultiError {
+func (d *fakeDestroyer) Destroy(ctx context.Context, superEventHandler func(applier.SuperEvent)) (applier.ObjectStatusMap, *stats.SyncStats) {
+	var errs status.MultiError
 	if d.destroyFunc != nil {
-		return d.destroyFunc(ctx)
+		errs = d.destroyFunc(ctx)
+	} else {
+		errs = d.errs
 	}
-	return d.errs
-}
-
-func (d *fakeDestroyer) Errors() status.MultiError {
-	return d.errs
+	superEventHandler(applier.SuperInventoryEvent{
+		Inventory: &v1alpha1.ResourceGroup{
+			Spec: v1alpha1.ResourceGroupSpec{
+				Resources: []v1alpha1.ObjMetadata{
+					// TODO: test InventoryObjectCount
+				},
+			},
+		},
+	})
+	if errs != nil {
+		for _, err := range errs.Errors() {
+			superEventHandler(applier.SuperErrorEvent{
+				Error: err,
+			})
+		}
+	}
+	superEventHandler(applier.SuperInventoryEvent{
+		Inventory: &v1alpha1.ResourceGroup{
+			Spec: v1alpha1.ResourceGroupSpec{
+				Resources: []v1alpha1.ObjMetadata{
+					// TODO: test InventoryObjectCount
+				},
+			},
+		},
+	})
+	// TODO: test ObjectStatusMap & SyncStats
+	return applier.ObjectStatusMap{}, &stats.SyncStats{}
 }

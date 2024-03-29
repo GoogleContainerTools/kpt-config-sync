@@ -60,10 +60,10 @@ func CanManage(scope declared.Scope, syncName string, obj client.Object, op admi
 	}
 	oldManager := core.GetAnnotation(obj, metadata.ResourceManagerKey)
 	newManager := declared.ResourceManager(scope, syncName)
-	reconciler, _ := reconcilerName(newManager)
+	reconciler, _ := ReconcilerNameFromManager(newManager)
 	err := ValidateManager(reconciler, oldManager, core.IDOf(obj), op)
 	if err != nil {
-		klog.V(3).Infof("diff.CanManage? %v", err)
+		klog.V(1).Infof("diff.CanManage? %v", err)
 		return false
 	}
 	return true
@@ -89,7 +89,7 @@ func ValidateManager(reconciler, manager string, id core.ID, op admissionv1.Oper
 		return nil
 	}
 
-	oldReconciler, syncScope := reconcilerName(manager)
+	oldReconciler, syncScope := ReconcilerNameFromManager(manager)
 
 	if err := declared.ValidateScope(string(syncScope)); err != nil {
 		// All managers are allowed to manage an object with an invalid manager.
@@ -145,7 +145,9 @@ func ValidateManager(reconciler, manager string, id core.ID, op admissionv1.Oper
 	return nil
 }
 
-func reconcilerName(manager string) (string, declared.Scope) {
+// ReconcilerNameFromManager parses the manager annotation value and returns the
+// reconciler deployment name and scope.
+func ReconcilerNameFromManager(manager string) (string, declared.Scope) {
 	syncScope, syncName := declared.ManagerScopeAndName(manager)
 	var reconciler string
 	if syncScope == declared.RootReconciler {

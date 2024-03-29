@@ -243,7 +243,8 @@ func TestRemediator_Reconcile(t *testing.T) {
 			// Simulate the Parser having already parsed the resource and recorded it.
 			d := makeDeclared(t, "unused", tc.declared)
 
-			r := newReconciler(declared.RootReconciler, configsync.RootSyncName, c.Applier(), d, testingfake.NewFightHandler())
+			r := newReconciler(declared.RootReconciler, configsync.RootSyncName, c.Applier(), d,
+				testingfake.NewConflictHandler(), testingfake.NewFightHandler())
 
 			// Get the triggering object for the reconcile event.
 			var obj client.Object
@@ -365,7 +366,8 @@ func TestRemediator_Reconcile_Metrics(t *testing.T) {
 			fakeApplier.UpdateError = tc.updateError
 			fakeApplier.DeleteError = tc.deleteError
 
-			reconciler := newReconciler(declared.RootReconciler, configsync.RootSyncName, fakeApplier, d, testingfake.NewFightHandler())
+			reconciler := newReconciler(declared.RootReconciler, configsync.RootSyncName, fakeApplier, d,
+				testingfake.NewConflictHandler(), testingfake.NewFightHandler())
 
 			// Get the triggering object for the reconcile event.
 			var obj client.Object

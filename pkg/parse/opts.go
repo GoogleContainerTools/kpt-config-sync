@@ -88,20 +88,21 @@ type Options struct {
 
 // Parser represents a parser that can be pointed at and continuously parse a source.
 type Parser interface {
+	SyncStatusUpdater
+
 	parseSource(ctx context.Context, state sourceState) ([]ast.FileObject, status.MultiError)
 	setSourceStatus(ctx context.Context, newStatus sourceStatus) error
 	setRenderingStatus(ctx context.Context, oldStatus, newStatus renderingStatus) error
-	SetSyncStatus(ctx context.Context, newStatus syncStatus) error
 	options() *Options
-	// SyncErrors returns all the sync errors, including remediator errors,
-	// validation errors, applier errors, and watch update errors.
-	SyncErrors() status.MultiError
-	// Syncing returns true if the updater is running.
-	Syncing() bool
-	// K8sClient returns the Kubernetes client that talks to the API server.
-	K8sClient() client.Client
 	// setRequiresRendering sets the requires-rendering annotation on the RSync
 	setRequiresRendering(ctx context.Context, renderingRequired bool) error
+}
+
+type SyncStatusUpdater interface {
+	// SetSyncStatus updates the status.sync field of the RSync
+	SetSyncStatus(ctx context.Context, newStatus syncStatus) error
+	// SyncStatus gets updates the status.sync field of the RSync
+	SyncStatus(ctx context.Context) (syncStatus, error)
 }
 
 func (o *Options) k8sClient() client.Client {

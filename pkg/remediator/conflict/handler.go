@@ -32,11 +32,14 @@ type Handler interface {
 
 	// ConflictErrors returns the management conflict errors (KNV1060) the remediator encounters.
 	ConflictErrors() []status.ManagementConflictError
+	// HasConflictErrors returns true if conflicts exist.
+	HasConflictErrors() bool
 }
 
 // handler implements Handler.
 type handler struct {
 	// mux guards the conflictErrs
+	// TODO: replace with RWMutex
 	mux sync.Mutex
 	// conflictErrs tracks all the conflict errors (KNV1060) the remediator encounters,
 	// and report to RootSync|RepoSync status.
@@ -89,4 +92,12 @@ func (h *handler) ConflictErrors() []status.ManagementConflictError {
 		result = append(result, pair.Value)
 	}
 	return result
+}
+
+// HasConflictErrors returns true if conflicts exist.
+func (h *handler) HasConflictErrors() bool {
+	h.mux.Lock()
+	defer h.mux.Unlock()
+
+	return h.conflictErrs.Len() > 0
 }

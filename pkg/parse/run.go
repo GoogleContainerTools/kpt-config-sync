@@ -25,7 +25,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/hydrate"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/metadata"
@@ -34,7 +33,6 @@ import (
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/util"
 	webhookconfiguration "kpt.dev/configsync/pkg/webhook/configuration"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -82,18 +80,24 @@ func Run(ctx context.Context, p Parser, nsControllerState *namespacecontroller.S
 	// Use timers, not tickers.
 	// Tickers can cause memory leaks and continuous execution, when execution
 	// takes longer than the tick duration.
-	runTimer := time.NewTimer(opts.PollingPeriod)
-	defer runTimer.Stop()
 
+	// schedule first re-parse
+	reparseTimer := time.NewTimer(opts.PollingPeriod)
+	defer reparseTimer.Stop()
+
+	// schedule first re-sync
 	resyncTimer := time.NewTimer(opts.ResyncPeriod)
 	defer resyncTimer.Stop()
 
+	// schedule first retry, with backoff & jitter
 	retryTimer := time.NewTimer(opts.RetryPeriod)
 	defer retryTimer.Stop()
 
+	// schedule first status update (between sync attempts)
 	statusUpdateTimer := time.NewTimer(opts.StatusUpdatePeriod)
 	defer statusUpdateTimer.Stop()
 
+	// schedule first namespace update check
 	nsEventPeriod := time.Second
 	nsEventTimer := time.NewTimer(nsEventPeriod)
 	defer nsEventTimer.Stop()
@@ -110,12 +114,12 @@ func Run(ctx context.Context, p Parser, nsControllerState *namespacecontroller.S
 		case <-ctx.Done():
 			return
 
-		// Re-apply even if no changes have been detected.
+		// Re-sync even if no changes have been detected.
 		// This case should be checked first since it resets the cache.
-		// If the reconciler is in the process of reconciling a given commit, the resync won't
-		// happen until the ongoing reconciliation is done.
+		// If the reconciler is attempting to sync a given commit, the re-sync
+		// will be delayed until the current sync attempt is done.
 		case <-resyncTimer.C:
-			klog.Infof("It is time for a force-resync")
+			klog.Infof("Run loop: re-syncing")
 			// Reset the cache partially to make sure all the steps of a parse-apply-watch loop will run.
 			// The cached sourceState will not be reset to avoid reading all the source files unnecessarily.
 			// The cached needToRetry will not be reset to avoid resetting the backoff retries.
@@ -127,21 +131,24 @@ func Run(ctx context.Context, p Parser, nsControllerState *namespacecontroller.S
 			// state of backoff retry.
 			statusUpdateTimer.Reset(opts.StatusUpdatePeriod) // Schedule status update attempt
 
-		// Re-import declared resources from the filesystem (from git-sync).
-		// If the reconciler is in the process of reconciling a given commit, the re-import won't
-		// happen until the ongoing reconciliation is done.
-		case <-runTimer.C:
+		// Re-parse declared resource objects from the filesystem (from git-sync).
+		// If the reconciler is attempting to sync a given commit, the re-parse
+		// will be delayed until the current sync attempt is done.
+		case <-reparseTimer.C:
+			klog.Infof("Run loop: re-parsing")
 			runFn(ctx, p, triggerReimport, state)
 
-			runTimer.Reset(opts.PollingPeriod) // Schedule re-import attempt
+			reparseTimer.Reset(opts.PollingPeriod) // Schedule re-import attempt
 			// we should not reset retryTimer under this `case` since it is not aware of the
 			// state of backoff retry.
 			statusUpdateTimer.Reset(opts.StatusUpdatePeriod) // Schedule status update attempt
 
 		// Retry if there was an error, conflict, or any watches need to be updated.
 		case <-retryTimer.C:
+			klog.Infof("Run loop: re-trying")
 			var trigger string
 			if opts.managementConflict() {
+				klog.Warning("Management conflict detected. Triggering new sync attempt.")
 				// Reset the cache partially to make sure all the steps of a parse-apply-watch loop will run.
 				// The cached sourceState will not be reset to avoid reading all the source files unnecessarily.
 				// The cached needToRetry will not be reset to avoid resetting the backoff retries.
@@ -177,19 +184,24 @@ func Run(ctx context.Context, p Parser, nsControllerState *namespacecontroller.S
 			runFn(ctx, p, trigger, state)
 			// Reset retryTimer after `run` to make sure `retryDuration` happens between the end of one execution
 			// of `run` and the start of the next execution.
-			retryTimer.Reset(retryDuration)
+			retryTimer.Reset(retryDuration)                  // Schedule retry
 			statusUpdateTimer.Reset(opts.StatusUpdatePeriod) // Schedule status update attempt
 
 		// Update the sync status to report management conflicts (from the remediator).
 		case <-statusUpdateTimer.C:
+			klog.Infof("Run loop: status update")
+			// Skip sync status update if state.cache has been reset and not yet
+			// re-parsed. This avoids removing the last known sync status while
+			// waiting to parse a new source commit.
 			// Skip sync status update if the .status.sync.commit is out of date.
 			// This avoids overwriting a newer Syncing condition with the status
 			// from an older commit.
-			if state.syncStatus.commit == state.sourceStatus.commit &&
+			if state.cache.source.commit != "" &&
+				state.syncStatus.commit == state.sourceStatus.commit &&
 				state.syncStatus.commit == state.renderingStatus.commit {
 
 				klog.V(3).Info("Updating sync status (periodic while not syncing)")
-				if err := setSyncStatus(ctx, p, state, p.Syncing(), p.SyncErrors()); err != nil {
+				if err := p.options().Updater.SetSyncStatus(ctx, state); err != nil {
 					klog.Warningf("failed to update sync status: %v", err)
 				}
 			}
@@ -200,6 +212,7 @@ func Run(ctx context.Context, p Parser, nsControllerState *namespacecontroller.S
 
 		// Execute the entire parse-apply-watch loop for a namespace event.
 		case <-nsEventTimer.C:
+			klog.Infof("Run loop: namespace update check")
 			if nsControllerState == nil {
 				// If the Namespace Controller is not running, stop the timer without
 				// closing the channel.
@@ -512,9 +525,10 @@ func parseAndUpdate(ctx context.Context, p Parser, trigger string, state *reconc
 	sourceErrs := parseSource(ctx, p, trigger, state)
 	klog.V(3).Info("Parser stopped")
 	newSourceStatus := sourceStatus{
-		commit:     state.cache.source.commit,
-		errs:       sourceErrs,
-		lastUpdate: metav1.Now(),
+		commit:      state.cache.source.commit,
+		objectCount: len(state.cache.objsToApply),
+		errs:        sourceErrs,
+		lastUpdate:  metav1.Now(),
 	}
 	if state.needToSetSourceStatus(newSourceStatus) {
 		klog.V(3).Infof("Updating source status (after parse): %#v", newSourceStatus)
@@ -532,24 +546,9 @@ func parseAndUpdate(ctx context.Context, p Parser, trigger string, state *reconc
 		return sourceErrs
 	}
 
-	// Create a new context with its cancellation function.
-	ctxForUpdateSyncStatus, cancel := context.WithCancel(context.Background())
-
-	go updateSyncStatusPeriodically(ctxForUpdateSyncStatus, p, state)
-
-	klog.V(3).Info("Updater starting...")
 	start := time.Now()
-	syncErrs := p.options().Update(ctx, &state.cache)
+	syncErrs := p.options().Update(ctx, state)
 	metrics.RecordParserDuration(ctx, trigger, "update", metrics.StatusTagKey(syncErrs), start)
-	klog.V(3).Info("Updater stopped")
-
-	// This is to terminate `updateSyncStatusPeriodically`.
-	cancel()
-
-	klog.V(3).Info("Updating sync status (after sync)")
-	if err := setSyncStatus(ctx, p, state, false, syncErrs); err != nil {
-		syncErrs = status.Append(syncErrs, err)
-	}
 
 	return status.Append(sourceErrs, syncErrs)
 }
@@ -557,91 +556,21 @@ func parseAndUpdate(ctx context.Context, p Parser, trigger string, state *reconc
 // setSyncStatus updates `.status.sync` and the Syncing condition, if needed,
 // as well as `state.syncStatus` and `state.syncingConditionLastUpdate` if
 // the update is successful.
-func setSyncStatus(ctx context.Context, p Parser, state *reconcilerState, syncing bool, syncErrs status.MultiError) error {
+func setSyncStatus(ctx context.Context, syncStatusUpdater SyncStatusUpdater, updater *Updater, state *reconcilerState) error {
 	// Update the RSync status, if necessary
 	newSyncStatus := syncStatus{
-		syncing:    syncing,
-		commit:     state.cache.source.commit,
-		errs:       syncErrs,
-		lastUpdate: metav1.Now(),
+		syncing:     updater.Updating(),
+		commit:      state.cache.source.commit,
+		objectCount: updater.InventoryObjectCount(),
+		errs:        updater.Errors(),
+		lastUpdate:  metav1.Now(),
 	}
 	if state.needToSetSyncStatus(newSyncStatus) {
-		if err := p.SetSyncStatus(ctx, newSyncStatus); err != nil {
+		if err := syncStatusUpdater.SetSyncStatus(ctx, newSyncStatus); err != nil {
 			return err
 		}
 		state.syncStatus = newSyncStatus
 		state.syncingConditionLastUpdate = newSyncStatus.lastUpdate
-	}
-
-	// Extract conflict errors from sync errors.
-	var conflictErrs []status.ManagementConflictError
-	if syncErrs != nil {
-		for _, err := range syncErrs.Errors() {
-			if conflictErr, ok := err.(status.ManagementConflictError); ok {
-				conflictErrs = append(conflictErrs, conflictErr)
-			}
-		}
-	}
-	// Report conflict errors to the remote manager, if it's a RootSync.
-	if err := reportRootSyncConflicts(ctx, p.K8sClient(), conflictErrs); err != nil {
-		return fmt.Errorf("failed to report remote conflicts: %w", err)
-	}
-	return nil
-}
-
-// updateSyncStatusPeriodically update the sync status periodically until the
-// cancellation function of the context is called.
-func updateSyncStatusPeriodically(ctx context.Context, p Parser, state *reconcilerState) {
-	klog.V(3).Info("Periodic sync status updates starting...")
-	updatePeriod := p.options().StatusUpdatePeriod
-	updateTimer := time.NewTimer(updatePeriod)
-	defer updateTimer.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			// ctx.Done() is closed when the cancellation function of the context is called.
-			klog.V(3).Info("Periodic sync status updates stopped")
-			return
-
-		case <-updateTimer.C:
-			klog.V(3).Info("Updating sync status (periodic while syncing)")
-			if err := setSyncStatus(ctx, p, state, true, p.SyncErrors()); err != nil {
-				klog.Warningf("failed to update sync status: %v", err)
-			}
-
-			updateTimer.Reset(updatePeriod) // Schedule status update attempt
-		}
-	}
-}
-
-// reportRootSyncConflicts reports conflicts to the RootSync that manages the
-// conflicting resources.
-func reportRootSyncConflicts(ctx context.Context, k8sClient client.Client, conflictErrs []status.ManagementConflictError) error {
-	if len(conflictErrs) == 0 {
-		return nil
-	}
-	conflictingManagerErrors := map[string][]status.ManagementConflictError{}
-	for _, conflictError := range conflictErrs {
-		conflictingManager := conflictError.ConflictingManager()
-		err := conflictError.ConflictingManagerError()
-		conflictingManagerErrors[conflictingManager] = append(conflictingManagerErrors[conflictingManager], err)
-	}
-
-	for conflictingManager, conflictErrors := range conflictingManagerErrors {
-		scope, name := declared.ManagerScopeAndName(conflictingManager)
-		if scope == declared.RootReconciler {
-			// RootSync applier uses PolicyAdoptAll.
-			// So it may fight, if the webhook is disabled.
-			// Report the conflict to the other RootSync to make it easier to detect.
-			klog.Infof("Detected conflict with RootSync manager %q", conflictingManager)
-			if err := prependRootSyncRemediatorStatus(ctx, k8sClient, name, conflictErrors, defaultDenominator); err != nil {
-				return fmt.Errorf("failed to update RootSync %q to prepend remediator conflicts: %w", name, err)
-			}
-		} else {
-			// RepoSync applier uses PolicyAdoptIfNoInventory.
-			// So it won't fight, even if the webhook is disabled.
-			klog.Infof("Detected conflict with RepoSync manager %q", conflictingManager)
-		}
 	}
 	return nil
 }

@@ -108,6 +108,7 @@ func TestRoot_Parse(t *testing.T) {
 				fake.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Label(metadata.ParentPackageIDLabel, metadata.PackageID(rootSyncName, configmanagement.ControllerNamespace, configsync.RootSyncKind)),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -120,6 +121,7 @@ func TestRoot_Parse(t *testing.T) {
 					"",
 					core.Name("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.ParentPackageIDLabel, metadata.PackageID(rootSyncName, configmanagement.ControllerNamespace, configsync.RootSyncKind)),
 					core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -145,6 +147,7 @@ func TestRoot_Parse(t *testing.T) {
 				fake.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Label(metadata.ParentPackageIDLabel, metadata.PackageID(rootSyncName, configmanagement.ControllerNamespace, configsync.RootSyncKind)),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -161,6 +164,7 @@ func TestRoot_Parse(t *testing.T) {
 			namespaceStrategy: configsync.NamespaceStrategyImplicit,
 			existingObjects: []client.Object{fake.NamespaceObject("foo",
 				core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+				core.Label(metadata.ParentPackageIDLabel, metadata.PackageID(rootSyncName, configmanagement.ControllerNamespace, configsync.RootSyncKind)),
 				core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
 				core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 				core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -179,6 +183,7 @@ func TestRoot_Parse(t *testing.T) {
 				fake.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Label(metadata.ParentPackageIDLabel, metadata.PackageID(rootSyncName, configmanagement.ControllerNamespace, configsync.RootSyncKind)),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -191,6 +196,7 @@ func TestRoot_Parse(t *testing.T) {
 					"",
 					core.Name("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.ParentPackageIDLabel, metadata.PackageID(rootSyncName, configmanagement.ControllerNamespace, configsync.RootSyncKind)),
 					core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -207,6 +213,7 @@ func TestRoot_Parse(t *testing.T) {
 			namespaceStrategy: configsync.NamespaceStrategyImplicit,
 			existingObjects: []client.Object{fake.NamespaceObject("foo",
 				core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+				core.Label(metadata.ParentPackageIDLabel, metadata.PackageID(rootSyncName, configmanagement.ControllerNamespace, configsync.RootSyncKind)),
 				core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
 				core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 				core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -225,6 +232,7 @@ func TestRoot_Parse(t *testing.T) {
 				fake.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Label(metadata.ParentPackageIDLabel, metadata.PackageID(rootSyncName, configmanagement.ControllerNamespace, configsync.RootSyncKind)),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -251,6 +259,7 @@ func TestRoot_Parse(t *testing.T) {
 				fake.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Label(metadata.ParentPackageIDLabel, metadata.PackageID(rootSyncName, configmanagement.ControllerNamespace, configsync.RootSyncKind)),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -277,6 +286,7 @@ func TestRoot_Parse(t *testing.T) {
 					fake.WithRootSyncSourceType(v1beta1.GitSource),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1beta1"),
+					core.Label(metadata.ParentPackageIDLabel, metadata.PackageID(rootSyncName, configmanagement.ControllerNamespace, configsync.RootSyncKind)),
 					core.Annotation(metadata.SourcePathAnnotationKey, fmt.Sprintf("namespaces/%s/test.yaml", configsync.ControllerNamespace)),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -303,6 +313,7 @@ func TestRoot_Parse(t *testing.T) {
 				fake.Role(core.Namespace("bar"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Label(metadata.ParentPackageIDLabel, metadata.PackageID(rootSyncName, configmanagement.ControllerNamespace, configsync.RootSyncKind)),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -314,6 +325,7 @@ func TestRoot_Parse(t *testing.T) {
 				fake.ConfigMap(core.Namespace("bar"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Label(metadata.ParentPackageIDLabel, metadata.PackageID(rootSyncName, configmanagement.ControllerNamespace, configsync.RootSyncKind)),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/configmap.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -326,6 +338,7 @@ func TestRoot_Parse(t *testing.T) {
 					"",
 					core.Name("bar"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.ParentPackageIDLabel, metadata.PackageID(rootSyncName, configmanagement.ControllerNamespace, configsync.RootSyncKind)),
 					core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -345,6 +358,7 @@ func TestRoot_Parse(t *testing.T) {
 				// bar not exists, should be added as an implicit namespace
 				fake.NamespaceObject("baz", // baz exists and self-managed, should be added as an implicit namespace
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.ParentPackageIDLabel, metadata.PackageID(rootSyncName, configmanagement.ControllerNamespace, configsync.RootSyncKind)),
 					core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -368,6 +382,7 @@ func TestRoot_Parse(t *testing.T) {
 				fake.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Label(metadata.ParentPackageIDLabel, metadata.PackageID(rootSyncName, configmanagement.ControllerNamespace, configsync.RootSyncKind)),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -379,6 +394,7 @@ func TestRoot_Parse(t *testing.T) {
 				fake.Role(core.Namespace("bar"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Label(metadata.ParentPackageIDLabel, metadata.PackageID(rootSyncName, configmanagement.ControllerNamespace, configsync.RootSyncKind)),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -390,6 +406,7 @@ func TestRoot_Parse(t *testing.T) {
 				fake.ConfigMap(core.Namespace("bar"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Label(metadata.ParentPackageIDLabel, metadata.PackageID(rootSyncName, configmanagement.ControllerNamespace, configsync.RootSyncKind)),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/configmap.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -401,6 +418,7 @@ func TestRoot_Parse(t *testing.T) {
 				fake.Role(core.Namespace("baz"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Label(metadata.ParentPackageIDLabel, metadata.PackageID(rootSyncName, configmanagement.ControllerNamespace, configsync.RootSyncKind)),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -412,6 +430,7 @@ func TestRoot_Parse(t *testing.T) {
 				fake.ConfigMap(core.Namespace("baz"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Label(metadata.ParentPackageIDLabel, metadata.PackageID(rootSyncName, configmanagement.ControllerNamespace, configsync.RootSyncKind)),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/configmap.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -424,6 +443,7 @@ func TestRoot_Parse(t *testing.T) {
 					"",
 					core.Name("bar"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.ParentPackageIDLabel, metadata.PackageID(rootSyncName, configmanagement.ControllerNamespace, configsync.RootSyncKind)),
 					core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -436,6 +456,7 @@ func TestRoot_Parse(t *testing.T) {
 					"",
 					core.Name("baz"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.ParentPackageIDLabel, metadata.PackageID(rootSyncName, configmanagement.ControllerNamespace, configsync.RootSyncKind)),
 					core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -478,10 +499,11 @@ func TestRoot_Parse(t *testing.T) {
 					DiscoveryInterface: syncertest.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
 					Converter:          converter,
 					Updater: Updater{
-						Scope:      declared.RootReconciler,
-						Resources:  &declared.Resources{},
-						Remediator: &remediatorfake.Remediator{},
-						Applier:    fakeApplier,
+						Scope:              declared.RootReconciler,
+						Resources:          &declared.Resources{},
+						Remediator:         &remediatorfake.Remediator{},
+						Applier:            fakeApplier,
+						StatusUpdatePeriod: configsync.DefaultReconcilerSyncStatusUpdatePeriod,
 					},
 					mux: &sync.Mutex{},
 				},
@@ -490,6 +512,8 @@ func TestRoot_Parse(t *testing.T) {
 					NamespaceStrategy: tc.namespaceStrategy,
 				},
 			}
+			// Updater uses the root options to known how to update the RootSync sync status.
+			parser.Options.Updater.SyncStatusUpdater = parser
 			for _, o := range tc.existingObjects {
 				if err := parser.Client.Create(context.Background(), o); err != nil {
 					t.Fatal(err)
@@ -550,6 +574,7 @@ func TestRoot_DeclaredFields(t *testing.T) {
 			webhookEnabled: false,
 			existingObjects: []client.Object{fake.NamespaceObject("foo",
 				core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+				core.Label(metadata.ParentPackageIDLabel, metadata.PackageID(rootSyncName, configmanagement.ControllerNamespace, configsync.RootSyncKind)),
 				core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 				core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:rules":{}}`),
 				core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -563,6 +588,7 @@ func TestRoot_DeclaredFields(t *testing.T) {
 			expectedObjsToApply: []ast.FileObject{
 				fake.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.ParentPackageIDLabel, metadata.PackageID(rootSyncName, configmanagement.ControllerNamespace, configsync.RootSyncKind)),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
@@ -579,6 +605,7 @@ func TestRoot_DeclaredFields(t *testing.T) {
 			webhookEnabled: true,
 			existingObjects: []client.Object{fake.NamespaceObject("foo",
 				core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+				core.Label(metadata.ParentPackageIDLabel, metadata.PackageID(rootSyncName, configmanagement.ControllerNamespace, configsync.RootSyncKind)),
 				core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 				core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:rules":{}}`),
 				core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -593,6 +620,7 @@ func TestRoot_DeclaredFields(t *testing.T) {
 			expectedObjsToApply: []ast.FileObject{
 				fake.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.ParentPackageIDLabel, metadata.PackageID(rootSyncName, configmanagement.ControllerNamespace, configsync.RootSyncKind)),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{"f:configmanagement.gke.io/source-path":{}},"f:labels":{"f:configsync.gke.io/declared-version":{}}},"f:rules":{}}`),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
@@ -611,6 +639,7 @@ func TestRoot_DeclaredFields(t *testing.T) {
 			existingObjects: []client.Object{
 				fake.NamespaceObject("foo",
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.ParentPackageIDLabel, metadata.PackageID(rootSyncName, configmanagement.ControllerNamespace, configsync.RootSyncKind)),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
 					core.Annotation(metadata.SyncTokenAnnotationKey, ""),
@@ -625,6 +654,7 @@ func TestRoot_DeclaredFields(t *testing.T) {
 			expectedObjsToApply: []ast.FileObject{
 				fake.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.ParentPackageIDLabel, metadata.PackageID(rootSyncName, configmanagement.ControllerNamespace, configsync.RootSyncKind)),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{"f:configmanagement.gke.io/source-path":{}},"f:labels":{"f:configsync.gke.io/declared-version":{}}},"f:rules":{}}`),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
@@ -643,6 +673,7 @@ func TestRoot_DeclaredFields(t *testing.T) {
 			existingObjects: []client.Object{
 				fake.NamespaceObject("foo",
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.ParentPackageIDLabel, metadata.PackageID(rootSyncName, configmanagement.ControllerNamespace, configsync.RootSyncKind)),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
 					core.Annotation(metadata.SyncTokenAnnotationKey, ""),
@@ -656,6 +687,7 @@ func TestRoot_DeclaredFields(t *testing.T) {
 			expectedObjsToApply: []ast.FileObject{
 				fake.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.ParentPackageIDLabel, metadata.PackageID(rootSyncName, configmanagement.ControllerNamespace, configsync.RootSyncKind)),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
@@ -697,10 +729,11 @@ func TestRoot_DeclaredFields(t *testing.T) {
 					Converter:          converter,
 					WebhookEnabled:     tc.webhookEnabled,
 					Updater: Updater{
-						Scope:      declared.RootReconciler,
-						Resources:  &declared.Resources{},
-						Remediator: &remediatorfake.Remediator{},
-						Applier:    fakeApplier,
+						Scope:              declared.RootReconciler,
+						Resources:          &declared.Resources{},
+						Remediator:         &remediatorfake.Remediator{},
+						Applier:            fakeApplier,
+						StatusUpdatePeriod: configsync.DefaultReconcilerSyncStatusUpdatePeriod,
 					},
 					mux: &sync.Mutex{},
 				},
@@ -708,7 +741,8 @@ func TestRoot_DeclaredFields(t *testing.T) {
 					SourceFormat:      filesystem.SourceFormatUnstructured,
 					NamespaceStrategy: configsync.NamespaceStrategyExplicit,
 				},
-			}
+			} // Updater uses the root options to known how to update the RootSync sync status.
+			parser.Options.Updater.SyncStatusUpdater = parser
 			for _, o := range tc.existingObjects {
 				t.Log("creating obj", o.GetObjectKind().GroupVersionKind().Kind)
 				if err := parser.Client.Create(context.Background(), o); err != nil {
@@ -846,6 +880,7 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 				fake.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Label(metadata.ParentPackageIDLabel, metadata.PackageID(rootSyncName, configmanagement.ControllerNamespace, configsync.RootSyncKind)),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -858,6 +893,7 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 					"",
 					core.Name("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.ParentPackageIDLabel, metadata.PackageID(rootSyncName, configmanagement.ControllerNamespace, configsync.RootSyncKind)),
 					core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -882,6 +918,7 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 				fakeCRD(core.Name("anvils.acme.com"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Label(metadata.ParentPackageIDLabel, metadata.PackageID(rootSyncName, configmanagement.ControllerNamespace, configsync.RootSyncKind)),
 					core.Annotation(metadata.SourcePathAnnotationKey, "cluster/crd.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -892,6 +929,7 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 				fake.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Label(metadata.ParentPackageIDLabel, metadata.PackageID(rootSyncName, configmanagement.ControllerNamespace, configsync.RootSyncKind)),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -905,6 +943,7 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 					core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Label(metadata.ParentPackageIDLabel, metadata.PackageID(rootSyncName, configmanagement.ControllerNamespace, configsync.RootSyncKind)),
 					core.Annotation(metadata.ResourceManagerKey, ":root_my-rs"),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/obj.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
@@ -917,6 +956,7 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 					"",
 					core.Name("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.ParentPackageIDLabel, metadata.PackageID(rootSyncName, configmanagement.ControllerNamespace, configsync.RootSyncKind)),
 					core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -956,10 +996,11 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 					DiscoveryInterface: tc.discoveryClient,
 					Converter:          converter,
 					Updater: Updater{
-						Scope:      declared.RootReconciler,
-						Resources:  &declared.Resources{},
-						Remediator: &remediatorfake.Remediator{},
-						Applier:    fakeApplier,
+						Scope:              declared.RootReconciler,
+						Resources:          &declared.Resources{},
+						Remediator:         &remediatorfake.Remediator{},
+						Applier:            fakeApplier,
+						StatusUpdatePeriod: configsync.DefaultReconcilerSyncStatusUpdatePeriod,
 					},
 					mux: &sync.Mutex{},
 				},
@@ -968,6 +1009,8 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 					NamespaceStrategy: configsync.NamespaceStrategyImplicit,
 				},
 			}
+			// Updater uses the root options to known how to update the RootSync sync status.
+			parser.Options.Updater.SyncStatusUpdater = parser
 			state := &reconcilerState{}
 			err := parseAndUpdate(context.Background(), parser, triggerReimport, state)
 			testerrors.AssertEqual(t, tc.expectedError, err, "expected error to match")
@@ -1041,10 +1084,11 @@ func TestRoot_SourceReconcilerErrorsMetricValidation(t *testing.T) {
 					Client:             syncertest.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName)),
 					DiscoveryInterface: syncertest.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
 					Updater: Updater{
-						Scope:      declared.RootReconciler,
-						Resources:  &declared.Resources{},
-						Remediator: &remediatorfake.Remediator{},
-						Applier:    fakeApplier,
+						Scope:              declared.RootReconciler,
+						Resources:          &declared.Resources{},
+						Remediator:         &remediatorfake.Remediator{},
+						Applier:            fakeApplier,
+						StatusUpdatePeriod: configsync.DefaultReconcilerSyncStatusUpdatePeriod,
 					},
 					mux: &sync.Mutex{},
 				},
@@ -1052,6 +1096,8 @@ func TestRoot_SourceReconcilerErrorsMetricValidation(t *testing.T) {
 					SourceFormat: filesystem.SourceFormatUnstructured,
 				},
 			}
+			// Updater uses the root options to known how to update the RootSync sync status.
+			parser.Options.Updater.SyncStatusUpdater = parser
 			state := &reconcilerState{}
 			err := parseAndUpdate(context.Background(), parser, triggerReimport, state)
 			testerrors.AssertEqual(t, tc.expectedError, err, "expected error to match")
@@ -1066,13 +1112,15 @@ func TestRoot_SourceReconcilerErrorsMetricValidation(t *testing.T) {
 func TestRoot_SourceAndSyncReconcilerErrorsMetricValidation(t *testing.T) {
 	testCases := []struct {
 		name            string
-		applyErrors     status.MultiError
+		applyErrors     []status.Error
 		expectedError   status.MultiError
 		expectedMetrics []*view.Row
 	}{
 		{
-			name:          "single reconciler error in sync component",
-			applyErrors:   applier.Error(errors.New("sync error")),
+			name: "single reconciler error in sync component",
+			applyErrors: []status.Error{
+				applier.Error(errors.New("sync error")),
+			},
 			expectedError: applier.Error(errors.New("sync error")),
 			expectedMetrics: []*view.Row{
 				{Data: &view.LastValueData{Value: 0}, Tags: []tag.Tag{{Key: metrics.KeyComponent, Value: "source"}, {Key: metrics.KeyErrorClass, Value: "1xxx"}}},
@@ -1085,10 +1133,10 @@ func TestRoot_SourceAndSyncReconcilerErrorsMetricValidation(t *testing.T) {
 		},
 		{
 			name: "multiple reconciler errors in sync component",
-			applyErrors: status.Wrap(
+			applyErrors: []status.Error{
 				applier.Error(errors.New("sync error")),
 				status.InternalError("internal error"),
-			),
+			},
 			expectedError: status.Wrap(
 				applier.Error(errors.New("sync error")),
 				status.InternalError("internal error"),
@@ -1121,10 +1169,11 @@ func TestRoot_SourceAndSyncReconcilerErrorsMetricValidation(t *testing.T) {
 				Options: &Options{
 					Parser: fakeConfigParser,
 					Updater: Updater{
-						Scope:      declared.RootReconciler,
-						Resources:  &declared.Resources{},
-						Remediator: &remediatorfake.Remediator{},
-						Applier:    fakeApplier,
+						Scope:              declared.RootReconciler,
+						Resources:          &declared.Resources{},
+						Remediator:         &remediatorfake.Remediator{},
+						Applier:            fakeApplier,
+						StatusUpdatePeriod: configsync.DefaultReconcilerSyncStatusUpdatePeriod,
 					},
 					SyncName:           rootSyncName,
 					ReconcilerName:     rootReconcilerName,
@@ -1136,6 +1185,8 @@ func TestRoot_SourceAndSyncReconcilerErrorsMetricValidation(t *testing.T) {
 					SourceFormat: filesystem.SourceFormatUnstructured,
 				},
 			}
+			// Updater uses the root options to known how to update the RootSync sync status.
+			parser.Options.Updater.SyncStatusUpdater = parser
 			state := &reconcilerState{}
 			err := parseAndUpdate(context.Background(), parser, triggerReimport, state)
 			testerrors.AssertEqual(t, tc.expectedError, err, "expected error to match")

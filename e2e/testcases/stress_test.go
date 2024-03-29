@@ -248,7 +248,7 @@ func TestStressLargeRequest(t *testing.T) {
 		},
 		Override: &v1beta1.RootSyncOverrideSpec{
 			OverrideSpec: v1beta1.OverrideSpec{
-				StatusMode: applier.StatusDisabled,
+				StatusMode: applier.StatusDisabled.String(),
 				Resources:  []v1beta1.ContainerResourcesSpec{reconcilerOverride},
 			},
 		},
@@ -351,7 +351,7 @@ func TestStressManyDeployments(t *testing.T) {
 	syncPath := filepath.Join(gitproviders.DefaultSyncDir, "stress-test")
 	ns := "stress-test-ns"
 
-	deployCount := 1000
+	deployCount := 4000
 
 	nt.T.Logf("Adding a test namespace and %d deployments", deployCount)
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/ns-%s.yaml", syncPath, ns), fake.NamespaceObject(ns)))
@@ -410,6 +410,363 @@ spec:
 	nt.T.Log("Removing resources from Git")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(syncPath))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing resources from Git"))
+
+	// Validate that the resources sync without the reconciler running out of
+	// memory, getting OOMKilled, and crash looping.
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
+}
+
+// TestStressProfileResourcesByObjectCount loops through multiple steps. Each
+// step adds and removes incrementally more Deployments. This is useful for
+// profiling the resource requests, usage, and limits relative to the number of
+// managed objects.
+// Skipped by default, because it takes about 2 hours.
+func TestStressProfileResourcesByObjectCount(t *testing.T) {
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured,
+		ntopts.StressTest,
+		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
+
+	syncPath := filepath.Join(gitproviders.DefaultSyncDir, "stress-test")
+	ns := "stress-test-ns"
+
+	steps := 8
+	deploysPerStep := 500
+
+	for step := 1; step <= steps; step++ {
+		deployCount := deploysPerStep * step
+
+		nt.T.Logf("Adding a test namespace and %d deployments", deployCount)
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/ns-%s.yaml", syncPath, ns), fake.NamespaceObject(ns)))
+
+		for i := 1; i <= deployCount; i++ {
+			name := fmt.Sprintf("pause-%d", i)
+			nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile(
+				fmt.Sprintf("%s/namespaces/%s/deployment-%s.yaml", syncPath, ns, name),
+				[]byte(fmt.Sprintf(`
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: %s
+  namespace: %s
+  labels:
+    app: %s
+    nomos-test: enabled
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: %s
+  template:
+    metadata:
+      labels:
+        app: %s
+    spec:
+      containers:
+      - name: pause
+        image: registry.k8s.io/pause:3.7
+        ports:
+        - containerPort: 80
+        resources:
+          limits:
+            cpu: 250m
+            memory: 256Mi
+          requests:
+            cpu: 250m
+            memory: 256Mi
+`, name, ns, name, name, name))))
+		}
+
+		nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("Adding a test namespace and %d deployments", deployCount)))
+
+		// Validate that the resources sync without the reconciler running out of
+		// memory, getting OOMKilled, and crash looping.
+		if err := nt.WatchForAllSyncs(); err != nil {
+			nt.T.Fatal(err)
+		}
+
+		nt.T.Logf("Verify the number of Deployment objects")
+		validateNumberOfObjectsEquals(nt, kinds.Deployment(), deployCount,
+			client.MatchingLabels{metadata.ManagedByKey: metadata.ManagedByValue},
+			client.InNamespace(ns))
+
+		nt.T.Log("Removing resources from Git")
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(syncPath))
+		nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing resources from Git"))
+
+		// Validate that the resources sync without the reconciler running out of
+		// memory, getting OOMKilled, and crash looping.
+		if err := nt.WatchForAllSyncs(); err != nil {
+			nt.T.Fatal(err)
+		}
+	}
+}
+
+// TestStressProfileResourcesByObjectCount loops through multiple steps. Each
+// step provisions multiple RootSyncs, each with many Deployments applied and
+// then pruned. Each subsequent step manages more and more Deployments.
+// This is useful for profiling the resource requests, usage, and limits
+// relative to the number of managed objects.
+// Skipped by default, because it takes about 2 hours.
+func TestStressProfileResourcesByObjectCountWithMultiSync(t *testing.T) {
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured,
+		ntopts.StressTest,
+		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
+
+	steps := 8
+	deploysPerStep := 500
+	syncCount := 10
+
+	// Create the namespace using the default root-sync.
+	// Use the same namespace for all other RSyncs to ensure they all show up in watches, whether it's cluster-scope or namespace-scope.
+	ns := "stress-test-ns"
+	nt.T.Logf("Adding test namespace: %s", ns)
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/ns-%s.yaml", gitproviders.DefaultSyncDir, ns), fake.NamespaceObject(ns)))
+
+	for syncIndex := 1; syncIndex <= syncCount; syncIndex++ {
+		syncName := fmt.Sprintf("sync-%d", syncIndex)
+		// Use the same Git repo for all the RootSyncs, but have them sync from different directories.
+		syncPath := syncName
+		syncObj := nomostest.RootSyncObjectV1Beta1FromOtherRootRepo(nt, syncName, configsync.RootSyncName)
+		syncObj.Spec.Git.Dir = syncPath
+		syncObj.Spec.SafeOverride().LogLevels = []v1beta1.ContainerLogLevelOverride{
+			{
+				ContainerName: "reconciler",
+				LogLevel:      3,
+			},
+		}
+		// Manage the RootSyncs with the parent root-sync
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
+			fmt.Sprintf("%s/namespaces/%s/rootsync-%s.yaml", gitproviders.DefaultSyncDir, configsync.ControllerNamespace, syncName),
+			syncObj))
+	}
+
+	for step := 1; step <= steps; step++ {
+		totalDeployCount := deploysPerStep * step
+		nt.T.Logf("Starting step %d: %d Deployments total", step, totalDeployCount)
+
+		for syncIndex := 1; syncIndex <= syncCount; syncIndex++ {
+			syncName := fmt.Sprintf("sync-%d", syncIndex)
+			syncPath := syncName
+			deployCount := totalDeployCount / syncCount
+
+			nt.T.Logf("Adding %d deployments for RootSync %s", deployCount, syncName)
+
+			for deployIndex := 1; deployIndex <= deployCount; deployIndex++ {
+				deployName := fmt.Sprintf("pause-%d-%d", syncIndex, deployIndex)
+				nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile(
+					fmt.Sprintf("%s/namespaces/%s/deployment-%s.yaml", syncPath, ns, deployName),
+					[]byte(fmt.Sprintf(`
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: %s
+  namespace: %s
+  labels:
+    app: %s
+    nomos-test: enabled
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: %s
+  template:
+    metadata:
+      labels:
+        app: %s
+    spec:
+      containers:
+      - name: pause
+        image: registry.k8s.io/pause:3.7
+        ports:
+        - containerPort: 80
+        resources:
+          limits:
+            cpu: 250m
+            memory: 256Mi
+          requests:
+            cpu: 250m
+            memory: 256Mi
+`, deployName, ns, deployName, deployName, deployName))))
+			}
+
+			nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("Adding %d deployments for %d RootSyncs", deployCount, syncCount)))
+		}
+
+		// Validate that the resources sync without the reconciler running out of
+		// memory, getting OOMKilled, and crash looping.
+		if err := nt.WatchForAllSyncs(); err != nil {
+			nt.T.Fatal(err)
+		}
+
+		nt.T.Logf("Verify the number of Deployment objects")
+		validateNumberOfObjectsEquals(nt, kinds.Deployment(), totalDeployCount,
+			client.MatchingLabels{metadata.ManagedByKey: metadata.ManagedByValue},
+			client.InNamespace(ns))
+
+		nt.T.Log("Removing resources from Git")
+		for syncIndex := 1; syncIndex <= syncCount; syncIndex++ {
+			syncName := fmt.Sprintf("sync-%d", syncIndex)
+			syncPath := syncName
+			nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(syncPath))
+			// Add an empty sync directory so the reconciler doesn't error that it can't find it.
+			nt.Must(nt.RootRepos[configsync.RootSyncName].AddEmptyDir(syncPath))
+		}
+		nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing resources from Git"))
+
+		// Validate that the resources sync without the reconciler running out of
+		// memory, getting OOMKilled, and crash looping.
+		if err := nt.WatchForAllSyncs(); err != nil {
+			nt.T.Fatal(err)
+		}
+
+		nt.T.Logf("Verify all Deployments deleted")
+		validateNumberOfObjectsEquals(nt, kinds.Deployment(), 0,
+			client.MatchingLabels{metadata.ManagedByKey: metadata.ManagedByValue},
+			client.InNamespace(ns))
+	}
+
+	nt.T.Log("Removing RootSyncs from Git")
+	for syncIndex := 1; syncIndex <= syncCount; syncIndex++ {
+		syncName := fmt.Sprintf("sync-%d", syncIndex)
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(
+			fmt.Sprintf("%s/namespaces/%s/rootsync-%s.yaml", gitproviders.DefaultSyncDir, configsync.ControllerNamespace, syncName)))
+	}
+
+	nt.T.Logf("Removing test namespace: %s", ns)
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(fmt.Sprintf("%s/ns-%s.yaml", gitproviders.DefaultSyncDir, ns)))
+
+	// Validate that the resources sync without the reconciler running out of
+	// memory, getting OOMKilled, and crash looping.
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
+}
+
+// TestStressProfileResourcesByRootSyncCount applies 10,000 Deployments, across
+// 10 different RootSyncs, each managing 1000 Deployments.
+// This is useful for profiling the resource requests, usage, and limits
+// relative to the total number of objects on the cluster, with a single
+// resource type, in the same namespace.
+func TestStressProfileResourcesByRootSyncCount(t *testing.T) {
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured,
+		ntopts.StressTest,
+		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
+
+	nt.T.Log("Stop the CS webhook by removing the webhook configuration")
+	nomostest.StopWebhook(nt)
+
+	// Create the namespace using the default root-sync.
+	// Use the same namespace for all other RSyncs to ensure they all show up in watches, whether it's cluster-scope or namespace-scope.
+	ns := "stress-test-ns"
+	nt.T.Logf("Adding test namespace: %s", ns)
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/ns-%s.yaml", gitproviders.DefaultSyncDir, ns), fake.NamespaceObject(ns)))
+
+	syncCount := 10
+	deployCount := 1000
+
+	for i := 1; i <= syncCount; i++ {
+		syncName := fmt.Sprintf("sync-%d", i)
+		// Use the same Git repo for all the RootSyncs, but have them sync from different directories.
+		syncPath := syncName
+		syncObj := nomostest.RootSyncObjectV1Beta1FromOtherRootRepo(nt, syncName, configsync.RootSyncName)
+		syncObj.Spec.Git.Dir = syncPath
+		syncObj.Spec.SafeOverride().LogLevels = []v1beta1.ContainerLogLevelOverride{
+			{
+				ContainerName: "reconciler",
+				LogLevel:      3,
+			},
+		}
+		// Manage the RootSyncs with the parent root-sync
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
+			fmt.Sprintf("%s/namespaces/%s/rootsync-%s.yaml", gitproviders.DefaultSyncDir, configsync.ControllerNamespace, syncName),
+			syncObj))
+
+		// For each RootSync, make 100 Deployments with unique names
+		for j := 1; j <= deployCount; j++ {
+			deployName := fmt.Sprintf("pause-%d-%d", i, j)
+			nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile(
+				fmt.Sprintf("%s/namespaces/%s/deployment-%s.yaml", syncPath, ns, deployName),
+				[]byte(fmt.Sprintf(`
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: %s
+  namespace: %s
+  labels:
+    app: %s
+    nomos-test: enabled
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: %s
+  template:
+    metadata:
+      labels:
+        app: %s
+    spec:
+      containers:
+      - name: pause
+        image: registry.k8s.io/pause:3.7
+        ports:
+        - containerPort: 80
+        resources:
+          limits:
+            cpu: 250m
+            memory: 256Mi
+          requests:
+            cpu: 250m
+            memory: 256Mi
+`, deployName, ns, deployName, deployName, deployName))))
+		}
+	}
+
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("Adding %d RootSyncs each with %d deployments", syncCount, deployCount)))
+
+	// Wait for root-sync to sync
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	// Wait for the other RootSyncs to sync
+	nt.T.Log("Waiting for RootSyncs to be synced...")
+	latestCommit := commitForRepo(nt.RootRepos[configsync.RootSyncName])
+	for i := 1; i <= syncCount; i++ {
+		syncName := fmt.Sprintf("sync-%d", i)
+		syncPath := syncName
+		syncObj := nomostest.RootSyncObjectV1Beta1FromOtherRootRepo(nt, syncName, configsync.RootSyncName)
+		syncObj.Spec.Git.Dir = syncPath
+		waitForSync(nt, latestCommit, syncObj)
+	}
+
+	nt.T.Logf("Verify the number of Deployment objects")
+	validateNumberOfObjectsEquals(nt, kinds.Deployment(), syncCount*deployCount,
+		client.MatchingLabels{metadata.ManagedByKey: metadata.ManagedByValue},
+		client.InNamespace(ns))
+
+	nt.T.Log("Removing Deployments from Git")
+	for i := 1; i <= syncCount; i++ {
+		syncPath := fmt.Sprintf("sync-%d", i)
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(syncPath))
+		// Add an empty sync directory so the reconciler doesn't error that it can't find it.
+		nt.Must(nt.RootRepos[configsync.RootSyncName].AddEmptyDir(syncPath))
+	}
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing resources from Git"))
+
+	// Validate that the resources sync without the reconciler running out of
+	// memory, getting OOMKilled, and crash looping.
+	if err := nt.WatchForAllSyncs(); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Log("Removing RootSyncs from Git")
+	for i := 1; i <= syncCount; i++ {
+		syncName := fmt.Sprintf("sync-%d", i)
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(
+			fmt.Sprintf("%s/namespaces/%s/rootsync-%s.yaml", gitproviders.DefaultSyncDir, configsync.ControllerNamespace, syncName)))
+	}
 
 	// Validate that the resources sync without the reconciler running out of
 	// memory, getting OOMKilled, and crash looping.
@@ -883,12 +1240,15 @@ func truncateSourceErrors() testpredicates.Predicate {
 }
 
 func validateNumberOfObjectsEquals(nt *nomostest.NT, gvk schema.GroupVersionKind, count int, opts ...client.ListOption) {
-	nsList := &metav1.PartialObjectMetadataList{}
-	nsList.SetGroupVersionKind(gvk)
-	if err := nt.KubeClient.List(nsList, opts...); err != nil {
-		nt.T.Error(err)
-	}
-	if len(nsList.Items) != count {
-		nt.T.Errorf("Expected cluster to have %d %s objects, but found %d", count, gvk, len(nsList.Items))
-	}
+	nomostest.Wait(nt.T, fmt.Sprintf("wait for %d %s objects", count, gvk), nt.DefaultWaitTimeout, func() error {
+		nsList := &metav1.PartialObjectMetadataList{}
+		nsList.SetGroupVersionKind(gvk)
+		if err := nt.KubeClient.List(nsList, opts...); err != nil {
+			return err
+		}
+		if len(nsList.Items) != count {
+			return fmt.Errorf("expected cluster to have %d %s objects, but found %d", count, gvk, len(nsList.Items))
+		}
+		return nil
+	})
 }

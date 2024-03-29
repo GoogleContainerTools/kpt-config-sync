@@ -24,13 +24,14 @@ import (
 )
 
 type sourceStatus struct {
-	commit     string
-	errs       status.MultiError
-	lastUpdate metav1.Time
+	commit      string
+	objectCount int
+	errs        status.MultiError
+	lastUpdate  metav1.Time
 }
 
 func (gs sourceStatus) equal(other sourceStatus) bool {
-	return gs.commit == other.commit && status.DeepEqual(gs.errs, other.errs)
+	return gs.commit == other.commit && gs.objectCount == other.objectCount && status.DeepEqual(gs.errs, other.errs)
 }
 
 type renderingStatus struct {
@@ -48,14 +49,15 @@ func (rs renderingStatus) equal(other renderingStatus) bool {
 }
 
 type syncStatus struct {
-	syncing    bool
-	commit     string
-	errs       status.MultiError
-	lastUpdate metav1.Time
+	syncing     bool
+	commit      string
+	objectCount int
+	errs        status.MultiError
+	lastUpdate  metav1.Time
 }
 
 func (gs syncStatus) equal(other syncStatus) bool {
-	return gs.syncing == other.syncing && gs.commit == other.commit && status.DeepEqual(gs.errs, other.errs)
+	return gs.syncing == other.syncing && gs.commit == other.commit && gs.objectCount == other.objectCount && status.DeepEqual(gs.errs, other.errs)
 }
 
 type reconcilerState struct {

@@ -21,6 +21,7 @@ import (
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/status"
 	"sigs.k8s.io/cli-utils/pkg/apis/actuation"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // ApplierErrorCode is the error code for apply failures.
@@ -37,6 +38,12 @@ func Error(err error) status.Error {
 // the given resource.
 func ErrorForResource(err error, id core.ID) status.Error {
 	return applierErrorBuilder.Wrap(fmt.Errorf("failed to apply %v: %w", id, err)).Build()
+}
+
+// ErrorForResourceWithResource returns an Error that indicates that
+// the applier failed to apply the given resource and includes the resource itself
+func ErrorForResourceWithResource(err error, id core.ID, resource client.Object) status.Error {
+	return applierErrorBuilder.Sprintf("failed to apply %v", id).Wrap(err).BuildWithResources(resource)
 }
 
 // PruneErrorForResource indicates that the applier failed to prune

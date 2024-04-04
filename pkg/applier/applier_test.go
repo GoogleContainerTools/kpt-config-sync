@@ -137,7 +137,7 @@ func TestApply(t *testing.T) {
 				formApplyEvent(event.ApplyFailed, testObj, applyerror.NewUnknownTypeError(errors.New("unknown type"))),
 				formApplyEvent(event.ApplyPending, testObj2, nil),
 			},
-			expectedError: ErrorForResource(errors.New("unknown type"), idFrom(testID)),
+			expectedError: ErrorForResourceWithResource(errors.New("unknown type"), idFrom(testID), testObj),
 			expectedGVKs:  map[schema.GroupVersionKind]struct{}{kinds.Deployment(): {}},
 		},
 		{
@@ -173,7 +173,7 @@ func TestApply(t *testing.T) {
 				formApplyEvent(event.ApplyFailed, testObj, applyerror.NewApplyRunError(errors.New("failed apply"))),
 				formApplyEvent(event.ApplyPending, testObj2, nil),
 			},
-			expectedError: ErrorForResource(errors.New("failed apply"), idFrom(testID)),
+			expectedError: ErrorForResourceWithResource(errors.New("failed apply"), idFrom(testID), testObj),
 			expectedGVKs: map[schema.GroupVersionKind]struct{}{
 				kinds.Deployment(): {},
 				testGVK:            {},
@@ -234,8 +234,8 @@ func TestApply(t *testing.T) {
 				kinds.Deployment(): {},
 			},
 			expectedError: status.Append(
-				ErrorForResource(errors.New("unknown type"), idFrom(testID)),
-				ErrorForResource(errors.New("failed apply"), idFrom(deploymentID))),
+				ErrorForResourceWithResource(errors.New("unknown type"), idFrom(testID), testObj),
+				ErrorForResourceWithResource(errors.New("failed apply"), idFrom(deploymentID), deploymentObj)),
 		},
 		{
 			name: "failed dependency during apply",
@@ -683,7 +683,7 @@ func indent(in string, indentation uint) string {
 
 func newDeploymentObj() *unstructured.Unstructured {
 	return fake.UnstructuredObject(kinds.Deployment(),
-		core.Namespace("test-namespace"), core.Name("random-name"))
+		core.Namespace("test-namespace"), core.Name("random-name"), core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"))
 }
 
 func newTestObj(name string) *unstructured.Unstructured {

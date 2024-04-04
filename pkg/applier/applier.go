@@ -246,8 +246,15 @@ func (h *eventHandler) processApplyEvent(ctx context.Context, e event.ApplyEvent
 		switch e.Error.(type) {
 		case *applyerror.UnknownTypeError:
 			unknownTypeResources[id] = struct{}{}
+
+			if e.Resource != nil {
+				return ErrorForResourceWithResource(e.Error, id, e.Resource)
+			}
 			return ErrorForResource(e.Error, id)
 		default:
+			if e.Resource != nil {
+				return ErrorForResourceWithResource(e.Error, id, e.Resource)
+			}
 			return ErrorForResource(e.Error, id)
 		}
 

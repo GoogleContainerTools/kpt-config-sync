@@ -86,6 +86,7 @@ var reconcilerManagerAllowList = []string{
 // reconcilerBase provides common data and methods for the RepoSync and RootSync reconcilers
 type reconcilerBase struct {
 	loggingController
+	reconcilerFinalizerHandler reconcilerFinalizerHandler
 
 	clusterName             string
 	client                  client.Client    // caching
@@ -617,10 +618,14 @@ func (r *reconcilerBase) setupOrTeardown(ctx context.Context, syncObj client.Obj
 	// Else - the object is being deleted.
 
 	if controllerutil.ContainsFinalizer(syncObj, metadata.ReconcilerFinalizer) {
-		// The object is being deleted, but the reconciler finalizer is still running.
-		// Wait for the reconciler finalizer to complete.
-		r.logger(ctx).Info("Waiting for Reconciler Finalizer to finish")
-		return nil
+		removed, err := r.reconcilerFinalizerHandler.handleReconcilerFinalizer(ctx, syncObj)
+		if err != nil {
+			return err
+		}
+		if !removed {
+			r.logger(ctx).Info("Waiting for Reconciler Finalizer to finish")
+			return nil
+		}
 	}
 
 	if controllerutil.ContainsFinalizer(syncObj, metadata.ReconcilerManagerFinalizer) {
@@ -639,11 +644,11 @@ func (r *reconcilerBase) setupOrTeardown(ctx context.Context, syncObj client.Obj
 		controllerutil.RemoveFinalizer(syncObj, metadata.ReconcilerManagerFinalizer)
 		if err := r.client.Update(ctx, syncObj); err != nil {
 			err = status.APIServerError(err,
-				fmt.Sprintf("failed to update %s to remove finalizer", r.syncKind))
-			r.logger(ctx).Error(err, "Finalizer removal failed")
+				fmt.Sprintf("failed to update %s to remove the reconciler-manager finalizer", r.syncKind))
+			r.logger(ctx).Error(err, "Removal of reconciler-manager finalizer failed")
 			return err
 		}
-		r.logger(ctx).Info("Finalizer removal successful")
+		r.logger(ctx).Info("Removal of reconciler-manager finalizer succeeded")
 	}
 
 	return nil

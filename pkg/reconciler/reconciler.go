@@ -213,11 +213,6 @@ func Run(opts Options) {
 		klog.Fatalf("Instantiating Remediator: %v", err)
 	}
 
-	converter, err := declared.NewValueConverter(discoveryClient)
-	if err != nil {
-		klog.Fatalf("Instantiating converter: %v", err)
-	}
-
 	// Configure the Parser.
 	var parser parse.Parser
 	fs := parse.FileSource{
@@ -243,7 +238,6 @@ func Run(opts Options) {
 		RetryPeriod:        opts.RetryPeriod,
 		StatusUpdatePeriod: opts.StatusUpdatePeriod,
 		DiscoveryInterface: discoveryClient,
-		Converter:          converter,
 		RenderingEnabled:   opts.RenderingEnabled,
 		Files:              parse.Files{FileSource: fs},
 		WebhookEnabled:     opts.WebhookEnabled,
@@ -254,6 +248,15 @@ func Run(opts Options) {
 			Remediator: rem,
 		},
 	}
+	// Only instantiate the converter when the webhook is enabled because the
+	// instantiation pulls fresh schemas from the openapi discovery endpoint.
+	if opts.WebhookEnabled {
+		parseOpts.Converter, err = declared.NewValueConverter(discoveryClient)
+		if err != nil {
+			klog.Fatalf("Instantiating converter: %v", err)
+		}
+	}
+
 	nsControllerState := namespacecontroller.NewState()
 	if opts.ReconcilerScope == declared.RootReconciler {
 		rootOpts := &parse.RootOptions{

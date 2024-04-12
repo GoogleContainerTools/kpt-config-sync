@@ -20,15 +20,20 @@ import (
 	"fmt"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/go-logr/logr"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/utils/pointer"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
@@ -38,6 +43,7 @@ import (
 	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 func TestAdjustContainerResources(t *testing.T) {
@@ -953,4 +959,168 @@ func mapToPodResources(m map[string]corev1.ResourceRequirements) *util.PodResour
 		})
 	}
 	return &util.PodResources{Containers: containers}
+}
+
+func withFinalizer(finalizer string) core.MetaMutator {
+	return func(o client.Object) {
+		controllerutil.AddFinalizer(o, finalizer)
+	}
+}
+
+func withNamespacePhase(phase corev1.NamespacePhase) core.MetaMutator {
+	return func(o client.Object) {
+		ns := o.(*corev1.Namespace)
+		ns.Status.Phase = phase
+	}
+}
+func TestSetupAndTeardown(t *testing.T) {
+	lc := loggingController{logr.Discard()}
+	testCases := map[string]struct {
+		rsync              client.Object
+		serverObjs         []client.Object
+		expectedErrMsg     string
+		expectedServerObjs []client.Object
+	}{
+		"Active RepoSync should have recociler-manager finalizer injected": {
+			rsync: fake.RepoSyncObjectV1Beta1("test-ns", "rs"),
+			expectedServerObjs: []client.Object{
+				fake.RepoSyncObjectV1Beta1("test-ns", "rs",
+					withFinalizer(metadata.ReconcilerManagerFinalizer),
+					core.Generation(1), core.UID("1"), core.ResourceVersion("2"), // ResourceVersion is updated
+				),
+			},
+		},
+		"Active RepoSync with the recociler-manager finalizer should remain the same": {
+			rsync: fake.RepoSyncObjectV1Beta1("test-ns", "rs",
+				withFinalizer(metadata.ReconcilerManagerFinalizer)),
+			expectedServerObjs: []client.Object{
+				fake.RepoSyncObjectV1Beta1("test-ns", "rs",
+					withFinalizer(metadata.ReconcilerManagerFinalizer),
+					core.Generation(1), core.UID("1"), core.ResourceVersion("1"), // ResourceVersion remains the same
+				),
+			},
+		},
+		"Terminating RepoSync's reconciler-manager finalizer should be removed": {
+			rsync: fake.RepoSyncObjectV1Beta1("test-ns", "rs",
+				withFinalizer(metadata.ReconcilerManagerFinalizer),
+				core.DeletionTimestamp(metav1.Time{Time: time.Now()})),
+			expectedServerObjs: nil, // RepoSync should be deleted after reconciler-manager finalizer is removed.
+		},
+		// This won't happen because RepoSync can't exist without the Namespace
+		// The test uses it to simulate a k8s-apiserver GET failure.
+		"Terminating RepoSync's reconciler finalizer removal should fail if its Namespace does not exist": {
+			rsync: fake.RepoSyncObjectV1Beta1("test-ns", "rs",
+				withFinalizer(metadata.ReconcilerFinalizer),
+				withFinalizer(metadata.ReconcilerManagerFinalizer),
+				core.DeletionTimestamp(metav1.Time{Time: time.Now()})),
+			expectedServerObjs: []client.Object{
+				fake.RepoSyncObjectV1Beta1("test-ns", "rs",
+					withFinalizer(metadata.ReconcilerFinalizer),
+					withFinalizer(metadata.ReconcilerManagerFinalizer), // reconciler-manager finalizer should not be removed
+					core.Generation(1), core.UID("1"), core.ResourceVersion("1"),
+					core.DeletionTimestamp(metav1.Time{Time: time.Now()})),
+			},
+			expectedErrMsg: "Namespace \"/test-ns\" not found",
+		},
+		"Terminating RootSync's reconciler & reconciler-manager finalizers should be kept if its Namespace is not terminating": {
+			rsync: fake.RootSyncObjectV1Beta1("rs",
+				withFinalizer(metadata.ReconcilerFinalizer),
+				withFinalizer(metadata.ReconcilerManagerFinalizer),
+				core.DeletionTimestamp(metav1.Time{Time: time.Now()})),
+			serverObjs: []client.Object{fake.NamespaceObject(configsync.ControllerNamespace)},
+			expectedServerObjs: []client.Object{
+				fake.RootSyncObjectV1Beta1("rs",
+					withFinalizer(metadata.ReconcilerFinalizer),        // wait for the reconciler finalizer to complete
+					withFinalizer(metadata.ReconcilerManagerFinalizer), // reconciler-manager finalizer should not be removed
+					core.Generation(1), core.UID("1"), core.ResourceVersion("1"),
+					core.DeletionTimestamp(metav1.Time{Time: time.Now()})),
+				fake.NamespaceObject(configsync.ControllerNamespace,
+					core.Generation(1), core.UID("1"), core.ResourceVersion("1"),
+				),
+			},
+		},
+		"Terminating RepoSync's reconciler finalizer should be kept if its Namespace is not terminating": {
+			rsync: fake.RepoSyncObjectV1Beta1("test-ns", "rs",
+				withFinalizer(metadata.ReconcilerFinalizer),
+				withFinalizer(metadata.ReconcilerManagerFinalizer),
+				core.DeletionTimestamp(metav1.Time{Time: time.Now()})),
+			serverObjs: []client.Object{fake.NamespaceObject("test-ns")},
+			expectedServerObjs: []client.Object{
+				fake.RepoSyncObjectV1Beta1("test-ns", "rs",
+					withFinalizer(metadata.ReconcilerFinalizer),        // wait for the reconciler finalizer to complete
+					withFinalizer(metadata.ReconcilerManagerFinalizer), // reconciler-manager finalizer should not be removed
+					core.Generation(1), core.UID("1"), core.ResourceVersion("1"),
+					core.DeletionTimestamp(metav1.Time{Time: time.Now()})),
+				fake.NamespaceObject("test-ns",
+					core.Generation(1), core.UID("1"), core.ResourceVersion("1"),
+				),
+			},
+		},
+		"Terminating RootSync's reconciler finalizer is kept even if its Namespace is terminating": {
+			rsync: fake.RootSyncObjectV1Beta1("rs",
+				withFinalizer(metadata.ReconcilerFinalizer),
+				withFinalizer(metadata.ReconcilerManagerFinalizer),
+				core.DeletionTimestamp(metav1.Time{Time: time.Now()})),
+			serverObjs: []client.Object{fake.NamespaceObject(configsync.ControllerNamespace,
+				withNamespacePhase(corev1.NamespaceTerminating),
+				withFinalizer("kubernetes"), // The finalizer prevents the Namespace from being deleted
+				core.DeletionTimestamp(metav1.Time{Time: time.Now()}))},
+			expectedServerObjs: []client.Object{
+				fake.RootSyncObjectV1Beta1("rs",
+					withFinalizer(metadata.ReconcilerFinalizer),
+					withFinalizer(metadata.ReconcilerManagerFinalizer), // reconciler-manager finalizer should not be removed
+					core.Generation(1), core.UID("1"), core.ResourceVersion("1"),
+					core.DeletionTimestamp(metav1.Time{Time: time.Now()})),
+				fake.NamespaceObject(configsync.ControllerNamespace,
+					withNamespacePhase(corev1.NamespaceTerminating),
+					withFinalizer("kubernetes"), // The finalizer prevents the Namespace from being deleted
+					core.Generation(1), core.UID("1"), core.ResourceVersion("1"),
+					core.DeletionTimestamp(metav1.Time{Time: time.Now()}))},
+		},
+		"Terminating RepoSync's reconciler & reconciler-manager finalizers should be removed if its Namespace is terminating": {
+			rsync: fake.RepoSyncObjectV1Beta1("test-ns", "rs",
+				withFinalizer(metadata.ReconcilerFinalizer),
+				withFinalizer(metadata.ReconcilerManagerFinalizer),
+				core.DeletionTimestamp(metav1.Time{Time: time.Now()})),
+			serverObjs: []client.Object{fake.NamespaceObject("test-ns",
+				withNamespacePhase(corev1.NamespaceTerminating),
+				withFinalizer("kubernetes"), // The finalizer prevents the Namespace from being deleted
+				core.DeletionTimestamp(metav1.Time{Time: time.Now()}))},
+			expectedServerObjs: []client.Object{
+				// RepoSync should be deleted after reconciler finalizer is removed.
+				fake.NamespaceObject("test-ns",
+					withNamespacePhase(corev1.NamespaceTerminating),
+					withFinalizer("kubernetes"), // The finalizer prevents the Namespace from being deleted
+					core.Generation(1), core.UID("1"), core.ResourceVersion("1"),
+					core.DeletionTimestamp(metav1.Time{Time: time.Now()}))},
+		},
+	}
+
+	noOpFunc := func(context.Context) error { return nil }
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+			objs := []client.Object{tc.rsync}
+			objs = append(objs, tc.serverObjs...)
+			testClient := syncerFake.NewClient(t, core.Scheme, objs...)
+			r := &reconcilerBase{
+				scheme:            testClient.Scheme(),
+				client:            testClient,
+				loggingController: lc,
+			}
+			if tc.rsync.GetObjectKind().GroupVersionKind().Kind == configsync.RootSyncKind {
+				r.reconcilerFinalizerHandler = rootReconcilerFinalizerHandler{}
+			} else {
+				r.reconcilerFinalizerHandler = nsReconcilerFinalizerHandler{lc, testClient}
+			}
+			err := r.setupOrTeardown(ctx, tc.rsync, noOpFunc, noOpFunc)
+			if tc.expectedErrMsg != "" {
+				assert.Equal(t, tc.expectedErrMsg, err.Error())
+			} else {
+				assert.NoError(t, err)
+			}
+
+			testClient.Check(t, tc.expectedServerObjs...)
+		})
+	}
 }

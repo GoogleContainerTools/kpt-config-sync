@@ -91,20 +91,20 @@ const (
 
 // NewRepoSyncReconciler returns a new RepoSyncReconciler.
 func NewRepoSyncReconciler(clusterName string, reconcilerPollingPeriod, hydrationPollingPeriod time.Duration, client client.Client, watcher client.WithWatch, dynamicClient dynamic.Interface, log logr.Logger, scheme *runtime.Scheme) *RepoSyncReconciler {
+	lc := loggingController{log}
 	return &RepoSyncReconciler{
 		reconcilerBase: reconcilerBase{
-			loggingController: loggingController{
-				log: log,
-			},
-			clusterName:             clusterName,
-			client:                  client,
-			dynamicClient:           dynamicClient,
-			watcher:                 watcher,
-			scheme:                  scheme,
-			reconcilerPollingPeriod: reconcilerPollingPeriod,
-			hydrationPollingPeriod:  hydrationPollingPeriod,
-			syncKind:                configsync.RepoSyncKind,
-			knownHostExist:          false,
+			loggingController:          lc,
+			reconcilerFinalizerHandler: nsReconcilerFinalizerHandler{lc, client},
+			clusterName:                clusterName,
+			client:                     client,
+			dynamicClient:              dynamicClient,
+			watcher:                    watcher,
+			scheme:                     scheme,
+			reconcilerPollingPeriod:    reconcilerPollingPeriod,
+			hydrationPollingPeriod:     hydrationPollingPeriod,
+			syncKind:                   configsync.RepoSyncKind,
+			knownHostExist:             false,
 		},
 		configMapWatches: make(map[string]bool),
 	}

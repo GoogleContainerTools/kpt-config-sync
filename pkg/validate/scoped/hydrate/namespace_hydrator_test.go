@@ -48,6 +48,13 @@ func nsSelector(nssName, mode, path string, labels map[string]string) ast.FileOb
 	return fake.NamespaceSelectorAtPath(path, core.Name(nssName), mutFunc)
 }
 
+func withNamespacePhase(phase corev1.NamespacePhase) core.MetaMutator {
+	return func(o client.Object) {
+		ns := o.(*corev1.Namespace)
+		ns.Status.Phase = phase
+	}
+}
+
 var (
 	devOnlyNSS = nsSelector("dev-only", v1.NSSelectorStaticMode,
 		"dev-only-nss.yaml", map[string]string{"environment": "dev"})
@@ -197,6 +204,34 @@ func TestNamespaceSelectors(t *testing.T) {
 						core.Annotation(metadata.NamespaceSelectorAnnotationKey, devOnlyNSS.Unstructured.GetName())),
 					fake.Role(
 						core.Namespace("dev1"),
+						core.Annotation(metadata.NamespaceSelectorAnnotationKey, devOnlyNSS.Unstructured.GetName())),
+				},
+			},
+			wantDynamicNSSelectorEnabledAnnotation: true,
+		},
+		{
+			name: "namespace-scoped resources should NOT be selected in matching but terminating Namespaces",
+			objs: &objects.Scoped{
+				Scope:    declared.RootReconciler,
+				SyncName: configsync.RootSyncName,
+				Cluster: []ast.FileObject{
+					devOnlyDynamicNSS,
+				},
+				Namespace: []ast.FileObject{
+					fake.Role(core.Annotation(metadata.NamespaceSelectorAnnotationKey, devOnlyNSS.Unstructured.GetName())),
+				},
+			},
+			onClusterObjects: []client.Object{
+				fake.NamespaceObject("dev1", core.Label("environment", "dev"), withNamespacePhase(corev1.NamespaceTerminating)),
+				fake.NamespaceObject("dev2", core.Label("environment", "dev")),
+			},
+			want: &objects.Scoped{
+				Scope:    declared.RootReconciler,
+				SyncName: configsync.RootSyncName,
+				Namespace: []ast.FileObject{
+					// Role on `dev1` Namespace is not selected because `dev1` is terminating
+					fake.Role(
+						core.Namespace("dev2"),
 						core.Annotation(metadata.NamespaceSelectorAnnotationKey, devOnlyNSS.Unstructured.GetName())),
 				},
 			},

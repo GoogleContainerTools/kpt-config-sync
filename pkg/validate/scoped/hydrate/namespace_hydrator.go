@@ -143,7 +143,7 @@ func buildSelectorMap(ctx context.Context, c client.Client, objs *objects.Scoped
 		var selectedNamespaces []string
 		// Select dynamic/on-cluster Namespaces that match the NamespaceSelector's labels.
 		for _, ns := range nsList.Items {
-			if selector.Matches(labels.Set(ns.GetLabels())) {
+			if ns.Status.Phase != corev1.NamespaceTerminating && selector.Matches(labels.Set(ns.GetLabels())) {
 				selectedNamespaces = append(selectedNamespaces, ns.GetName())
 				// selectedNamespaceMap only stores dynamic Namespaces.
 				selectedNamespaceMap[ns.GetName()] = append(selectedNamespaceMap[ns.GetName()], selector)

@@ -257,13 +257,19 @@ func Run(opts Options) {
 		}
 	}
 
-	nsControllerState := namespacecontroller.NewState()
+	var nsControllerState *namespacecontroller.State
 	if opts.ReconcilerScope == declared.RootReconciler {
 		rootOpts := &parse.RootOptions{
 			SourceFormat:             opts.SourceFormat,
 			NamespaceStrategy:        opts.NamespaceStrategy,
 			DynamicNSSelectorEnabled: opts.DynamicNSSelectorEnabled,
-			NSControllerState:        nsControllerState,
+		}
+		if opts.DynamicNSSelectorEnabled {
+			// Only set nsControllerState when dynamic NamespaceSelector is enabled on
+			// RootSyncs.
+			// RepoSync can't manage NamespaceSelectors.
+			nsControllerState = namespacecontroller.NewState()
+			rootOpts.NSControllerState = nsControllerState
 		}
 		parser = parse.NewRootRunner(parseOpts, rootOpts)
 	} else {

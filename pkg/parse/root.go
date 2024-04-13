@@ -73,11 +73,15 @@ type RootOptions struct {
 	// DynamicNSSelectorEnabled represents whether the NamespaceSelector's dynamic
 	// mode is enabled. If it is enabled, NamespaceSelector will also select
 	// resources matching the on-cluster Namespaces.
+	// Only Root reconciler may have dynamic NamespaceSelector enabled because
+	// RepoSync can't manage NamespaceSelectors.
 	DynamicNSSelectorEnabled bool
 
 	// NSControllerState stores whether the Namespace Controller schedules a sync
 	// event for the reconciler thread, along with the cached NamespaceSelector
 	// and selected namespaces.
+	// Only Root reconciler may have Namespace Controller state because
+	// RepoSync can't manage NamespaceSelectors.
 	NSControllerState *namespacecontroller.State
 }
 

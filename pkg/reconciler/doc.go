@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package reconciler declares the reconciler process which is described in
-// go/config-sync-multi-repo. This process has four main components:
+// Package reconciler declares the reconciler process that has four main components:
 // git-sync, parser, applier, remediator
 //
 // git-sync is a third party component that runs in a sidecar container. The

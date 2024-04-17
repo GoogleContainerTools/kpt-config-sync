@@ -131,12 +131,12 @@ func validateRepoSyncRBAC(nt *nomostest.NT, ns string, nsRepo *gitproviders.Repo
 	nt.T.Log("Add 'watch' permission")
 	configureRBAC(nt, ns, []string{"list", "watch"})
 	nt.WaitForRepoSyncSyncError(ns, configsync.RepoSyncName, applier.ApplierErrorCode,
-		`failed to apply Deployment.apps, bookstore/hello-world: failed to get current object from cluster: deployments.apps "hello-world" is forbidden: User "system:serviceaccount:config-management-system:ns-reconciler-bookstore" cannot get resource "deployments" in API group "apps" in the namespace "bookstore"`)
+		`failed to apply Deployment.apps, bookstore/hello-world: failed to get current object from cluster: deployments.apps "hello-world" is forbidden: User "system:serviceaccount:config-management-system:ns-reconciler-bookstore" cannot get resource "deployments" in API group "apps" in the namespace "bookstore"`+"\n\nsource: acme/deployment.yaml")
 
 	nt.T.Log("Add 'get' permission")
 	configureRBAC(nt, ns, []string{"list", "watch", "get"})
 	nt.WaitForRepoSyncSyncError(ns, configsync.RepoSyncName, applier.ApplierErrorCode,
-		`failed to apply Deployment.apps, bookstore/hello-world: deployments.apps "hello-world" is forbidden: User "system:serviceaccount:config-management-system:ns-reconciler-bookstore" cannot patch resource "deployments" in API group "apps" in the namespace "bookstore"`)
+		`failed to apply Deployment.apps, bookstore/hello-world: deployments.apps "hello-world" is forbidden: User "system:serviceaccount:config-management-system:ns-reconciler-bookstore" cannot patch resource "deployments" in API group "apps" in the namespace "bookstore"`+"\n\nsource: acme/deployment.yaml")
 
 	nt.T.Log("Add 'patch' permission")
 	configureRBAC(nt, ns, []string{"list", "watch", "get", "patch"})
@@ -145,7 +145,7 @@ func validateRepoSyncRBAC(nt *nomostest.NT, ns string, nsRepo *gitproviders.Repo
 	// A Pod restart on Autopilot may take longer than 1 minute
 	nomostest.DeletePodByLabel(nt, "configsync.gke.io/deployment-name", core.NsReconcilerName(ns, configsync.RepoSyncName), false)
 	nt.WaitForRepoSyncSyncError(ns, configsync.RepoSyncName, applier.ApplierErrorCode,
-		`failed to apply Deployment.apps, bookstore/hello-world: deployments.apps "hello-world" is forbidden`)
+		`failed to apply Deployment.apps, bookstore/hello-world: deployments.apps "hello-world" is forbidden: `+"\n\nsource: acme/deployment.yaml")
 	nt.T.Log("Add 'create' permission")
 	configureRBAC(nt, ns, []string{"list", "watch", "get", "patch", "create"})
 	if err := nt.WatchForAllSyncs(); err != nil {

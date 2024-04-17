@@ -72,7 +72,7 @@ func TestNamespaceStrategy(t *testing.T) {
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add cm1"))
 	// check for error
 	nt.WaitForRootSyncSyncError(rootSyncNN.Name, applier.ApplierErrorCode,
-		"failed to apply ConfigMap, foo-implicit/cm1: namespaces \"foo-implicit\" not found")
+		"failed to apply ConfigMap, foo-implicit/cm1: namespaces \"foo-implicit\" not found\n\nsource: acme/cm1.yaml")
 	// switch the mode to implicit
 	nt.MustMergePatch(rootSync, `{"spec": {"override": {"namespaceStrategy": "implicit"}}}`)
 	// check for success

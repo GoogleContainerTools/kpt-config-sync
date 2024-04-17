@@ -219,7 +219,7 @@ type eventHandler struct {
 	clientSet *ClientSet
 }
 
-func (h *eventHandler) processApplyEvent(ctx context.Context, e event.ApplyEvent, s *stats.ApplyEventStats, objectStatusMap ObjectStatusMap, unknownTypeResources map[core.ID]struct{}) status.Error {
+func (h *eventHandler) processApplyEvent(ctx context.Context, e event.ApplyEvent, s *stats.ApplyEventStats, objectStatusMap ObjectStatusMap, unknownTypeResources map[core.ID]struct{}, resourceMap map[core.ID]client.Object) status.Error {
 	id := idFrom(e.Identifier)
 	s.Add(e.Status)
 
@@ -246,17 +246,13 @@ func (h *eventHandler) processApplyEvent(ctx context.Context, e event.ApplyEvent
 		switch e.Error.(type) {
 		case *applyerror.UnknownTypeError:
 			unknownTypeResources[id] = struct{}{}
-
-			if e.Resource != nil {
-				return ErrorForResourceWithResource(e.Error, id, e.Resource)
-			}
-			return ErrorForResource(e.Error, id)
-		default:
-			if e.Resource != nil {
-				return ErrorForResourceWithResource(e.Error, id, e.Resource)
-			}
-			return ErrorForResource(e.Error, id)
 		}
+
+		if resourceMap[id] != nil {
+			return ErrorForResourceWithResource(e.Error, id, resourceMap[id])
+		}
+
+		return ErrorForResource(e.Error, id)
 
 	case event.ApplySkipped:
 		objectStatus.Actuation = actuation.ActuationSkipped
@@ -561,6 +557,12 @@ func (a *supervisor) applyInner(ctx context.Context, objs []client.Object) (map[
 	// This allows for picking up CRD changes.
 	meta.MaybeResetRESTMapper(a.clientSet.Mapper)
 
+	// Builds a map of id -> resource
+	resourceMap := make(map[core.ID]client.Object)
+	for _, obj := range resources {
+		resourceMap[idFrom(object.UnstructuredToObjMetadata(obj))] = obj
+	}
+
 	events := a.clientSet.KptApplier.Run(ctx, a.inventory, object.UnstructuredSet(resources), options)
 	for e := range events {
 		switch e.Type {
@@ -594,7 +596,7 @@ func (a *supervisor) applyInner(ctx context.Context, objs []client.Object) (map[
 			} else {
 				klog.V(1).Info(e.ApplyEvent)
 			}
-			a.addError(eh.processApplyEvent(ctx, e.ApplyEvent, s.ApplyEvent, objStatusMap, unknownTypeResources))
+			a.addError(eh.processApplyEvent(ctx, e.ApplyEvent, s.ApplyEvent, objStatusMap, unknownTypeResources, resourceMap))
 		case event.PruneType:
 			if e.PruneEvent.Error != nil {
 				klog.Info(e.PruneEvent)

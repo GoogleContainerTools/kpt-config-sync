@@ -19,12 +19,14 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
@@ -70,9 +72,20 @@ func TestNamespaceStrategy(t *testing.T) {
 	cm1 := fake.ConfigMapObject(core.Name("cm1"), core.Namespace(fooNamespace.Name))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm1.yaml", cm1))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add cm1"))
+
 	// check for error
 	nt.WaitForRootSyncSyncError(rootSyncNN.Name, applier.ApplierErrorCode,
-		"failed to apply ConfigMap, foo-implicit/cm1: namespaces \"foo-implicit\" not found\n\nsource: acme/cm1.yaml")
+		"failed to apply ConfigMap, foo-implicit/cm1: namespaces \"foo-implicit\" not found", []v1beta1.ResourceRef{{
+			SourcePath: "acme/cm1.yaml",
+			Name:       "cm1",
+			Namespace:  "foo-implicit",
+			GVK: metav1.GroupVersionKind{
+				Group:   "",
+				Version: "v1",
+				Kind:    "ConfigMap",
+			},
+		}})
+
 	// switch the mode to implicit
 	nt.MustMergePatch(rootSync, `{"spec": {"override": {"namespaceStrategy": "implicit"}}}`)
 	// check for success
@@ -128,7 +141,7 @@ func TestNamespaceStrategy(t *testing.T) {
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Prune namespace-foo"))
 	// check for error
 	nt.WaitForRootSyncSyncError(rootSyncNN.Name, applier.ApplierErrorCode,
-		"skipped delete of Namespace, /foo-implicit: namespace still in use: foo-implicit")
+		"skipped delete of Namespace, /foo-implicit: namespace still in use: foo-implicit", nil)
 	// prune the ConfigMap
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/cm1.yaml"))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Prune cm1"))
@@ -215,9 +228,9 @@ func TestNamespaceStrategyMultipleRootSyncs(t *testing.T) {
 	nt.Must(nt.RootRepos[rootSyncY.Name].CommitAndPush("Add cm-y"))
 	// check for error
 	nt.WaitForRootSyncSyncError(rootSyncX.Name, applier.ApplierErrorCode,
-		"failed to apply ConfigMap, namespace-a/cm-x: namespaces \"namespace-a\" not found")
+		"failed to apply ConfigMap, namespace-a/cm-x: namespaces \"namespace-a\" not found", nil)
 	nt.WaitForRootSyncSyncError(rootSyncY.Name, applier.ApplierErrorCode,
-		"failed to apply ConfigMap, namespace-a/cm-y: namespaces \"namespace-a\" not found")
+		"failed to apply ConfigMap, namespace-a/cm-y: namespaces \"namespace-a\" not found", nil)
 	// declare the namespace in sync-a
 	nt.Must(nt.RootRepos[rootSyncA.Name].Add("acme/namespace-a.yaml", namespaceA))
 	nt.Must(nt.RootRepos[rootSyncA.Name].CommitAndPush("Add namespace-a"))

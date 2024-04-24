@@ -267,7 +267,7 @@ func (nt *NT) WaitForRootSyncSourceError(rsName, code string, message string, op
 			}
 			// Only validate the rendering status, not the Syncing condition
 			// TODO: Remove this hack once async sync status updates are fixed to reflect only the latest commit.
-			return testpredicates.ValidateError(rs.Status.Source.Errors, code, message)
+			return testpredicates.ValidateError(rs.Status.Source.Errors, code, message, nil)
 			// syncingCondition := rootsync.GetCondition(rs.Status.Conditions, v1beta1.RootSyncSyncing)
 			// return validateRootSyncError(rs.Status.Source.Errors, syncingCondition, code, message, []v1beta1.ErrorSource{v1beta1.SourceError})
 		},
@@ -287,7 +287,7 @@ func (nt *NT) WaitForRootSyncRenderingError(rsName, code string, message string,
 			}
 			// Only validate the rendering status, not the Syncing condition
 			// TODO: Revert this hack once async sync status updates are fixed to include rendering errors
-			return testpredicates.ValidateError(rs.Status.Rendering.Errors, code, message)
+			return testpredicates.ValidateError(rs.Status.Rendering.Errors, code, message, nil)
 			// syncingCondition := rootsync.GetCondition(rs.Status.Conditions, v1beta1.RootSyncSyncing)
 			// return validateRootSyncError(rs.Status.Rendering.Errors, syncingCondition, code, message, []v1beta1.ErrorSource{v1beta1.RenderingError})
 		},
@@ -296,7 +296,7 @@ func (nt *NT) WaitForRootSyncRenderingError(rsName, code string, message string,
 }
 
 // WaitForRootSyncSyncError waits until the given error (code and message) is present on the RootSync resource
-func (nt *NT) WaitForRootSyncSyncError(rsName, code string, message string, opts ...WaitOption) {
+func (nt *NT) WaitForRootSyncSyncError(rsName, code string, message string, resources []v1beta1.ResourceRef, opts ...WaitOption) {
 	Wait(nt.T, fmt.Sprintf("RootSync %s rendering error code %s", rsName, code), nt.DefaultWaitTimeout,
 		func() error {
 			nt.T.Helper()
@@ -307,7 +307,7 @@ func (nt *NT) WaitForRootSyncSyncError(rsName, code string, message string, opts
 			}
 			// Only validate the sync status, not the Syncing condition
 			// TODO: Remove this hack once async sync status updates are fixed to reflect only the latest commit.
-			return testpredicates.ValidateError(rs.Status.Sync.Errors, code, message)
+			return testpredicates.ValidateError(rs.Status.Sync.Errors, code, message, resources)
 			// syncingCondition := rootsync.GetCondition(rs.Status.Conditions, v1beta1.RootSyncSyncing)
 			// return validateRootSyncError(rs.Status.Sync.Errors, syncingCondition, code, message, []v1beta1.ErrorSource{v1beta1.SyncError})
 		},
@@ -316,7 +316,7 @@ func (nt *NT) WaitForRootSyncSyncError(rsName, code string, message string, opts
 }
 
 // WaitForRepoSyncSyncError waits until the given error (code and message) is present on the RepoSync resource
-func (nt *NT) WaitForRepoSyncSyncError(ns, rsName, code string, message string, opts ...WaitOption) {
+func (nt *NT) WaitForRepoSyncSyncError(ns, rsName, code string, message string, resources []v1beta1.ResourceRef, opts ...WaitOption) {
 	Wait(nt.T, fmt.Sprintf("RepoSync %s/%s rendering error code %s", ns, rsName, code), nt.DefaultWaitTimeout,
 		func() error {
 			nt.T.Helper()
@@ -327,7 +327,7 @@ func (nt *NT) WaitForRepoSyncSyncError(ns, rsName, code string, message string, 
 			}
 			// Only validate the sync status, not the Syncing condition
 			// TODO: Remove this hack once async sync status updates are fixed to reflect only the latest commit.
-			return testpredicates.ValidateError(rs.Status.Sync.Errors, code, message)
+			return testpredicates.ValidateError(rs.Status.Sync.Errors, code, message, resources)
 			// syncingCondition := reposync.GetCondition(rs.Status.Conditions, v1beta1.RepoSyncSyncing)
 			// return validateRepoSyncError(rs.Status.Sync.Errors, syncingCondition, code, message, []v1beta1.ErrorSource{v1beta1.SyncError})
 		},
@@ -347,7 +347,7 @@ func (nt *NT) WaitForRepoSyncSourceError(ns, rsName, code, message string, opts 
 			}
 			// Only validate the rendering status, not the Syncing condition
 			// TODO: Remove this hack once async sync status updates are fixed to reflect only the latest commit.
-			return testpredicates.ValidateError(rs.Status.Source.Errors, code, message)
+			return testpredicates.ValidateError(rs.Status.Source.Errors, code, message, nil)
 			// syncingCondition := reposync.GetCondition(rs.Status.Conditions, v1beta1.RepoSyncSyncing)
 			// return validateRepoSyncError(rs.Status.Source.Errors, syncingCondition, code, message, []v1beta1.ErrorSource{v1beta1.SourceError})
 		},

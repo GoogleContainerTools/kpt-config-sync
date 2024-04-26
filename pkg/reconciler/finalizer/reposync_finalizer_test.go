@@ -68,7 +68,7 @@ func TestRepoSyncFinalize(t *testing.T) {
 		name                       string
 		rsync                      client.Object
 		setup                      func(*fake.Client) error
-		destroyErrs                status.MultiError
+		destroyErrs                []status.Error
 		expectedRsyncBeforeDestroy client.Object
 		expectedError              error
 		expectedStopped            bool
@@ -123,7 +123,9 @@ func TestRepoSyncFinalize(t *testing.T) {
 				}
 				return obj
 			}(),
-			destroyErrs: status.APIServerError(fmt.Errorf("destroy error"), "example message"),
+			destroyErrs: []status.Error{
+				status.APIServerError(fmt.Errorf("destroy error"), "example message"),
+			},
 			expectedError: fmt.Errorf(
 				"deleting managed objects: %w",
 				status.APIServerError(fmt.Errorf("destroy error"), "example message")),
@@ -282,7 +284,7 @@ func TestRepoSyncFinalize(t *testing.T) {
 				defer close(continueCh)
 				stopped = true
 			}
-			destroyFunc := func(context.Context) status.MultiError {
+			destroyFunc := func(context.Context) []status.Error {
 				// Lookup the current RepoSync
 				key := client.ObjectKeyFromObject(repoSync1)
 				rsync := &v1beta1.RepoSync{}
@@ -294,7 +296,9 @@ func TestRepoSyncFinalize(t *testing.T) {
 			}
 			fakeDestroyer := newFakeDestroyer(tc.destroyErrs, destroyFunc)
 			finalizer := &RepoSyncFinalizer{
-				Destroyer:          fakeDestroyer,
+				baseFinalizer: baseFinalizer{
+					Destroyer: fakeDestroyer,
+				},
 				Client:             fakeClient,
 				StopControllers:    stopFunc,
 				ControllersStopped: continueCh,

@@ -46,8 +46,9 @@ type Updater struct {
 	// tracking them in a ResourceGroup inventory.
 	Applier applier.Applier
 
-	errorMux       sync.RWMutex
+	statusMux      sync.RWMutex
 	validationErrs status.MultiError
+	applyErrs      status.MultiError
 	watchErrs      status.MultiError
 
 	updateMux sync.RWMutex
@@ -65,14 +66,14 @@ func (u *Updater) managementConflict() bool {
 // Errors returns the latest known set of errors from the updater.
 // This method is safe to call while Update is running.
 func (u *Updater) Errors() status.MultiError {
-	u.errorMux.RLock()
-	defer u.errorMux.RUnlock()
+	u.statusMux.RLock()
+	defer u.statusMux.RUnlock()
 
 	var errs status.MultiError
 	errs = status.Append(errs, u.conflictErrors())
 	errs = status.Append(errs, u.fightErrors())
 	errs = status.Append(errs, u.validationErrs)
-	errs = status.Append(errs, u.Applier.Errors())
+	errs = status.Append(errs, u.applyErrors())
 	errs = status.Append(errs, u.watchErrs)
 	return errs
 }
@@ -98,14 +99,32 @@ func (u *Updater) fightErrors() status.MultiError {
 }
 
 func (u *Updater) setValidationErrs(errs status.MultiError) {
-	u.errorMux.Lock()
-	defer u.errorMux.Unlock()
+	u.statusMux.Lock()
+	defer u.statusMux.Unlock()
 	u.validationErrs = errs
 }
 
+func (u *Updater) applyErrors() status.MultiError {
+	u.statusMux.RLock()
+	defer u.statusMux.RUnlock()
+	return u.applyErrs
+}
+
+func (u *Updater) addApplyError(err status.Error) {
+	u.statusMux.Lock()
+	defer u.statusMux.Unlock()
+	u.applyErrs = status.Append(u.applyErrs, err)
+}
+
+func (u *Updater) resetApplyErrors() {
+	u.statusMux.Lock()
+	defer u.statusMux.Unlock()
+	u.applyErrs = nil
+}
+
 func (u *Updater) setWatchErrs(errs status.MultiError) {
-	u.errorMux.Lock()
-	defer u.errorMux.Unlock()
+	u.statusMux.Lock()
+	defer u.statusMux.Unlock()
 	u.watchErrs = errs
 }
 
@@ -236,14 +255,34 @@ func (u *Updater) declare(ctx context.Context, objs []client.Object, commit stri
 }
 
 func (u *Updater) apply(ctx context.Context, objs []client.Object, commit string) status.MultiError {
+	// Collect errors into a MultiError
+	var err status.MultiError
+	eventHandler := func(event applier.Event) {
+		if errEvent, ok := event.(applier.ErrorEvent); ok {
+			if err == nil {
+				err = errEvent.Error
+			} else {
+				err = status.Append(err, errEvent.Error)
+			}
+			u.addApplyError(errEvent.Error)
+		}
+	}
 	klog.V(1).Info("Applier starting...")
 	start := time.Now()
-	err := u.Applier.Apply(ctx, objs)
+	u.resetApplyErrors()
+	objStatusMap, syncStats := u.Applier.Apply(ctx, eventHandler, objs)
+	if syncStats.Empty() {
+		klog.V(4).Info("Applier made no new progress")
+	} else {
+		klog.Infof("Applier made new progress: %s", syncStats.String())
+		objStatusMap.Log(klog.V(0))
+	}
 	metrics.RecordApplyDuration(ctx, metrics.StatusTagKey(err), commit, start)
 	if err != nil {
 		klog.Warningf("Failed to apply declared resources: %v", err)
 		return err
 	}
+	klog.V(4).Info("Apply completed without error: all resources are up to date.")
 	klog.V(3).Info("Applier stopped")
 	return nil
 }

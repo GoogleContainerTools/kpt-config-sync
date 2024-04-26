@@ -24,8 +24,10 @@ import (
 	"github.com/GoogleContainerTools/kpt/pkg/live"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/applier/stats"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
@@ -77,10 +79,12 @@ func TestApply(t *testing.T) {
 	resourceManager := declared.ResourceManager(syncScope, syncName)
 
 	deploymentObj := newDeploymentObj()
-	deploymentID := object.UnstructuredToObjMetadata(deploymentObj)
+	deploymentObjMeta := object.UnstructuredToObjMetadata(deploymentObj)
+	deploymentObjID := core.IDOf(deploymentObj)
 
-	testObj := newTestObj("test-1")
-	testID := object.UnstructuredToObjMetadata(testObj)
+	testObj1 := newTestObj("test-1")
+	testObj1Meta := object.UnstructuredToObjMetadata(testObj1)
+	testObj1ID := core.IDOf(testObj1)
 
 	abandonObj := deploymentObj.DeepCopy()
 	abandonObj.SetName("abandon-me")
@@ -99,17 +103,21 @@ func TestApply(t *testing.T) {
 		metadata.ArchLabel:      "anything",
 		"example-to-not-delete": "anything",
 	})
+	abandonObjID := core.IDOf(abandonObj)
 
 	testObj2 := newTestObj("test-2")
+	testObj2ID := core.IDOf(testObj2)
 	testObj3 := newTestObj("test-3")
+	testObj3ID := core.IDOf(testObj3)
 
-	objs := []client.Object{deploymentObj, testObj}
+	objs := []client.Object{deploymentObj, testObj1}
 
 	namespaceObj := fake.UnstructuredObject(kinds.Namespace(),
 		core.Name(string(syncScope)))
-	namespaceID := object.UnstructuredToObjMetadata(namespaceObj)
+	namespaceObjMeta := object.UnstructuredToObjMetadata(namespaceObj)
+	namespaceObjID := core.IDOf(namespaceObj)
 
-	uid := core.ID{
+	inventoryID := core.ID{
 		GroupKind: live.ResourceGroupGVK.GroupKind(),
 		ObjectKey: client.ObjectKey{
 			Name:      syncName,
@@ -122,59 +130,92 @@ func TestApply(t *testing.T) {
 	etcdError := errors.New("etcdserver: request is too large") // satisfies util.IsRequestTooLargeError
 
 	testcases := []struct {
-		name               string
-		serverObjs         []client.Object
-		events             []event.Event
-		expectedError      status.MultiError
-		expectedServerObjs []client.Object
+		name                    string
+		serverObjs              []client.Object
+		events                  []event.Event
+		expectedError           status.MultiError
+		expectedObjectStatusMap ObjectStatusMap
+		expectedSyncStats       *stats.SyncStats
+		expectedServerObjs      []client.Object
 	}{
 		{
 			name: "unknown type for some resource",
 			events: []event.Event{
-				formApplyEvent(event.ApplyFailed, testObj, applyerror.NewUnknownTypeError(errors.New("unknown type"))),
+				formApplyEvent(event.ApplyFailed, testObj1, applyerror.NewUnknownTypeError(errors.New("unknown type"))),
 				formApplyEvent(event.ApplyPending, testObj2, nil),
 			},
-			expectedError: ErrorForResourceWithResource(errors.New("unknown type"), idFrom(testID), testObj),
+			expectedError: ErrorForResourceWithResource(errors.New("unknown type"), testObj1ID, testObj1),
+			expectedObjectStatusMap: ObjectStatusMap{
+				testObj1ID: &ObjectStatus{Strategy: actuation.ActuationStrategyApply, Actuation: actuation.ActuationFailed},
+				testObj2ID: &ObjectStatus{Strategy: actuation.ActuationStrategyApply, Actuation: actuation.ActuationPending},
+			},
+			expectedSyncStats: stats.NewSyncStats().
+				WithApplyEvents(event.ApplyFailed, 1).
+				WithApplyEvents(event.ApplyPending, 1),
 		},
 		{
 			name: "conflict error for some resource",
 			events: []event.Event{
-				formApplySkipEvent(testID, testObj.DeepCopy(), &inventory.PolicyPreventedActuationError{
+				formApplySkipEvent(testObj1Meta, testObj1.DeepCopy(), &inventory.PolicyPreventedActuationError{
 					Strategy: actuation.ActuationStrategyApply,
 					Policy:   inventory.PolicyMustMatch,
 					Status:   inventory.NoMatch,
 				}),
 				formApplyEvent(event.ApplyPending, testObj2, nil),
 			},
-			expectedError: KptManagementConflictError(testObj),
+			expectedError: KptManagementConflictError(testObj1),
+			expectedObjectStatusMap: ObjectStatusMap{
+				testObj1ID: &ObjectStatus{Strategy: actuation.ActuationStrategyApply, Actuation: actuation.ActuationSkipped},
+				testObj2ID: &ObjectStatus{Strategy: actuation.ActuationStrategyApply, Actuation: actuation.ActuationPending},
+			},
+			expectedSyncStats: stats.NewSyncStats().
+				WithApplyEvents(event.ApplySkipped, 1).
+				WithApplyEvents(event.ApplyPending, 1),
 		},
 		{
 			name: "inventory object is too large",
 			events: []event.Event{
 				formErrorEvent(etcdError),
 			},
-			expectedError: largeResourceGroupError(etcdError, uid),
+			expectedError:           largeResourceGroupError(etcdError, inventoryID),
+			expectedObjectStatusMap: ObjectStatusMap{},
+			expectedSyncStats: stats.NewSyncStats().
+				WithErrorEvents(1),
 		},
 		{
 			name: "failed to apply",
 			events: []event.Event{
-				formApplyEvent(event.ApplyFailed, testObj, applyerror.NewApplyRunError(errors.New("failed apply"))),
+				formApplyEvent(event.ApplyFailed, testObj1, applyerror.NewApplyRunError(errors.New("failed apply"))),
 				formApplyEvent(event.ApplyPending, testObj2, nil),
 			},
-			expectedError: ErrorForResourceWithResource(errors.New("failed apply"), idFrom(testID), testObj),
+			expectedError: ErrorForResourceWithResource(errors.New("failed apply"), testObj1ID, testObj1),
+			expectedObjectStatusMap: ObjectStatusMap{
+				testObj1ID: &ObjectStatus{Strategy: actuation.ActuationStrategyApply, Actuation: actuation.ActuationFailed},
+				testObj2ID: &ObjectStatus{Strategy: actuation.ActuationStrategyApply, Actuation: actuation.ActuationPending},
+			},
+			expectedSyncStats: stats.NewSyncStats().
+				WithApplyEvents(event.ApplyFailed, 1).
+				WithApplyEvents(event.ApplyPending, 1),
 		},
 		{
 			name: "failed to prune",
 			events: []event.Event{
-				formPruneEvent(event.PruneFailed, testObj, errors.New("failed pruning")),
+				formPruneEvent(event.PruneFailed, testObj1, errors.New("failed pruning")),
 				formPruneEvent(event.PruneSuccessful, testObj2, nil),
 			},
-			expectedError: PruneErrorForResource(errors.New("failed pruning"), idFrom(testID)),
+			expectedError: PruneErrorForResource(errors.New("failed pruning"), testObj1ID),
+			expectedObjectStatusMap: ObjectStatusMap{
+				testObj1ID: &ObjectStatus{Strategy: actuation.ActuationStrategyDelete, Actuation: actuation.ActuationFailed},
+				testObj2ID: &ObjectStatus{Strategy: actuation.ActuationStrategyDelete, Actuation: actuation.ActuationSucceeded},
+			},
+			expectedSyncStats: stats.NewSyncStats().
+				WithPruneEvents(event.PruneFailed, 1).
+				WithPruneEvents(event.PruneSuccessful, 1),
 		},
 		{
 			name: "skipped pruning",
 			events: []event.Event{
-				formPruneEvent(event.PruneSuccessful, testObj, nil),
+				formPruneEvent(event.PruneSuccessful, testObj1, nil),
 				formPruneEvent(event.PruneSkipped, namespaceObj, &filter.NamespaceInUseError{
 					Namespace: "test-namespace",
 				}),
@@ -182,49 +223,87 @@ func TestApply(t *testing.T) {
 			},
 			expectedError: SkipErrorForResource(
 				errors.New("namespace still in use: test-namespace"),
-				idFrom(namespaceID),
+				idFrom(namespaceObjMeta),
 				actuation.ActuationStrategyDelete),
+			expectedObjectStatusMap: ObjectStatusMap{
+				testObj1ID:     &ObjectStatus{Strategy: actuation.ActuationStrategyDelete, Actuation: actuation.ActuationSucceeded},
+				namespaceObjID: &ObjectStatus{Strategy: actuation.ActuationStrategyDelete, Actuation: actuation.ActuationSkipped},
+				testObj2ID:     &ObjectStatus{Strategy: actuation.ActuationStrategyDelete, Actuation: actuation.ActuationSucceeded},
+			},
+			expectedSyncStats: stats.NewSyncStats().
+				WithPruneEvents(event.PruneSuccessful, 2).
+				WithPruneEvents(event.PruneSkipped, 1),
 		},
 		{
 			name: "all passed",
 			events: []event.Event{
-				formApplyEvent(event.ApplySuccessful, testObj, nil),
+				formApplyEvent(event.ApplySuccessful, testObj1, nil),
 				formApplyEvent(event.ApplySuccessful, deploymentObj, nil),
 				formApplyEvent(event.ApplyPending, testObj2, nil),
 				formPruneEvent(event.PruneSuccessful, testObj3, nil),
 			},
+			expectedObjectStatusMap: ObjectStatusMap{
+				testObj1ID:      &ObjectStatus{Strategy: actuation.ActuationStrategyApply, Actuation: actuation.ActuationSucceeded},
+				deploymentObjID: &ObjectStatus{Strategy: actuation.ActuationStrategyApply, Actuation: actuation.ActuationSucceeded},
+				testObj2ID:      &ObjectStatus{Strategy: actuation.ActuationStrategyApply, Actuation: actuation.ActuationPending},
+				testObj3ID:      &ObjectStatus{Strategy: actuation.ActuationStrategyDelete, Actuation: actuation.ActuationSucceeded},
+			},
+			expectedSyncStats: stats.NewSyncStats().
+				WithApplyEvents(event.ApplySuccessful, 2).
+				WithApplyEvents(event.ApplyPending, 1).
+				WithPruneEvents(event.PruneSuccessful, 1),
 		},
 		{
 			name: "all failed",
 			events: []event.Event{
-				formApplyEvent(event.ApplyFailed, testObj, applyerror.NewUnknownTypeError(errors.New("unknown type"))),
+				formApplyEvent(event.ApplyFailed, testObj1, applyerror.NewUnknownTypeError(errors.New("unknown type"))),
 				formApplyEvent(event.ApplyFailed, deploymentObj, applyerror.NewApplyRunError(errors.New("failed apply"))),
 				formApplyEvent(event.ApplyPending, testObj2, nil),
 				formPruneEvent(event.PruneSuccessful, testObj3, nil),
 			},
-			expectedError: status.Wrap(
-				ErrorForResourceWithResource(errors.New("unknown type"), idFrom(testID), testObj),
-				ErrorForResourceWithResource(errors.New("failed apply"), idFrom(deploymentID), deploymentObj)),
+			expectedError: status.Append(
+				ErrorForResourceWithResource(errors.New("unknown type"), testObj1ID, testObj1),
+				ErrorForResourceWithResource(errors.New("failed apply"), deploymentObjID, deploymentObj)),
+			expectedObjectStatusMap: ObjectStatusMap{
+				testObj1ID:      &ObjectStatus{Strategy: actuation.ActuationStrategyApply, Actuation: actuation.ActuationFailed},
+				deploymentObjID: &ObjectStatus{Strategy: actuation.ActuationStrategyApply, Actuation: actuation.ActuationFailed},
+				testObj2ID:      &ObjectStatus{Strategy: actuation.ActuationStrategyApply, Actuation: actuation.ActuationPending},
+				testObj3ID:      &ObjectStatus{Strategy: actuation.ActuationStrategyDelete, Actuation: actuation.ActuationSucceeded},
+			},
+			expectedSyncStats: stats.NewSyncStats().
+				WithApplyEvents(event.ApplyFailed, 2).
+				WithApplyEvents(event.ApplyPending, 1).
+				WithPruneEvents(event.PruneSuccessful, 1),
 		},
 		{
 			name: "failed dependency during apply",
 			events: []event.Event{
-				formApplySkipEventWithDependency(deploymentID, deploymentObj.DeepCopy()),
+				formApplySkipEventWithDependency(deploymentObjMeta, deploymentObj.DeepCopy()),
 			},
 			expectedError: SkipErrorForResource(
 				errors.New("dependency apply reconcile timeout: namespace_name_group_kind"),
-				idFrom(deploymentID),
+				deploymentObjID,
 				actuation.ActuationStrategyApply),
+			expectedObjectStatusMap: ObjectStatusMap{
+				deploymentObjID: &ObjectStatus{Strategy: actuation.ActuationStrategyApply, Actuation: actuation.ActuationSkipped},
+			},
+			expectedSyncStats: stats.NewSyncStats().
+				WithApplyEvents(event.ApplySkipped, 1),
 		},
 		{
 			name: "failed dependency during prune",
 			events: []event.Event{
-				formPruneSkipEventWithDependency(deploymentID),
+				formPruneSkipEventWithDependency(deploymentObjMeta),
 			},
 			expectedError: SkipErrorForResource(
 				errors.New("dependent delete actuation failed: namespace_name_group_kind"),
-				idFrom(deploymentID),
+				deploymentObjID,
 				actuation.ActuationStrategyDelete),
+			expectedObjectStatusMap: ObjectStatusMap{
+				deploymentObjID: &ObjectStatus{Strategy: actuation.ActuationStrategyDelete, Actuation: actuation.ActuationSkipped},
+			},
+			expectedSyncStats: stats.NewSyncStats().
+				WithPruneEvents(event.PruneSkipped, 1),
 		},
 		{
 			name: "abandon object",
@@ -235,6 +314,11 @@ func TestApply(t *testing.T) {
 				formPruneSkipEventWithDetach(abandonObj),
 			},
 			expectedError: nil,
+			expectedObjectStatusMap: ObjectStatusMap{
+				abandonObjID: &ObjectStatus{Strategy: actuation.ActuationStrategyDelete, Actuation: actuation.ActuationSkipped},
+			},
+			expectedSyncStats: stats.NewSyncStats().
+				WithPruneEvents(event.PruneSkipped, 1),
 			expectedServerObjs: []client.Object{
 				func() client.Object {
 					obj := abandonObj.DeepCopy()
@@ -280,8 +364,23 @@ func TestApply(t *testing.T) {
 			applier, err := NewNamespaceSupervisor(cs, syncScope, syncName, 5*time.Minute)
 			require.NoError(t, err)
 
-			errs := applier.Apply(context.Background(), objs)
-			testerrors.AssertEqual(t, tc.expectedError, errs)
+			var errs status.MultiError
+			eventHandler := func(event Event) {
+				if errEvent, ok := event.(ErrorEvent); ok {
+					if errs == nil {
+						errs = errEvent.Error
+					} else {
+						errs = status.Append(errs, errEvent.Error)
+					}
+				}
+			}
+
+			objectStatusMap, syncStats := applier.Apply(context.Background(), eventHandler, objs)
+
+			testutil.AssertEqual(t, tc.expectedError, errs)
+			testutil.AssertEqual(t, tc.expectedObjectStatusMap, objectStatusMap)
+			testutil.AssertEqual(t, tc.expectedSyncStats, syncStats)
+
 			fakeClient.Check(t, tc.expectedServerObjs...)
 		})
 	}
@@ -419,39 +518,53 @@ func formErrorEvent(err error) event.Event {
 
 func TestProcessApplyEvent(t *testing.T) {
 	deploymentObj := newDeploymentObj()
-	deploymentID := object.UnstructuredToObjMetadata(deploymentObj)
-	testObj := newTestObj("test-1")
-	testID := object.UnstructuredToObjMetadata(testObj)
+	deploymentObjID := core.IDOf(deploymentObj)
+	testObj1 := newTestObj("test-1")
+	testObj1ID := core.IDOf(testObj1)
 
 	ctx := context.Background()
-	s := stats.NewSyncStats()
+	syncStats := stats.NewSyncStats()
 	objStatusMap := make(ObjectStatusMap)
 	unknownTypeResources := make(map[core.ID]struct{})
-	eh := eventHandler{
-		isDestroy: false,
-	}
+	s := supervisor{}
 
 	resourceMap := make(map[core.ID]client.Object)
-	resourceMap[idFrom(deploymentID)] = deploymentObj
+	resourceMap[deploymentObjID] = deploymentObj
 
-	err := eh.processApplyEvent(ctx, formApplyEvent(event.ApplyFailed, deploymentObj, fmt.Errorf("test error")).ApplyEvent, s.ApplyEvent, objStatusMap, unknownTypeResources, resourceMap)
-	expectedError := ErrorForResourceWithResource(fmt.Errorf("test error"), idFrom(deploymentID), deploymentObj)
-	testerrors.AssertEqual(t, expectedError, err, "expected processPruneEvent to error on apply %s", event.ApplyFailed)
+	err := s.processApplyEvent(ctx, formApplyEvent(event.ApplyFailed, deploymentObj, fmt.Errorf("test error")).ApplyEvent, syncStats.ApplyEvent, objStatusMap, unknownTypeResources, resourceMap)
+	expectedError := ErrorForResourceWithResource(fmt.Errorf("test error"), deploymentObjID, deploymentObj)
+	testutil.AssertEqual(t, expectedError, err, "expected processPruneEvent to error on apply %s", event.ApplyFailed)
 
-	err = eh.processApplyEvent(ctx, formApplyEvent(event.ApplySuccessful, testObj, nil).ApplyEvent, s.ApplyEvent, objStatusMap, unknownTypeResources, resourceMap)
+	expectedCSE := v1beta1.ConfigSyncError{
+		Code:         "2009",
+		ErrorMessage: "KNV2009: failed to apply Deployment.apps, test-namespace/random-name: test error\n\nsource: namespaces/foo/role.yaml\nnamespace: test-namespace\nmetadata.name: random-name\ngroup: apps\nversion: v1\nkind: Deployment\n\nFor more information, see https://g.co/cloud/acm-errors#knv2009",
+		Resources: []v1beta1.ResourceRef{{
+			SourcePath: "namespaces/foo/role.yaml",
+			Name:       "random-name",
+			Namespace:  "test-namespace",
+			GVK: metav1.GroupVersionKind{
+				Group:   "apps",
+				Version: "v1",
+				Kind:    "Deployment",
+			},
+		}},
+	}
+	testutil.AssertEqual(t, expectedCSE, err.ToCSE(), "expected CSEs to match")
+
+	err = s.processApplyEvent(ctx, formApplyEvent(event.ApplySuccessful, testObj1, nil).ApplyEvent, syncStats.ApplyEvent, objStatusMap, unknownTypeResources, resourceMap)
 	assert.Nil(t, err, "expected processApplyEvent NOT to error on apply %s", event.ApplySuccessful)
 
 	expectedApplyStatus := stats.NewSyncStats()
 	expectedApplyStatus.ApplyEvent.Add(event.ApplyFailed)
 	expectedApplyStatus.ApplyEvent.Add(event.ApplySuccessful)
-	testutil.AssertEqual(t, expectedApplyStatus, s, "expected event stats to match")
+	testutil.AssertEqual(t, expectedApplyStatus, syncStats, "expected event stats to match")
 
 	expectedObjStatusMap := ObjectStatusMap{
-		idFrom(deploymentID): {
+		deploymentObjID: {
 			Strategy:  actuation.ActuationStrategyApply,
 			Actuation: actuation.ActuationFailed,
 		},
-		idFrom(testID): {
+		testObj1ID: {
 			Strategy:  actuation.ActuationStrategyApply,
 			Actuation: actuation.ActuationSucceeded,
 		},
@@ -470,25 +583,24 @@ func TestProcessPruneEvent(t *testing.T) {
 	testID := object.UnstructuredToObjMetadata(testObj)
 
 	ctx := context.Background()
-	s := stats.NewSyncStats()
+	syncStats := stats.NewSyncStats()
 	objStatusMap := make(ObjectStatusMap)
 	cs := &ClientSet{}
-	eh := eventHandler{
-		isDestroy: false,
+	s := supervisor{
 		clientSet: cs,
 	}
 
-	err := eh.processPruneEvent(ctx, formPruneEvent(event.PruneFailed, deploymentObj, fmt.Errorf("test error")).PruneEvent, s.PruneEvent, objStatusMap)
+	err := s.processPruneEvent(ctx, formPruneEvent(event.PruneFailed, deploymentObj, fmt.Errorf("test error")).PruneEvent, syncStats.PruneEvent, objStatusMap)
 	expectedError := PruneErrorForResource(fmt.Errorf("test error"), idFrom(deploymentID))
 	testerrors.AssertEqual(t, expectedError, err, "expected processPruneEvent to error on prune %s", event.PruneFailed)
 
-	err = eh.processPruneEvent(ctx, formPruneEvent(event.PruneSuccessful, testObj, nil).PruneEvent, s.PruneEvent, objStatusMap)
+	err = s.processPruneEvent(ctx, formPruneEvent(event.PruneSuccessful, testObj, nil).PruneEvent, syncStats.PruneEvent, objStatusMap)
 	assert.Nil(t, err, "expected processPruneEvent NOT to error on prune %s", event.PruneSuccessful)
 
 	expectedApplyStatus := stats.NewSyncStats()
 	expectedApplyStatus.PruneEvent.Add(event.PruneFailed)
 	expectedApplyStatus.PruneEvent.Add(event.PruneSuccessful)
-	testutil.AssertEqual(t, expectedApplyStatus, s, "expected event stats to match")
+	testutil.AssertEqual(t, expectedApplyStatus, syncStats, "expected event stats to match")
 
 	expectedObjStatusMap := ObjectStatusMap{
 		idFrom(deploymentID): {
@@ -583,16 +695,14 @@ func TestProcessWaitEvent(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 
-			p := eventHandler{
-				isDestroy: tc.isDestroy,
-			}
-			s := stats.NewSyncStats()
+			s := supervisor{}
+			syncStats := stats.NewSyncStats()
 			objStatusMap := make(ObjectStatusMap)
 			expectedApplyStatus := stats.NewSyncStats()
 			expectedObjStatusMap := ObjectStatusMap{}
 
 			for _, e := range tc.events {
-				err := p.processWaitEvent(formWaitEvent(e.status, e.id).WaitEvent, s.WaitEvent, objStatusMap)
+				err := s.processWaitEvent(formWaitEvent(e.status, e.id).WaitEvent, syncStats.WaitEvent, objStatusMap, tc.isDestroy)
 				if e.expectedErr == nil {
 					assert.Nil(t, err)
 				} else {
@@ -604,7 +714,7 @@ func TestProcessWaitEvent(t *testing.T) {
 				}
 			}
 
-			testutil.AssertEqual(t, expectedApplyStatus, s, "expected event stats to match")
+			testutil.AssertEqual(t, expectedApplyStatus, syncStats, "expected event stats to match")
 			testutil.AssertEqual(t, expectedObjStatusMap, objStatusMap, "expected object status to match")
 		})
 	}

@@ -19,6 +19,7 @@ import (
 	"fmt"
 
 	"kpt.dev/configsync/pkg/applier"
+	"kpt.dev/configsync/pkg/applier/stats"
 	"kpt.dev/configsync/pkg/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -28,12 +29,9 @@ import (
 // This is not in kpt.dev/configsync/pkg/testing/fake because that would cause
 // a import loop (applier -> fake -> applier).
 type Applier struct {
+	ApplyCalls   int
 	ApplyInputs  []ApplierInputs
 	ApplyOutputs []ApplierOutputs
-
-	ApplyCalls, ErrorsCalls int
-
-	currentErrors status.MultiError
 }
 
 // ApplierInputs stores inputs for fake.Applier.Apply()
@@ -43,26 +41,27 @@ type ApplierInputs struct {
 
 // ApplierOutputs stores outputs for fake.Applier.Apply()
 type ApplierOutputs struct {
-	Errors status.MultiError
+	Errors          []status.Error
+	ObjectStatusMap applier.ObjectStatusMap
+	SyncStats       *stats.SyncStats
 }
 
 // Apply fakes applier.Applier.Apply()
-func (a *Applier) Apply(_ context.Context, objects []client.Object) status.MultiError {
+func (a *Applier) Apply(_ context.Context, eventHandler func(applier.Event), objects []client.Object) (applier.ObjectStatusMap, *stats.SyncStats) {
 	a.ApplyInputs = append(a.ApplyInputs, ApplierInputs{
 		Objects: objects,
 	})
 	if a.ApplyCalls >= len(a.ApplyOutputs) {
-		panic(fmt.Sprintf("Expected only %d calls to Applier.Apply, but got more. Update Applier.ApplyOutputs if this is expected.", len(a.ApplyOutputs)))
+		panic(fmt.Sprintf("Expected only %d calls to Applier.Apply, but got more. Update Applier.Outputs if this is expected.", len(a.ApplyOutputs)))
 	}
 	outputs := a.ApplyOutputs[a.ApplyCalls]
 	a.ApplyCalls++
-	a.currentErrors = outputs.Errors
-	return outputs.Errors
-}
-
-// Errors fakes applier.Applier.Errors()
-func (a *Applier) Errors() status.MultiError {
-	return a.currentErrors
+	for _, err := range outputs.Errors {
+		eventHandler(applier.ErrorEvent{
+			Error: err,
+		})
+	}
+	return outputs.ObjectStatusMap, outputs.SyncStats
 }
 
 var _ applier.Applier = &Applier{}

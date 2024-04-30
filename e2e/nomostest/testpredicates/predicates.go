@@ -17,6 +17,7 @@ package testpredicates
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -1365,7 +1366,7 @@ func ValidateError(errs []v1beta1.ConfigSyncError, code, message string, resourc
 	for _, e := range errs {
 		if e.Code == code {
 			hasMessage = message == "" || strings.Contains(e.ErrorMessage, message)
-			hasResources = len(resources) == 0 || errorResourcesEqual(resources, e.Resources)
+			hasResources = len(resources) == 0 || reflect.DeepEqual(resources, e.Resources)
 
 			if hasMessage && hasResources {
 				return nil
@@ -1378,25 +1379,4 @@ func ValidateError(errs []v1beta1.ConfigSyncError, code, message string, resourc
 	}
 
 	return fmt.Errorf("error %s not present: %s", code, log.AsJSON(errs))
-}
-
-// errorResourcesEqual checks that the two lists of error resources are equal
-func errorResourcesEqual(want []v1beta1.ResourceRef, got []v1beta1.ResourceRef) bool {
-	if len(want) != len(got) {
-		return false
-	}
-
-	found := make(map[string]bool)
-
-	for _, resource := range want {
-		found[resource.Name] = true
-	}
-
-	for _, resource := range got {
-		if !found[resource.Name] {
-			return false
-		}
-	}
-
-	return true
 }

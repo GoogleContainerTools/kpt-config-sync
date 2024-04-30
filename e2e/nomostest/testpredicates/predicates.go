@@ -17,6 +17,7 @@ package testpredicates
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -846,7 +847,7 @@ func RootSyncHasSourceError(errCode, errMessage string) Predicate {
 		if !ok {
 			return WrongTypeErr(o, &v1beta1.RootSync{})
 		}
-		return ValidateError(rs.Status.Source.Errors, errCode, errMessage)
+		return ValidateError(rs.Status.Source.Errors, errCode, errMessage, nil)
 	}
 }
 
@@ -861,7 +862,7 @@ func RepoSyncHasSourceError(errCode, errMessage string) Predicate {
 		if !ok {
 			return WrongTypeErr(o, &v1beta1.RepoSync{})
 		}
-		return ValidateError(rs.Status.Source.Errors, errCode, errMessage)
+		return ValidateError(rs.Status.Source.Errors, errCode, errMessage, nil)
 	}
 }
 
@@ -876,7 +877,7 @@ func RootSyncHasRenderingError(errCode, errMessage string) Predicate {
 		if !ok {
 			return WrongTypeErr(o, &v1beta1.RootSync{})
 		}
-		return ValidateError(rs.Status.Rendering.Errors, errCode, errMessage)
+		return ValidateError(rs.Status.Rendering.Errors, errCode, errMessage, nil)
 	}
 }
 
@@ -941,7 +942,7 @@ func RepoSyncHasRenderingError(errCode, errMessage string) Predicate {
 		if !ok {
 			return WrongTypeErr(o, &v1beta1.RepoSync{})
 		}
-		return ValidateError(rs.Status.Rendering.Errors, errCode, errMessage)
+		return ValidateError(rs.Status.Rendering.Errors, errCode, errMessage, nil)
 	}
 }
 
@@ -956,7 +957,7 @@ func RootSyncHasSyncError(errCode, errMessage string) Predicate {
 		if !ok {
 			return WrongTypeErr(o, &v1beta1.RootSync{})
 		}
-		return ValidateError(rs.Status.Sync.Errors, errCode, errMessage)
+		return ValidateError(rs.Status.Sync.Errors, errCode, errMessage, nil)
 	}
 }
 
@@ -971,7 +972,7 @@ func RepoSyncHasSyncError(errCode, errMessage string) Predicate {
 		if !ok {
 			return WrongTypeErr(o, &v1beta1.RepoSync{})
 		}
-		return ValidateError(rs.Status.Sync.Errors, errCode, errMessage)
+		return ValidateError(rs.Status.Sync.Errors, errCode, errMessage, nil)
 	}
 }
 
@@ -1353,20 +1354,29 @@ func ClusterRoleBindingSubjectNamesEqual(subjects ...string) func(o client.Objec
 }
 
 // ValidateError returns true if the specified errors contain an error
-// with the specified error code and (partial) message.
-func ValidateError(errs []v1beta1.ConfigSyncError, code, message string) error {
+// with the specified error code, (partial) message, and resources.
+func ValidateError(errs []v1beta1.ConfigSyncError, code, message string, resources []v1beta1.ResourceRef) error {
 	if len(errs) == 0 {
 		return fmt.Errorf("no errors present")
 	}
+
+	hasMessage := false
+	hasResources := false
+
 	for _, e := range errs {
 		if e.Code == code {
-			if message == "" || strings.Contains(e.ErrorMessage, message) {
+			hasMessage = message == "" || strings.Contains(e.ErrorMessage, message)
+			hasResources = len(resources) == 0 || reflect.DeepEqual(resources, e.Resources)
+
+			if hasMessage && hasResources {
 				return nil
 			}
 		}
 	}
-	if message != "" {
-		return fmt.Errorf("error %s not present with message %q: %s", code, message, log.AsJSON(errs))
+
+	if message != "" || len(resources) != 0 {
+		return fmt.Errorf("error %s not present with message %q and resources %v: %s", code, message, resources, log.AsJSON(errs))
 	}
+
 	return fmt.Errorf("error %s not present: %s", code, log.AsJSON(errs))
 }

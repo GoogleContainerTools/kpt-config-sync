@@ -101,7 +101,7 @@ data:
                - ALL
            imagePullPolicy: IfNotPresent
          - name: git-sync
-           image: gcr.io/config-management-release/git-sync:v4.2.1-gke.3__linux_amd64
+           image: gcr.io/config-management-release/git-sync:v4.2.1-gke.8__linux_amd64
            args: ["--root=/repo/source", "--link=rev", "--max-failures=30", "--error-file=error.json"]
            volumeMounts:
            - name: repo

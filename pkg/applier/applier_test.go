@@ -84,7 +84,6 @@ func TestApply(t *testing.T) {
 
 	testObj := newTestObj("test-1")
 	testID := object.UnstructuredToObjMetadata(testObj)
-	testGVK := testObj.GroupVersionKind()
 
 	abandonObj := deploymentObj.DeepCopy()
 	abandonObj.SetName("abandon-me")
@@ -131,7 +130,6 @@ func TestApply(t *testing.T) {
 		events             []event.Event
 		expectedError      status.MultiError
 		expectedCSEs       []v1beta1.ConfigSyncError
-		expectedGVKs       map[schema.GroupVersionKind]struct{}
 		expectedServerObjs []client.Object
 	}{
 		{
@@ -158,7 +156,6 @@ func TestApply(t *testing.T) {
 						},
 					},
 				}},
-			expectedGVKs: map[schema.GroupVersionKind]struct{}{kinds.Deployment(): {}},
 		},
 		{
 			name: "conflict error for some resource",
@@ -171,10 +168,6 @@ func TestApply(t *testing.T) {
 				formApplyEvent(event.ApplyPending, testObj2, nil),
 			},
 			expectedError: KptManagementConflictError(testObj),
-			expectedGVKs: map[schema.GroupVersionKind]struct{}{
-				kinds.Deployment(): {},
-				testGVK:            {},
-			},
 		},
 		{
 			name: "inventory object is too large",
@@ -182,10 +175,6 @@ func TestApply(t *testing.T) {
 				formErrorEvent(etcdError),
 			},
 			expectedError: largeResourceGroupError(etcdError, uid),
-			expectedGVKs: map[schema.GroupVersionKind]struct{}{
-				kinds.Deployment(): {},
-				testGVK:            {},
-			},
 		},
 		{
 			name: "failed to apply",
@@ -210,10 +199,6 @@ func TestApply(t *testing.T) {
 					},
 				},
 			}},
-			expectedGVKs: map[schema.GroupVersionKind]struct{}{
-				kinds.Deployment(): {},
-				testGVK:            {},
-			},
 		},
 		{
 			name: "failed to prune",
@@ -222,10 +207,6 @@ func TestApply(t *testing.T) {
 				formPruneEvent(event.PruneSuccessful, testObj2, nil),
 			},
 			expectedError: PruneErrorForResource(errors.New("failed pruning"), idFrom(testID)),
-			expectedGVKs: map[schema.GroupVersionKind]struct{}{
-				kinds.Deployment(): {},
-				testGVK:            {},
-			},
 		},
 		{
 			name: "skipped pruning",
@@ -240,10 +221,6 @@ func TestApply(t *testing.T) {
 				errors.New("namespace still in use: test-namespace"),
 				idFrom(namespaceID),
 				actuation.ActuationStrategyDelete),
-			expectedGVKs: map[schema.GroupVersionKind]struct{}{
-				kinds.Deployment(): {},
-				testGVK:            {},
-			},
 		},
 		{
 			name: "all passed",
@@ -253,10 +230,6 @@ func TestApply(t *testing.T) {
 				formApplyEvent(event.ApplyPending, testObj2, nil),
 				formPruneEvent(event.PruneSuccessful, testObj3, nil),
 			},
-			expectedGVKs: map[schema.GroupVersionKind]struct{}{
-				kinds.Deployment(): {},
-				testGVK:            {},
-			},
 		},
 		{
 			name: "all failed",
@@ -265,9 +238,6 @@ func TestApply(t *testing.T) {
 				formApplyEvent(event.ApplyFailed, deploymentObj, applyerror.NewApplyRunError(errors.New("failed apply"))),
 				formApplyEvent(event.ApplyPending, testObj2, nil),
 				formPruneEvent(event.PruneSuccessful, testObj3, nil),
-			},
-			expectedGVKs: map[schema.GroupVersionKind]struct{}{
-				kinds.Deployment(): {},
 			},
 			expectedError: status.Append(
 				ErrorForResourceWithResource(errors.New("unknown type"), idFrom(testID), testObj),
@@ -306,10 +276,6 @@ func TestApply(t *testing.T) {
 			events: []event.Event{
 				formApplySkipEventWithDependency(deploymentID, deploymentObj.DeepCopy()),
 			},
-			expectedGVKs: map[schema.GroupVersionKind]struct{}{
-				kinds.Deployment(): {},
-				testGVK:            {},
-			},
 			expectedError: status.Append(SkipErrorForResource(
 				errors.New("dependency apply reconcile timeout: namespace_name_group_kind"),
 				idFrom(deploymentID),
@@ -325,10 +291,6 @@ func TestApply(t *testing.T) {
 				errors.New("dependent delete actuation failed: namespace_name_group_kind"),
 				idFrom(deploymentID),
 				actuation.ActuationStrategyDelete),
-			expectedGVKs: map[schema.GroupVersionKind]struct{}{
-				kinds.Deployment(): {},
-				testGVK:            {},
-			},
 		},
 		{
 			name: "abandon object",
@@ -339,10 +301,6 @@ func TestApply(t *testing.T) {
 				formPruneSkipEventWithDetach(abandonObj),
 			},
 			expectedError: nil,
-			expectedGVKs: map[schema.GroupVersionKind]struct{}{
-				kinds.Deployment(): {},
-				testGVK:            {},
-			},
 			expectedServerObjs: []client.Object{
 				func() client.Object {
 					obj := abandonObj.DeepCopy()
@@ -388,8 +346,7 @@ func TestApply(t *testing.T) {
 			applier, err := NewNamespaceSupervisor(cs, syncScope, syncName, 5*time.Minute)
 			require.NoError(t, err)
 
-			gvks, errs := applier.Apply(context.Background(), objs)
-			testutil.AssertEqual(t, tc.expectedGVKs, gvks)
+			errs := applier.Apply(context.Background(), objs)
 
 			if tc.expectedError == nil {
 				if errs != nil {

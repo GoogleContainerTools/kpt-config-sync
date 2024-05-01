@@ -1128,20 +1128,16 @@ type fakeApplier struct {
 	errors []status.Error
 }
 
-func (a *fakeApplier) Apply(_ context.Context, objs []client.Object) (map[schema.GroupVersionKind]struct{}, status.MultiError) {
+func (a *fakeApplier) Apply(_ context.Context, objs []client.Object) status.MultiError {
 	if a.errors == nil {
 		a.got = objs
-		gvks := make(map[schema.GroupVersionKind]struct{})
-		for _, obj := range objs {
-			gvks[obj.GetObjectKind().GroupVersionKind()] = struct{}{}
-		}
-		return gvks, nil
+		return nil
 	}
 	var errs status.MultiError
 	for _, e := range a.errors {
 		errs = status.Append(errs, e)
 	}
-	return nil, errs
+	return errs
 }
 
 func (a *fakeApplier) Errors() status.MultiError {

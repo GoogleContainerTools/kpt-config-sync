@@ -189,8 +189,7 @@ func (u *Updater) update(ctx context.Context, cache *cacheForCommit) status.Mult
 	// Apply the declared resources
 	if !cache.applied {
 		declaredObjs, _ := u.Resources.DeclaredObjects()
-		_, err := u.apply(ctx, declaredObjs, cache.source.commit)
-		if err != nil {
+		if err := u.apply(ctx, declaredObjs, cache.source.commit); err != nil {
 			return err
 		}
 		// Only mark the commit as applied if there were no (non-blocking) parse errors.
@@ -236,17 +235,17 @@ func (u *Updater) declare(ctx context.Context, objs []client.Object, commit stri
 	return objs, nil
 }
 
-func (u *Updater) apply(ctx context.Context, objs []client.Object, commit string) (map[schema.GroupVersionKind]struct{}, status.MultiError) {
+func (u *Updater) apply(ctx context.Context, objs []client.Object, commit string) status.MultiError {
 	klog.V(1).Info("Applier starting...")
 	start := time.Now()
-	gvks, err := u.Applier.Apply(ctx, objs)
+	err := u.Applier.Apply(ctx, objs)
 	metrics.RecordApplyDuration(ctx, metrics.StatusTagKey(err), commit, start)
 	if err != nil {
 		klog.Warningf("Failed to apply declared resources: %v", err)
-		return nil, err
+		return err
 	}
 	klog.V(3).Info("Applier stopped")
-	return gvks, nil
+	return nil
 }
 
 // watch updates the Remediator's watches to start new ones and stop old

@@ -70,7 +70,7 @@ func TestManager_Update(t *testing.T) {
 		// the end of the test.
 		wantWatchedTypes []schema.GroupVersionKind
 		// wantErr, if non-nil, reports that we want Update to return an error.
-		wantErr error
+		wantErr status.MultiError
 	}{
 		// Base Case.
 		{

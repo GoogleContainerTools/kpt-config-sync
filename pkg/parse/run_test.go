@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	applierfake "kpt.dev/configsync/pkg/applier/fake"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/hydrate"
@@ -39,6 +40,7 @@ import (
 	"kpt.dev/configsync/pkg/importer/reader"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
+	remediatorfake "kpt.dev/configsync/pkg/remediator/fake"
 	"kpt.dev/configsync/pkg/rootsync"
 	"kpt.dev/configsync/pkg/status"
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
@@ -75,8 +77,12 @@ func newParser(t *testing.T, fs FileSource, renderingEnabled bool) Parser {
 		Updater: Updater{
 			Scope:      declared.RootReconciler,
 			Resources:  &declared.Resources{},
-			Remediator: &noOpRemediator{},
-			Applier:    &fakeApplier{},
+			Remediator: &remediatorfake.Remediator{},
+			Applier: &applierfake.Applier{
+				ApplyOutputs: []applierfake.ApplierOutputs{
+					{}, // One Apply call, no errors
+				},
+			},
 		},
 		mux:              &sync.Mutex{},
 		RenderingEnabled: renderingEnabled,

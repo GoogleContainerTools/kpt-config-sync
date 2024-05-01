@@ -643,7 +643,7 @@ func (a *supervisor) addError(err error) {
 	defer a.errorMux.Unlock()
 
 	if _, ok := err.(status.Error); !ok {
-		// Wrap as an applier.Error to indidate the source of the error
+		// Wrap as an applier.Error to indicate the source of the error
 		err = Error(err)
 	}
 

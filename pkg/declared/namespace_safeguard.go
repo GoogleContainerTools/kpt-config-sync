@@ -15,6 +15,7 @@
 package declared
 
 import (
+	"github.com/elliotchance/orderedmap/v2"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
@@ -29,18 +30,22 @@ import (
 // 2) current contains zero Namespaces.
 //
 // Otherwise returns nil.
-func deletesAllNamespaces(previous, current map[core.ID]*unstructured.Unstructured) status.Error {
+func deletesAllNamespaces(previous, current *orderedmap.OrderedMap[core.ID, *unstructured.Unstructured]) status.Error {
 	var previousNamespaces []string
 	var currentNamespaces []string
 
-	for p := range previous {
-		if p.GroupKind == kinds.Namespace().GroupKind() {
-			previousNamespaces = append(previousNamespaces, p.Name)
+	if previous != nil {
+		for pair := previous.Front(); pair != nil; pair = pair.Next() {
+			if pair.Key.GroupKind == kinds.Namespace().GroupKind() {
+				previousNamespaces = append(previousNamespaces, pair.Key.Name)
+			}
 		}
 	}
-	for c := range current {
-		if c.GroupKind == kinds.Namespace().GroupKind() {
-			currentNamespaces = append(currentNamespaces, c.Name)
+	if current != nil {
+		for pair := current.Front(); pair != nil; pair = pair.Next() {
+			if pair.Key.GroupKind == kinds.Namespace().GroupKind() {
+				currentNamespaces = append(currentNamespaces, pair.Key.Name)
+			}
 		}
 	}
 

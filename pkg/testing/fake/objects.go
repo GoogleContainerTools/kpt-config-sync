@@ -206,13 +206,27 @@ func ClusterAtPath(path string, opts ...core.MetaMutator) ast.FileObject {
 // RootSyncV1Beta1 returns a K8S RootSync resource in a FileObject.
 func RootSyncV1Beta1(name string, opts ...core.MetaMutator) ast.FileObject {
 	rootSync := RootSyncObjectV1Beta1(name, opts...)
-	return FileObject(rootSync, fmt.Sprintf("namespaces/%s/%s.yaml", configsync.ControllerNamespace, name))
+	// RootSync type won't let us remove the status, so convert to unstructured.
+	uObj, err := kinds.ToUnstructured(rootSync, core.Scheme)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to convert RepoSync to Unstructured: %v", err))
+	}
+	// Since we're faking the output of a parsed file, remove the status.
+	delete(uObj.Object, "status")
+	return FileObject(uObj, fmt.Sprintf("namespaces/%s/%s.yaml", configsync.ControllerNamespace, name))
 }
 
 // RepoSyncV1Beta1 returns a K8S RepoSync resource in a FileObject.
 func RepoSyncV1Beta1(ns, name string, opts ...core.MetaMutator) ast.FileObject {
 	repoSync := RepoSyncObjectV1Beta1(ns, name, opts...)
-	return FileObject(repoSync, fmt.Sprintf("namespaces/%s/%s.yaml", ns, name))
+	// RootSync type won't let us remove the status, so convert to unstructured.
+	uObj, err := kinds.ToUnstructured(repoSync, core.Scheme)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to convert RepoSync to Unstructured: %v", err))
+	}
+	// Since we're faking the output of a parsed file, remove the status.
+	delete(uObj.Object, "status")
+	return FileObject(uObj, fmt.Sprintf("namespaces/%s/%s.yaml", ns, name))
 }
 
 // CustomResourceDefinitionV1Beta1Object returns an initialized CustomResourceDefinition.

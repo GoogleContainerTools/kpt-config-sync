@@ -628,11 +628,17 @@ func (a *supervisor) Errors() status.MultiError {
 	a.errorMux.RLock()
 	defer a.errorMux.RUnlock()
 
-	// Return a copy to avoid persisting caller modifications
-	return status.Append(nil, a.errs)
+	if a.errs != nil {
+		// Return a copy to avoid persisting caller modifications
+		return status.Wrap(a.errs.Errors()...)
+	}
+	return nil
 }
 
 func (a *supervisor) addError(err error) {
+	if err == nil {
+		return
+	}
 	a.errorMux.Lock()
 	defer a.errorMux.Unlock()
 

@@ -18,18 +18,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/GoogleContainerTools/kpt/pkg/live"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/applier/stats"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
@@ -38,6 +34,7 @@ import (
 	"kpt.dev/configsync/pkg/status"
 	testingfake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/testing/testerrors"
 	"sigs.k8s.io/cli-utils/pkg/apis/actuation"
 	"sigs.k8s.io/cli-utils/pkg/apply"
 	applyerror "sigs.k8s.io/cli-utils/pkg/apply/error"
@@ -129,7 +126,6 @@ func TestApply(t *testing.T) {
 		serverObjs         []client.Object
 		events             []event.Event
 		expectedError      status.MultiError
-		expectedCSEs       []v1beta1.ConfigSyncError
 		expectedServerObjs []client.Object
 	}{
 		{
@@ -139,23 +135,6 @@ func TestApply(t *testing.T) {
 				formApplyEvent(event.ApplyPending, testObj2, nil),
 			},
 			expectedError: ErrorForResourceWithResource(errors.New("unknown type"), idFrom(testID), testObj),
-			expectedCSEs: []v1beta1.ConfigSyncError{
-				{
-					Code:         "2009",
-					ErrorMessage: "KNV2009: failed to apply Test.configsync.test, test-namespace/test-1: unknown type\n\nsource: foo/test.yaml\nnamespace: test-namespace\nmetadata.name: test-1\ngroup: configsync.test\nversion: v1\nkind: Test\n\nFor more information, see https://g.co/cloud/acm-errors#knv2009",
-					Resources: []v1beta1.ResourceRef{
-						{
-							SourcePath: "foo/test.yaml",
-							Name:       "test-1",
-							Namespace:  "test-namespace",
-							GVK: metav1.GroupVersionKind{
-								Group:   "configsync.test",
-								Version: "v1",
-								Kind:    "Test",
-							},
-						},
-					},
-				}},
 		},
 		{
 			name: "conflict error for some resource",
@@ -183,22 +162,6 @@ func TestApply(t *testing.T) {
 				formApplyEvent(event.ApplyPending, testObj2, nil),
 			},
 			expectedError: ErrorForResourceWithResource(errors.New("failed apply"), idFrom(testID), testObj),
-			expectedCSEs: []v1beta1.ConfigSyncError{{
-				Code:         "2009",
-				ErrorMessage: "KNV2009: failed to apply Test.configsync.test, test-namespace/test-1: failed apply\n\nsource: foo/test.yaml\nnamespace: test-namespace\nmetadata.name: test-1\ngroup: configsync.test\nversion: v1\nkind: Test\n\nFor more information, see https://g.co/cloud/acm-errors#knv2009",
-				Resources: []v1beta1.ResourceRef{
-					{
-						SourcePath: "foo/test.yaml",
-						Name:       "test-1",
-						Namespace:  "test-namespace",
-						GVK: metav1.GroupVersionKind{
-							Group:   "configsync.test",
-							Version: "v1",
-							Kind:    "Test",
-						},
-					},
-				},
-			}},
 		},
 		{
 			name: "failed to prune",
@@ -239,48 +202,19 @@ func TestApply(t *testing.T) {
 				formApplyEvent(event.ApplyPending, testObj2, nil),
 				formPruneEvent(event.PruneSuccessful, testObj3, nil),
 			},
-			expectedError: status.Append(
+			expectedError: status.Wrap(
 				ErrorForResourceWithResource(errors.New("unknown type"), idFrom(testID), testObj),
 				ErrorForResourceWithResource(errors.New("failed apply"), idFrom(deploymentID), deploymentObj)),
-			expectedCSEs: []v1beta1.ConfigSyncError{{
-				Code:         "2009",
-				ErrorMessage: "KNV2009: failed to apply Test.configsync.test, test-namespace/test-1: unknown type\n\nsource: foo/test.yaml\nnamespace: test-namespace\nmetadata.name: test-1\ngroup: configsync.test\nversion: v1\nkind: Test\n\nFor more information, see https://g.co/cloud/acm-errors#knv2009",
-				Resources: []v1beta1.ResourceRef{{
-					SourcePath: "foo/test.yaml",
-					Name:       "test-1",
-					Namespace:  "test-namespace",
-					GVK: metav1.GroupVersionKind{
-						Group:   "configsync.test",
-						Version: "v1",
-						Kind:    "Test",
-					},
-				}},
-			},
-				{
-					Code:         "2009",
-					ErrorMessage: "KNV2009: failed to apply Deployment.apps, test-namespace/random-name: failed apply\n\nsource: namespaces/foo/role.yaml\nnamespace: test-namespace\nmetadata.name: random-name\ngroup: apps\nversion: v1\nkind: Deployment\n\nFor more information, see https://g.co/cloud/acm-errors#knv2009",
-					Resources: []v1beta1.ResourceRef{{
-						SourcePath: "namespaces/foo/role.yaml",
-						Name:       "random-name",
-						Namespace:  "test-namespace",
-						GVK: metav1.GroupVersionKind{
-							Group:   "apps",
-							Version: "v1",
-							Kind:    "Deployment",
-						},
-					}},
-				}},
 		},
 		{
 			name: "failed dependency during apply",
 			events: []event.Event{
 				formApplySkipEventWithDependency(deploymentID, deploymentObj.DeepCopy()),
 			},
-			expectedError: status.Append(SkipErrorForResource(
+			expectedError: SkipErrorForResource(
 				errors.New("dependency apply reconcile timeout: namespace_name_group_kind"),
 				idFrom(deploymentID),
 				actuation.ActuationStrategyApply),
-				nil),
 		},
 		{
 			name: "failed dependency during prune",
@@ -347,36 +281,7 @@ func TestApply(t *testing.T) {
 			require.NoError(t, err)
 
 			errs := applier.Apply(context.Background(), objs)
-
-			if tc.expectedError == nil {
-				if errs != nil {
-					t.Errorf("%s: unexpected error %v", tc.name, errs)
-				}
-			} else if errs == nil {
-				t.Errorf("%s: expected some error, but not happened", tc.name)
-			} else {
-				actualErrs := errs.Errors()
-				expectedErrs := tc.expectedError.Errors()
-				if len(actualErrs) != len(expectedErrs) {
-					t.Errorf("%s: number of error is not as expected %v", tc.name, actualErrs)
-				} else {
-					for i, actual := range actualErrs {
-						expected := expectedErrs[i]
-						if !strings.Contains(actual.Error(), expected.Error()) || reflect.TypeOf(expected) != reflect.TypeOf(actual) {
-							t.Errorf("%s:\nexpected error:\n%v\nbut got:\n%v", tc.name,
-								indent(expected.Error(), 1),
-								indent(actual.Error(), 1))
-						}
-
-						if len(tc.expectedCSEs) != 0 {
-							expectedConfigSync := tc.expectedCSEs[i]
-							testutil.AssertEqual(t, expectedConfigSync, actual.ToCSE(), "expected CSEs to match")
-						}
-
-					}
-				}
-			}
-
+			testerrors.AssertEqual(t, tc.expectedError, errs)
 			fakeClient.Check(t, tc.expectedServerObjs...)
 		})
 	}
@@ -531,23 +436,7 @@ func TestProcessApplyEvent(t *testing.T) {
 
 	err := eh.processApplyEvent(ctx, formApplyEvent(event.ApplyFailed, deploymentObj, fmt.Errorf("test error")).ApplyEvent, s.ApplyEvent, objStatusMap, unknownTypeResources, resourceMap)
 	expectedError := ErrorForResourceWithResource(fmt.Errorf("test error"), idFrom(deploymentID), deploymentObj)
-	testutil.AssertEqual(t, expectedError, err, "expected processPruneEvent to error on apply %s", event.ApplyFailed)
-
-	expectedCSE := v1beta1.ConfigSyncError{
-		Code:         "2009",
-		ErrorMessage: "KNV2009: failed to apply Deployment.apps, test-namespace/random-name: test error\n\nsource: namespaces/foo/role.yaml\nnamespace: test-namespace\nmetadata.name: random-name\ngroup: apps\nversion: v1\nkind: Deployment\n\nFor more information, see https://g.co/cloud/acm-errors#knv2009",
-		Resources: []v1beta1.ResourceRef{{
-			SourcePath: "namespaces/foo/role.yaml",
-			Name:       "random-name",
-			Namespace:  "test-namespace",
-			GVK: metav1.GroupVersionKind{
-				Group:   "apps",
-				Version: "v1",
-				Kind:    "Deployment",
-			},
-		}},
-	}
-	testutil.AssertEqual(t, expectedCSE, err.ToCSE(), "expected CSEs to match")
+	testerrors.AssertEqual(t, expectedError, err, "expected processPruneEvent to error on apply %s", event.ApplyFailed)
 
 	err = eh.processApplyEvent(ctx, formApplyEvent(event.ApplySuccessful, testObj, nil).ApplyEvent, s.ApplyEvent, objStatusMap, unknownTypeResources, resourceMap)
 	assert.Nil(t, err, "expected processApplyEvent NOT to error on apply %s", event.ApplySuccessful)
@@ -719,12 +608,6 @@ func TestProcessWaitEvent(t *testing.T) {
 			testutil.AssertEqual(t, expectedObjStatusMap, objStatusMap, "expected object status to match")
 		})
 	}
-}
-
-func indent(in string, indentation uint) string {
-	indent := strings.Repeat("\t", int(indentation))
-	lines := strings.Split(in, "\n")
-	return indent + strings.Join(lines, fmt.Sprintf("\n%s", indent))
 }
 
 func newDeploymentObj() *unstructured.Unstructured {

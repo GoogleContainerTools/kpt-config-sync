@@ -26,7 +26,7 @@ import (
 	"kpt.dev/configsync/pkg/diff/difftest"
 	"kpt.dev/configsync/pkg/syncer/syncertest"
 	"kpt.dev/configsync/pkg/testing/fake"
-	"sigs.k8s.io/cli-utils/pkg/testutil"
+	"kpt.dev/configsync/pkg/testing/testerrors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -178,7 +178,7 @@ func TestValidateManager(t *testing.T) {
 			manager:    "any-other-manager",
 			id:         rootSyncID,
 			operation:  admissionv1.Create,
-			want:       testutil.EqualError(fmt.Errorf(`config sync "root-reconciler-rootsync-1" can not CREATE object "RootSync.configsync.gke.io, config-management-system/rootsync-1" managed by config sync "ns-reconciler-any-other-manager"`)),
+			want:       fmt.Errorf(`config sync "root-reconciler-rootsync-1" can not CREATE object "RootSync.configsync.gke.io, config-management-system/rootsync-1" managed by config sync "ns-reconciler-any-other-manager"`),
 		},
 		{
 			name:       "Root reconciler can not delete its own RootSync",
@@ -186,7 +186,7 @@ func TestValidateManager(t *testing.T) {
 			manager:    "any-other-manager",
 			id:         rootSyncID,
 			operation:  admissionv1.Delete,
-			want:       testutil.EqualError(fmt.Errorf(`config sync "root-reconciler-rootsync-1" can not DELETE object "RootSync.configsync.gke.io, config-management-system/rootsync-1" managed by config sync "ns-reconciler-any-other-manager"`)),
+			want:       fmt.Errorf(`config sync "root-reconciler-rootsync-1" can not DELETE object "RootSync.configsync.gke.io, config-management-system/rootsync-1" managed by config sync "ns-reconciler-any-other-manager"`),
 		},
 		{
 			name:       "Root reconciler can not manage object with other root manager",
@@ -194,7 +194,7 @@ func TestValidateManager(t *testing.T) {
 			manager:    ":root_test-rs",
 			id:         cmID,
 			operation:  admissionv1.Update,
-			want:       testutil.EqualError(fmt.Errorf(`config sync "root-reconciler" can not UPDATE object "ConfigMap.example.com, ns-1/cm-1" managed by config sync "root-reconciler-test-rs"`)),
+			want:       fmt.Errorf(`config sync "root-reconciler" can not UPDATE object "ConfigMap.example.com, ns-1/cm-1" managed by config sync "root-reconciler-test-rs"`),
 		},
 		{
 			name:       "Root reconciler can manage object with no manager",
@@ -226,7 +226,7 @@ func TestValidateManager(t *testing.T) {
 			manager:    "any-other-manager",
 			id:         repoSyncID,
 			operation:  admissionv1.Create,
-			want:       testutil.EqualError(fmt.Errorf(`config sync "ns-reconciler-ns-1-reposync-1-10" can not CREATE object "RepoSync.configsync.gke.io, ns-1/reposync-1" managed by config sync "ns-reconciler-any-other-manager"`)),
+			want:       fmt.Errorf(`config sync "ns-reconciler-ns-1-reposync-1-10" can not CREATE object "RepoSync.configsync.gke.io, ns-1/reposync-1" managed by config sync "ns-reconciler-any-other-manager"`),
 		},
 		{
 			name:       "Namespace reconciler can not delete its own RepoSync",
@@ -234,7 +234,7 @@ func TestValidateManager(t *testing.T) {
 			manager:    "any-other-manager",
 			id:         repoSyncID,
 			operation:  admissionv1.Delete,
-			want:       testutil.EqualError(fmt.Errorf(`config sync "ns-reconciler-ns-1-reposync-1-10" can not DELETE object "RepoSync.configsync.gke.io, ns-1/reposync-1" managed by config sync "ns-reconciler-any-other-manager"`)),
+			want:       fmt.Errorf(`config sync "ns-reconciler-ns-1-reposync-1-10" can not DELETE object "RepoSync.configsync.gke.io, ns-1/reposync-1" managed by config sync "ns-reconciler-any-other-manager"`),
 		},
 		{
 			name:       "Namespace reconciler can not manage object with manager in different namespace",
@@ -242,7 +242,7 @@ func TestValidateManager(t *testing.T) {
 			manager:    "videostore",
 			id:         cmID,
 			operation:  admissionv1.Update,
-			want:       testutil.EqualError(fmt.Errorf(`config sync "ns-reconciler-bookstore" can not UPDATE object "ConfigMap.example.com, ns-1/cm-1" managed by config sync "ns-reconciler-videostore"`)),
+			want:       fmt.Errorf(`config sync "ns-reconciler-bookstore" can not UPDATE object "ConfigMap.example.com, ns-1/cm-1" managed by config sync "ns-reconciler-videostore"`),
 		},
 		{
 			name:       "Namespace reconciler can not manage object with different manager in the same namespace",
@@ -250,7 +250,7 @@ func TestValidateManager(t *testing.T) {
 			manager:    "bookstore_test-rs",
 			id:         cmID,
 			operation:  admissionv1.Update,
-			want:       testutil.EqualError(fmt.Errorf(`config sync "ns-reconciler-bookstore" can not UPDATE object "ConfigMap.example.com, ns-1/cm-1" managed by config sync "ns-reconciler-bookstore-test-rs-7"`)),
+			want:       fmt.Errorf(`config sync "ns-reconciler-bookstore" can not UPDATE object "ConfigMap.example.com, ns-1/cm-1" managed by config sync "ns-reconciler-bookstore-test-rs-7"`),
 		},
 		{
 			name:       "Namespace reconciler can not manage object with any root manager",
@@ -258,7 +258,7 @@ func TestValidateManager(t *testing.T) {
 			manager:    ":root",
 			id:         cmID,
 			operation:  admissionv1.Update,
-			want:       testutil.EqualError(fmt.Errorf(`config sync "ns-reconciler-bookstore" can not UPDATE object "ConfigMap.example.com, ns-1/cm-1" managed by config sync "root-reconciler"`)),
+			want:       fmt.Errorf(`config sync "ns-reconciler-bookstore" can not UPDATE object "ConfigMap.example.com, ns-1/cm-1" managed by config sync "root-reconciler"`),
 		},
 		{
 			name:       "Namespace reconciler can manage object with no manager",
@@ -290,7 +290,7 @@ func TestValidateManager(t *testing.T) {
 			manager:    "bookstore",
 			id:         rootSyncID,
 			operation:  admissionv1.Create,
-			want:       testutil.EqualError(fmt.Errorf(`config sync "reconciler-manager" can not CREATE object "RootSync.configsync.gke.io, config-management-system/rootsync-1" managed by config sync "ns-reconciler-bookstore"`)),
+			want:       fmt.Errorf(`config sync "reconciler-manager" can not CREATE object "RootSync.configsync.gke.io, config-management-system/rootsync-1" managed by config sync "ns-reconciler-bookstore"`),
 		},
 		{
 			name:       "ReconcilerManager can not create RepoSync with a manager",
@@ -298,7 +298,7 @@ func TestValidateManager(t *testing.T) {
 			manager:    "bookstore",
 			id:         repoSyncID,
 			operation:  admissionv1.Create,
-			want:       testutil.EqualError(fmt.Errorf(`config sync "reconciler-manager" can not CREATE object "RepoSync.configsync.gke.io, ns-1/reposync-1" managed by config sync "ns-reconciler-bookstore"`)),
+			want:       fmt.Errorf(`config sync "reconciler-manager" can not CREATE object "RepoSync.configsync.gke.io, ns-1/reposync-1" managed by config sync "ns-reconciler-bookstore"`),
 		},
 		{
 			name:       "ReconcilerManager can not delete RootSync with a manager",
@@ -306,7 +306,7 @@ func TestValidateManager(t *testing.T) {
 			manager:    "bookstore",
 			id:         rootSyncID,
 			operation:  admissionv1.Delete,
-			want:       testutil.EqualError(fmt.Errorf(`config sync "reconciler-manager" can not DELETE object "RootSync.configsync.gke.io, config-management-system/rootsync-1" managed by config sync "ns-reconciler-bookstore"`)),
+			want:       fmt.Errorf(`config sync "reconciler-manager" can not DELETE object "RootSync.configsync.gke.io, config-management-system/rootsync-1" managed by config sync "ns-reconciler-bookstore"`),
 		},
 		{
 			name:       "ReconcilerManager can not delete RepoSync with a manager",
@@ -314,7 +314,7 @@ func TestValidateManager(t *testing.T) {
 			manager:    "bookstore",
 			id:         repoSyncID,
 			operation:  admissionv1.Delete,
-			want:       testutil.EqualError(fmt.Errorf(`config sync "reconciler-manager" can not DELETE object "RepoSync.configsync.gke.io, ns-1/reposync-1" managed by config sync "ns-reconciler-bookstore"`)),
+			want:       fmt.Errorf(`config sync "reconciler-manager" can not DELETE object "RepoSync.configsync.gke.io, ns-1/reposync-1" managed by config sync "ns-reconciler-bookstore"`),
 		},
 		{
 			name:       "Importer can manage object with a root manager",
@@ -337,7 +337,7 @@ func TestValidateManager(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			got := ValidateManager(tc.reconciler, tc.manager, tc.id, tc.operation)
-			testutil.AssertEqual(t, tc.want, got)
+			testerrors.AssertEqual(t, tc.want, got)
 		})
 	}
 }

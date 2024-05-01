@@ -28,6 +28,7 @@ import (
 	"kpt.dev/configsync/pkg/status"
 	testingfake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/testing/testerrors"
 	"sigs.k8s.io/cli-utils/pkg/apis/actuation"
 	"sigs.k8s.io/cli-utils/pkg/apply"
 	applyerror "sigs.k8s.io/cli-utils/pkg/apply/error"
@@ -35,7 +36,6 @@ import (
 	"sigs.k8s.io/cli-utils/pkg/apply/filter"
 	"sigs.k8s.io/cli-utils/pkg/inventory"
 	"sigs.k8s.io/cli-utils/pkg/object"
-	"sigs.k8s.io/cli-utils/pkg/testutil"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -102,7 +102,7 @@ func TestDestroy(t *testing.T) {
 				formDeleteEvent(event.DeleteFailed, testObj, applyerror.NewUnknownTypeError(testError1)),
 				formDeleteEvent(event.DeletePending, testObj2, nil),
 			},
-			multiErr: newMultiError(DeleteErrorForResource(testError1, idFrom(testID))),
+			multiErr: DeleteErrorForResource(testError1, idFrom(testID)),
 		},
 		{
 			name: "conflict error for some resource",
@@ -123,7 +123,7 @@ func TestDestroy(t *testing.T) {
 			events: []event.Event{
 				formErrorEvent(etcdError),
 			},
-			multiErr: newMultiError(largeResourceGroupError(etcdError, uid)),
+			multiErr: largeResourceGroupError(etcdError, uid),
 		},
 		{
 			name: "failed to delete",
@@ -131,7 +131,7 @@ func TestDestroy(t *testing.T) {
 				formDeleteEvent(event.DeleteFailed, testObj, testError1),
 				formDeleteEvent(event.DeletePending, testObj2, nil),
 			},
-			multiErr: newMultiError(DeleteErrorForResource(testError1, idFrom(testID))),
+			multiErr: DeleteErrorForResource(testError1, idFrom(testID)),
 		},
 		{
 			name: "skipped delete",
@@ -142,10 +142,10 @@ func TestDestroy(t *testing.T) {
 				}),
 				formDeleteEvent(event.DeleteSuccessful, testObj2, nil),
 			},
-			multiErr: newMultiError(SkipErrorForResource(
+			multiErr: SkipErrorForResource(
 				errors.New("namespace still in use: test-namespace"),
 				idFrom(namespaceID),
-				actuation.ActuationStrategyDelete)),
+				actuation.ActuationStrategyDelete),
 		},
 		{
 			name: "all passed",
@@ -162,7 +162,7 @@ func TestDestroy(t *testing.T) {
 				formDeleteEvent(event.DeleteFailed, testObj, testError1),
 				formDeleteEvent(event.DeleteFailed, deploymentObj, testError2),
 			},
-			multiErr: newMultiError(
+			multiErr: status.Wrap(
 				DeleteErrorForResource(testError1, idFrom(testID)),
 				DeleteErrorForResource(testError2, idFrom(deploymentID))),
 		},
@@ -171,19 +171,18 @@ func TestDestroy(t *testing.T) {
 			events: []event.Event{
 				formDeleteSkipEventWithDependent(deploymentObj.DeepCopy(), deployment2Obj.DeepCopy()),
 			},
-			multiErr: newMultiError(
-				SkipErrorForResource(
-					&filter.DependencyPreventedActuationError{
-						Object:                  deploymentID,
-						Strategy:                actuation.ActuationStrategyDelete,
-						Relationship:            filter.RelationshipDependent,
-						Relation:                deployment2ID,
-						RelationPhase:           filter.PhaseReconcile,
-						RelationActuationStatus: actuation.ActuationSucceeded,
-						RelationReconcileStatus: actuation.ReconcileTimeout,
-					},
-					idFrom(deploymentID),
-					actuation.ActuationStrategyDelete)),
+			multiErr: SkipErrorForResource(
+				&filter.DependencyPreventedActuationError{
+					Object:                  deploymentID,
+					Strategy:                actuation.ActuationStrategyDelete,
+					Relationship:            filter.RelationshipDependent,
+					Relation:                deployment2ID,
+					RelationPhase:           filter.PhaseReconcile,
+					RelationActuationStatus: actuation.ActuationSucceeded,
+					RelationReconcileStatus: actuation.ReconcileTimeout,
+				},
+				idFrom(deploymentID),
+				actuation.ActuationStrategyDelete),
 		},
 	}
 
@@ -200,19 +199,9 @@ func TestDestroy(t *testing.T) {
 			require.NoError(t, err)
 
 			errs := destroyer.Destroy(context.Background())
-			testutil.AssertEqual(t, tc.multiErr, errs)
+			testerrors.AssertEqual(t, tc.multiErr, errs)
 		})
 	}
-}
-
-// newMultiError wraps an error as a multiError that's comparable using
-// `testutil.AssertEqual`.
-func newMultiError(errs ...error) error {
-	var multiErr status.MultiError
-	for _, err := range errs {
-		multiErr = status.Append(multiErr, err)
-	}
-	return testutil.EqualError(multiErr)
 }
 
 func formDeleteEvent(status event.DeleteEventStatus, obj *unstructured.Unstructured, err error) event.Event {

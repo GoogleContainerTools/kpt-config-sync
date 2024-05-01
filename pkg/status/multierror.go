@@ -68,6 +68,18 @@ func NonBlockingErrors(errs MultiError) []v1beta1.ConfigSyncError {
 	return ToCSE(nonBlockingErrs)
 }
 
+// Wrap returns a MultiError composed of the specified status.Errors.
+// Returns nil if input list is empty or all inputs are nil.
+// If only one error is provided and it's a MultiError, it is returned without
+// wrapping.
+func Wrap(errs ...Error) MultiError {
+	var multiErr MultiError
+	for _, err := range errs {
+		multiErr = Append(multiErr, err)
+	}
+	return multiErr
+}
+
 // Append adds one or more errors to an existing MultiError.
 // If m, err, and errs are nil, returns nil.
 //
@@ -75,7 +87,14 @@ func NonBlockingErrors(errs MultiError) []v1beta1.ConfigSyncError {
 // There is no valid reason to call Append with exactly one argument.
 //
 // If err is a MultiError, appends all contained errors.
+//
+// If only one error is provided and it's a MultiError, it is returned without
+// wrapping.
 func Append(m MultiError, err error, errs ...error) MultiError {
+	if me, ok := err.(MultiError); ok && m == nil && len(errs) == 0 {
+		return me
+	}
+
 	result := &multiError{}
 
 	switch m.(type) {

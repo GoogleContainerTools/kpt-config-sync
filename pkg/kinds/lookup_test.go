@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"kpt.dev/configsync/pkg/testing/testerrors"
 	"sigs.k8s.io/cli-utils/pkg/testutil"
 )
 
@@ -118,11 +119,9 @@ func TestLookup(t *testing.T) {
 				},
 			},
 			scheme: emptyScheme,
-			expectedError: testutil.EqualError(
-				fmt.Errorf(
-					"failed to lookup object type: %w",
-					runtime.NewNotRegisteredErrForType(emptyScheme.Name(),
-						reflect.TypeOf(corev1.Service{})))),
+			expectedError: fmt.Errorf("failed to lookup object type: %w",
+				runtime.NewNotRegisteredErrForType(emptyScheme.Name(),
+					reflect.TypeOf(corev1.Service{}))),
 		},
 		{
 			name: "typed pre-populated GVK in scheme",
@@ -170,11 +169,9 @@ func TestLookup(t *testing.T) {
 				},
 			},
 			scheme: emptyScheme,
-			expectedError: testutil.EqualError(
-				fmt.Errorf(
-					"failed to lookup object type: %w",
-					runtime.NewNotRegisteredErrForType(emptyScheme.Name(),
-						reflect.TypeOf(corev1.Service{})))),
+			expectedError: fmt.Errorf("failed to lookup object type: %w",
+				runtime.NewNotRegisteredErrForType(emptyScheme.Name(),
+					reflect.TypeOf(corev1.Service{}))),
 		},
 		{
 			name: "typed unpopulated GVK in scheme",
@@ -203,7 +200,7 @@ func TestLookup(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			actual, err := Lookup(tc.object, tc.scheme)
-			testutil.AssertEqual(t, tc.expectedError, err)
+			testerrors.AssertEqual(t, tc.expectedError, err)
 			testutil.AssertEqual(t, tc.expected, actual)
 		})
 	}

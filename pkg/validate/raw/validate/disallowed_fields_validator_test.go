@@ -59,7 +59,7 @@ func TestDisallowedFields(t *testing.T) {
 					),
 				},
 			},
-			wantErrs: status.Append(nil,
+			wantErrs: status.Wrap(
 				syntax.IllegalFieldsInConfigError(fake.Deployment("hello"), id.OwnerReference),
 				syntax.IllegalFieldsInConfigError(fake.Deployment("hello"), id.SelfLink),
 				syntax.IllegalFieldsInConfigError(fake.Deployment("hello"), id.UID),

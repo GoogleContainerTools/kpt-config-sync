@@ -27,7 +27,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	ft "kpt.dev/configsync/pkg/importer/filesystem/filesystemtest"
-	"sigs.k8s.io/cli-utils/pkg/testutil"
+	"kpt.dev/configsync/pkg/testing/testerrors"
 )
 
 const (
@@ -206,7 +206,7 @@ func TestRunHydrate(t *testing.T) {
 		{
 			name:      "Run hydrate when source commit is changed",
 			commit:    differentCommit,
-			wantedErr: testutil.EqualError(NewTransientError(fmt.Errorf("source commit changed while running Kustomize build, was %s, now %s. It will be retried in the next sync", originCommit, differentCommit))),
+			wantedErr: NewTransientError(fmt.Errorf("source commit changed while running Kustomize build, was %s, now %s. It will be retried in the next sync", originCommit, differentCommit)),
 		},
 	}
 
@@ -268,7 +268,7 @@ func TestRunHydrate(t *testing.T) {
 			}
 
 			err = hydrator.runHydrate(originCommit, syncDir)
-			testutil.AssertEqual(t, tc.wantedErr, err)
+			testerrors.AssertEqual(t, tc.wantedErr, err)
 		})
 	}
 }

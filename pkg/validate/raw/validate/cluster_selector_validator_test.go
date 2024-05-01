@@ -120,7 +120,7 @@ func TestClusterSelectorsForHierarchical(t *testing.T) {
 					fake.NamespaceSelector(legacyClusterSelectorAnnotation),
 				},
 			},
-			wantErrs: status.Append(nil,
+			wantErrs: status.Wrap(
 				nonhierarchical.IllegalClusterSelectorAnnotationError(fake.Cluster(), "legacy"),
 				nonhierarchical.IllegalClusterSelectorAnnotationError(fake.ClusterSelector(), "legacy"),
 				nonhierarchical.IllegalClusterSelectorAnnotationError(fake.NamespaceSelector(), "legacy"),
@@ -135,7 +135,7 @@ func TestClusterSelectorsForHierarchical(t *testing.T) {
 					fake.NamespaceSelector(inlineClusterSelectorAnnotation),
 				},
 			},
-			wantErrs: status.Append(nil,
+			wantErrs: status.Wrap(
 				nonhierarchical.IllegalClusterSelectorAnnotationError(fake.Cluster(), "inline"),
 				nonhierarchical.IllegalClusterSelectorAnnotationError(fake.ClusterSelector(), "inline"),
 				nonhierarchical.IllegalClusterSelectorAnnotationError(fake.NamespaceSelector(), "inline"),
@@ -149,7 +149,7 @@ func TestClusterSelectorsForHierarchical(t *testing.T) {
 					fake.ClusterSelectorAtPath("cluster/cs.yaml"),
 				},
 			},
-			wantErrs: status.Append(nil,
+			wantErrs: status.Wrap(
 				validation.ShouldBeInClusterRegistryError(fake.Cluster()),
 				validation.ShouldBeInClusterRegistryError(fake.ClusterSelector()),
 			),

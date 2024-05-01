@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/utils/pointer"
+	"kpt.dev/configsync/pkg/testing/testerrors"
 	"sigs.k8s.io/cli-utils/pkg/testutil"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -367,8 +368,7 @@ func TestMergeListOptions(t *testing.T) {
 			b: &client.ListOptions{
 				Namespace: "example2",
 			},
-			expectedError: testutil.EqualError(
-				errors.New("cannot merge two different namespaces: example1 & example2")),
+			expectedError: errors.New("cannot merge two different namespaces: example1 & example2"),
 		},
 		// Limit
 		{
@@ -415,8 +415,7 @@ func TestMergeListOptions(t *testing.T) {
 			b: &client.ListOptions{
 				Limit: 10,
 			},
-			expectedError: testutil.EqualError(
-				errors.New("cannot merge two different limits: 5 & 10")),
+			expectedError: errors.New("cannot merge two different limits: 5 & 10"),
 		},
 		// Continue
 		{
@@ -463,8 +462,7 @@ func TestMergeListOptions(t *testing.T) {
 			b: &client.ListOptions{
 				Continue: "123abc",
 			},
-			expectedError: testutil.EqualError(
-				errors.New("cannot merge two different continue tokens: abc123 & 123abc")),
+			expectedError: errors.New("cannot merge two different continue tokens: abc123 & 123abc"),
 		},
 		// Raw
 		{
@@ -535,10 +533,10 @@ func TestMergeListOptions(t *testing.T) {
 					ResourceVersion: "abc123",
 				},
 			},
-			expectedError: testutil.EqualError(
-				errors.New("not yet implemented: merging two different raw ListOptions: " +
-					"&ListOptions{LabelSelector:,FieldSelector:,Watch:false,ResourceVersion:,TimeoutSeconds:nil,Limit:0,Continue:,AllowWatchBookmarks:false,ResourceVersionMatch:,} & " +
-					"&ListOptions{LabelSelector:,FieldSelector:,Watch:false,ResourceVersion:abc123,TimeoutSeconds:nil,Limit:0,Continue:,AllowWatchBookmarks:false,ResourceVersionMatch:,}")),
+			expectedError: errors.New("not yet implemented: " +
+				"merging two different raw ListOptions: " +
+				"&ListOptions{LabelSelector:,FieldSelector:,Watch:false,ResourceVersion:,TimeoutSeconds:nil,Limit:0,Continue:,AllowWatchBookmarks:false,ResourceVersionMatch:,} & " +
+				"&ListOptions{LabelSelector:,FieldSelector:,Watch:false,ResourceVersion:abc123,TimeoutSeconds:nil,Limit:0,Continue:,AllowWatchBookmarks:false,ResourceVersionMatch:,}"),
 		},
 		// AllTheThings!
 		{
@@ -606,14 +604,13 @@ func TestMergeListOptions(t *testing.T) {
 	}))
 
 	asserter := testutil.NewAsserter(
-		cmpopts.EquateErrors(),
 		hasTermFieldSelectorComparer,
 	)
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			result, err := MergeListOptions(tc.a, tc.b)
-			asserter.Equal(t, tc.expectedError, err)
+			testerrors.AssertEqual(t, tc.expectedError, err)
 			asserter.Equal(t, tc.expectedOpts, result)
 		})
 	}

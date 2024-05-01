@@ -150,8 +150,7 @@ func TestManager_Update(t *testing.T) {
 
 			gotErr := m.UpdateWatches(context.Background(), tc.gvks)
 
-			wantErr := status.Append(nil, tc.wantErr)
-			if !errors.Is(wantErr, gotErr) {
+			if !errors.Is(tc.wantErr, gotErr) {
 				t.Errorf("got UpdateWatches() error = %v, want %v", gotErr, tc.wantErr)
 			}
 			if diff := cmp.Diff(tc.wantWatchedTypes, m.watchedGVKs(), cmpopts.SortSlices(sortGVKs)); diff != "" {

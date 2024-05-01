@@ -26,7 +26,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -72,7 +71,7 @@ type Applier interface {
 	// Returns the set of GVKs which were successfully applied and any errors.
 	// This is called by the reconciler when changes are detected in the
 	// source of truth (git, OCI, helm) and periodically.
-	Apply(ctx context.Context, desiredResources []client.Object) (map[schema.GroupVersionKind]struct{}, status.MultiError)
+	Apply(ctx context.Context, desiredResources []client.Object) status.MultiError
 	// Errors returns the errors encountered during apply.
 	// This method may be called while Destroy is running, to get the set of
 	// errors encountered so far.
@@ -498,7 +497,7 @@ func (a *supervisor) checkInventoryObjectSize(ctx context.Context, c client.Clie
 }
 
 // applyInner triggers a kpt live apply library call to apply a set of resources.
-func (a *supervisor) applyInner(ctx context.Context, objs []client.Object) (map[schema.GroupVersionKind]struct{}, status.MultiError) {
+func (a *supervisor) applyInner(ctx context.Context, objs []client.Object) status.MultiError {
 	a.checkInventoryObjectSize(ctx, a.clientSet.Client)
 	eh := eventHandler{
 		isDestroy: false,
@@ -515,7 +514,7 @@ func (a *supervisor) applyInner(ctx context.Context, objs []client.Object) (map[
 		disabledCount, err := eh.handleDisabledObjects(ctx, a.inventory, disabledObjs)
 		if err != nil {
 			a.addError(err)
-			return nil, a.Errors()
+			return a.Errors()
 		}
 		s.DisableObjs = &stats.DisabledObjStats{
 			Total:     uint64(len(disabledObjs)),
@@ -526,7 +525,7 @@ func (a *supervisor) applyInner(ctx context.Context, objs []client.Object) (map[
 	resources, err := toUnstructured(enabledObjs)
 	if err != nil {
 		a.addError(err)
-		return nil, a.Errors()
+		return a.Errors()
 	}
 
 	unknownTypeResources := make(map[core.ID]struct{})
@@ -609,15 +608,6 @@ func (a *supervisor) applyInner(ctx context.Context, objs []client.Object) (map[
 		}
 	}
 
-	gvks := make(map[schema.GroupVersionKind]struct{})
-	for _, resource := range objs {
-		id := core.IDOf(resource)
-		if _, found := unknownTypeResources[id]; found {
-			continue
-		}
-		gvks[resource.GetObjectKind().GroupVersionKind()] = struct{}{}
-	}
-
 	errs := a.Errors()
 	if errs == nil {
 		klog.V(4).Infof("Apply completed without error: all resources are up to date.")
@@ -628,7 +618,7 @@ func (a *supervisor) applyInner(ctx context.Context, objs []client.Object) (map[
 		klog.Infof("Applier made new progress: %s", s.String())
 		objStatusMap.Log(klog.V(0))
 	}
-	return gvks, errs
+	return errs
 }
 
 // Errors returns the errors encountered during the last apply or current apply
@@ -741,7 +731,7 @@ func (a *supervisor) destroyInner(ctx context.Context) status.MultiError {
 
 // Apply all managed resource objects and return any errors.
 // Apply implements the Applier interface.
-func (a *supervisor) Apply(ctx context.Context, desiredResource []client.Object) (map[schema.GroupVersionKind]struct{}, status.MultiError) {
+func (a *supervisor) Apply(ctx context.Context, desiredResource []client.Object) status.MultiError {
 	a.execMux.Lock()
 	defer a.execMux.Unlock()
 

@@ -31,7 +31,7 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/syncer/syncertest/fake"
-	"sigs.k8s.io/cli-utils/pkg/testutil"
+	"kpt.dev/configsync/pkg/testing/testerrors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -181,15 +181,7 @@ func TestStatus(t *testing.T) {
 			fakeClient := fake.NewClient(t, scheme, tc.existingObjs...)
 			ctx := context.Background()
 			updated, err := Status(ctx, fakeClient, tc.obj, tc.mutateFunc)
-			if tc.expectedError != nil {
-				// AssertEqual doesn't work well on APIServerError, because the
-				// Error.Is impl is too lenient. So check the error message and
-				// type, instead.
-				assert.Equal(t, tc.expectedError.Error(), err.Error())
-				assert.IsType(t, tc.expectedError, err)
-			} else {
-				testutil.AssertEqual(t, tc.expectedError, err)
-			}
+			testerrors.AssertEqual(t, tc.expectedError, err)
 			assert.Equal(t, tc.expectedUpdated, updated)
 			fakeClient.Check(t, tc.expectedObj)
 		})
@@ -383,15 +375,7 @@ func TestSpec(t *testing.T) {
 			fakeClient = fake.NewClient(t, scheme, tc.existingObjs...)
 			ctx := context.Background()
 			updated, err := Spec(ctx, fakeClient, tc.obj, tc.mutateFunc)
-			if tc.expectedError != nil && err != nil {
-				// AssertEqual doesn't work well on APIServerError, because the
-				// Error.Is impl is too lenient. So check the error message and
-				// type, instead.
-				assert.Equal(t, tc.expectedError.Error(), err.Error())
-				assert.IsType(t, tc.expectedError, err)
-			} else {
-				testutil.AssertEqual(t, tc.expectedError, err)
-			}
+			testerrors.AssertEqual(t, tc.expectedError, err)
 			assert.Equal(t, tc.expectedUpdated, updated)
 			fakeClient.Check(t, tc.expectedObj)
 		})

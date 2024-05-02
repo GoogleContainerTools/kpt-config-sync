@@ -46,10 +46,10 @@ import (
 	syncertest "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/testing/openapitest"
+	"kpt.dev/configsync/pkg/testing/testerrors"
 	"kpt.dev/configsync/pkg/testing/testmetrics"
 	discoveryutil "kpt.dev/configsync/pkg/util/discovery"
 	webhookconfiguration "kpt.dev/configsync/pkg/webhook/configuration"
-	"sigs.k8s.io/cli-utils/pkg/testutil"
 
 	"sigs.k8s.io/cli-utils/pkg/common"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -474,8 +474,8 @@ func TestRoot_Parse(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			state := reconcilerState{}
-			if err := parseAndUpdate(context.Background(), parser, triggerReimport, &state); err != nil {
+			state := &reconcilerState{}
+			if err := parseAndUpdate(context.Background(), parser, triggerReimport, state); err != nil {
 				t.Fatal(err)
 			}
 
@@ -653,8 +653,8 @@ func TestRoot_DeclaredFields(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			state := reconcilerState{}
-			if err := parseAndUpdate(context.Background(), parser, triggerReimport, &state); err != nil {
+			state := &reconcilerState{}
+			if err := parseAndUpdate(context.Background(), parser, triggerReimport, state); err != nil {
 				t.Fatal(err)
 			}
 
@@ -718,7 +718,7 @@ func fakeGVKs() []schema.GroupVersionKind {
 	return gvks
 }
 
-func fakeParseError(err error, gvks ...schema.GroupVersionKind) error {
+func fakeParseError(err error, gvks ...schema.GroupVersionKind) status.MultiError {
 	groups := make(map[schema.GroupVersion]error)
 	for _, gvk := range gvks {
 		gv := gvk.GroupVersion()
@@ -733,7 +733,7 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 		parsed          []ast.FileObject
 		want            []ast.FileObject
 		discoveryClient discoveryutil.ServerResourcer
-		expectedError   error
+		expectedError   status.MultiError
 	}{
 		{
 			// unknown scoped object should not be skipped when sending to applier when discovery call fails
@@ -771,7 +771,10 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 			// unknown scoped object get skipped when sending to applier when discovery call is good
 			name:            "unknown scoped object without discovery failure",
 			discoveryClient: syncertest.NewDiscoveryClientWithError(nil, kinds.Namespace(), kinds.Role()),
-			expectedError:   status.UnknownObjectKindError(fake.Unstructured(kinds.Anvil(), core.Name("deploy"))),
+			expectedError: status.UnknownObjectKindError(
+				fake.Unstructured(kinds.Anvil(), core.Name("deploy"),
+					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/obj.yaml"),
+				)),
 			parsed: []ast.FileObject{
 				fake.Role(core.Namespace("foo")),
 				// add a faked obect in parser.parsed without CRD so it's scope will be unknown when validating
@@ -892,9 +895,9 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 					NamespaceStrategy: configsync.NamespaceStrategyImplicit,
 				},
 			}
-			state := reconcilerState{}
-			err := parseAndUpdate(context.Background(), parser, triggerReimport, &state)
-			testutil.AssertEqual(t, tc.expectedError, err, "expected error to match")
+			state := &reconcilerState{}
+			err := parseAndUpdate(context.Background(), parser, triggerReimport, state)
+			testerrors.AssertEqual(t, tc.expectedError, err, "expected error to match")
 
 			if diff := cmp.Diff(tc.want, state.cache.objsToApply, cmpopts.EquateEmpty(), ast.CompareFileObject, cmpopts.SortSlices(sortObjects)); diff != "" {
 				t.Error(diff)
@@ -903,73 +906,19 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 	}
 }
 
-func TestRoot_ParseErrorsMetricValidation(t *testing.T) {
-	testCases := []struct {
-		name        string
-		errors      []status.Error
-		wantMetrics []*view.Row
-	}{
-		{
-			name: "single parse error",
-			errors: []status.Error{
-				status.InternalError("internal error"),
-			},
-			wantMetrics: []*view.Row{
-				{Data: &view.CountData{Value: 1}, Tags: []tag.Tag{{}}},
-			},
-		},
-		{
-			name: "multiple parse errors",
-			errors: []status.Error{
-				status.InternalError("internal error"),
-				status.SourceError.Sprintf("source error").Build(),
-				status.InternalError("another internal error"),
-			},
-			wantMetrics: []*view.Row{
-				{Data: &view.CountData{Value: 2}, Tags: []tag.Tag{{}}},
-				{Data: &view.CountData{Value: 1}, Tags: []tag.Tag{{}}},
-			},
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			parser := &root{
-				Options: &Options{
-					Parser:             &fakeParser{errors: tc.errors},
-					SyncName:           rootSyncName,
-					ReconcilerName:     rootReconcilerName,
-					Client:             syncertest.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName)),
-					DiscoveryInterface: syncertest.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
-					Updater: Updater{
-						Scope:     declared.RootReconciler,
-						Resources: &declared.Resources{},
-					},
-					mux: &sync.Mutex{},
-				},
-				RootOptions: &RootOptions{
-					SourceFormat: filesystem.SourceFormatUnstructured,
-				},
-			}
-			err := parseAndUpdate(context.Background(), parser, triggerReimport, &reconcilerState{})
-			if err == nil {
-				t.Errorf("parse() should return errors")
-			}
-		})
-	}
-}
-
 func TestRoot_SourceReconcilerErrorsMetricValidation(t *testing.T) {
 	testCases := []struct {
-		name        string
-		parseErrors []status.Error
-		wantMetrics []*view.Row
+		name          string
+		parseErrors   []status.Error
+		expectedError status.MultiError
+		wantMetrics   []*view.Row
 	}{
 		{
 			name: "single reconciler error in source component",
 			parseErrors: []status.Error{
 				status.SourceError.Sprintf("source error").Build(),
 			},
+			expectedError: status.SourceError.Sprintf("source error").Build(),
 			wantMetrics: []*view.Row{
 				{Data: &view.LastValueData{Value: 0}, Tags: []tag.Tag{{Key: metrics.KeyComponent, Value: "source"}, {Key: metrics.KeyErrorClass, Value: "1xxx"}}},
 				{Data: &view.LastValueData{Value: 1}, Tags: []tag.Tag{{Key: metrics.KeyComponent, Value: "source"}, {Key: metrics.KeyErrorClass, Value: "2xxx"}}},
@@ -982,6 +931,10 @@ func TestRoot_SourceReconcilerErrorsMetricValidation(t *testing.T) {
 				status.SourceError.Sprintf("source error").Build(),
 				status.InternalError("internal error"),
 			},
+			expectedError: status.Wrap(
+				status.SourceError.Sprintf("source error").Build(),
+				status.InternalError("internal error"),
+			),
 			wantMetrics: []*view.Row{
 				{Data: &view.LastValueData{Value: 0}, Tags: []tag.Tag{{Key: metrics.KeyComponent, Value: "source"}, {Key: metrics.KeyErrorClass, Value: "1xxx"}}},
 				{Data: &view.LastValueData{Value: 1}, Tags: []tag.Tag{{Key: metrics.KeyComponent, Value: "source"}, {Key: metrics.KeyErrorClass, Value: "2xxx"}}},
@@ -1011,10 +964,10 @@ func TestRoot_SourceReconcilerErrorsMetricValidation(t *testing.T) {
 					SourceFormat: filesystem.SourceFormatUnstructured,
 				},
 			}
-			err := parseAndUpdate(context.Background(), parser, triggerReimport, &reconcilerState{})
-			if err == nil {
-				t.Errorf("parse() should return errors")
-			}
+			state := &reconcilerState{}
+			err := parseAndUpdate(context.Background(), parser, triggerReimport, state)
+			testerrors.AssertEqual(t, tc.expectedError, err, "expected error to match")
+
 			if diff := m.ValidateMetrics(metrics.ReconcilerErrorsView, tc.wantMetrics); diff != "" {
 				t.Errorf(diff)
 			}
@@ -1024,15 +977,17 @@ func TestRoot_SourceReconcilerErrorsMetricValidation(t *testing.T) {
 
 func TestRoot_SourceAndSyncReconcilerErrorsMetricValidation(t *testing.T) {
 	testCases := []struct {
-		name        string
-		applyErrors []status.Error
-		wantMetrics []*view.Row
+		name          string
+		applyErrors   []status.Error
+		expectedError status.MultiError
+		wantMetrics   []*view.Row
 	}{
 		{
 			name: "single reconciler error in sync component",
 			applyErrors: []status.Error{
 				applier.Error(errors.New("sync error")),
 			},
+			expectedError: applier.Error(errors.New("sync error")),
 			wantMetrics: []*view.Row{
 				{Data: &view.LastValueData{Value: 0}, Tags: []tag.Tag{{Key: metrics.KeyComponent, Value: "source"}, {Key: metrics.KeyErrorClass, Value: "1xxx"}}},
 				{Data: &view.LastValueData{Value: 0}, Tags: []tag.Tag{{Key: metrics.KeyComponent, Value: "source"}, {Key: metrics.KeyErrorClass, Value: "2xxx"}}},
@@ -1048,6 +1003,10 @@ func TestRoot_SourceAndSyncReconcilerErrorsMetricValidation(t *testing.T) {
 				applier.Error(errors.New("sync error")),
 				status.InternalError("internal error"),
 			},
+			expectedError: status.Wrap(
+				applier.Error(errors.New("sync error")),
+				status.InternalError("internal error"),
+			),
 			wantMetrics: []*view.Row{
 				{Data: &view.LastValueData{Value: 0}, Tags: []tag.Tag{{Key: metrics.KeyComponent, Value: "source"}, {Key: metrics.KeyErrorClass, Value: "1xxx"}}},
 				{Data: &view.LastValueData{Value: 0}, Tags: []tag.Tag{{Key: metrics.KeyComponent, Value: "source"}, {Key: metrics.KeyErrorClass, Value: "2xxx"}}},
@@ -1082,10 +1041,10 @@ func TestRoot_SourceAndSyncReconcilerErrorsMetricValidation(t *testing.T) {
 					SourceFormat: filesystem.SourceFormatUnstructured,
 				},
 			}
-			err := parseAndUpdate(context.Background(), parser, triggerReimport, &reconcilerState{})
-			if err == nil {
-				t.Errorf("update() should return errors")
-			}
+			state := &reconcilerState{}
+			err := parseAndUpdate(context.Background(), parser, triggerReimport, state)
+			testerrors.AssertEqual(t, tc.expectedError, err, "expected error to match")
+
 			if diff := m.ValidateMetrics(metrics.ReconcilerErrorsView, tc.wantMetrics); diff != "" {
 				t.Errorf(diff)
 			}

@@ -71,7 +71,7 @@ func NonBlockingErrors(errs MultiError) []v1beta1.ConfigSyncError {
 // Wrap returns a MultiError composed of the specified status.Errors.
 // Returns nil if input list is empty or all inputs are nil.
 // If only one error is provided and it's a MultiError, it is returned without
-// wrapping.
+// wrapping. If no errors are provided, nil is returned.
 func Wrap(errs ...Error) MultiError {
 	var multiErr MultiError
 	for _, err := range errs {
@@ -89,34 +89,26 @@ func Wrap(errs ...Error) MultiError {
 // If err is a MultiError, appends all contained errors.
 //
 // If only one error is provided and it's a MultiError, it is returned without
-// wrapping.
+// wrapping. If no errors are provided, nil is returned.
 func Append(m MultiError, err error, errs ...error) MultiError {
-	if me, ok := err.(MultiError); ok && m == nil && len(errs) == 0 {
-		return me
-	}
-
-	result := &multiError{}
-
-	switch m.(type) {
-	case nil:
-		// No errors to begin with.
-	case *multiError:
-		result.errs = m.Errors()
-	default:
-		for _, e := range m.Errors() {
-			result.add(e)
-		}
-	}
-
-	result.add(err)
-	for _, e := range errs {
-		result.add(e)
-	}
-
-	if len(result.errs) == 0 {
+	var result []Error
+	// appendErrors handles nils, so just add everything and check the length after.
+	result = appendErrors(result, m)
+	result = appendErrors(result, err)
+	result = appendErrors(result, errs...)
+	// Don't return empty MultiErrors
+	if len(result) == 0 {
 		return nil
 	}
-	return result
+	// Don't return solo MultiErrors
+	if len(result) == 1 {
+		if me, ok := result[0].(MultiError); ok {
+			return me
+		}
+	}
+	return &multiError{
+		errs: result,
+	}
 }
 
 // ToCME converts a MultiError to ConfigManagementError.
@@ -192,24 +184,29 @@ type multiError struct {
 	errs []Error
 }
 
-// Add adds error to the builder.
-// If the type is known to contain an array of error, adds all of the contained errors.
-// If the error is nil, do nothing.
-func (m *multiError) add(err error) {
-	switch e := err.(type) {
-	case nil:
-		// No error to add if nil.
-	case Error:
-		m.errs = append(m.errs, e)
-	case MultiError:
-		m.errs = append(m.errs, e.Errors()...)
-	case utilerrors.Aggregate:
-		for _, er := range e.Errors() {
-			m.add(er)
+// appendErrors appends an error to a list of errors.
+// If the error is nil, return the input list.
+// If the error is a status.MultiError or apierrors.Aggregate, flatten it and
+// add each wrapped error to the input list.
+// If the error type is unknown, wrap it as an undocumented status.Error.
+func appendErrors(slice []Error, errs ...error) []Error {
+	for _, err := range errs {
+		switch e := err.(type) {
+		case nil:
+			// No error to add if nil.
+		case Error:
+			slice = append(slice, e)
+		case MultiError:
+			slice = append(slice, e.Errors()...)
+		case utilerrors.Aggregate:
+			for _, er := range e.Errors() {
+				slice = appendErrors(slice, er)
+			}
+		default:
+			slice = append(slice, undocumented(err))
 		}
-	default:
-		m.errs = append(m.errs, undocumented(err))
 	}
+	return slice
 }
 
 // Error implements error
@@ -227,6 +224,9 @@ func (m *multiError) Errors() []Error {
 
 // Is allows *multiError to be compared to other errors.
 func (m *multiError) Is(target error) bool {
+	if target == nil {
+		return false
+	}
 	other, isMultiError := target.(MultiError)
 	if !isMultiError {
 		return false

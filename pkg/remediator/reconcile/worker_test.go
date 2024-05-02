@@ -37,6 +37,7 @@ import (
 	syncertestfake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	testingfake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/testing/testerrors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -491,7 +492,9 @@ func TestWorker_Refresh(t *testing.T) {
 			client:      syncertestfake.NewErrorClient(errors.New("some error")),
 			want:        fake.UnstructuredObject(kinds.Role(), core.Name(name), core.Namespace(namespace)),
 			wantDeleted: false,
-			wantErr:     status.APIServerError(errors.New("some error"), ""),
+			wantErr: status.APIServerError(errors.New("some error"),
+				"failed to get updated object for worker cache",
+				fake.UnstructuredObject(kinds.Role(), core.Name(name), core.Namespace(namespace))),
 		},
 	}
 
@@ -506,10 +509,7 @@ func TestWorker_Refresh(t *testing.T) {
 
 			err := w.refresh(context.Background(), fake.UnstructuredObject(
 				kinds.Role(), core.Name(name), core.Namespace(namespace)))
-			if !errors.Is(err, tc.wantErr) {
-				t.Errorf("got refresh = %v, want %v",
-					err, tc.wantErr)
-			}
+			testerrors.AssertEqual(t, tc.wantErr, err)
 
 			if !tc.wantDeleted && tc.wantErr == nil {
 				// These fields are added by unstructured conversions, but we aren't

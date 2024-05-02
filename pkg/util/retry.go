@@ -15,6 +15,7 @@
 package util
 
 import (
+	"errors"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -42,6 +43,18 @@ func NewRetriableError(err error) error {
 // Error implements the Error function of the interface.
 func (r *RetriableError) Error() string {
 	return r.err.Error()
+}
+
+// Is makes RetriableErrors comparable.
+func (r *RetriableError) Is(target error) bool {
+	if target == nil {
+		return false
+	}
+	re, ok := target.(*RetriableError)
+	if !ok {
+		return false
+	}
+	return errors.Is(r.err, re.err)
 }
 
 var _ error = &RetriableError{}

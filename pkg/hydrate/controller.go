@@ -356,7 +356,7 @@ func SourceCommitAndDir(sourceType v1beta1.SourceType, sourceRevDir cmpath.Absol
 		// the path doesn't exist, or other OS failures. The root cause is
 		// probably because the *-sync container is not ready yet, so retry until
 		// it becomes ready.
-		return "", "", util.NewRetriableError(fmt.Errorf("failed to check the status of the source root directory %q: %v", sourceRoot, err))
+		return "", "", util.NewRetriableError(fmt.Errorf("failed to check the status of the source root directory %q: %w", sourceRoot, err))
 	}
 	// Check if the source configs are pulled successfully.
 	errFilePath := filepath.Join(sourceRoot, ErrorFile)

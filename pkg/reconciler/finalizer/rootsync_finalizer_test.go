@@ -34,6 +34,7 @@ import (
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/syncer/syncertest/fake"
+	"kpt.dev/configsync/pkg/testing/testerrors"
 	"sigs.k8s.io/cli-utils/pkg/testutil"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -311,15 +312,7 @@ func TestRootSyncFinalize(t *testing.T) {
 			}
 
 			err := finalizer.Finalize(ctx, tc.rsync)
-			if tc.expectedError != nil && err != nil {
-				// AssertEqual is too lenient on APIServerError, because
-				// baseErrorImpl.Is only checks the error code.
-				// So check the error message and type, instead.
-				assert.Equal(t, tc.expectedError.Error(), err.Error())
-				assert.IsType(t, tc.expectedError, err)
-			} else {
-				testutil.AssertEqual(t, tc.expectedError, err)
-			}
+			testerrors.AssertEqual(t, tc.expectedError, err)
 
 			assert.Equal(t, tc.expectedStopped, stopped)
 			var expectedObjs []client.Object
@@ -449,15 +442,7 @@ func TestRootSyncAddFinalizer(t *testing.T) {
 			}
 
 			updated, err := finalizer.AddFinalizer(ctx, tc.rsync)
-			if tc.expectedError != nil && err != nil {
-				// AssertEqual doesn't work well on APIServerError, because the
-				// Error.Is impl is too lenient. So check the error message and
-				// type, instead.
-				assert.Equal(t, tc.expectedError.Error(), err.Error())
-				assert.IsType(t, tc.expectedError, err)
-			} else {
-				testutil.AssertEqual(t, tc.expectedError, err)
-			}
+			testerrors.AssertEqual(t, tc.expectedError, err)
 
 			assert.Equal(t, tc.expectedUpdated, updated)
 			var expectedObjs []client.Object
@@ -595,15 +580,7 @@ func TestRootSyncRemoveFinalizer(t *testing.T) {
 			}
 
 			updated, err := finalizer.RemoveFinalizer(ctx, tc.rsync)
-			if tc.expectedError != nil && err != nil {
-				// AssertEqual doesn't work well on APIServerError, because the
-				// Error.Is impl is too lenient. So check the error message and
-				// type, instead.
-				assert.Equal(t, tc.expectedError.Error(), err.Error())
-				assert.IsType(t, tc.expectedError, err)
-			} else {
-				testutil.AssertEqual(t, tc.expectedError, err)
-			}
+			testerrors.AssertEqual(t, tc.expectedError, err)
 
 			assert.Equal(t, tc.expectedUpdated, updated)
 			var expectedObjs []client.Object

@@ -260,26 +260,26 @@ func TestSortErrors(t *testing.T) {
 		want []Error
 	}{
 		{
-			"nil error",
-			nil,
-			nil,
+			name: "nil error",
+			errs: nil,
+			want: nil,
 		},
 		{
-			"three errors in sorted order already",
-			[]Error{apiServerErrBar, undocumentedErrFoo, undocumentedErrBaz},
-			[]Error{apiServerErrBar, undocumentedErrFoo, undocumentedErrBaz},
+			name: "three errors in sorted order already",
+			errs: []Error{apiServerErrBar, undocumentedErrBaz, undocumentedErrFoo},
+			want: []Error{apiServerErrBar, undocumentedErrBaz, undocumentedErrFoo},
 		},
 		{
-			"three errors not in sorted order",
-			[]Error{undocumentedErrFoo, undocumentedErrBaz, apiServerErrBar},
-			[]Error{apiServerErrBar, undocumentedErrFoo, undocumentedErrBaz},
+			name: "three errors not in sorted order",
+			errs: []Error{undocumentedErrFoo, undocumentedErrBaz, apiServerErrBar},
+			want: []Error{apiServerErrBar, undocumentedErrBaz, undocumentedErrFoo},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			sortErrors(tc.errs)
 			sortIncorrectly := false
 			for i := range tc.errs {
-				if !errors.Is(tc.errs[i], tc.want[i]) {
+				if tc.errs[i] != tc.want[i] {
 					sortIncorrectly = true
 				}
 			}

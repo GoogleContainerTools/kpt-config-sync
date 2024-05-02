@@ -479,8 +479,8 @@ func TestProcessPruneEvent(t *testing.T) {
 	}
 
 	err := eh.processPruneEvent(ctx, formPruneEvent(event.PruneFailed, deploymentObj, fmt.Errorf("test error")).PruneEvent, s.PruneEvent, objStatusMap)
-	expectedError := ErrorForResource(fmt.Errorf("test error"), idFrom(deploymentID))
-	testutil.AssertEqual(t, expectedError, err, "expected processPruneEvent to error on prune %s", event.PruneFailed)
+	expectedError := PruneErrorForResource(fmt.Errorf("test error"), idFrom(deploymentID))
+	testerrors.AssertEqual(t, expectedError, err, "expected processPruneEvent to error on prune %s", event.PruneFailed)
 
 	err = eh.processPruneEvent(ctx, formPruneEvent(event.PruneSuccessful, testObj, nil).PruneEvent, s.PruneEvent, objStatusMap)
 	assert.Nil(t, err, "expected processPruneEvent NOT to error on prune %s", event.PruneSuccessful)

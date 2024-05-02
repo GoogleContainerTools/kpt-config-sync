@@ -15,6 +15,8 @@
 package testerrors
 
 import (
+	"fmt"
+	"reflect"
 	"testing"
 
 	"sigs.k8s.io/cli-utils/pkg/testutil"
@@ -29,12 +31,47 @@ import (
 // only compares the error code. Using testerrors.Equal, the assertion is more
 // strict.
 func AssertEqual(t *testing.T, expected, actual error, msgAndArgs ...interface{}) {
-	testutil.AssertEqual(t, testableError(expected), actual, msgAndArgs...)
+	testutil.AssertEqual(t, testableError(expected), testableError(actual), msgAndArgs...)
 }
 
 func testableError(err error) error {
 	if err == nil {
 		return nil
 	}
-	return testutil.EqualError(err)
+	// TODO: replace with testutil.EqualError after cli-utils is updated for asymmetric comparison
+	return EqualError(err)
+}
+
+// EqualError returns an error with an Is(error)bool function that matches
+// any error with the same type and string value as the supplied error.
+//
+// Use with AssertEqual to handle error comparisons.
+func EqualError(err error) error {
+	return &equalError{
+		err: err,
+	}
+}
+
+type equalError struct {
+	err error
+}
+
+func (e *equalError) Error() string {
+	return fmt.Sprintf("EqualError{Type: %T, Error: %q}", e.err, e.err)
+}
+
+func (e *equalError) Is(target error) bool {
+	if target == nil {
+		return false
+	}
+	// Unwrap EqualErrors to allow asymmetric comparison.
+	if ee, ok := target.(*equalError); ok {
+		return e.Is(ee.err)
+	}
+	return reflect.TypeOf(e.err) == reflect.TypeOf(target) &&
+		e.err.Error() == target.Error()
+}
+
+func (e *equalError) Unwrap() error {
+	return e.err
 }

@@ -82,7 +82,7 @@ type ErrorBuilder struct {
 // call with the passed unique code. Panics if there is an error code collision.
 func NewErrorBuilder(code string) ErrorBuilder {
 	register(code)
-	return ErrorBuilder{error: baseErrorImpl{
+	return ErrorBuilder{error: &baseErrorImpl{
 		code: code,
 	}}
 }
@@ -97,7 +97,7 @@ func (eb ErrorBuilder) BuildWithPaths(paths ...id.Path) PathError {
 	if len(paths) == 0 {
 		return nil
 	}
-	return pathErrorImpl{
+	return &pathErrorImpl{
 		underlying: eb.error,
 		paths:      paths,
 	}
@@ -108,7 +108,7 @@ func (eb ErrorBuilder) BuildWithResources(resources ...client.Object) ResourceEr
 	if len(resources) == 0 {
 		return nil
 	}
-	return resourceErrorImpl{
+	return &resourceErrorImpl{
 		underlying: eb.error,
 		resources:  resources,
 	}
@@ -118,7 +118,7 @@ func (eb ErrorBuilder) BuildWithResources(resources ...client.Object) ResourceEr
 // newManager is the manager annotation for the current remediator/reconciler.
 // currentManager is the manager annotation in the actual resource. It is also known as conflictingManager.
 func (eb ErrorBuilder) BuildWithConflictingManagers(resource client.Object, newManager, currentManager string) ManagementConflictError {
-	return managementConflictErrorImpl{
+	return &managementConflictErrorImpl{
 		underlying:     eb.error,
 		resource:       resource,
 		newManager:     newManager,
@@ -128,7 +128,7 @@ func (eb ErrorBuilder) BuildWithConflictingManagers(resource client.Object, newM
 
 // Sprint adds a message string into the Error inside the ErrorBuilder.
 func (eb ErrorBuilder) Sprint(message string) ErrorBuilder {
-	return ErrorBuilder{error: messageErrorImpl{
+	return ErrorBuilder{error: &messageErrorImpl{
 		underlying: eb.error,
 		message:    message,
 	}}
@@ -151,7 +151,7 @@ func (eb ErrorBuilder) Sprintf(format string, a ...interface{}) ErrorBuilder {
 		// a stack overflow.
 		reportMisuse("improperly formatted error message: " + message)
 	}
-	return ErrorBuilder{error: messageErrorImpl{
+	return ErrorBuilder{error: &messageErrorImpl{
 		underlying: eb.error,
 		message:    message,
 	}}
@@ -167,7 +167,7 @@ func (eb ErrorBuilder) Wrap(toWrap error) ErrorBuilder {
 	if toWrap == nil {
 		return ErrorBuilder{error: nil}
 	}
-	return ErrorBuilder{error: wrappedErrorImpl{
+	return ErrorBuilder{error: &wrappedErrorImpl{
 		underlying: eb.error,
 		wrapped:    toWrap,
 	}}

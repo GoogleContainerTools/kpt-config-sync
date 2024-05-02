@@ -64,19 +64,19 @@ type managementConflictErrorImpl struct {
 	currentManager string
 }
 
-var _ ManagementConflictError = managementConflictErrorImpl{}
+var _ ManagementConflictError = &managementConflictErrorImpl{}
 
-func (m managementConflictErrorImpl) ConflictingManager() string {
+func (m *managementConflictErrorImpl) ConflictingManager() string {
 	return m.currentManager
 }
 
-func (m managementConflictErrorImpl) CurrentManagerError() ManagementConflictError {
+func (m *managementConflictErrorImpl) CurrentManagerError() ManagementConflictError {
 	return ManagementConflictErrorBuilder.
 		Sprint(currentErrorMsg(m.newManager, m.newManager)).
 		BuildWithConflictingManagers(m.resource, m.newManager, m.currentManager)
 }
 
-func (m managementConflictErrorImpl) ConflictingManagerError() ManagementConflictError {
+func (m *managementConflictErrorImpl) ConflictingManagerError() ManagementConflictError {
 	return ManagementConflictErrorBuilder.
 		Sprintf("The %q reconciler detects a management conflict for a resource declared in another repository. "+
 			"Remove the declaration for this resource from either the current repository, or the repository managed by %q.",
@@ -84,38 +84,41 @@ func (m managementConflictErrorImpl) ConflictingManagerError() ManagementConflic
 		BuildWithConflictingManagers(m.resource, m.newManager, m.currentManager)
 }
 
-func (m managementConflictErrorImpl) Cause() error {
+func (m *managementConflictErrorImpl) Cause() error {
 	return m.underlying.Cause()
 }
 
-func (m managementConflictErrorImpl) Error() string {
+func (m *managementConflictErrorImpl) Error() string {
 	return format(m)
 }
 
-func (m managementConflictErrorImpl) Errors() []Error {
+func (m *managementConflictErrorImpl) Errors() []Error {
 	return []Error{m}
 }
 
-func (m managementConflictErrorImpl) ToCME() v1.ConfigManagementError {
+func (m *managementConflictErrorImpl) ToCME() v1.ConfigManagementError {
 	cme := fromError(m)
 	cme.ErrorResources = append(cme.ErrorResources, toErrorResource(m.resource))
 	return cme
 }
 
-func (m managementConflictErrorImpl) ToCSE() v1beta1.ConfigSyncError {
+func (m *managementConflictErrorImpl) ToCSE() v1beta1.ConfigSyncError {
 	cse := cseFromError(m)
 	cse.Resources = append(cse.Resources, toResourceRef(m.resource))
 	return cse
 }
 
-func (m managementConflictErrorImpl) Code() string {
+func (m *managementConflictErrorImpl) Code() string {
 	return m.underlying.Code()
 }
 
-func (m managementConflictErrorImpl) Body() string {
+func (m *managementConflictErrorImpl) Body() string {
 	return formatBody(m.underlying.Body(), "\n\n", formatResources(m.resource))
 }
 
-func (m managementConflictErrorImpl) Is(target error) bool {
+func (m *managementConflictErrorImpl) Is(target error) bool {
+	if target == nil {
+		return false
+	}
 	return m.underlying.Is(target)
 }

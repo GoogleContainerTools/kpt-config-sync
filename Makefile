@@ -37,7 +37,7 @@ OUTPUT_DIR := $(abspath .output)
 GO_DIR := $(OUTPUT_DIR)/go
 
 # Base image used for all golang containers
-GOLANG_IMAGE := golang:1.21.8-bookworm
+GOLANG_IMAGE := golang:1.21.9-bookworm
 # Base image used for debian containers
 # When updating you can use this command: 
 # gcloud container images list-tags gcr.io/gke-release/debian-base --filter="tags:bookworm*" 

@@ -40,18 +40,13 @@ import (
 func TestCRDDeleteBeforeRemoveCustomResourceV1Beta1(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1)
 
-	support, err := nt.SupportV1Beta1CRDAndRBAC()
-	if err != nil {
-		nt.T.Fatal("failed to check the supported CRD versions")
-	}
-	// Skip this test if v1beta1 CRD is not supported in the testing cluster.
-	if !support {
-		return
+	if !nt.SupportV1Beta1CRDAndRBAC() {
+		nt.T.Skip("Kubernetes v1.22 and later do not support the v1beta1 CRD API")
 	}
 
 	crdFile := filepath.Join(".", "..", "testdata", "customresources", "v1beta1_crds", "anvil-crd.yaml")
 	clusterFile := filepath.Join(".", "..", "testdata", "customresources", "v1beta1_crds", "clusteranvil-crd.yaml")
-	_, err = nt.Shell.Kubectl("apply", "-f", crdFile)
+	_, err := nt.Shell.Kubectl("apply", "-f", crdFile)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -284,17 +279,13 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 
 func TestSyncUpdateCustomResource(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1)
-	support, err := nt.SupportV1Beta1CRDAndRBAC()
-	if err != nil {
-		nt.T.Fatal("failed to check the supported CRD versions")
-	}
-	// Skip this test if v1beta1 CRD is not supported in the testing cluster.
-	if !support {
-		return
+
+	if !nt.SupportV1Beta1CRDAndRBAC() {
+		nt.T.Skip("Kubernetes v1.22 and later do not support the v1beta1 CRD API")
 	}
 
 	crdFile := filepath.Join(".", "..", "testdata", "customresources", "v1beta1_crds", "anvil-crd-structural-v1.yaml")
-	_, err = nt.Shell.Kubectl("apply", "-f", crdFile)
+	_, err := nt.Shell.Kubectl("apply", "-f", crdFile)
 	if err != nil {
 		nt.T.Fatal(err)
 	}

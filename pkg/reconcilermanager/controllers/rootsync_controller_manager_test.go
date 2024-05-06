@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strconv"
 	"testing"
 	"time"
@@ -52,6 +53,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 )
 
 // TestRootSyncReconcilerDeploymentLifecycle validates that the
@@ -606,19 +608,18 @@ func startControllerManager(ctx context.Context, t *testing.T, fakeClient *synce
 		NewCache: func(_ *rest.Config, _ cache.Options) (cache.Cache, error) {
 			return fakeCache, nil
 		},
-		NewClient: func(_ cache.Cache, _ *rest.Config, _ client.Options, _ ...client.Object) (client.Client, error) {
+		NewClient: func(_ *rest.Config, _ client.Options) (client.Client, error) {
 			return fakeClient, nil
 		},
-		MapperProvider: func(_ *rest.Config) (meta.RESTMapper, error) {
+		MapperProvider: func(_ *rest.Config, _ *http.Client) (meta.RESTMapper, error) {
 			return fakeClient.RESTMapper(), nil
 		},
 		// The underlying library uses a fixed port for serving metrics, which can
 		// cause conflicts when running tests concurrently. This disables the metrics server.
-		MetricsBindAddress: "0",
+		Metrics: metricsserver.Options{
+			BindAddress: "0",
+		},
 	})
-	require.NoError(t, err)
-
-	err = mgr.SetFields(fakeClient) // Replace cluster.apiReader
 	require.NoError(t, err)
 
 	t.Log("registering controller")

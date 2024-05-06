@@ -18,7 +18,7 @@ import (
 	"flag"
 
 	"k8s.io/klog/v2"
-	"k8s.io/klog/v2/klogr"
+	"k8s.io/klog/v2/textlogger"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
@@ -37,5 +37,5 @@ func InitFlags() {
 	}
 
 	// Configure controller-runtime to use klog, via the klogr library
-	ctrl.SetLogger(klogr.New())
+	ctrl.SetLogger(textlogger.NewLogger(textlogger.NewConfig()))
 }

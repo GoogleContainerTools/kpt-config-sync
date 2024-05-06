@@ -16,7 +16,6 @@ package controllers
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -71,7 +70,7 @@ func (r *reconcilerBase) cleanup(ctx context.Context, obj client.Object) error {
 	if err != nil {
 		// ErrWaitTimeout is returned when the context is Done, but doesn't
 		// specify cancelled or deadline exceeded.
-		if errors.Is(err, wait.ErrWaitTimeout) {
+		if wait.Interrupted(err) {
 			// If the DeleteAndWait observed any events, the object should have been updated.
 			if uObj.GetDeletionTimestamp().IsZero() {
 				// object not deleted

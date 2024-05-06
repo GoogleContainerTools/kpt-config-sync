@@ -26,7 +26,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
@@ -155,7 +155,7 @@ func TestStatus(t *testing.T) {
 			obj:  deploymentCopy(deployment1),
 			mutateFunc: func() error {
 				obj := inputObj.(*appsv1.Deployment)
-				obj.Spec.Replicas = pointer.Int32(2)
+				obj.Spec.Replicas = ptr.To(int32(2))
 				return nil
 			},
 			existingObjs: []client.Object{
@@ -222,7 +222,7 @@ func TestSpec(t *testing.T) {
 			obj:  deploymentCopy(deployment1),
 			mutateFunc: func() error {
 				obj := inputObj.(*appsv1.Deployment)
-				obj.Spec.Replicas = pointer.Int32(2)
+				obj.Spec.Replicas = ptr.To(int32(2))
 				return nil
 			},
 			existingObjs: []client.Object{
@@ -232,7 +232,7 @@ func TestSpec(t *testing.T) {
 			expectedError:   nil,
 			expectedObj: func() client.Object {
 				obj := deploymentCopy(deployment1)
-				obj.Spec.Replicas = pointer.Int32(2)
+				obj.Spec.Replicas = ptr.To(int32(2))
 				obj.SetResourceVersion("2") // updated
 				obj.SetGeneration(2)        // updated
 				return obj
@@ -243,14 +243,14 @@ func TestSpec(t *testing.T) {
 			obj:  deploymentCopy(deployment1),
 			mutateFunc: func() error {
 				obj := inputObj.(*appsv1.Deployment)
-				obj.Spec.Replicas = pointer.Int32(1)
+				obj.Spec.Replicas = ptr.To(int32(1))
 				obj.SetResourceVersion("1") // Fake a duplicate request
 				return nil
 			},
 			existingObjs: []client.Object{
 				func() client.Object {
 					obj := deploymentCopy(deployment1)
-					obj.Spec.Replicas = pointer.Int32(1)
+					obj.Spec.Replicas = ptr.To(int32(1))
 					obj.SetResourceVersion("2") // server object already updated
 					obj.SetGeneration(2)        // server spec already updated
 					return obj
@@ -270,7 +270,7 @@ func TestSpec(t *testing.T) {
 				deploymentCopy(deployment1)),
 			expectedObj: func() client.Object {
 				obj := deploymentCopy(deployment1)
-				obj.Spec.Replicas = pointer.Int32(1)
+				obj.Spec.Replicas = ptr.To(int32(1))
 				obj.SetResourceVersion("2") // unchanged
 				obj.SetGeneration(2)        // unchanged
 				return obj
@@ -296,7 +296,7 @@ func TestSpec(t *testing.T) {
 			obj:  deploymentCopy(deployment1),
 			mutateFunc: func() error {
 				obj := inputObj.(*appsv1.Deployment)
-				obj.Spec.Replicas = pointer.Int32(2)
+				obj.Spec.Replicas = ptr.To(int32(2))
 				once.Do(func() {
 					obj.SetResourceVersion("1") // Fake a stale request once
 				})
@@ -305,7 +305,7 @@ func TestSpec(t *testing.T) {
 			existingObjs: []client.Object{
 				func() client.Object {
 					obj := deploymentCopy(deployment1)
-					obj.Spec.Replicas = pointer.Int32(1)
+					obj.Spec.Replicas = ptr.To(int32(1))
 					obj.SetResourceVersion("2") // server object already updated
 					obj.SetGeneration(2)        // server spec already updated
 					return obj
@@ -317,7 +317,7 @@ func TestSpec(t *testing.T) {
 			expectedError: nil,
 			expectedObj: func() client.Object {
 				obj := deploymentCopy(deployment1)
-				obj.Spec.Replicas = pointer.Int32(2)
+				obj.Spec.Replicas = ptr.To(int32(2))
 				obj.SetResourceVersion("3") // changed
 				obj.SetGeneration(3)        // changed
 				return obj
@@ -343,7 +343,7 @@ func TestSpec(t *testing.T) {
 				}
 
 				// Continue mutation
-				obj.Spec.Replicas = pointer.Int32(1)
+				obj.Spec.Replicas = ptr.To(int32(1))
 				return nil
 			},
 			existingObjs: []client.Object{

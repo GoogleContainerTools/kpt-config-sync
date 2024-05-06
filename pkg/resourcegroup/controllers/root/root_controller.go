@@ -18,6 +18,7 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -25,20 +26,17 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/retry"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/event"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
-	"sigs.k8s.io/controller-runtime/pkg/source"
-
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/handler"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/resourcegroup"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/resourcemap"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/typeresolver"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/watch"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 //nolint:revive // TODO: add comments for public constants and enable linting
@@ -186,11 +184,12 @@ func isStatusDisabled(resgroup *v1alpha1.ResourceGroup) bool {
 func NewController(mgr manager.Manager, channel chan event.GenericEvent,
 	logger logr.Logger, resolver *typeresolver.TypeResolver, group string, resMap *resourcemap.ResourceMap) error {
 	cfg := mgr.GetConfig()
-	watchOption, err := watch.DefaultOptions(cfg)
+	httpClient := mgr.GetHTTPClient()
+	watchOption, err := watch.DefaultOptions(cfg, httpClient)
 	if err != nil {
 		return err
 	}
-	watchManager, err := watch.NewManager(cfg, resMap, channel, watchOption)
+	watchManager, err := watch.NewManager(cfg, httpClient, resMap, channel, watchOption)
 	if err != nil {
 		return err
 	}
@@ -212,7 +211,7 @@ func NewController(mgr manager.Manager, channel chan event.GenericEvent,
 		WithEventFilter(ResourceGroupPredicate{}).
 		// skip the Generic events
 		WithEventFilter(NoGenericEventPredicate{}).
-		Watches(&source.Kind{Type: &apiextensionsv1.CustomResourceDefinition{}}, &handler.CRDEventHandler{
+		Watches(&apiextensionsv1.CustomResourceDefinition{}, &handler.CRDEventHandler{
 			Mapping: resMap,
 			Channel: channel,
 			Log:     logger,

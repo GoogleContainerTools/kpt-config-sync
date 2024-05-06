@@ -476,7 +476,12 @@ func ClusterClients(ctx context.Context, contexts []string) (map[string]*Cluster
 	unreachableClusters := false
 
 	for name, cfg := range configs {
-		mapper, err := apiutil.NewDynamicRESTMapper(cfg)
+		httpClient, err := rest.HTTPClientFor(cfg)
+		if err != nil {
+			fmt.Printf("Failed to create HTTPClient for %q: %v\n", name, err)
+			continue
+		}
+		mapper, err := apiutil.NewDynamicRESTMapper(cfg, httpClient)
 		if err != nil {
 			fmt.Printf("Failed to create mapper for %q: %v\n", name, err)
 			continue

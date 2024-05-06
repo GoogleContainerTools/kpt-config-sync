@@ -26,6 +26,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testshell"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/kustomize/kyaml/copyutil"
+	"sigs.k8s.io/kustomize/kyaml/filesys"
 )
 
 // use an auto-incrementing index to create unique file names for tarballs
@@ -91,7 +92,7 @@ func BuildImage(artifactDir string, shell *testshell.TestShell, provider OCIRegi
 	tmpDir := filepath.Join(artifactDir, packageName, version, strconv.Itoa(imageIndex))
 	if options.sourcePackage != "" {
 		inputDir := "../testdata/" + options.sourcePackage
-		if err := copyutil.CopyDir(inputDir, tmpDir); err != nil {
+		if err := copyutil.CopyDir(filesys.MakeFsOnDisk(), inputDir, tmpDir); err != nil {
 			return nil, fmt.Errorf("copying package directory: %v", err)
 		}
 	}

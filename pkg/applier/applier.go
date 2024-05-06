@@ -458,7 +458,7 @@ func (h *eventHandler) handleDeleteSkippedEvent(ctx context.Context, eventType e
 			klog.Error(err)
 			return applierErrorBuilder.Wrap(err).Build()
 		}
-		klog.V(4).Infof("removed the Config Sync metadata from %v (%s: %s)", id)
+		klog.V(4).Infof("removed the Config Sync metadata from %v (%s: %s)", id, abandonErr.Annotation, abandonErr.Value)
 		return nil
 	}
 

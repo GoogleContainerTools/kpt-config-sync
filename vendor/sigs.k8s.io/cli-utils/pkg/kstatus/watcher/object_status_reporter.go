@@ -272,7 +272,8 @@ func (w *ObjectStatusReporter) stopInformer(gkn GroupKindNamespace) {
 
 func (w *ObjectStatusReporter) startInformerWithRetry(ctx context.Context, gkn GroupKindNamespace) {
 	realClock := &clock.RealClock{}
-	backoffManager := wait.NewExponentialBackoffManager(800*time.Millisecond, 30*time.Second, 2*time.Minute, 2.0, 1.0, realClock)
+	// TODO nolint can be removed once https://github.com/kubernetes/kubernetes/issues/118638 is resolved
+	backoffManager := wait.NewExponentialBackoffManager(800*time.Millisecond, 30*time.Second, 2*time.Minute, 2.0, 1.0, realClock) //nolint:staticcheck
 	retryCtx, retryCancel := context.WithCancel(ctx)
 
 	wait.BackoffUntil(func() {

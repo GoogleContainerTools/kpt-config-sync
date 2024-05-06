@@ -2839,7 +2839,8 @@ func TestMapSecretToRepoSyncs(t *testing.T) {
 	_, _, testReconciler := setupNSReconciler(t, rs1, rs2, rs3, rs4, rs5, rs6, serviceAccount)
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := testReconciler.mapSecretToRepoSyncs(tc.secret)
+			ctx := context.Background()
+			result := testReconciler.mapSecretToRepoSyncs(ctx, tc.secret)
 			if len(tc.want) != len(result) {
 				t.Fatalf("%s: expected %d requests, got %d", tc.name, len(tc.want), len(result))
 			}
@@ -2954,8 +2955,8 @@ func TestMapObjectToRepoSync(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			_, _, testReconciler := setupNSReconciler(t, rs1, rs2)
-
-			result := testReconciler.mapObjectToRepoSync(tc.object)
+			ctx := context.Background()
+			result := testReconciler.mapObjectToRepoSync(ctx, tc.object)
 			if len(tc.want) != len(result) {
 				t.Fatalf("%s: expected %d requests, got %d", tc.name, len(tc.want), len(result))
 			}

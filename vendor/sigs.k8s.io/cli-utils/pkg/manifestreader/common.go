@@ -81,11 +81,10 @@ func SetNamespaces(mapper meta.RESTMapper, objs []*unstructured.Unstructured,
 				// of unknown types.
 				unknownGVKs = append(unknownGVKs, unknownTypeError.GroupVersionKind)
 				continue
-			} else {
-				// If something went wrong when looking up the scope, just
-				// give up.
-				return err
 			}
+			// If something went wrong when looking up the scope, just
+			// give up.
+			return err
 		}
 
 		switch scope {

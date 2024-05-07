@@ -54,6 +54,7 @@ import (
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -74,6 +75,8 @@ type RepoSyncReconciler struct {
 	configMapWatches map[string]bool
 
 	controller *controller.Controller
+
+	cache cache.Cache
 }
 
 const (
@@ -471,34 +474,34 @@ func (r *RepoSyncReconciler) Register(mgr controllerruntime.Manager, watchFleetM
 		}).
 		For(&v1beta1.RepoSync{}).
 		// Custom Watch to trigger Reconcile for objects created by RepoSync controller.
-		Watches(&source.Kind{Type: &corev1.Secret{}},
+		Watches(&corev1.Secret{},
 			handler.EnqueueRequestsFromMapFunc(r.mapSecretToRepoSyncs),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
-		Watches(&source.Kind{Type: withNamespace(&appsv1.Deployment{}, configsync.ControllerNamespace)},
+		Watches(withNamespace(&appsv1.Deployment{}, configsync.ControllerNamespace),
 			handler.EnqueueRequestsFromMapFunc(r.mapObjectToRepoSync),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
-		Watches(&source.Kind{Type: withNamespace(&corev1.ServiceAccount{}, configsync.ControllerNamespace)},
+		Watches(withNamespace(&corev1.ServiceAccount{}, configsync.ControllerNamespace),
 			handler.EnqueueRequestsFromMapFunc(r.mapObjectToRepoSync),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
 		// Watch RoleBindings in all namespaces, because RoleBindings are created
 		// in the namespace of the RepoSync. Only maps to existing RepoSyncs.
-		Watches(&source.Kind{Type: &rbacv1.RoleBinding{}},
+		Watches(&rbacv1.RoleBinding{},
 			handler.EnqueueRequestsFromMapFunc(r.mapObjectToRepoSync),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
-		Watches(&source.Kind{Type: &admissionv1.ValidatingWebhookConfiguration{}},
+		Watches(&admissionv1.ValidatingWebhookConfiguration{},
 			handler.EnqueueRequestsFromMapFunc(r.mapAdmissionWebhookToRepoSyncs),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}))
 
 	if watchFleetMembership {
 		// Custom Watch for membership to trigger reconciliation.
-		controllerBuilder.Watches(&source.Kind{Type: &hubv1.Membership{}},
-			handler.EnqueueRequestsFromMapFunc(r.mapMembershipToRepoSyncs()),
+		controllerBuilder.Watches(&hubv1.Membership{},
+			handler.EnqueueRequestsFromMapFunc(r.mapMembershipToRepoSyncs),
 			builder.WithPredicates(predicate.GenerationChangedPredicate{}))
 	}
 
 	ctrlr, err := controllerBuilder.Build(r)
 	r.controller = &ctrlr
-
+	r.cache = mgr.GetCache()
 	return err
 }
 
@@ -519,7 +522,7 @@ func (r *RepoSyncReconciler) watchConfigMaps(rs *v1beta1.RepoSync) error {
 		klog.Infoln("Adding watch for ConfigMaps in namespace ", rs.Namespace)
 		ctrlr := *r.controller
 
-		if err := ctrlr.Watch(&source.Kind{Type: withNamespace(&corev1.ConfigMap{}, rs.Namespace)},
+		if err := ctrlr.Watch(source.Kind(r.cache, withNamespace(&corev1.ConfigMap{}, rs.Namespace)),
 			handler.EnqueueRequestsFromMapFunc(r.mapConfigMapToRepoSyncs),
 			predicate.ResourceVersionChangedPredicate{}); err != nil {
 			return err
@@ -530,33 +533,29 @@ func (r *RepoSyncReconciler) watchConfigMaps(rs *v1beta1.RepoSync) error {
 	return nil
 }
 
-func (r *RepoSyncReconciler) mapMembershipToRepoSyncs() func(client.Object) []reconcile.Request {
-	return func(o client.Object) []reconcile.Request {
-		//TODO: pass through context (reqs updating controller-runtime)
-		ctx := context.Background()
-		// Clear the membership if the cluster is unregistered
-		if err := r.client.Get(ctx, types.NamespacedName{Name: fleetMembershipName}, &hubv1.Membership{}); err != nil {
-			if apierrors.IsNotFound(err) {
-				klog.Info("Fleet Membership not found, clearing membership cache")
-				r.membership = nil
-				return r.requeueAllRepoSyncs(fleetMembershipName)
-			}
-			klog.Errorf("Fleet Membership get failed: %v", err)
-			return nil
+func (r *RepoSyncReconciler) mapMembershipToRepoSyncs(ctx context.Context, o client.Object) []reconcile.Request {
+	// Clear the membership if the cluster is unregistered
+	if err := r.client.Get(ctx, types.NamespacedName{Name: fleetMembershipName}, &hubv1.Membership{}); err != nil {
+		if apierrors.IsNotFound(err) {
+			klog.Info("Fleet Membership not found, clearing membership cache")
+			r.membership = nil
+			return r.requeueAllRepoSyncs(fleetMembershipName)
 		}
-
-		m, isMembership := o.(*hubv1.Membership)
-		if !isMembership {
-			klog.Errorf("Fleet Membership expected, found %q", o.GetObjectKind().GroupVersionKind())
-			return nil
-		}
-		if m.Name != fleetMembershipName {
-			klog.Errorf("Fleet Membership name expected %q, found %q", fleetMembershipName, m.Name)
-			return nil
-		}
-		r.membership = m
-		return r.requeueAllRepoSyncs(fleetMembershipName)
+		klog.Errorf("Fleet Membership get failed: %v", err)
+		return nil
 	}
+
+	m, isMembership := o.(*hubv1.Membership)
+	if !isMembership {
+		klog.Errorf("Fleet Membership expected, found %q", o.GetObjectKind().GroupVersionKind())
+		return nil
+	}
+	if m.Name != fleetMembershipName {
+		klog.Errorf("Fleet Membership name expected %q, found %q", fleetMembershipName, m.Name)
+		return nil
+	}
+	r.membership = m
+	return r.requeueAllRepoSyncs(fleetMembershipName)
 }
 
 func (r *RepoSyncReconciler) requeueAllRepoSyncs(name string) []reconcile.Request {
@@ -586,9 +585,7 @@ func (r *RepoSyncReconciler) requeueAllRepoSyncs(name string) []reconcile.Reques
 // - `spec.git.caCertSecretRef.name`
 // - `spec.helm.secretRef.name`
 // The update to the Secret object will trigger a reconciliation of the RepoSync objects.
-func (r *RepoSyncReconciler) mapSecretToRepoSyncs(secret client.Object) []reconcile.Request {
-	//TODO: pass through context (reqs updating controller-runtime)
-	ctx := context.Background()
+func (r *RepoSyncReconciler) mapSecretToRepoSyncs(ctx context.Context, secret client.Object) []reconcile.Request {
 	sRef := client.ObjectKeyFromObject(secret)
 	// map the copied ns-reconciler Secret in the config-management-system to RepoSync request.
 	if sRef.Namespace == configsync.ControllerNamespace {
@@ -663,7 +660,7 @@ func (r *RepoSyncReconciler) mapSecretToRepoSyncs(secret client.Object) []reconc
 	return requests
 }
 
-func (r *RepoSyncReconciler) mapAdmissionWebhookToRepoSyncs(admissionWebhook client.Object) []reconcile.Request {
+func (r *RepoSyncReconciler) mapAdmissionWebhookToRepoSyncs(_ context.Context, admissionWebhook client.Object) []reconcile.Request {
 	if admissionWebhook.GetName() == webhookconfiguration.Name {
 		return r.requeueAllRepoSyncs(admissionWebhook.GetName())
 	}
@@ -735,9 +732,7 @@ func repoSyncHelmSecretName(rs *v1beta1.RepoSync) string {
 	return rs.Spec.Helm.SecretRef.Name
 }
 
-func (r *RepoSyncReconciler) mapConfigMapToRepoSyncs(obj client.Object) []reconcile.Request {
-	//TODO: pass through context (reqs updating controller-runtime)
-	ctx := context.Background()
+func (r *RepoSyncReconciler) mapConfigMapToRepoSyncs(ctx context.Context, obj client.Object) []reconcile.Request {
 	objRef := client.ObjectKeyFromObject(obj)
 
 	// Use annotations/labels to map ConfigMap copies in config-management-system
@@ -812,9 +807,7 @@ func repoSyncHelmValuesFileNames(rs *v1beta1.RepoSync) []string {
 
 // mapObjectToRepoSync define a mapping from an object in 'config-management-system'
 // namespace to a RepoSync to be reconciled.
-func (r *RepoSyncReconciler) mapObjectToRepoSync(obj client.Object) []reconcile.Request {
-	//TODO: pass through context (reqs updating controller-runtime)
-	ctx := context.Background()
+func (r *RepoSyncReconciler) mapObjectToRepoSync(ctx context.Context, obj client.Object) []reconcile.Request {
 	objRef := client.ObjectKeyFromObject(obj)
 
 	// Ignore changes from resources without the ns-reconciler prefix or configsync.gke.io:ns-reconciler

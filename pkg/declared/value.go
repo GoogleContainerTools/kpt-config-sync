@@ -17,7 +17,7 @@ package declared
 import (
 	"fmt"
 
-	openapiv2 "github.com/google/gnostic/openapiv2"
+	openapiv2 "github.com/google/gnostic-models/openapiv2"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/discovery"

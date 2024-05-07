@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/klog/v2/klogr"
+	"k8s.io/klog/v2/textlogger"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/helm"
 	"kpt.dev/configsync/pkg/reconcilermanager"
@@ -88,7 +88,7 @@ func errorBackoff() wait.Backoff {
 
 func main() {
 	utillog.Setup()
-	log := utillog.NewLogger(klogr.New(), *flRoot, *flErrorFile)
+	log := utillog.NewLogger(textlogger.NewLogger(textlogger.NewConfig()), *flRoot, *flErrorFile)
 	log.Info("rendering Helm chart with arguments", "--repo", *flRepo,
 		"--chart", *flChart, "--version", *flVersion, "--root", *flRoot,
 		"--values", *flValuesYAML, "--values-file-paths", *flValuesFilePaths,

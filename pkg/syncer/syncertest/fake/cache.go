@@ -147,7 +147,7 @@ func (c *Cache) HasSyncedFuncs() []k8scache.InformerSynced {
 
 // GetInformer constructs or retrieves from cache an informer to watch the
 // specified resource.
-func (c *Cache) GetInformer(ctx context.Context, obj client.Object) (cache.Informer, error) {
+func (c *Cache) GetInformer(ctx context.Context, obj client.Object, _ ...cache.InformerGetOption) (cache.Informer, error) {
 	gvk, err := kinds.Lookup(obj, c.Scheme())
 	if err != nil {
 		return nil, err
@@ -182,7 +182,7 @@ func (c *Cache) getInformerMapEntry(ctx context.Context, gvk schema.GroupVersion
 }
 
 // GetInformerForKind returns the informer for the GroupVersionKind.
-func (c *Cache) GetInformerForKind(ctx context.Context, gvk schema.GroupVersionKind) (cache.Informer, error) {
+func (c *Cache) GetInformerForKind(ctx context.Context, gvk schema.GroupVersionKind, _ ...cache.InformerGetOption) (cache.Informer, error) {
 	entry, _, err := c.getInformerMapEntry(ctx, gvk)
 	if err != nil {
 		return nil, err

@@ -67,7 +67,11 @@ func NewListerWatcherFactoryFromClient(cfg *rest.Config) (ListerWatcherFactory, 
 		return nil, fmt.Errorf("failed to build dynamic client: %w", err)
 	}
 
-	mapper, err := apiutil.NewDynamicRESTMapper(cfg)
+	httpClient, err := rest.HTTPClientFor(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create HTTPClient: %w", err)
+	}
+	mapper, err := apiutil.NewDynamicRESTMapper(cfg, httpClient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build mapper: %w", err)
 	}

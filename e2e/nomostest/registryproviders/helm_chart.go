@@ -25,6 +25,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/kustomize/kyaml/copyutil"
+	"sigs.k8s.io/kustomize/kyaml/filesys"
 	"sigs.k8s.io/yaml"
 )
 
@@ -90,7 +91,7 @@ func BuildHelmPackage(artifactDir string, provider HelmRegistryProvider, rsRef t
 	tmpDir := filepath.Join(artifactDir, chartName, version, strconv.Itoa(helmIndex))
 	if options.sourceChart != "" {
 		inputDir := "../testdata/helm-charts/" + options.sourceChart
-		if err := copyutil.CopyDir(inputDir, tmpDir); err != nil {
+		if err := copyutil.CopyDir(filesys.MakeFsOnDisk(), inputDir, tmpDir); err != nil {
 			return nil, fmt.Errorf("copying package directory: %v", err)
 		}
 	}

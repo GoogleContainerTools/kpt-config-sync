@@ -32,7 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
@@ -747,7 +747,7 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 								LocalObjectReference: corev1.LocalObjectReference{
 									Name: "foo",
 								},
-								Optional: pointer.Bool(true),
+								Optional: ptr.To(true),
 								Items: []corev1.KeyToPath{{
 									Key:  "values.yaml",
 									Path: "foo/values.yaml",
@@ -794,7 +794,7 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 								LocalObjectReference: corev1.LocalObjectReference{
 									Name: "foo",
 								},
-								Optional: pointer.Bool(true),
+								Optional: ptr.To(true),
 								Items: []corev1.KeyToPath{{
 									Key:  "values.yaml",
 									Path: "foo/values.yaml",
@@ -809,7 +809,7 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 								LocalObjectReference: corev1.LocalObjectReference{
 									Name: "bar",
 								},
-								Optional: pointer.Bool(true),
+								Optional: ptr.To(true),
 								Items: []corev1.KeyToPath{{
 									Key:  "values.yaml",
 									Path: "bar/values.yaml",
@@ -856,7 +856,7 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 								LocalObjectReference: corev1.LocalObjectReference{
 									Name: "foo",
 								},
-								Optional: pointer.Bool(true),
+								Optional: ptr.To(true),
 								Items: []corev1.KeyToPath{{
 									Key:  "values.yaml",
 									Path: "foo/values.yaml",
@@ -871,7 +871,7 @@ func TestMountConfigMapValuesFiles(t *testing.T) {
 								LocalObjectReference: corev1.LocalObjectReference{
 									Name: "foo",
 								},
-								Optional: pointer.Bool(true),
+								Optional: ptr.To(true),
 								Items: []corev1.KeyToPath{{
 									Key:  "values.yaml",
 									Path: "foo/values.yaml",

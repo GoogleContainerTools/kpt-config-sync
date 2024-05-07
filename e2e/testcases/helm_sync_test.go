@@ -32,7 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
@@ -192,7 +192,7 @@ func TestHelmWatchConfigMap(t *testing.T) {
 	cmName := "helm-watch-config-map"
 	nt.T.Log("Apply valid ConfigMap that is not immutable (which should not be allowed)")
 	cm0 := fake.ConfigMapObject(core.Name(cmName), core.Namespace(configsync.ControllerNamespace))
-	cm0.Immutable = pointer.Bool(false)
+	cm0.Immutable = ptr.To(false)
 	cm0.Data = map[string]string{"something-else.yaml": `
 image:
   digest: sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e
@@ -211,7 +211,7 @@ image:
 
 	nt.T.Log("Apply the ConfigMap with values to the cluster with incorrect data key")
 	cm1 := fake.ConfigMapObject(core.Name(cmName), core.Namespace(configsync.ControllerNamespace))
-	cm1.Immutable = pointer.Bool(true)
+	cm1.Immutable = ptr.To(true)
 	cm1.Data = map[string]string{"something-else.yaml": `
 image:
   digest: sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e
@@ -231,7 +231,7 @@ image:
 
 	nt.T.Log("Apply valid ConfigMap with values: imagePullPolicy: Always; wordpressUserName: test-user-1")
 	cm2 := fake.ConfigMapObject(core.Name(cmName), core.Namespace(configsync.ControllerNamespace))
-	cm2.Immutable = pointer.Bool(true)
+	cm2.Immutable = ptr.To(true)
 	cm2.Data = map[string]string{"values.yaml": `
 image:
   digest: sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e
@@ -306,7 +306,7 @@ func TestHelmConfigMapOverride(t *testing.T) {
 	cmName := "helm-config-map-override"
 
 	cm := fake.ConfigMapObject(core.Name(cmName), core.Namespace(configsync.ControllerNamespace))
-	cm.Immutable = pointer.Bool(true)
+	cm.Immutable = ptr.To(true)
 	cm.Data = map[string]string{
 		"first": `
 extraEnvVars:
@@ -610,7 +610,7 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 	if err := nt.KubeClient.Get(cmName, testNs, cm1); err != nil {
 		nt.T.Fatal(err)
 	}
-	cm1.Immutable = pointer.Bool(true)
+	cm1.Immutable = ptr.To(true)
 	cm1.Data = map[string]string{
 		"values.yaml": `label: foo`,
 	}
@@ -631,7 +631,7 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 	cm2.Data = map[string]string{
 		"foo.yaml": `label: foo`,
 	}
-	cm2.Immutable = pointer.Bool(true)
+	cm2.Immutable = ptr.To(true)
 	nt.T.Cleanup(func() {
 		cm2 := fake.ConfigMapObject(core.Name(cmName2), core.Namespace(testNs))
 		if err := nt.KubeClient.Delete(cm2); err != nil {

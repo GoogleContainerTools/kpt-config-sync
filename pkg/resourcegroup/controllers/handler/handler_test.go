@@ -22,7 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/klog/v2/klogr"
+	"k8s.io/klog/v2/textlogger"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/resourcemap"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -67,12 +67,12 @@ func TestEventHandler(t *testing.T) {
 	h := EnqueueEventToChannel{
 		Mapping: fakeMapping{},
 		Channel: ch,
-		Log:     klogr.New(),
+		Log:     textlogger.NewLogger(textlogger.NewConfig()),
 	}
 	u := &unstructured.Unstructured{}
 
 	// Push an event to channel
-	go func() { h.OnAdd(u) }()
+	go func() { h.OnAdd(u, false) }()
 
 	// Consume an event from the channel
 	e := <-ch
@@ -90,13 +90,13 @@ func TestEventHandlerMultipleHandlers(t *testing.T) {
 	h1 := EnqueueEventToChannel{
 		Mapping: fakeMapping{},
 		Channel: ch,
-		Log:     klogr.New(),
+		Log:     textlogger.NewLogger(textlogger.NewConfig()),
 	}
 
 	h2 := EnqueueEventToChannel{
 		Mapping: fakeMapping{},
 		Channel: ch,
-		Log:     klogr.New(),
+		Log:     textlogger.NewLogger(textlogger.NewConfig()),
 		GVK:     schema.GroupVersionKind{Kind: "MyKind"},
 	}
 
@@ -104,7 +104,7 @@ func TestEventHandlerMultipleHandlers(t *testing.T) {
 	u2 := &unstructured.Unstructured{}
 	u2.SetGroupVersionKind(schema.GroupVersionKind{Kind: "MyKind"})
 	// Push an event to channel
-	go func() { h1.OnAdd(u1) }()
+	go func() { h1.OnAdd(u1, false) }()
 	go func() { h2.OnDelete(u2) }()
 	time.Sleep(time.Second)
 

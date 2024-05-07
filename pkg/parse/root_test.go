@@ -28,7 +28,7 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -689,8 +689,8 @@ func fakeCRD(opts ...core.MetaMutator) ast.FileObject {
 							Properties: map[string]apiextensionsv1.JSONSchemaProps{
 								"lbs": {
 									Type:    "integer",
-									Minimum: pointer.Float64(1.0),
-									Maximum: pointer.Float64(9000.0),
+									Minimum: ptr.To(1.0),
+									Maximum: ptr.To(9000.0),
 								},
 							},
 						},

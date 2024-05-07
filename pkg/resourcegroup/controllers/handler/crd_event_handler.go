@@ -15,6 +15,8 @@
 package handler
 
 import (
+	"context"
+
 	"github.com/go-logr/logr"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -36,25 +38,25 @@ type CRDEventHandler struct {
 var _ handler.EventHandler = &CRDEventHandler{}
 
 // Create implements EventHandler
-func (h *CRDEventHandler) Create(e event.CreateEvent, _ workqueue.RateLimitingInterface) {
+func (h *CRDEventHandler) Create(_ context.Context, e event.CreateEvent, _ workqueue.RateLimitingInterface) {
 	h.Log.V(5).Info("received a create event")
 	h.enqueueEvent(e.Object)
 }
 
 // Update implements EventHandler
-func (h *CRDEventHandler) Update(e event.UpdateEvent, _ workqueue.RateLimitingInterface) {
+func (h *CRDEventHandler) Update(_ context.Context, e event.UpdateEvent, _ workqueue.RateLimitingInterface) {
 	h.Log.V(5).Info("received an update event")
 	h.enqueueEvent(e.ObjectNew)
 }
 
 // Delete implements EventHandler
-func (h *CRDEventHandler) Delete(e event.DeleteEvent, _ workqueue.RateLimitingInterface) {
+func (h *CRDEventHandler) Delete(_ context.Context, e event.DeleteEvent, _ workqueue.RateLimitingInterface) {
 	h.Log.V(5).Info("received a delete event")
 	h.enqueueEvent(e.Object)
 }
 
 // Generic implements EventHandler
-func (h *CRDEventHandler) Generic(e event.GenericEvent, _ workqueue.RateLimitingInterface) {
+func (h *CRDEventHandler) Generic(_ context.Context, e event.GenericEvent, _ workqueue.RateLimitingInterface) {
 	h.Log.V(5).Info("received a generic event")
 	h.enqueueEvent(e.Object)
 }

@@ -29,6 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
@@ -99,7 +100,7 @@ func newManager(cfg *rest.Config) (manager.Manager, error) {
 	// If metrics are enabled, every time the subManger restarts it tries to bind to the metrics port
 	// but fails because restarting does not unbind the port.
 	// Instead of disabling these metrics, we could figure out a way to unbind the port on restart.
-	opts := manager.Options{MetricsBindAddress: "0"}
+	opts := manager.Options{Metrics: metricsserver.Options{BindAddress: "0"}}
 	mgr, err := manager.New(rest.CopyConfig(cfg), opts)
 	if err != nil {
 		return nil, fmt.Errorf("could not create the manager for RestartableManager: %w", err)

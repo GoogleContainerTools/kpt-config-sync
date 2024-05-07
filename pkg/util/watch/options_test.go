@@ -27,7 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/cli-utils/pkg/testutil"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -536,9 +536,10 @@ func TestMergeListOptions(t *testing.T) {
 				},
 			},
 			expectedError: testutil.EqualError(
-				errors.New("not yet implemented: merging two different raw ListOptions: " +
-					"&ListOptions{LabelSelector:,FieldSelector:,Watch:false,ResourceVersion:,TimeoutSeconds:nil,Limit:0,Continue:,AllowWatchBookmarks:false,ResourceVersionMatch:,} & " +
-					"&ListOptions{LabelSelector:,FieldSelector:,Watch:false,ResourceVersion:abc123,TimeoutSeconds:nil,Limit:0,Continue:,AllowWatchBookmarks:false,ResourceVersionMatch:,}")),
+				errors.New("not yet implemented: " +
+					"merging two different raw ListOptions: " +
+					"&ListOptions{LabelSelector:,FieldSelector:,Watch:false,ResourceVersion:,TimeoutSeconds:nil,Limit:0,Continue:,AllowWatchBookmarks:false,ResourceVersionMatch:,SendInitialEvents:nil,} & " +
+					"&ListOptions{LabelSelector:,FieldSelector:,Watch:false,ResourceVersion:abc123,TimeoutSeconds:nil,Limit:0,Continue:,AllowWatchBookmarks:false,ResourceVersionMatch:,SendInitialEvents:nil,}")),
 		},
 		// AllTheThings!
 		{
@@ -562,7 +563,7 @@ func TestMergeListOptions(t *testing.T) {
 					AllowWatchBookmarks:  true,
 					ResourceVersion:      "abc123",
 					ResourceVersionMatch: metav1.ResourceVersionMatchExact,
-					TimeoutSeconds:       pointer.Int64(10),
+					TimeoutSeconds:       ptr.To(int64(10)),
 				},
 			},
 			expectedOpts: &client.ListOptions{
@@ -583,7 +584,7 @@ func TestMergeListOptions(t *testing.T) {
 					AllowWatchBookmarks:  true,
 					ResourceVersion:      "abc123",
 					ResourceVersionMatch: metav1.ResourceVersionMatchExact,
-					TimeoutSeconds:       pointer.Int64(10),
+					TimeoutSeconds:       ptr.To(int64(10)),
 				},
 			},
 		},
@@ -709,7 +710,7 @@ func TestConvertListOptions(t *testing.T) {
 				AllowWatchBookmarks:  true,
 				ResourceVersion:      "abc123",
 				ResourceVersionMatch: metav1.ResourceVersionMatchExact,
-				TimeoutSeconds:       pointer.Int64(10),
+				TimeoutSeconds:       ptr.To(int64(10)),
 			},
 			expectedOpts: &client.ListOptions{
 				Raw: &metav1.ListOptions{
@@ -717,7 +718,7 @@ func TestConvertListOptions(t *testing.T) {
 					AllowWatchBookmarks:  true,
 					ResourceVersion:      "abc123",
 					ResourceVersionMatch: metav1.ResourceVersionMatchExact,
-					TimeoutSeconds:       pointer.Int64(10),
+					TimeoutSeconds:       ptr.To(int64(10)),
 				},
 			},
 		},
@@ -736,7 +737,7 @@ func TestConvertListOptions(t *testing.T) {
 				AllowWatchBookmarks:  true,
 				ResourceVersion:      "abc123",
 				ResourceVersionMatch: metav1.ResourceVersionMatchExact,
-				TimeoutSeconds:       pointer.Int64(10),
+				TimeoutSeconds:       ptr.To(int64(10)),
 				Limit:                10,
 				Continue:             "123abc",
 			},
@@ -764,7 +765,7 @@ func TestConvertListOptions(t *testing.T) {
 					AllowWatchBookmarks:  true,
 					ResourceVersion:      "abc123",
 					ResourceVersionMatch: metav1.ResourceVersionMatchExact,
-					TimeoutSeconds:       pointer.Int64(10),
+					TimeoutSeconds:       ptr.To(int64(10)),
 					Limit:                10,
 					Continue:             "123abc",
 				},
@@ -830,7 +831,7 @@ func TestUnrollListOptions(t *testing.T) {
 					AllowWatchBookmarks:  true,
 					ResourceVersion:      "abc123",
 					ResourceVersionMatch: metav1.ResourceVersionMatchExact,
-					TimeoutSeconds:       pointer.Int64(10),
+					TimeoutSeconds:       ptr.To(int64(10)),
 				},
 			},
 			expectedOpts: []client.ListOption{
@@ -851,7 +852,7 @@ func TestUnrollListOptions(t *testing.T) {
 						AllowWatchBookmarks:  true,
 						ResourceVersion:      "abc123",
 						ResourceVersionMatch: metav1.ResourceVersionMatchExact,
-						TimeoutSeconds:       pointer.Int64(10),
+						TimeoutSeconds:       ptr.To(int64(10)),
 					},
 				},
 			},

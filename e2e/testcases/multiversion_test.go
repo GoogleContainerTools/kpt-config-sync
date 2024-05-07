@@ -38,13 +38,9 @@ import (
 func TestMultipleVersions_CustomResourceV1Beta1(t *testing.T) {
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.Reconciliation1)
-	support, err := nt.SupportV1Beta1CRDAndRBAC()
-	if err != nil {
-		nt.T.Fatal("failed to check the supported CRD versions")
-	}
-	// Skip this test when v1beta1 CRD is not supported in the testing cluster.
-	if !support {
-		return
+
+	if !nt.SupportV1Beta1CRDAndRBAC() {
+		nt.T.Skip("Kubernetes v1.22 and later do not support the v1beta1 CRD API")
 	}
 
 	// Add the Anvil CRD.
@@ -68,7 +64,7 @@ func TestMultipleVersions_CustomResourceV1Beta1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err = nt.Validate("first", "foo", anvilCR("v1", "", 0))
+	err := nt.Validate("first", "foo", anvilCR("v1", "", 0))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -313,10 +309,8 @@ func anvilGVK(version string) schema.GroupVersionKind {
 func TestMultipleVersions_RoleBinding(t *testing.T) {
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.Reconciliation1)
-	supportV1beta1, err := nt.SupportV1Beta1CRDAndRBAC()
-	if err != nil {
-		nt.T.Fatal("failed to check the supported CRD versions")
-	}
+
+	supportV1beta1 := nt.SupportV1Beta1CRDAndRBAC()
 
 	rbV1 := fake.RoleBindingObject(core.Name("v1user"))
 	rbV1.RoleRef = rbacv1.RoleRef{
@@ -354,7 +348,7 @@ func TestMultipleVersions_RoleBinding(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err = nt.Validate("v1user", "foo", &rbacv1.RoleBinding{},
+	err := nt.Validate("v1user", "foo", &rbacv1.RoleBinding{},
 		hasV1Subjects("v1user@acme.com"))
 	if err != nil {
 		nt.T.Fatal(err)

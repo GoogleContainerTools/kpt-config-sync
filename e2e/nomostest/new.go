@@ -186,6 +186,8 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		OCIClient:               sharedNt.OCIClient,
 	}
 
+	nt.detectClusterVersion()
+
 	if opts.SkipConfigSyncInstall {
 		return nt
 	}
@@ -276,6 +278,8 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		HelmClient:              helmClient,
 		OCIClient:               ociClient,
 	}
+
+	nt.detectClusterVersion()
 
 	// TODO: Try speeding up the reconciler and hydration polling.
 	// It seems that speeding them up too much can cause failures in

@@ -30,6 +30,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"kpt.dev/configsync/e2e/nomostest/clusterversion"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/portforwarder"
@@ -110,6 +111,9 @@ type NT struct {
 
 	// IsGKEAutopilot indicates if the test cluster is a GKE Autopilot cluster.
 	IsGKEAutopilot bool
+
+	// ClusterVersion is the parsed version of the target test cluster
+	ClusterVersion *clusterversion.ClusterVersion
 
 	// DefaultWaitTimeout is the default timeout for tests to wait for sync completion.
 	DefaultWaitTimeout time.Duration
@@ -881,23 +885,30 @@ func (nt *NT) detectGKEAutopilot(skipAutopilot bool) {
 	}
 }
 
-// SupportV1Beta1CRDAndRBAC checks if v1beta1 CRD and RBAC resources are supported
-// in the current testing cluster.
-// v1beta1 APIs for CRD and RBAC resources are deprecated in K8s 1.22.
-func (nt *NT) SupportV1Beta1CRDAndRBAC() (bool, error) {
-	dc, err := discovery.NewDiscoveryClientForConfig(nt.Config)
-	if err != nil {
-		return false, fmt.Errorf("failed to create discoveryclient: %w", err)
+func (nt *NT) detectClusterVersion() {
+	if nt.ClusterVersion == nil {
+		dc, err := discovery.NewDiscoveryClientForConfig(nt.Config)
+		if err != nil {
+			nt.T.Fatalf("failed to create discovery client: %w", err)
+		}
+		serverVersion, err := dc.ServerVersion()
+		if err != nil {
+			nt.T.Fatalf("failed to get server version: %w", err)
+		}
+		clusterVersion, err := clusterversion.ParseClusterVersion(serverVersion.GitVersion)
+		if err != nil {
+			nt.T.Fatalf("failed to parse cluster version %q: %w", serverVersion.GitVersion, err)
+		}
+		nt.ClusterVersion = &clusterVersion
 	}
-	serverVersion, err := dc.ServerVersion()
-	if err != nil {
-		return false, fmt.Errorf("failed to get server version: %w", err)
-	}
-	// Use only major version and minor version in case other parts
-	// may affect the comparison.
-	v := fmt.Sprintf("v%s.%s", serverVersion.Major, serverVersion.Minor)
-	cmp := strings.Compare(v, "v1.22")
-	return cmp < 0, nil
+}
+
+// SupportV1Beta1CRDAndRBAC checks if v1beta1 CRD and RBAC resources are
+// supported in the current testing cluster.
+//
+// The v1beta1 CRD & RBAC APIs were removed in K8s 1.22.
+func (nt *NT) SupportV1Beta1CRDAndRBAC() bool {
+	return nt.ClusterVersion.Major == 1 && nt.ClusterVersion.Minor < 22
 }
 
 // RepoSyncClusterRole returns the NS reconciler ClusterRole

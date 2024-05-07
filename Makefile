@@ -37,7 +37,8 @@ OUTPUT_DIR := $(abspath .output)
 GO_DIR := $(OUTPUT_DIR)/go
 
 # Base image used for all golang containers
-GOLANG_IMAGE := golang:1.21.9-bookworm
+# Uses trusted google-built golang image
+GOLANG_IMAGE := google-go.pkg.dev/golang:1.21.9
 # Base image used for debian containers
 # When updating you can use this command: 
 # gcloud container images list-tags gcr.io/gke-release/debian-base --filter="tags:bookworm*" 
@@ -132,7 +133,7 @@ INFRA_IMAGE_PREFIX := infrastructure-public-image
 # When upgrading this tag, the image will be rebuilt locally during presubmits.
 # After the change is submitted, a postsubmit job will publish the new tag.
 # There is no need to manually publish this image.
-BUILDENV_IMAGE := $(TEST_INFRA_REGISTRY)/buildenv:$(INFRA_IMAGE_PREFIX)-v0.3.2
+BUILDENV_IMAGE := $(TEST_INFRA_REGISTRY)/buildenv:$(INFRA_IMAGE_PREFIX)-v0.3.3
 
 # Nomos docker images containing all binaries.
 RECONCILER_IMAGE := reconciler

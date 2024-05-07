@@ -903,14 +903,6 @@ func (nt *NT) detectClusterVersion() {
 	}
 }
 
-// SupportV1Beta1CRDAndRBAC checks if v1beta1 CRD and RBAC resources are
-// supported in the current testing cluster.
-//
-// The v1beta1 CRD & RBAC APIs were removed in K8s 1.22.
-func (nt *NT) SupportV1Beta1CRDAndRBAC() bool {
-	return nt.ClusterVersion.Major == 1 && nt.ClusterVersion.Minor < 22
-}
-
 // RepoSyncClusterRole returns the NS reconciler ClusterRole
 func (nt *NT) RepoSyncClusterRole() *rbacv1.ClusterRole {
 	cr := fake.ClusterRoleObject(core.Name(clusterRoleName))

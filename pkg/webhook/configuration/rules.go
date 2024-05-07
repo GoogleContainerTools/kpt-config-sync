@@ -22,7 +22,7 @@ import (
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/metadata"
 )
@@ -99,13 +99,13 @@ func toWebhook(gv schema.GroupVersion) admissionv1.ValidatingWebhook {
 			Service: &admissionv1.ServiceReference{
 				Namespace: configsync.ControllerNamespace,
 				Name:      ShortName,
-				Path:      pointer.String(ServingPath),
-				Port:      pointer.Int32(ServicePort),
+				Path:      ptr.To(ServingPath),
+				Port:      ptr.To(int32(ServicePort)),
 			},
 		},
 		// Several essential k8s checks require creating sequences of objects and
 		// time out after 10 seconds, so 3 seconds is a reasonable upper bound.
-		TimeoutSeconds: pointer.Int32(3),
+		TimeoutSeconds: ptr.To(int32(3)),
 		FailurePolicy:  &ignore,
 	}
 }

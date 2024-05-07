@@ -24,7 +24,7 @@ import (
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
@@ -146,8 +146,8 @@ func anvilV1Beta1CRD() *apiextensionsv1beta1.CustomResourceDefinition {
 					Properties: map[string]apiextensionsv1beta1.JSONSchemaProps{
 						"lbs": {
 							Type:    "integer",
-							Minimum: pointer.Float64(1.0),
-							Maximum: pointer.Float64(9000.0),
+							Minimum: ptr.To(1.0),
+							Maximum: ptr.To(9000.0),
 						},
 					},
 				},
@@ -248,8 +248,8 @@ func anvilV1CRD() *apiextensionsv1.CustomResourceDefinition {
 							Properties: map[string]apiextensionsv1.JSONSchemaProps{
 								"lbs": {
 									Type:    "integer",
-									Minimum: pointer.Float64(1.0),
-									Maximum: pointer.Float64(9000.0),
+									Minimum: ptr.To(1.0),
+									Maximum: ptr.To(9000.0),
 								},
 							},
 						},
@@ -271,8 +271,8 @@ func anvilV1CRD() *apiextensionsv1.CustomResourceDefinition {
 							Properties: map[string]apiextensionsv1.JSONSchemaProps{
 								"lbs": {
 									Type:    "integer",
-									Minimum: pointer.Float64(1.0),
-									Maximum: pointer.Float64(9000.0),
+									Minimum: ptr.To(1.0),
+									Maximum: ptr.To(9000.0),
 								},
 							},
 						},

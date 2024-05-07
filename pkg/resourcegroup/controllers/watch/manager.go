@@ -16,6 +16,7 @@ package watch
 
 import (
 	"context"
+	"net/http"
 	"sync"
 
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -66,8 +67,8 @@ type Options struct {
 // DefaultOptions return the default options:
 // - create discovery RESTmapper from the passed rest.Config
 // - use createWatcher to create watchers
-func DefaultOptions(cfg *rest.Config) (*Options, error) {
-	mapper, err := apiutil.NewDynamicRESTMapper(cfg)
+func DefaultOptions(cfg *rest.Config, httpClient *http.Client) (*Options, error) {
+	mapper, err := apiutil.NewDynamicRESTMapper(cfg, httpClient)
 	if err != nil {
 		return nil, err
 	}
@@ -79,10 +80,10 @@ func DefaultOptions(cfg *rest.Config) (*Options, error) {
 }
 
 // NewManager starts a new watch manager
-func NewManager(cfg *rest.Config, decls *resourcemap.ResourceMap, channel chan event.GenericEvent, options *Options) (*Manager, error) {
+func NewManager(cfg *rest.Config, httpClient *http.Client, decls *resourcemap.ResourceMap, channel chan event.GenericEvent, options *Options) (*Manager, error) {
 	if options == nil {
 		var err error
-		options, err = DefaultOptions(cfg)
+		options, err = DefaultOptions(cfg, httpClient)
 		if err != nil {
 			return nil, err
 		}

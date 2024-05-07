@@ -35,7 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	hubv1 "kpt.dev/configsync/pkg/api/hub/v1"
@@ -2854,7 +2854,8 @@ func TestMapSecretToRootSyncs(t *testing.T) {
 	_, _, testReconciler := setupRootReconciler(t, rs1, rs2, rs3, rs4, rs5, rs6)
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := testReconciler.mapSecretToRootSyncs(tc.secret)
+			ctx := context.Background()
+			result := testReconciler.mapSecretToRootSyncs(ctx, tc.secret)
 			if len(tc.want) != len(result) {
 				t.Fatalf("%s: expected %d requests, got %d", tc.name, len(tc.want), len(result))
 			}
@@ -4227,7 +4228,7 @@ func rootSyncDeployment(reconcilerName string, muts ...depMutator) *appsv1.Deplo
 
 func setReplicas(replicas int32) depMutator {
 	return func(dep *appsv1.Deployment) {
-		dep.Spec.Replicas = pointer.Int32(replicas)
+		dep.Spec.Replicas = ptr.To(replicas)
 	}
 }
 

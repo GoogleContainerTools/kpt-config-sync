@@ -16,12 +16,13 @@ package reconciler
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
-	"k8s.io/klog/v2/klogr"
+	"k8s.io/klog/v2/textlogger"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/applier"
@@ -41,6 +42,7 @@ import (
 	"kpt.dev/configsync/pkg/syncer/reconcile"
 	"kpt.dev/configsync/pkg/syncer/reconcile/fight"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
@@ -160,8 +162,12 @@ func Run(opts Options) {
 	}
 
 	// Use the DynamicRESTMapper as the default RESTMapper does not detect when
-	// new types become available.
-	mapper, err := apiutil.NewDynamicRESTMapper(cfg)
+	// new types become available
+	httpClient, err := rest.HTTPClientFor(cfg)
+	if err != nil {
+		klog.Fatalf("Error creating HTTPClient: %v", err)
+	}
+	mapper, err := apiutil.NewDynamicRESTMapper(cfg, httpClient)
 	if err != nil {
 		klog.Fatalf("Error creating DynamicRESTMapper: %v", err)
 	}
@@ -283,10 +289,10 @@ func Run(opts Options) {
 	signalCtx := signals.SetupSignalHandler()
 
 	// Create the ControllerManager
-	ctrl.SetLogger(klogr.New())
+	ctrl.SetLogger(textlogger.NewLogger(textlogger.NewConfig()))
 	mgrOptions := ctrl.Options{
 		Scheme: core.Scheme,
-		MapperProvider: func(_ *rest.Config) (meta.RESTMapper, error) {
+		MapperProvider: func(_ *rest.Config, _ *http.Client) (meta.RESTMapper, error) {
 			return mapper, nil
 		},
 		BaseContext: func() context.Context {
@@ -298,7 +304,9 @@ func Run(opts Options) {
 	// This prevents Namespaced Reconcilers from needing cluster-scoped read
 	// permissions.
 	if opts.ReconcilerScope != declared.RootReconciler {
-		mgrOptions.Namespace = string(opts.ReconcilerScope)
+		mgrOptions.Cache.DefaultNamespaces = map[string]cache.Config{
+			string(opts.ReconcilerScope): {},
+		}
 	}
 	mgr, err := ctrl.NewManager(cfgForWatch, mgrOptions)
 	if err != nil {

@@ -24,7 +24,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp" // register gcp auth provider plugin
 	"k8s.io/klog/v2"
-	"k8s.io/klog/v2/klogr"
+	"k8s.io/klog/v2/textlogger"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/log"
 	ocmetrics "kpt.dev/configsync/pkg/resourcegroup/controllers/metrics"
@@ -35,6 +35,8 @@ import (
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/typeresolver"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/event"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -88,17 +90,21 @@ func run() error {
 		}
 	}()
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:             scheme,
-		MetricsBindAddress: metricsAddr,
-		Port:               9443,
-		LeaderElection:     enableLeaderElection,
-		LeaderElectionID:   "413d8c8e.gke.io",
+		Scheme: scheme,
+		Metrics: metricsserver.Options{
+			BindAddress: metricsAddr,
+		},
+		WebhookServer: webhook.NewServer(webhook.Options{
+			Port: 9443,
+		}),
+		LeaderElection:   enableLeaderElection,
+		LeaderElectionID: "413d8c8e.gke.io",
 	})
 	if err != nil {
 		return fmt.Errorf("failed to build manager: %w", err)
 	}
 
-	logger := klogr.New().WithName("controllers")
+	logger := textlogger.NewLogger(textlogger.NewConfig()).WithName("controllers")
 
 	for _, group := range []string{root.KptGroup} {
 		if err := registerControllersForGroup(mgr, logger, group); err != nil {

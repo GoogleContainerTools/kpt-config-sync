@@ -5,13 +5,12 @@ package fake
 import (
 	"context"
 
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
-	configmanagementv1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 )
 
 // FakeRepos implements RepoInterface
@@ -19,24 +18,24 @@ type FakeRepos struct {
 	Fake *FakeConfigmanagementV1
 }
 
-var reposResource = schema.GroupVersionResource{Group: "configmanagement.gke.io", Version: "v1", Resource: "repos"}
+var reposResource = v1.SchemeGroupVersion.WithResource("repos")
 
-var reposKind = schema.GroupVersionKind{Group: "configmanagement.gke.io", Version: "v1", Kind: "Repo"}
+var reposKind = v1.SchemeGroupVersion.WithKind("Repo")
 
 // Get takes name of the repo, and returns the corresponding repo object, and an error if there is any.
-func (c *FakeRepos) Get(ctx context.Context, name string, options v1.GetOptions) (result *configmanagementv1.Repo, err error) {
+func (c *FakeRepos) Get(ctx context.Context, name string, options metav1.GetOptions) (result *v1.Repo, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(reposResource, name), &configmanagementv1.Repo{})
+		Invokes(testing.NewRootGetAction(reposResource, name), &v1.Repo{})
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*configmanagementv1.Repo), err
+	return obj.(*v1.Repo), err
 }
 
 // List takes label and field selectors, and returns the list of Repos that match those selectors.
-func (c *FakeRepos) List(ctx context.Context, opts v1.ListOptions) (result *configmanagementv1.RepoList, err error) {
+func (c *FakeRepos) List(ctx context.Context, opts metav1.ListOptions) (result *v1.RepoList, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(reposResource, reposKind, opts), &configmanagementv1.RepoList{})
+		Invokes(testing.NewRootListAction(reposResource, reposKind, opts), &v1.RepoList{})
 	if obj == nil {
 		return nil, err
 	}
@@ -45,8 +44,8 @@ func (c *FakeRepos) List(ctx context.Context, opts v1.ListOptions) (result *conf
 	if label == nil {
 		label = labels.Everything()
 	}
-	list := &configmanagementv1.RepoList{ListMeta: obj.(*configmanagementv1.RepoList).ListMeta}
-	for _, item := range obj.(*configmanagementv1.RepoList).Items {
+	list := &v1.RepoList{ListMeta: obj.(*v1.RepoList).ListMeta}
+	for _, item := range obj.(*v1.RepoList).Items {
 		if label.Matches(labels.Set(item.Labels)) {
 			list.Items = append(list.Items, item)
 		}
@@ -55,63 +54,63 @@ func (c *FakeRepos) List(ctx context.Context, opts v1.ListOptions) (result *conf
 }
 
 // Watch returns a watch.Interface that watches the requested repos.
-func (c *FakeRepos) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
+func (c *FakeRepos) Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
 		InvokesWatch(testing.NewRootWatchAction(reposResource, opts))
 }
 
 // Create takes the representation of a repo and creates it.  Returns the server's representation of the repo, and an error, if there is any.
-func (c *FakeRepos) Create(ctx context.Context, repo *configmanagementv1.Repo, opts v1.CreateOptions) (result *configmanagementv1.Repo, err error) {
+func (c *FakeRepos) Create(ctx context.Context, repo *v1.Repo, opts metav1.CreateOptions) (result *v1.Repo, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(reposResource, repo), &configmanagementv1.Repo{})
+		Invokes(testing.NewRootCreateAction(reposResource, repo), &v1.Repo{})
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*configmanagementv1.Repo), err
+	return obj.(*v1.Repo), err
 }
 
 // Update takes the representation of a repo and updates it. Returns the server's representation of the repo, and an error, if there is any.
-func (c *FakeRepos) Update(ctx context.Context, repo *configmanagementv1.Repo, opts v1.UpdateOptions) (result *configmanagementv1.Repo, err error) {
+func (c *FakeRepos) Update(ctx context.Context, repo *v1.Repo, opts metav1.UpdateOptions) (result *v1.Repo, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(reposResource, repo), &configmanagementv1.Repo{})
+		Invokes(testing.NewRootUpdateAction(reposResource, repo), &v1.Repo{})
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*configmanagementv1.Repo), err
+	return obj.(*v1.Repo), err
 }
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeRepos) UpdateStatus(ctx context.Context, repo *configmanagementv1.Repo, opts v1.UpdateOptions) (*configmanagementv1.Repo, error) {
+func (c *FakeRepos) UpdateStatus(ctx context.Context, repo *v1.Repo, opts metav1.UpdateOptions) (*v1.Repo, error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateSubresourceAction(reposResource, "status", repo), &configmanagementv1.Repo{})
+		Invokes(testing.NewRootUpdateSubresourceAction(reposResource, "status", repo), &v1.Repo{})
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*configmanagementv1.Repo), err
+	return obj.(*v1.Repo), err
 }
 
 // Delete takes name of the repo and deletes it. Returns an error if one occurs.
-func (c *FakeRepos) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
+func (c *FakeRepos) Delete(ctx context.Context, name string, opts metav1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteActionWithOptions(reposResource, name, opts), &configmanagementv1.Repo{})
+		Invokes(testing.NewRootDeleteActionWithOptions(reposResource, name, opts), &v1.Repo{})
 	return err
 }
 
 // DeleteCollection deletes a collection of objects.
-func (c *FakeRepos) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
+func (c *FakeRepos) DeleteCollection(ctx context.Context, opts metav1.DeleteOptions, listOpts metav1.ListOptions) error {
 	action := testing.NewRootDeleteCollectionAction(reposResource, listOpts)
 
-	_, err := c.Fake.Invokes(action, &configmanagementv1.RepoList{})
+	_, err := c.Fake.Invokes(action, &v1.RepoList{})
 	return err
 }
 
 // Patch applies the patch and returns the patched repo.
-func (c *FakeRepos) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *configmanagementv1.Repo, err error) {
+func (c *FakeRepos) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts metav1.PatchOptions, subresources ...string) (result *v1.Repo, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(reposResource, name, pt, data, subresources...), &configmanagementv1.Repo{})
+		Invokes(testing.NewRootPatchSubresourceAction(reposResource, name, pt, data, subresources...), &v1.Repo{})
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*configmanagementv1.Repo), err
+	return obj.(*v1.Repo), err
 }

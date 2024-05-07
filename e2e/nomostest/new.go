@@ -25,7 +25,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	testmetrics "kpt.dev/configsync/e2e/nomostest/metrics"
@@ -71,7 +71,7 @@ func newOptStruct(testName, tmpDir string, ntOptions ...ntopts.Opt) *ntopts.New 
 			RootRepos:      map[string]ntopts.RepoOpts{configsync.RootSyncName: {}},
 			// Default to 1m to keep tests fast.
 			// To override, use WithReconcileTimeout.
-			ReconcileTimeout: pointer.Duration(1 * time.Minute),
+			ReconcileTimeout: ptr.To(1 * time.Minute),
 		},
 	}
 	for _, opt := range ntOptions {

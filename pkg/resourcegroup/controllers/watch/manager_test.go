@@ -138,7 +138,7 @@ func TestManager_Update(t *testing.T) {
 				watcherFunc: testRunnables(ctx, tc.failedWatchers),
 			}
 			ch := make(chan event.GenericEvent)
-			m, err := NewManager(nil, nil, ch, options)
+			m, err := NewManager(nil, nil, nil, ch, options)
 			if err != nil {
 				t.Fatal(err)
 			}

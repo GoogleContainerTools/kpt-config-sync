@@ -25,7 +25,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 // NamespaceController is a controller that watches for Namespace events and
@@ -74,7 +73,7 @@ func (nc *NamespaceController) Reconcile(ctx context.Context, req ctrl.Request) 
 func (nc *NamespaceController) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("NamespaceController").
-		Watches(&source.Kind{Type: &corev1.Namespace{}},
+		Watches(&corev1.Namespace{},
 			&handler.EnqueueRequestForObject{},
 			builder.WithPredicates(UnmanagedNamespacePredicate{})).
 		Complete(nc)

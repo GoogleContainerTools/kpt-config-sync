@@ -112,6 +112,7 @@ func kustomizeFieldUsageRecurse(k *types.Kustomization, path string) (*Kustomize
 	simplMetrics := make(map[string]int)
 	deprecationMetrics := make(map[string]int)
 
+	//nolint:staticcheck // allow deprecated field for backwards compatibility
 	subDirs := append(k.Resources, append(k.Bases, k.Components...)...)
 	localBases := 0
 	for i, r := range subDirs {
@@ -119,6 +120,7 @@ func kustomizeFieldUsageRecurse(k *types.Kustomization, path string) (*Kustomize
 		basePath := filepath.Join(path, r)
 		files, err := os.ReadDir(basePath)
 		if err == nil && len(files) > 0 {
+			//nolint:staticcheck // allow deprecated field for backwards compatibility
 			if i < len(k.Resources)+len(k.Bases) {
 				localBases++
 			}
@@ -210,9 +212,11 @@ func patchTypeCount(k *types.Kustomization) map[string]int {
 	if len(k.Patches) > 0 {
 		result["Patches"] = len(k.Patches)
 	}
+	//nolint:staticcheck // allow deprecated field for backwards compatibility
 	if len(k.PatchesStrategicMerge) > 0 {
 		result["PatchesStrategicMerge"] = len(k.PatchesStrategicMerge)
 	}
+	//nolint:staticcheck // allow deprecated field for backwards compatibility
 	if len(k.PatchesJson6902) > 0 {
 		result["PatchesJson6902"] = len(k.PatchesJson6902)
 	}
@@ -314,9 +318,11 @@ func simplificationUsage(k *types.Kustomization, path string) map[string]int {
 
 func deprecatedFieldCount(k *types.Kustomization) map[string]int {
 	result := make(map[string]int)
+	//nolint:staticcheck // allow deprecated field for backwards compatibility
 	if len(k.Vars) > 0 {
 		result["Vars"] = len(k.Vars)
 	}
+	//nolint:staticcheck // allow deprecated field for backwards compatibility
 	if len(k.Bases) > 0 {
 		result["Bases"] = len(k.Bases)
 	}

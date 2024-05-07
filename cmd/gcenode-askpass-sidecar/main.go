@@ -19,7 +19,7 @@ import (
 	"net/http"
 
 	"cloud.google.com/go/compute/metadata"
-	"k8s.io/klog/v2/klogr"
+	"k8s.io/klog/v2/textlogger"
 	"kpt.dev/configsync/pkg/askpass"
 	"kpt.dev/configsync/pkg/util"
 	utillog "kpt.dev/configsync/pkg/util/log"
@@ -59,7 +59,7 @@ func main() {
 	}
 
 	utillog.Setup()
-	log := utillog.NewLogger(klogr.New(), *flRoot, *flErrorFile)
+	log := utillog.NewLogger(textlogger.NewLogger(textlogger.NewConfig()), *flRoot, *flErrorFile)
 
 	log.Info("starting askpass with arguments", "--port", *flPort,
 		"--email", *flGsaEmail, "--error-file", *flErrorFile, "--root", *flRoot)

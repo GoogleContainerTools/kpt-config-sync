@@ -285,7 +285,7 @@ func (w *Watcher) WatchObject(gvk schema.GroupVersionKind, name, namespace strin
 	}
 	_, err = watchtools.UntilWithSync(ctx, lw, exampleObj, precondition, condition)
 	if err != nil {
-		if err == wait.ErrWaitTimeout {
+		if wait.Interrupted(err) {
 			// Until returns ErrWaitTimeout for any ctx.Done
 			// https://github.com/kubernetes/apimachinery/blob/v0.26.3/pkg/util/wait/wait.go#L594
 			// https://github.com/kubernetes/client-go/blob/v0.26.3/tools/watch/until.go#L89

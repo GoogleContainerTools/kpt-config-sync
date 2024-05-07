@@ -25,7 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/klog/v2/klogr"
+	"k8s.io/klog/v2/textlogger"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
@@ -61,10 +61,10 @@ func main() {
 			"Enabling this will ensure there is only one active controller manager.")
 
 	log.Setup()
-	setupLog := klogr.New().WithName("setup")
+	setupLog := textlogger.NewLogger(textlogger.NewConfig()).WithName("setup")
 
 	profiler.Service()
-	ctrl.SetLogger(klogr.New())
+	ctrl.SetLogger(textlogger.NewLogger(textlogger.NewConfig()))
 
 	setupLog.Info(fmt.Sprintf("running with flags --cluster-name=%s; --reconciler-polling-period=%s; --hydration-polling-period=%s",
 		*clusterName, *reconcilerPollingPeriod, *hydrationPollingPeriod))
@@ -96,7 +96,7 @@ func main() {
 	watchFleetMembership := fleetMembershipCRDExists(dynamicClient, mgr.GetRESTMapper(), &setupLog)
 
 	crdController := controllers.NewCRDReconciler(
-		klogr.New().WithName("controllers").WithName("CRD"))
+		textlogger.NewLogger(textlogger.NewConfig()).WithName("controllers").WithName("CRD"))
 	if err := crdController.Register(mgr); err != nil {
 		setupLog.Error(err, "failed to register controller", "controller", "CRD")
 		os.Exit(1)
@@ -106,7 +106,7 @@ func main() {
 	repoSyncController := controllers.NewRepoSyncReconciler(*clusterName,
 		*reconcilerPollingPeriod, *hydrationPollingPeriod,
 		mgr.GetClient(), watcher, dynamicClient,
-		klogr.New().WithName("controllers").WithName(configsync.RepoSyncKind),
+		textlogger.NewLogger(textlogger.NewConfig()).WithName("controllers").WithName(configsync.RepoSyncKind),
 		mgr.GetScheme())
 	crdController.SetCRDHandler(configsync.RepoSyncCRDName, func() error {
 		if err := repoSyncController.Register(mgr, watchFleetMembership); err != nil {
@@ -120,7 +120,7 @@ func main() {
 	rootSyncController := controllers.NewRootSyncReconciler(*clusterName,
 		*reconcilerPollingPeriod, *hydrationPollingPeriod,
 		mgr.GetClient(), watcher, dynamicClient,
-		klogr.New().WithName("controllers").WithName(configsync.RootSyncKind),
+		textlogger.NewLogger(textlogger.NewConfig()).WithName("controllers").WithName(configsync.RootSyncKind),
 		mgr.GetScheme())
 	crdController.SetCRDHandler(configsync.RootSyncCRDName, func() error {
 		if err := rootSyncController.Register(mgr, watchFleetMembership); err != nil {
@@ -132,7 +132,7 @@ func main() {
 	setupLog.Info("RootSync controller registration scheduled")
 
 	otel := controllers.NewOtelReconciler(*clusterName, mgr.GetClient(),
-		klogr.New().WithName("controllers").WithName("Otel"),
+		textlogger.NewLogger(textlogger.NewConfig()).WithName("controllers").WithName("Otel"),
 		mgr.GetScheme())
 	if err := otel.Register(mgr); err != nil {
 		setupLog.Error(err, "failed to register controller", "controller", "Otel")
@@ -141,7 +141,7 @@ func main() {
 	setupLog.Info("Otel controller registration successful")
 
 	otelSA := controllers.NewOtelSAReconciler(*clusterName, mgr.GetClient(),
-		klogr.New().WithName("controllers").WithName(controllers.OtelSALoggerName),
+		textlogger.NewLogger(textlogger.NewConfig()).WithName("controllers").WithName(controllers.OtelSALoggerName),
 		mgr.GetScheme())
 	if err := otelSA.Register(mgr); err != nil {
 		setupLog.Error(err, "failed to register controller", "controller", "OtelSA")

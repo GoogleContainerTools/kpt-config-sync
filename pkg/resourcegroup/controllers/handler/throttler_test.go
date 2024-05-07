@@ -15,6 +15,7 @@
 package handler
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -40,7 +41,7 @@ func TestThrottler(t *testing.T) {
 	throttler := NewThrottler(time.Second)
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 
-	throttler.Generic(genericE, queue)
+	throttler.Generic(context.Background(), genericE, queue)
 
 	_, found := throttler.mapping[types.NamespacedName{
 		Name:      "group",
@@ -72,10 +73,12 @@ func TestThrottlerMultipleEvents(t *testing.T) {
 	throttler := NewThrottler(5 * time.Second)
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 
+	ctx := context.Background()
+
 	// Call the event handler three times for the same event
-	throttler.Generic(genericE, queue)
-	throttler.Generic(genericE, queue)
-	throttler.Generic(genericE, queue)
+	throttler.Generic(ctx, genericE, queue)
+	throttler.Generic(ctx, genericE, queue)
+	throttler.Generic(ctx, genericE, queue)
 
 	// After 3 seconds, still within the duration, the event can
 	// be found in the mapping
@@ -121,11 +124,12 @@ func TestThrottlerMultipleObjects(t *testing.T) {
 	throttler := NewThrottler(5 * time.Second)
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 
+	ctx := context.Background()
 	// Call the event handler to push two events
-	throttler.Generic(genericE, queue)
-	throttler.Generic(genericE2, queue)
-	throttler.Generic(genericE, queue)
-	throttler.Generic(genericE2, queue)
+	throttler.Generic(ctx, genericE, queue)
+	throttler.Generic(ctx, genericE2, queue)
+	throttler.Generic(ctx, genericE, queue)
+	throttler.Generic(ctx, genericE2, queue)
 
 	// After 3 seconds, still within the duration, the events can
 	// be found in the mapping

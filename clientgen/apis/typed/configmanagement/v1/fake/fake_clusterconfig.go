@@ -5,13 +5,12 @@ package fake
 import (
 	"context"
 
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
-	configmanagementv1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 )
 
 // FakeClusterConfigs implements ClusterConfigInterface
@@ -19,24 +18,24 @@ type FakeClusterConfigs struct {
 	Fake *FakeConfigmanagementV1
 }
 
-var clusterconfigsResource = schema.GroupVersionResource{Group: "configmanagement.gke.io", Version: "v1", Resource: "clusterconfigs"}
+var clusterconfigsResource = v1.SchemeGroupVersion.WithResource("clusterconfigs")
 
-var clusterconfigsKind = schema.GroupVersionKind{Group: "configmanagement.gke.io", Version: "v1", Kind: "ClusterConfig"}
+var clusterconfigsKind = v1.SchemeGroupVersion.WithKind("ClusterConfig")
 
 // Get takes name of the clusterConfig, and returns the corresponding clusterConfig object, and an error if there is any.
-func (c *FakeClusterConfigs) Get(ctx context.Context, name string, options v1.GetOptions) (result *configmanagementv1.ClusterConfig, err error) {
+func (c *FakeClusterConfigs) Get(ctx context.Context, name string, options metav1.GetOptions) (result *v1.ClusterConfig, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(clusterconfigsResource, name), &configmanagementv1.ClusterConfig{})
+		Invokes(testing.NewRootGetAction(clusterconfigsResource, name), &v1.ClusterConfig{})
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*configmanagementv1.ClusterConfig), err
+	return obj.(*v1.ClusterConfig), err
 }
 
 // List takes label and field selectors, and returns the list of ClusterConfigs that match those selectors.
-func (c *FakeClusterConfigs) List(ctx context.Context, opts v1.ListOptions) (result *configmanagementv1.ClusterConfigList, err error) {
+func (c *FakeClusterConfigs) List(ctx context.Context, opts metav1.ListOptions) (result *v1.ClusterConfigList, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(clusterconfigsResource, clusterconfigsKind, opts), &configmanagementv1.ClusterConfigList{})
+		Invokes(testing.NewRootListAction(clusterconfigsResource, clusterconfigsKind, opts), &v1.ClusterConfigList{})
 	if obj == nil {
 		return nil, err
 	}
@@ -45,8 +44,8 @@ func (c *FakeClusterConfigs) List(ctx context.Context, opts v1.ListOptions) (res
 	if label == nil {
 		label = labels.Everything()
 	}
-	list := &configmanagementv1.ClusterConfigList{ListMeta: obj.(*configmanagementv1.ClusterConfigList).ListMeta}
-	for _, item := range obj.(*configmanagementv1.ClusterConfigList).Items {
+	list := &v1.ClusterConfigList{ListMeta: obj.(*v1.ClusterConfigList).ListMeta}
+	for _, item := range obj.(*v1.ClusterConfigList).Items {
 		if label.Matches(labels.Set(item.Labels)) {
 			list.Items = append(list.Items, item)
 		}
@@ -55,63 +54,63 @@ func (c *FakeClusterConfigs) List(ctx context.Context, opts v1.ListOptions) (res
 }
 
 // Watch returns a watch.Interface that watches the requested clusterConfigs.
-func (c *FakeClusterConfigs) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
+func (c *FakeClusterConfigs) Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
 		InvokesWatch(testing.NewRootWatchAction(clusterconfigsResource, opts))
 }
 
 // Create takes the representation of a clusterConfig and creates it.  Returns the server's representation of the clusterConfig, and an error, if there is any.
-func (c *FakeClusterConfigs) Create(ctx context.Context, clusterConfig *configmanagementv1.ClusterConfig, opts v1.CreateOptions) (result *configmanagementv1.ClusterConfig, err error) {
+func (c *FakeClusterConfigs) Create(ctx context.Context, clusterConfig *v1.ClusterConfig, opts metav1.CreateOptions) (result *v1.ClusterConfig, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(clusterconfigsResource, clusterConfig), &configmanagementv1.ClusterConfig{})
+		Invokes(testing.NewRootCreateAction(clusterconfigsResource, clusterConfig), &v1.ClusterConfig{})
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*configmanagementv1.ClusterConfig), err
+	return obj.(*v1.ClusterConfig), err
 }
 
 // Update takes the representation of a clusterConfig and updates it. Returns the server's representation of the clusterConfig, and an error, if there is any.
-func (c *FakeClusterConfigs) Update(ctx context.Context, clusterConfig *configmanagementv1.ClusterConfig, opts v1.UpdateOptions) (result *configmanagementv1.ClusterConfig, err error) {
+func (c *FakeClusterConfigs) Update(ctx context.Context, clusterConfig *v1.ClusterConfig, opts metav1.UpdateOptions) (result *v1.ClusterConfig, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(clusterconfigsResource, clusterConfig), &configmanagementv1.ClusterConfig{})
+		Invokes(testing.NewRootUpdateAction(clusterconfigsResource, clusterConfig), &v1.ClusterConfig{})
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*configmanagementv1.ClusterConfig), err
+	return obj.(*v1.ClusterConfig), err
 }
 
 // UpdateStatus was generated because the type contains a Status member.
 // Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeClusterConfigs) UpdateStatus(ctx context.Context, clusterConfig *configmanagementv1.ClusterConfig, opts v1.UpdateOptions) (*configmanagementv1.ClusterConfig, error) {
+func (c *FakeClusterConfigs) UpdateStatus(ctx context.Context, clusterConfig *v1.ClusterConfig, opts metav1.UpdateOptions) (*v1.ClusterConfig, error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateSubresourceAction(clusterconfigsResource, "status", clusterConfig), &configmanagementv1.ClusterConfig{})
+		Invokes(testing.NewRootUpdateSubresourceAction(clusterconfigsResource, "status", clusterConfig), &v1.ClusterConfig{})
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*configmanagementv1.ClusterConfig), err
+	return obj.(*v1.ClusterConfig), err
 }
 
 // Delete takes name of the clusterConfig and deletes it. Returns an error if one occurs.
-func (c *FakeClusterConfigs) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
+func (c *FakeClusterConfigs) Delete(ctx context.Context, name string, opts metav1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteActionWithOptions(clusterconfigsResource, name, opts), &configmanagementv1.ClusterConfig{})
+		Invokes(testing.NewRootDeleteActionWithOptions(clusterconfigsResource, name, opts), &v1.ClusterConfig{})
 	return err
 }
 
 // DeleteCollection deletes a collection of objects.
-func (c *FakeClusterConfigs) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
+func (c *FakeClusterConfigs) DeleteCollection(ctx context.Context, opts metav1.DeleteOptions, listOpts metav1.ListOptions) error {
 	action := testing.NewRootDeleteCollectionAction(clusterconfigsResource, listOpts)
 
-	_, err := c.Fake.Invokes(action, &configmanagementv1.ClusterConfigList{})
+	_, err := c.Fake.Invokes(action, &v1.ClusterConfigList{})
 	return err
 }
 
 // Patch applies the patch and returns the patched clusterConfig.
-func (c *FakeClusterConfigs) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *configmanagementv1.ClusterConfig, err error) {
+func (c *FakeClusterConfigs) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts metav1.PatchOptions, subresources ...string) (result *v1.ClusterConfig, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(clusterconfigsResource, name, pt, data, subresources...), &configmanagementv1.ClusterConfig{})
+		Invokes(testing.NewRootPatchSubresourceAction(clusterconfigsResource, name, pt, data, subresources...), &v1.ClusterConfig{})
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*configmanagementv1.ClusterConfig), err
+	return obj.(*v1.ClusterConfig), err
 }

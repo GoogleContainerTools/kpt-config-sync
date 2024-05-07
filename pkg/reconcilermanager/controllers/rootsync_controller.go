@@ -62,7 +62,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 // ReconcilerType defines the type of a reconciler
@@ -419,33 +418,33 @@ func (r *RootSyncReconciler) Register(mgr controllerruntime.Manager, watchFleetM
 		}).
 		For(&v1beta1.RootSync{}).
 		// Custom Watch to trigger Reconcile for objects created by RootSync controller.
-		Watches(&source.Kind{Type: withNamespace(&corev1.Secret{}, configsync.ControllerNamespace)},
+		Watches(withNamespace(&corev1.Secret{}, configsync.ControllerNamespace),
 			handler.EnqueueRequestsFromMapFunc(r.mapSecretToRootSyncs),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
-		Watches(&source.Kind{Type: withNamespace(&corev1.ConfigMap{}, configsync.ControllerNamespace)},
+		Watches(withNamespace(&corev1.ConfigMap{}, configsync.ControllerNamespace),
 			handler.EnqueueRequestsFromMapFunc(r.mapConfigMapsToRootSyncs),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
-		Watches(&source.Kind{Type: withNamespace(&appsv1.Deployment{}, configsync.ControllerNamespace)},
+		Watches(withNamespace(&appsv1.Deployment{}, configsync.ControllerNamespace),
 			handler.EnqueueRequestsFromMapFunc(r.mapObjectToRootSync),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
-		Watches(&source.Kind{Type: withNamespace(&corev1.ServiceAccount{}, configsync.ControllerNamespace)},
+		Watches(withNamespace(&corev1.ServiceAccount{}, configsync.ControllerNamespace),
 			handler.EnqueueRequestsFromMapFunc(r.mapObjectToRootSync),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
-		Watches(&source.Kind{Type: &rbacv1.ClusterRoleBinding{}},
+		Watches(&rbacv1.ClusterRoleBinding{},
 			handler.EnqueueRequestsFromMapFunc(r.mapObjectToRootSync),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
 		// TODO: is it possible to watch with a label filter?
-		Watches(&source.Kind{Type: &rbacv1.RoleBinding{}},
+		Watches(&rbacv1.RoleBinding{},
 			handler.EnqueueRequestsFromMapFunc(r.mapObjectToRootSync),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
-		Watches(&source.Kind{Type: &admissionv1.ValidatingWebhookConfiguration{}},
+		Watches(&admissionv1.ValidatingWebhookConfiguration{},
 			handler.EnqueueRequestsFromMapFunc(r.mapAdmissionWebhookToRootSync),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}))
 
 	if watchFleetMembership {
 		// Custom Watch for membership to trigger reconciliation.
-		controllerBuilder.Watches(&source.Kind{Type: &hubv1.Membership{}},
-			handler.EnqueueRequestsFromMapFunc(r.mapMembershipToRootSyncs()),
+		controllerBuilder.Watches(&hubv1.Membership{},
+			handler.EnqueueRequestsFromMapFunc(r.mapMembershipToRootSyncs),
 			builder.WithPredicates(predicate.GenerationChangedPredicate{}))
 	}
 	return controllerBuilder.Complete(r)
@@ -456,39 +455,33 @@ func withNamespace(obj client.Object, ns string) client.Object {
 	return obj
 }
 
-func (r *RootSyncReconciler) mapMembershipToRootSyncs() func(client.Object) []reconcile.Request {
-	return func(o client.Object) []reconcile.Request {
-		//TODO: pass through context (reqs updating controller-runtime)
-		ctx := context.Background()
-		// Clear the membership if the cluster is unregistered
-		if err := r.client.Get(ctx, types.NamespacedName{Name: fleetMembershipName}, &hubv1.Membership{}); err != nil {
-			if apierrors.IsNotFound(err) {
-				klog.Info("Fleet Membership not found, clearing membership cache")
-				r.membership = nil
-				return r.requeueAllRootSyncs(fleetMembershipName)
-			}
-			klog.Errorf("Fleet Membership get failed: %v", err)
-			return nil
+func (r *RootSyncReconciler) mapMembershipToRootSyncs(ctx context.Context, o client.Object) []reconcile.Request {
+	// Clear the membership if the cluster is unregistered
+	if err := r.client.Get(ctx, types.NamespacedName{Name: fleetMembershipName}, &hubv1.Membership{}); err != nil {
+		if apierrors.IsNotFound(err) {
+			klog.Info("Fleet Membership not found, clearing membership cache")
+			r.membership = nil
+			return r.requeueAllRootSyncs(fleetMembershipName)
 		}
-
-		m, isMembership := o.(*hubv1.Membership)
-		if !isMembership {
-			klog.Errorf("Fleet Membership expected, found %q", o.GetObjectKind().GroupVersionKind())
-			return nil
-		}
-		if m.Name != fleetMembershipName {
-			klog.Errorf("Fleet Membership name expected %q, found %q", fleetMembershipName, m.Name)
-			return nil
-		}
-		r.membership = m
-		return r.requeueAllRootSyncs(fleetMembershipName)
+		klog.Errorf("Fleet Membership get failed: %v", err)
+		return nil
 	}
+
+	m, isMembership := o.(*hubv1.Membership)
+	if !isMembership {
+		klog.Errorf("Fleet Membership expected, found %q", o.GetObjectKind().GroupVersionKind())
+		return nil
+	}
+	if m.Name != fleetMembershipName {
+		klog.Errorf("Fleet Membership name expected %q, found %q", fleetMembershipName, m.Name)
+		return nil
+	}
+	r.membership = m
+	return r.requeueAllRootSyncs(fleetMembershipName)
 }
 
 // mapConfigMapsToRootSyncs handles updates to referenced ConfigMaps
-func (r *RootSyncReconciler) mapConfigMapsToRootSyncs(obj client.Object) []reconcile.Request {
-	//TODO: pass through context (reqs updating controller-runtime)
-	ctx := context.Background()
+func (r *RootSyncReconciler) mapConfigMapsToRootSyncs(ctx context.Context, obj client.Object) []reconcile.Request {
 	objRef := client.ObjectKeyFromObject(obj)
 
 	// Ignore changes from other namespaces.
@@ -540,9 +533,7 @@ func rootSyncHelmValuesFileNames(rs *v1beta1.RootSync) []string {
 
 // mapObjectToRootSync define a mapping from an object in 'config-management-system'
 // namespace to a RootSync to be reconciled.
-func (r *RootSyncReconciler) mapObjectToRootSync(obj client.Object) []reconcile.Request {
-	//TODO: pass through context (reqs updating controller-runtime)
-	ctx := context.Background()
+func (r *RootSyncReconciler) mapObjectToRootSync(ctx context.Context, obj client.Object) []reconcile.Request {
 	objRef := client.ObjectKeyFromObject(obj)
 
 	// Ignore changes from other namespaces because all the generated resources
@@ -642,7 +633,7 @@ func (r *RootSyncReconciler) requeueAllRootSyncs(name string) []reconcile.Reques
 	return requests
 }
 
-func (r *RootSyncReconciler) mapAdmissionWebhookToRootSync(admissionWebhook client.Object) []reconcile.Request {
+func (r *RootSyncReconciler) mapAdmissionWebhookToRootSync(_ context.Context, admissionWebhook client.Object) []reconcile.Request {
 	if admissionWebhook.GetName() == webhookconfiguration.Name {
 		return r.requeueAllRootSyncs(admissionWebhook.GetName())
 	}
@@ -655,9 +646,7 @@ func (r *RootSyncReconciler) mapAdmissionWebhookToRootSync(admissionWebhook clie
 // - `spec.git.caCertSecretRef.name`
 // - `spec.helm.secretRef.name`
 // The update to the Secret object will trigger a reconciliation of the RootSync objects.
-func (r *RootSyncReconciler) mapSecretToRootSyncs(secret client.Object) []reconcile.Request {
-	//TODO: pass through context (reqs updating controller-runtime)
-	ctx := context.Background()
+func (r *RootSyncReconciler) mapSecretToRootSyncs(ctx context.Context, secret client.Object) []reconcile.Request {
 	sRef := client.ObjectKeyFromObject(secret)
 	// Ignore secret in other namespaces because the RootSync's secrets MUST
 	// exist in the config-management-system namespace.

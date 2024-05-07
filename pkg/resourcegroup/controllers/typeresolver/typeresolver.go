@@ -105,5 +105,5 @@ func NewTypeResolver(mgr ctrl.Manager, logger logr.Logger) (*TypeResolver, error
 		Version: "v1",
 		Kind:    "CustomResourceDefinition",
 	})
-	return r, c.Watch(&source.Kind{Type: u}, &handler.EnqueueRequestForObject{})
+	return r, c.Watch(source.Kind(mgr.GetCache(), u), &handler.EnqueueRequestForObject{})
 }

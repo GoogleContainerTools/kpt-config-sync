@@ -26,7 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
-	"k8s.io/klog/v2/klogr"
+	"k8s.io/klog/v2/textlogger"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/resourcemap"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/typeresolver"
@@ -34,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 )
 
 const contextResourceGroupControllerKey = contextKey("resourcegroup-controller")
@@ -46,12 +47,16 @@ func TestReconcile(t *testing.T) {
 	var namespace = metav1.NamespaceDefault
 
 	// Setup the Manager
-	mgr, err := manager.New(cfg, manager.Options{MetricsBindAddress: "0"})
+	mgr, err := manager.New(cfg, manager.Options{
+		Metrics: metricsserver.Options{
+			BindAddress: "0",
+		},
+	})
 	assert.NoError(t, err)
 	c = mgr.GetClient()
 
 	klog.InitFlags(nil)
-	logger := klogr.New().WithName("controllers").WithName(v1alpha1.ResourceGroupKind)
+	logger := textlogger.NewLogger(textlogger.NewConfig()).WithName("controllers").WithName(v1alpha1.ResourceGroupKind)
 
 	ctx = context.WithValue(context.TODO(), contextResourceGroupControllerKey, logger)
 

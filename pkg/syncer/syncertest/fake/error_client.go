@@ -16,9 +16,11 @@ package fake
 
 import (
 	"context"
+	"fmt"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -30,6 +32,16 @@ type ErrorClient struct {
 // NewErrorClient returns a Client that always returns an error.
 func NewErrorClient(err error) client.Client {
 	return &ErrorClient{error: err}
+}
+
+// GroupVersionKindFor returns the GroupVersionKind for the given object.
+func (e ErrorClient) GroupVersionKindFor(_ runtime.Object) (schema.GroupVersionKind, error) {
+	return schema.GroupVersionKind{}, fmt.Errorf("GroupVersionKindFor not implemented")
+}
+
+// IsObjectNamespaced returns true if the GroupVersionKind of the object is namespaced.
+func (e ErrorClient) IsObjectNamespaced(_ runtime.Object) (bool, error) {
+	return false, fmt.Errorf("IsObjectNamespaced not implemented")
 }
 
 // Get implements client.Client.

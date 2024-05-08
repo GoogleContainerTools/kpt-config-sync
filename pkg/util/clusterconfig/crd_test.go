@@ -23,13 +23,13 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/syncer/decode"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/testing/testerrors"
-	"kpt.dev/configsync/testing/testoutput"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -79,7 +79,7 @@ func TestGetCRDs(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			decoder := decode.NewGenericResourceDecoder(core.Scheme)
-			cc := testoutput.ClusterConfig(tc.objs...)
+			cc := clusterConfig(tc.objs...)
 			actual, err := GetCRDs(decoder, cc)
 
 			if err != nil {
@@ -92,6 +92,19 @@ func TestGetCRDs(t *testing.T) {
 			}
 		})
 	}
+}
+
+const importToken = "abcde"
+
+// clusterConfig generates a valid ClusterConfig to be put in AllConfigs given the set of hydrated
+// cluster-scoped client.Objects.
+func clusterConfig(objects ...client.Object) *v1.ClusterConfig {
+	config := fake.ClusterConfigObject()
+	config.Spec.Token = importToken
+	for _, o := range objects {
+		config.AddResource(o)
+	}
+	return config
 }
 
 func generateMalformedCRD(t *testing.T) *unstructured.Unstructured {

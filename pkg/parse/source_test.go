@@ -107,7 +107,6 @@ func TestReadConfigFiles(t *testing.T) {
 
 			parser := &root{
 				Options: &Options{
-					Parser:             &fakeParser{},
 					SyncName:           rootSyncName,
 					ReconcilerName:     rootReconcilerName,
 					Client:             syncertest.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName)),

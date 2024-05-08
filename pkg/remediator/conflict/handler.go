@@ -17,7 +17,7 @@ package conflict
 import (
 	"sync"
 
-	orderedmap "github.com/wk8/go-ordered-map"
+	"github.com/elliotchance/orderedmap/v2"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/remediator/queue"
@@ -40,7 +40,7 @@ type handler struct {
 	mux sync.Mutex
 	// conflictErrs tracks all the conflict errors (KNV1060) the remediator encounters,
 	// and report to RootSync|RepoSync status.
-	conflictErrs *orderedmap.OrderedMap
+	conflictErrs *orderedmap.OrderedMap[queue.GVKNN, status.ManagementConflictError]
 }
 
 var _ Handler = &handler{}
@@ -48,7 +48,7 @@ var _ Handler = &handler{}
 // NewHandler instantiates a conflict handler
 func NewHandler() Handler {
 	return &handler{
-		conflictErrs: orderedmap.New(),
+		conflictErrs: orderedmap.NewOrderedMap[queue.GVKNN, status.ManagementConflictError](),
 	}
 }
 
@@ -63,8 +63,7 @@ func (h *handler) RemoveConflictError(gvknn queue.GVKNN) {
 	h.mux.Lock()
 	defer h.mux.Unlock()
 
-	_, deleted := h.conflictErrs.Delete(gvknn)
-	if deleted {
+	if h.conflictErrs.Delete(gvknn) {
 		klog.Infof("Conflict error resolved for %s", gvknn)
 	}
 }
@@ -73,10 +72,9 @@ func (h *handler) RemoveAllConflictErrors(gvk schema.GroupVersionKind) {
 	h.mux.Lock()
 	defer h.mux.Unlock()
 
-	for pair := h.conflictErrs.Oldest(); pair != nil; pair = pair.Next() {
-		gvknn := pair.Key.(queue.GVKNN)
-		if gvknn.GroupVersionKind() == gvk {
-			h.conflictErrs.Delete(gvknn)
+	for pair := h.conflictErrs.Front(); pair != nil; pair = pair.Next() {
+		if pair.Key.GroupVersionKind() == gvk {
+			h.conflictErrs.Delete(pair.Key)
 		}
 	}
 }
@@ -87,8 +85,8 @@ func (h *handler) ConflictErrors() []status.ManagementConflictError {
 
 	// Return a copy
 	var result []status.ManagementConflictError
-	for pair := h.conflictErrs.Oldest(); pair != nil; pair = pair.Next() {
-		result = append(result, pair.Value.(status.ManagementConflictError))
+	for pair := h.conflictErrs.Front(); pair != nil; pair = pair.Next() {
+		result = append(result, pair.Value)
 	}
 	return result
 }

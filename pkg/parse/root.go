@@ -21,6 +21,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/elliotchance/orderedmap/v2"
 	"github.com/google/go-cmp/cmp"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -489,19 +490,22 @@ func (p *root) addImplicitNamespaces(objs []ast.FileObject) ([]ast.FileObject, s
 	var errs status.MultiError
 	// namespaces will track the set of Namespaces we expect to exist, and those
 	// which actually do.
-	namespaces := make(map[string]bool)
+	namespaces := orderedmap.NewOrderedMap[string, bool]()
 
 	for _, o := range objs {
 		if o.GetObjectKind().GroupVersionKind().GroupKind() == kinds.Namespace().GroupKind() {
-			namespaces[o.GetName()] = true
-		} else if o.GetNamespace() != "" && !namespaces[o.GetNamespace()] {
-			// If unset, this ensures the key exists and is false.
-			// Otherwise it has no impact.
-			namespaces[o.GetNamespace()] = false
+			namespaces.Set(o.GetName(), true)
+		} else if o.GetNamespace() != "" {
+			if _, found := namespaces.Get(o.GetNamespace()); !found {
+				// If unset, this ensures the key exists and is false.
+				// Otherwise it has no impact.
+				namespaces.Set(o.GetNamespace(), false)
+			}
 		}
 	}
 
-	for ns, isDeclared := range namespaces {
+	for e := namespaces.Front(); e != nil; e = e.Next() {
+		ns, isDeclared := e.Key, e.Value
 		// Do not treat config-management-system as an implicit namespace for multi-sync support.
 		// Otherwise, the namespace will become a managed resource, and will cause conflict among multiple RootSyncs.
 		if isDeclared || ns == configsync.ControllerNamespace {

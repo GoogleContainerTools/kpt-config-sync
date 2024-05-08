@@ -104,6 +104,9 @@ github.com/docker/docker/pkg/homedir
 ## explicit; go 1.18
 github.com/docker/docker-credential-helpers/client
 github.com/docker/docker-credential-helpers/credentials
+# github.com/elliotchance/orderedmap/v2 v2.2.0
+## explicit; go 1.18
+github.com/elliotchance/orderedmap/v2
 # github.com/emicklei/go-restful/v3 v3.11.0
 ## explicit; go 1.13
 github.com/emicklei/go-restful/v3
@@ -411,9 +414,6 @@ github.com/stretchr/testify/require
 # github.com/vbatts/tar-split v0.11.2
 ## explicit; go 1.15
 github.com/vbatts/tar-split/archive/tar
-# github.com/wk8/go-ordered-map v1.0.0
-## explicit; go 1.14
-github.com/wk8/go-ordered-map
 # github.com/xlab/treeprint v1.2.0
 ## explicit; go 1.13
 github.com/xlab/treeprint

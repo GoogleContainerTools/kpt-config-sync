@@ -53,7 +53,7 @@ func TestUpdate(t *testing.T) {
 	}
 
 	for _, id := range expectedIDs {
-		if _, ok := dr.objectSet[id]; !ok {
+		if _, ok := dr.objectMap.Get(id); !ok {
 			t.Errorf("ID %v not found in the declared resource", id)
 		}
 	}

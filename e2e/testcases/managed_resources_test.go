@@ -92,8 +92,7 @@ metadata:
 
 	// Remediator should delete `test-ns1`, because it says it's managed by the
 	// root-reconciler, but it's not in the source declared resources.
-	err = nt.Watcher.WatchForNotFound(kinds.Namespace(), "test-ns1", "",
-		testwatcher.WatchTimeout(30*time.Second))
+	err = nt.Watcher.WatchForNotFound(kinds.Namespace(), "test-ns1", "")
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -248,8 +247,7 @@ data:
 	}
 
 	// Config Sync should remove `test-ns`.
-	err = nt.Watcher.WatchForNotFound(kinds.ConfigMap(), "test-cm1", "bookstore",
-		testwatcher.WatchTimeout(30*time.Second))
+	err = nt.Watcher.WatchForNotFound(kinds.ConfigMap(), "test-cm1", "bookstore")
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -448,8 +446,7 @@ func TestDeleteManagedResources(t *testing.T) {
 	}
 
 	// Verify Config Sync recreates the configmap
-	err = nt.Watcher.WatchForCurrentStatus(kinds.ConfigMap(), "cm-1", "bookstore",
-		testwatcher.WatchTimeout(30*time.Second))
+	err = nt.Watcher.WatchForCurrentStatus(kinds.ConfigMap(), "cm-1", "bookstore")
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -461,8 +458,7 @@ func TestDeleteManagedResources(t *testing.T) {
 	}
 
 	// Verify Config Sync recreates the namespace
-	err = nt.Watcher.WatchForCurrentStatus(kinds.Namespace(), "bookstore", "",
-		testwatcher.WatchTimeout(30*time.Second))
+	err = nt.Watcher.WatchForCurrentStatus(kinds.Namespace(), "bookstore", "")
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -510,8 +506,7 @@ func TestDeleteManagedResourcesWithIgnoreMutationAnnotation(t *testing.T) {
 	}
 
 	// Verify Config Sync recreates the configmap
-	err = nt.Watcher.WatchForCurrentStatus(kinds.ConfigMap(), "cm-1", "bookstore",
-		testwatcher.WatchTimeout(30*time.Second))
+	err = nt.Watcher.WatchForCurrentStatus(kinds.ConfigMap(), "cm-1", "bookstore")
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -523,8 +518,7 @@ func TestDeleteManagedResourcesWithIgnoreMutationAnnotation(t *testing.T) {
 	}
 
 	// Verify Config Sync recreates the namespace
-	err = nt.Watcher.WatchForCurrentStatus(kinds.Namespace(), "bookstore", "",
-		testwatcher.WatchTimeout(30*time.Second))
+	err = nt.Watcher.WatchForCurrentStatus(kinds.Namespace(), "bookstore", "")
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -656,8 +650,7 @@ func TestModifyManagedFields(t *testing.T) {
 	err = nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
 		[]testpredicates.Predicate{
 			testpredicates.HasAnnotation("season", "summer"),
-		},
-		testwatcher.WatchTimeout(30*time.Second))
+		})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -672,8 +665,7 @@ func TestModifyManagedFields(t *testing.T) {
 	err = nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
 		[]testpredicates.Predicate{
 			testpredicates.HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
-		},
-		testwatcher.WatchTimeout(30*time.Second))
+		})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -763,8 +755,7 @@ func TestDeleteManagedFields(t *testing.T) {
 	err = nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
 		[]testpredicates.Predicate{
 			testpredicates.HasAnnotation("season", "summer"),
-		},
-		testwatcher.WatchTimeout(30*time.Second))
+		})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -778,8 +769,7 @@ func TestDeleteManagedFields(t *testing.T) {
 	err = nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
 		[]testpredicates.Predicate{
 			testpredicates.HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
-		},
-		testwatcher.WatchTimeout(30*time.Second))
+		})
 	if err != nil {
 		nt.T.Fatal(err)
 	}

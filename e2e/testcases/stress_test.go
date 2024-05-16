@@ -53,6 +53,7 @@ import (
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/util/log"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -877,7 +878,7 @@ func truncateSourceErrors() testpredicates.Predicate {
 				return nil
 			}
 		}
-		return fmt.Errorf("the source errors should be truncated")
+		return fmt.Errorf("the source errors should be truncated:\n%s", log.AsYAML(rs))
 	}
 }
 

@@ -37,6 +37,7 @@ import (
 	"kpt.dev/configsync/pkg/importer/reader"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
+	"kpt.dev/configsync/pkg/reconciler/namespacecontroller"
 	"kpt.dev/configsync/pkg/rootsync"
 	"kpt.dev/configsync/pkg/status"
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
@@ -50,7 +51,7 @@ const (
 	symLink = "rev"
 )
 
-func newParser(t *testing.T, fs FileSource, renderingEnabled bool) Parser {
+func newParser(t *testing.T, fs *FileSource, renderingEnabled bool, retryPeriod time.Duration, pollingPeriod time.Duration) Parser {
 	parser := &root{}
 	converter, err := openapitest.ValueConverterForTest()
 	if err != nil {
@@ -68,7 +69,6 @@ func newParser(t *testing.T, fs FileSource, renderingEnabled bool) Parser {
 		Client:             syncerFake.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName)),
 		DiscoveryInterface: syncerFake.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
 		Converter:          converter,
-		Files:              Files{FileSource: fs},
 		Updater: Updater{
 			Scope:      declared.RootReconciler,
 			Resources:  &declared.Resources{},
@@ -77,7 +77,15 @@ func newParser(t *testing.T, fs FileSource, renderingEnabled bool) Parser {
 		},
 		mux:              &sync.Mutex{},
 		RenderingEnabled: renderingEnabled,
+		RetryPeriod:      retryPeriod,
+		ResyncPeriod:     2 * time.Second,
+		PollingPeriod:    pollingPeriod,
 	}
+
+	if fs != nil {
+		parser.Options.Files = Files{FileSource: *fs}
+	}
+
 	return parser
 }
 
@@ -362,7 +370,7 @@ func TestRun(t *testing.T) {
 				SourceRepo:   "https://github.com/test/test.git",
 				SourceBranch: "main",
 			}
-			parser := newParser(t, fs, tc.renderingEnabled)
+			parser := newParser(t, &fs, tc.renderingEnabled, configsync.DefaultReconcilerRetryPeriod, configsync.DefaultReconcilerPollingPeriod)
 			state := &reconcilerState{
 				backoff:     defaultBackoff(),
 				retryTimer:  time.NewTimer(configsync.DefaultReconcilerRetryPeriod),
@@ -400,5 +408,67 @@ func TestRun(t *testing.T) {
 			// Block and wait for the goroutine to complete.
 			<-doneCh
 		})
+	}
+}
+func TestBackoffRetryCount(t *testing.T) {
+	parser := newParser(t, nil, false, 10*time.Microsecond, 150*time.Microsecond)
+	testState := &namespacecontroller.State{}
+	reimportCount := 0
+	retryCount := 0
+	testIsDone := func(reimportCount *int, retryCount *int) bool {
+		return *reimportCount == 35
+	}
+
+	t.Logf("start running test at %v", time.Now())
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	Run(ctx, parser, testState, &RunOpts{
+		runFn:           mockRun(&reimportCount, &retryCount, cancel, testIsDone),
+		backoffDuration: 10 * time.Microsecond,
+	})
+
+	assert.Equal(t, 12, retryCount)
+}
+
+func TestBackoffReimportCount(t *testing.T) {
+	const reimportCountMin = 25
+	const reimportCountMax = 32
+
+	parser := newParser(t, nil, false, 10*time.Microsecond, 150*time.Microsecond)
+	testState := &namespacecontroller.State{}
+	reimportCount := 0
+	retryCount := 0
+
+	testIsDone := func(reimportCount *int, retryCount *int) bool {
+		return *retryCount == 12
+	}
+
+	t.Logf("start running test at %v", time.Now())
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	Run(ctx, parser, testState, &RunOpts{
+		runFn:           mockRun(&reimportCount, &retryCount, cancel, testIsDone),
+		backoffDuration: 10 * time.Microsecond,
+	})
+
+	assert.True(t, reimportCount >= reimportCountMin && reimportCount <= reimportCountMax, "reimportCount should be %d >= and <= %d, was %d", reimportCountMin, reimportCountMax, reimportCount)
+}
+
+func mockRun(reimportCount *int, retryCount *int, cancelFn func(), testIsDone func(reimportCount *int, retryCount *int) bool) RunFn {
+	return func(ctx context.Context, p Parser, trigger string, state *reconcilerState) {
+		state.cache.needToRetry = true
+
+		switch trigger {
+		case triggerReimport:
+			*reimportCount++
+		case triggerRetry:
+			*retryCount++
+		}
+
+		if testIsDone(reimportCount, retryCount) {
+			cancelFn()
+		}
 	}
 }

@@ -22,6 +22,7 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
@@ -66,8 +67,14 @@ const (
 	RenderingNotRequired string = "Rendering not required but is currently enabled"
 )
 
+type RunOpts struct {
+	runFn           RunFn
+	backoffDuration time.Duration
+}
+type RunFn func(ctx context.Context, p Parser, trigger string, state *reconcilerState)
+
 // Run keeps checking whether a parse-apply-watch loop is necessary and starts a loop if needed.
-func Run(ctx context.Context, p Parser, nsControllerState *namespacecontroller.State) {
+func Run(ctx context.Context, p Parser, nsControllerState *namespacecontroller.State, runOpts *RunOpts) {
 	opts := p.options()
 	// Use timers, not tickers.
 	// Tickers can cause memory leaks and continuous execution, when execution
@@ -88,11 +95,30 @@ func Run(ctx context.Context, p Parser, nsControllerState *namespacecontroller.S
 	nsEventTimer := time.NewTimer(nsEventPeriod)
 	defer nsEventTimer.Stop()
 
-	state := &reconcilerState{
-		backoff:     defaultBackoff(),
-		retryTimer:  retryTimer,
-		retryPeriod: opts.RetryPeriod,
+	var state *reconcilerState
+	var runFn RunFn
+
+	if runOpts != nil {
+		runFn = runOpts.runFn
+		state = &reconcilerState{
+			backoff: wait.Backoff{
+				Duration: runOpts.backoffDuration,
+				Factor:   2,
+				Steps:    retryLimit,
+				Jitter:   0.1,
+			},
+			retryTimer:  retryTimer,
+			retryPeriod: opts.RetryPeriod,
+		}
+	} else {
+		runFn = run
+		state = &reconcilerState{
+			backoff:     defaultBackoff(),
+			retryTimer:  retryTimer,
+			retryPeriod: opts.RetryPeriod,
+		}
 	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -108,7 +134,7 @@ func Run(ctx context.Context, p Parser, nsControllerState *namespacecontroller.S
 			// The cached sourceState will not be reset to avoid reading all the source files unnecessarily.
 			// The cached needToRetry will not be reset to avoid resetting the backoff retries.
 			state.resetPartialCache()
-			run(ctx, p, triggerResync, state)
+			runFn(ctx, p, triggerResync, state)
 
 			resyncTimer.Reset(opts.ResyncPeriod) // Schedule resync attempt
 			// we should not reset retryTimer under this `case` since it is not aware of the
@@ -119,7 +145,7 @@ func Run(ctx context.Context, p Parser, nsControllerState *namespacecontroller.S
 		// If the reconciler is in the process of reconciling a given commit, the re-import won't
 		// happen until the ongoing reconciliation is done.
 		case <-runTimer.C:
-			run(ctx, p, triggerReimport, state)
+			runFn(ctx, p, triggerReimport, state)
 
 			runTimer.Reset(opts.PollingPeriod) // Schedule re-import attempt
 			// we should not reset retryTimer under this `case` since it is not aware of the
@@ -162,7 +188,7 @@ func Run(ctx context.Context, p Parser, nsControllerState *namespacecontroller.S
 			// retryTimer will be reset to `Options.RetryPeriod`, and state.backoff is reset to `defaultBackoff()`.
 			// In this case, `run` will try to sync the configs from the new commit instead of the old commit
 			// being retried.
-			run(ctx, p, trigger, state)
+			runFn(ctx, p, trigger, state)
 			// Reset retryTimer after `run` to make sure `retryDuration` happens between the end of one execution
 			// of `run` and the start of the next execution.
 			retryTimer.Reset(retryDuration)
@@ -200,7 +226,7 @@ func Run(ctx context.Context, p Parser, nsControllerState *namespacecontroller.S
 				// The cached sourceState will not be reset to avoid reading all the source files unnecessarily.
 				// The cached needToRetry will not be reset to avoid resetting the backoff retries.
 				state.resetPartialCache()
-				run(ctx, p, namespaceEvent, state)
+				runFn(ctx, p, namespaceEvent, state)
 			}
 			// we should not reset retryTimer under this `case` since it is not aware of the
 			// state of backoff retry.

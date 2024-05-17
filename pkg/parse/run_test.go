@@ -435,7 +435,7 @@ func TestBackoffRetryCount(t *testing.T) {
 	testState := &namespacecontroller.State{}
 	reimportCount := 0
 	retryCount := 0
-	testIsDone := func(reimportCount *int, retryCount *int) bool {
+	testIsDone := func(reimportCount *int, _ *int) bool {
 		return *reimportCount == 35
 	}
 
@@ -460,7 +460,7 @@ func TestBackoffReimportCount(t *testing.T) {
 	reimportCount := 0
 	retryCount := 0
 
-	testIsDone := func(reimportCount *int, retryCount *int) bool {
+	testIsDone := func(_ *int, retryCount *int) bool {
 		return *retryCount == 12
 	}
 
@@ -477,7 +477,7 @@ func TestBackoffReimportCount(t *testing.T) {
 }
 
 func mockRun(reimportCount *int, retryCount *int, cancelFn func(), testIsDone func(reimportCount *int, retryCount *int) bool) RunFn {
-	return func(ctx context.Context, p Parser, trigger string, state *reconcilerState) {
+	return func(_ context.Context, _ Parser, trigger string, state *reconcilerState) {
 		state.cache.needToRetry = true
 
 		switch trigger {

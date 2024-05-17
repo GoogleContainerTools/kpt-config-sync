@@ -67,10 +67,13 @@ const (
 	RenderingNotRequired string = "Rendering not required but is currently enabled"
 )
 
+// RunOpts are the options used when calling Run
 type RunOpts struct {
 	runFn           RunFn
 	backoffDuration time.Duration
 }
+
+// RunFn is the function signature of the function that starts the parse-apply-watch loop
 type RunFn func(ctx context.Context, p Parser, trigger string, state *reconcilerState)
 
 // Run keeps checking whether a parse-apply-watch loop is necessary and starts a loop if needed.

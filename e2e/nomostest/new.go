@@ -25,7 +25,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	testmetrics "kpt.dev/configsync/e2e/nomostest/metrics"
@@ -71,7 +71,7 @@ func newOptStruct(testName, tmpDir string, ntOptions ...ntopts.Opt) *ntopts.New 
 			RootRepos:      map[string]ntopts.RepoOpts{configsync.RootSyncName: {}},
 			// Default to 1m to keep tests fast.
 			// To override, use WithReconcileTimeout.
-			ReconcileTimeout: pointer.Duration(1 * time.Minute),
+			ReconcileTimeout: ptr.To(1 * time.Minute),
 		},
 	}
 	for _, opt := range ntOptions {
@@ -186,6 +186,8 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		OCIClient:               sharedNt.OCIClient,
 	}
 
+	nt.detectClusterVersion()
+
 	if opts.SkipConfigSyncInstall {
 		return nt
 	}
@@ -276,6 +278,8 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		HelmClient:              helmClient,
 		OCIClient:               ociClient,
 	}
+
+	nt.detectClusterVersion()
 
 	// TODO: Try speeding up the reconciler and hydration polling.
 	// It seems that speeding them up too much can cause failures in
@@ -467,7 +471,12 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 	// understand the Repo and RootSync types as ConfigSync is now installed.
 	nt.RenewClient()
 
-	// Create the RootSync if it doesn't exist, and wait for it to be Synced.
+	// Initialize the base RootSync using SSA for field management
+	rs := RootSyncObjectV1Beta1FromRootRepo(nt, configsync.RootSyncName)
+	if err := nt.KubeClient.Apply(rs); err != nil {
+		nt.T.Fatal(err)
+	}
+	// Wait for Config Sync to be ready and the base RootSync to be synced.
 	if err := WaitForConfigSyncReady(nt); err != nil {
 		nt.T.Fatalf("waiting for ConfigSync Deployments to become available: %v", err)
 	}

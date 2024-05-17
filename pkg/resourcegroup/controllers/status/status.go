@@ -113,10 +113,10 @@ func IsCNRMResource(group string) bool {
 func ReadKCCResourceConditions(obj *unstructured.Unstructured) ([]v1alpha1.Condition, error) {
 	conditions, found, err := unstructured.NestedSlice(obj.Object, "status", "conditions")
 	if err != nil {
-		return nil, fmt.Errorf("failed to find .stauts.conditions for %s/%s: %v", obj.GetNamespace(), obj.GetName(), err)
+		return nil, fmt.Errorf("failed to find .status.conditions for %s/%s: %v", obj.GetNamespace(), obj.GetName(), err)
 	}
 	if !found {
-		return nil, fmt.Errorf("failed to find .stauts.conditions for %s/%s", obj.GetNamespace(), obj.GetName())
+		return nil, fmt.Errorf("failed to find .status.conditions for %s/%s", obj.GetNamespace(), obj.GetName())
 	}
 	data, err := yaml.Marshal(conditions)
 	if err != nil {

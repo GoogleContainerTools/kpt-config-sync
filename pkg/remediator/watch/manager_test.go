@@ -28,6 +28,7 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/syncer/syncertest/fake"
+	"kpt.dev/configsync/pkg/testing/testerrors"
 )
 
 func fakeRunnable() Runnable {
@@ -69,7 +70,7 @@ func TestManager_Update(t *testing.T) {
 		// the end of the test.
 		wantWatchedTypes []schema.GroupVersionKind
 		// wantErr, if non-nil, reports that we want Update to return an error.
-		wantErr error
+		wantErr status.MultiError
 	}{
 		// Base Case.
 		{
@@ -148,12 +149,9 @@ func TestManager_Update(t *testing.T) {
 			}
 			m.watcherMap = tc.watcherMap
 
-			gotErr := m.UpdateWatches(context.Background(), tc.gvks)
+			err = m.UpdateWatches(context.Background(), tc.gvks)
+			testerrors.AssertEqual(t, tc.wantErr, err)
 
-			wantErr := status.Append(nil, tc.wantErr)
-			if !errors.Is(wantErr, gotErr) {
-				t.Errorf("got UpdateWatches() error = %v, want %v", gotErr, tc.wantErr)
-			}
 			if diff := cmp.Diff(tc.wantWatchedTypes, m.watchedGVKs(), cmpopts.SortSlices(sortGVKs)); diff != "" {
 				t.Error(diff)
 			}

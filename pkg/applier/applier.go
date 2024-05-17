@@ -458,7 +458,7 @@ func (h *eventHandler) handleDeleteSkippedEvent(ctx context.Context, eventType e
 			klog.Error(err)
 			return applierErrorBuilder.Wrap(err).Build()
 		}
-		klog.V(4).Infof("removed the Config Sync metadata from %v (%s: %s)", id)
+		klog.V(4).Infof("removed the Config Sync metadata from %v (%s: %s)", id, abandonErr.Annotation, abandonErr.Value)
 		return nil
 	}
 
@@ -628,16 +628,22 @@ func (a *supervisor) Errors() status.MultiError {
 	a.errorMux.RLock()
 	defer a.errorMux.RUnlock()
 
-	// Return a copy to avoid persisting caller modifications
-	return status.Append(nil, a.errs)
+	if a.errs != nil {
+		// Return a copy to avoid persisting caller modifications
+		return status.Wrap(a.errs.Errors()...)
+	}
+	return nil
 }
 
 func (a *supervisor) addError(err error) {
+	if err == nil {
+		return
+	}
 	a.errorMux.Lock()
 	defer a.errorMux.Unlock()
 
 	if _, ok := err.(status.Error); !ok {
-		// Wrap as an applier.Error to indidate the source of the error
+		// Wrap as an applier.Error to indicate the source of the error
 		err = Error(err)
 	}
 

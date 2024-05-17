@@ -15,16 +15,15 @@
 package parse
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
-	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/testing/testerrors"
 )
 
 func TestNamespaceScopeVisitor(t *testing.T) {
@@ -50,7 +49,7 @@ func TestNamespaceScopeVisitor(t *testing.T) {
 			name:    "wrong Namespace error",
 			scope:   "foo",
 			obj:     fake.Role(core.Namespace("bar")),
-			wantErr: nonhierarchical.BadScopeErrBuilder.Sprint("").BuildWithResources(fake.Role()),
+			wantErr: BadScopeErr(fake.Role(core.Namespace("bar")), "foo"),
 		},
 	}
 
@@ -64,9 +63,7 @@ func TestNamespaceScopeVisitor(t *testing.T) {
 			visitor := repositoryScopeVisitor(tc.scope)
 
 			_, err := visitor([]ast.FileObject{tc.obj})
-			if !errors.Is(err, tc.wantErr) {
-				t.Errorf("got error %v, want %v", err, tc.wantErr)
-			}
+			testerrors.AssertEqual(t, tc.wantErr, err)
 
 			if diff := cmp.Diff(tc.want, tc.obj, ast.CompareFileObject); diff != "" {
 				// Either the visitor didn't mutate the object, or it unexpectedly did so.

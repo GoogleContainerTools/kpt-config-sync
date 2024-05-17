@@ -31,50 +31,53 @@ type resourceErrorImpl struct {
 	resources  []client.Object
 }
 
-var _ ResourceError = resourceErrorImpl{}
+var _ ResourceError = &resourceErrorImpl{}
 
 // Error implements error.
-func (r resourceErrorImpl) Error() string {
+func (r *resourceErrorImpl) Error() string {
 	return format(r)
 }
 
 // Is implements Error.
-func (r resourceErrorImpl) Is(target error) bool {
+func (r *resourceErrorImpl) Is(target error) bool {
+	if target == nil {
+		return false
+	}
 	return r.underlying.Is(target)
 }
 
 // Code implements Error.
-func (r resourceErrorImpl) Code() string {
+func (r *resourceErrorImpl) Code() string {
 	return r.underlying.Code()
 }
 
 // Body implements Error.
-func (r resourceErrorImpl) Body() string {
+func (r *resourceErrorImpl) Body() string {
 	return formatBody(r.underlying.Body(), "\n\n", formatResources(r.resources...))
 }
 
 // Errors implements MultiError.
-func (r resourceErrorImpl) Errors() []Error {
+func (r *resourceErrorImpl) Errors() []Error {
 	return []Error{r}
 }
 
 // Resources implements ResourceError.
-func (r resourceErrorImpl) Resources() []client.Object {
+func (r *resourceErrorImpl) Resources() []client.Object {
 	return r.resources
 }
 
 // ToCME implements Error.
-func (r resourceErrorImpl) ToCME() v1.ConfigManagementError {
+func (r *resourceErrorImpl) ToCME() v1.ConfigManagementError {
 	return fromResourceError(r)
 }
 
 // ToCSE implements Error.
-func (r resourceErrorImpl) ToCSE() v1beta1.ConfigSyncError {
+func (r *resourceErrorImpl) ToCSE() v1beta1.ConfigSyncError {
 	return cseFromResourceError(r)
 }
 
 // Cause implements causer.
-func (r resourceErrorImpl) Cause() error {
+func (r *resourceErrorImpl) Cause() error {
 	return r.underlying.Cause()
 }
 

@@ -125,7 +125,7 @@ func TestBuildTree(t *testing.T) {
 				},
 			},
 			want:     nil,
-			wantErrs: status.Append(nil, validation.ShouldBeInClusterError(fake.ClusterRole())),
+			wantErrs: validation.ShouldBeInClusterError(fake.ClusterRole()),
 		},
 		{
 			name: "namespace-scoped resource in wrong directory",
@@ -139,7 +139,7 @@ func TestBuildTree(t *testing.T) {
 				},
 			},
 			want:     nil,
-			wantErrs: status.Append(nil, validation.ShouldBeInNamespacesError(fake.Role())),
+			wantErrs: validation.ShouldBeInNamespacesError(fake.Role()),
 		},
 		{
 			name: "system resource in wrong directory",
@@ -151,7 +151,7 @@ func TestBuildTree(t *testing.T) {
 				},
 			},
 			want:     nil,
-			wantErrs: status.Append(nil, validation.ShouldBeInSystemError(fake.HierarchyConfig())),
+			wantErrs: validation.ShouldBeInSystemError(fake.HierarchyConfig()),
 		},
 	}
 

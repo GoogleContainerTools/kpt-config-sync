@@ -36,6 +36,9 @@ type ConfigParser interface {
 
 // AsCoreObjects converts a slice of FileObjects to a slice of client.Objects.
 func AsCoreObjects(fos []ast.FileObject) []client.Object {
+	if len(fos) == 0 {
+		return nil
+	}
 	result := make([]client.Object, len(fos))
 	for i, fo := range fos {
 		result[i] = fo.Unstructured

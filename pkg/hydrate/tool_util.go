@@ -50,7 +50,7 @@ import (
 
 const (
 	// HelmVersion is the recommended version of Helm for hydration.
-	HelmVersion = "v3.14.3-gke.2"
+	HelmVersion = "v3.14.4-gke.1"
 	// KustomizeVersion is the recommended version of Kustomize for hydration.
 	KustomizeVersion = "v5.3.0-gke.1"
 	// Helm is the binary name of the installed Helm.
@@ -326,7 +326,11 @@ func ValidateOptions(ctx context.Context, rootDir cmpath.Absolute, apiServerTime
 }
 
 func newClientClient(cfg *rest.Config) (client.Client, error) {
-	mapper, err := apiutil.NewDynamicRESTMapper(cfg)
+	httpClient, err := rest.HTTPClientFor(cfg)
+	if err != nil {
+		return nil, apiServerCheckError(err, "failed to create HTTPClient")
+	}
+	mapper, err := apiutil.NewDynamicRESTMapper(cfg, httpClient)
 	if err != nil {
 		return nil, apiServerCheckError(err, "failed to create mapper")
 	}

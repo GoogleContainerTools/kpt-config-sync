@@ -24,44 +24,47 @@ type messageErrorImpl struct {
 	message    string
 }
 
-var _ Error = messageErrorImpl{}
+var _ Error = &messageErrorImpl{}
 
 // Error implements error.
-func (m messageErrorImpl) Error() string {
+func (m *messageErrorImpl) Error() string {
 	return format(m)
 }
 
 // Is implements Error.
-func (m messageErrorImpl) Is(target error) bool {
+func (m *messageErrorImpl) Is(target error) bool {
+	if target == nil {
+		return false
+	}
 	return m.underlying.Is(target)
 }
 
 // Code implements Error.
-func (m messageErrorImpl) Code() string {
+func (m *messageErrorImpl) Code() string {
 	return m.underlying.Code()
 }
 
 // Body implements Error.
-func (m messageErrorImpl) Body() string {
+func (m *messageErrorImpl) Body() string {
 	return formatBody(m.message, ": ", m.underlying.Body())
 }
 
 // Errors implements MultiError.
-func (m messageErrorImpl) Errors() []Error {
+func (m *messageErrorImpl) Errors() []Error {
 	return []Error{m}
 }
 
 // ToCME implements Error.
-func (m messageErrorImpl) ToCME() v1.ConfigManagementError {
+func (m *messageErrorImpl) ToCME() v1.ConfigManagementError {
 	return fromError(m)
 }
 
 // ToCSE implements Error.
-func (m messageErrorImpl) ToCSE() v1beta1.ConfigSyncError {
+func (m *messageErrorImpl) ToCSE() v1beta1.ConfigSyncError {
 	return cseFromError(m)
 }
 
 // Cause implements causer.
-func (m messageErrorImpl) Cause() error {
+func (m *messageErrorImpl) Cause() error {
 	return m.underlying.Cause()
 }

@@ -36,6 +36,7 @@ import (
 	"kpt.dev/configsync/pkg/syncer/syncertest"
 	testingfake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/testing/testerrors"
 	"kpt.dev/configsync/pkg/testing/testmetrics"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -132,12 +133,14 @@ func TestRemediator_Reconcile(t *testing.T) {
 		},
 		// Bad declared management annotation paths.
 		{
-			name:      "don't create, and error on bad declared management annotation",
-			version:   "v1",
-			declared:  fake.ClusterRoleBindingObject(core.Label("declared-label", "foo"), syncertest.ManagementInvalid),
-			actual:    nil,
-			want:      nil,
-			wantError: nonhierarchical.IllegalManagementAnnotationError(fake.Namespace("namespaces/foo"), ""),
+			name:     "don't create, and error on bad declared management annotation",
+			version:  "v1",
+			declared: fake.ClusterRoleBindingObject(core.Label("declared-label", "foo"), syncertest.ManagementInvalid),
+			actual:   nil,
+			want:     nil,
+			wantError: nonhierarchical.IllegalManagementAnnotationError(
+				fake.ClusterRoleBindingObject(core.Label("declared-label", "foo"), syncertest.ManagementInvalid),
+				"invalid"),
 		},
 		{
 			name:     "don't update, and error on bad declared management annotation",
@@ -147,7 +150,9 @@ func TestRemediator_Reconcile(t *testing.T) {
 			want: fake.ClusterRoleBindingObject(core.Label("actual-label", "bar"),
 				core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 			),
-			wantError: nonhierarchical.IllegalManagementAnnotationError(fake.Namespace("namespaces/foo"), ""),
+			wantError: nonhierarchical.IllegalManagementAnnotationError(
+				fake.ClusterRoleBindingObject(core.Label("declared-label", "foo"), syncertest.ManagementInvalid),
+				"invalid"),
 		},
 		// bad in-cluster management annotation paths.
 		{
@@ -252,10 +257,7 @@ func TestRemediator_Reconcile(t *testing.T) {
 			}
 
 			err := r.Remediate(context.Background(), core.IDOf(obj), tc.actual)
-			if !errors.Is(err, tc.wantError) {
-				t.Errorf("got Reconcile() = %v, want matching %v",
-					err, tc.wantError)
-			}
+			testerrors.AssertEqual(t, tc.wantError, err)
 
 			if tc.want == nil {
 				c.Check(t)

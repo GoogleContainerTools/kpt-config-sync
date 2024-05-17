@@ -34,7 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	hubv1 "kpt.dev/configsync/pkg/api/hub/v1"
@@ -204,7 +204,7 @@ func (r *reconcilerBase) applyDeployment(ctx context.Context, declared *appsv1.D
 		ObjectKey: client.ObjectKeyFromObject(declared),
 		GroupKind: kinds.Deployment().GroupKind(),
 	}
-	patchOpts := metav1.PatchOptions{FieldManager: reconcilermanager.ManagerName, Force: pointer.Bool(true)}
+	patchOpts := metav1.PatchOptions{FieldManager: reconcilermanager.ManagerName, Force: ptr.To(true)}
 	deploymentClient := r.dynamicClient.Resource(kinds.DeploymentResource()).Namespace(id.Namespace)
 	currentDeploymentUnstructured, err := deploymentClient.Get(ctx, id.Name, metav1.GetOptions{})
 	if err != nil {
@@ -458,7 +458,7 @@ func mountConfigMapValuesFiles(templateSpec *corev1.PodSpec, c *corev1.Container
 					// The ConfigMap may be deleted before the RSync. To prevent the reconciler
 					// pod from going into an error state when that happens, we must mark
 					// this ConfigMap mount as optional and have our validation checks elsewhere.
-					Optional: pointer.Bool(true),
+					Optional: ptr.To(true),
 				},
 			},
 		})

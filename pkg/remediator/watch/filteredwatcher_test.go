@@ -27,7 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/diff/difftest"
@@ -240,7 +240,7 @@ func TestFilteredWatcher(t *testing.T) {
 		{
 			name:     "Error on context timeout",
 			declared: []client.Object{},
-			timeout:  pointer.Duration(1 * time.Second),
+			timeout:  ptr.To(1 * time.Second),
 
 			watches: [][]action{{
 				// No Stop

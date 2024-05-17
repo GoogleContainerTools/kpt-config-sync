@@ -5,13 +5,12 @@ package fake
 import (
 	"context"
 
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
-	configmanagementv1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 )
 
 // FakeHierarchyConfigs implements HierarchyConfigInterface
@@ -19,24 +18,24 @@ type FakeHierarchyConfigs struct {
 	Fake *FakeConfigmanagementV1
 }
 
-var hierarchyconfigsResource = schema.GroupVersionResource{Group: "configmanagement.gke.io", Version: "v1", Resource: "hierarchyconfigs"}
+var hierarchyconfigsResource = v1.SchemeGroupVersion.WithResource("hierarchyconfigs")
 
-var hierarchyconfigsKind = schema.GroupVersionKind{Group: "configmanagement.gke.io", Version: "v1", Kind: "HierarchyConfig"}
+var hierarchyconfigsKind = v1.SchemeGroupVersion.WithKind("HierarchyConfig")
 
 // Get takes name of the hierarchyConfig, and returns the corresponding hierarchyConfig object, and an error if there is any.
-func (c *FakeHierarchyConfigs) Get(ctx context.Context, name string, options v1.GetOptions) (result *configmanagementv1.HierarchyConfig, err error) {
+func (c *FakeHierarchyConfigs) Get(ctx context.Context, name string, options metav1.GetOptions) (result *v1.HierarchyConfig, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(hierarchyconfigsResource, name), &configmanagementv1.HierarchyConfig{})
+		Invokes(testing.NewRootGetAction(hierarchyconfigsResource, name), &v1.HierarchyConfig{})
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*configmanagementv1.HierarchyConfig), err
+	return obj.(*v1.HierarchyConfig), err
 }
 
 // List takes label and field selectors, and returns the list of HierarchyConfigs that match those selectors.
-func (c *FakeHierarchyConfigs) List(ctx context.Context, opts v1.ListOptions) (result *configmanagementv1.HierarchyConfigList, err error) {
+func (c *FakeHierarchyConfigs) List(ctx context.Context, opts metav1.ListOptions) (result *v1.HierarchyConfigList, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(hierarchyconfigsResource, hierarchyconfigsKind, opts), &configmanagementv1.HierarchyConfigList{})
+		Invokes(testing.NewRootListAction(hierarchyconfigsResource, hierarchyconfigsKind, opts), &v1.HierarchyConfigList{})
 	if obj == nil {
 		return nil, err
 	}
@@ -45,8 +44,8 @@ func (c *FakeHierarchyConfigs) List(ctx context.Context, opts v1.ListOptions) (r
 	if label == nil {
 		label = labels.Everything()
 	}
-	list := &configmanagementv1.HierarchyConfigList{ListMeta: obj.(*configmanagementv1.HierarchyConfigList).ListMeta}
-	for _, item := range obj.(*configmanagementv1.HierarchyConfigList).Items {
+	list := &v1.HierarchyConfigList{ListMeta: obj.(*v1.HierarchyConfigList).ListMeta}
+	for _, item := range obj.(*v1.HierarchyConfigList).Items {
 		if label.Matches(labels.Set(item.Labels)) {
 			list.Items = append(list.Items, item)
 		}
@@ -55,52 +54,52 @@ func (c *FakeHierarchyConfigs) List(ctx context.Context, opts v1.ListOptions) (r
 }
 
 // Watch returns a watch.Interface that watches the requested hierarchyConfigs.
-func (c *FakeHierarchyConfigs) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
+func (c *FakeHierarchyConfigs) Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error) {
 	return c.Fake.
 		InvokesWatch(testing.NewRootWatchAction(hierarchyconfigsResource, opts))
 }
 
 // Create takes the representation of a hierarchyConfig and creates it.  Returns the server's representation of the hierarchyConfig, and an error, if there is any.
-func (c *FakeHierarchyConfigs) Create(ctx context.Context, hierarchyConfig *configmanagementv1.HierarchyConfig, opts v1.CreateOptions) (result *configmanagementv1.HierarchyConfig, err error) {
+func (c *FakeHierarchyConfigs) Create(ctx context.Context, hierarchyConfig *v1.HierarchyConfig, opts metav1.CreateOptions) (result *v1.HierarchyConfig, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(hierarchyconfigsResource, hierarchyConfig), &configmanagementv1.HierarchyConfig{})
+		Invokes(testing.NewRootCreateAction(hierarchyconfigsResource, hierarchyConfig), &v1.HierarchyConfig{})
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*configmanagementv1.HierarchyConfig), err
+	return obj.(*v1.HierarchyConfig), err
 }
 
 // Update takes the representation of a hierarchyConfig and updates it. Returns the server's representation of the hierarchyConfig, and an error, if there is any.
-func (c *FakeHierarchyConfigs) Update(ctx context.Context, hierarchyConfig *configmanagementv1.HierarchyConfig, opts v1.UpdateOptions) (result *configmanagementv1.HierarchyConfig, err error) {
+func (c *FakeHierarchyConfigs) Update(ctx context.Context, hierarchyConfig *v1.HierarchyConfig, opts metav1.UpdateOptions) (result *v1.HierarchyConfig, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(hierarchyconfigsResource, hierarchyConfig), &configmanagementv1.HierarchyConfig{})
+		Invokes(testing.NewRootUpdateAction(hierarchyconfigsResource, hierarchyConfig), &v1.HierarchyConfig{})
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*configmanagementv1.HierarchyConfig), err
+	return obj.(*v1.HierarchyConfig), err
 }
 
 // Delete takes name of the hierarchyConfig and deletes it. Returns an error if one occurs.
-func (c *FakeHierarchyConfigs) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
+func (c *FakeHierarchyConfigs) Delete(ctx context.Context, name string, opts metav1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteActionWithOptions(hierarchyconfigsResource, name, opts), &configmanagementv1.HierarchyConfig{})
+		Invokes(testing.NewRootDeleteActionWithOptions(hierarchyconfigsResource, name, opts), &v1.HierarchyConfig{})
 	return err
 }
 
 // DeleteCollection deletes a collection of objects.
-func (c *FakeHierarchyConfigs) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
+func (c *FakeHierarchyConfigs) DeleteCollection(ctx context.Context, opts metav1.DeleteOptions, listOpts metav1.ListOptions) error {
 	action := testing.NewRootDeleteCollectionAction(hierarchyconfigsResource, listOpts)
 
-	_, err := c.Fake.Invokes(action, &configmanagementv1.HierarchyConfigList{})
+	_, err := c.Fake.Invokes(action, &v1.HierarchyConfigList{})
 	return err
 }
 
 // Patch applies the patch and returns the patched hierarchyConfig.
-func (c *FakeHierarchyConfigs) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *configmanagementv1.HierarchyConfig, err error) {
+func (c *FakeHierarchyConfigs) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts metav1.PatchOptions, subresources ...string) (result *v1.HierarchyConfig, err error) {
 	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(hierarchyconfigsResource, name, pt, data, subresources...), &configmanagementv1.HierarchyConfig{})
+		Invokes(testing.NewRootPatchSubresourceAction(hierarchyconfigsResource, name, pt, data, subresources...), &v1.HierarchyConfig{})
 	if obj == nil {
 		return nil, err
 	}
-	return obj.(*configmanagementv1.HierarchyConfig), err
+	return obj.(*v1.HierarchyConfig), err
 }

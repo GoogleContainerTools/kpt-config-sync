@@ -24,15 +24,18 @@ type baseErrorImpl struct {
 	code string
 }
 
-var _ Error = baseErrorImpl{}
+var _ Error = &baseErrorImpl{}
 
 // Error implements error.
-func (e baseErrorImpl) Error() string {
+func (e *baseErrorImpl) Error() string {
 	return format(e)
 }
 
 // Is implements Error.
-func (e baseErrorImpl) Is(target error) bool {
+func (e *baseErrorImpl) Is(target error) bool {
+	if target == nil {
+		return false
+	}
 	// Two errors satisfy errors.Is() if they are both status.Error and have the
 	// same KNV code.
 	if se, ok := target.(Error); ok {
@@ -42,31 +45,31 @@ func (e baseErrorImpl) Is(target error) bool {
 }
 
 // Code implements Error.
-func (e baseErrorImpl) Code() string {
+func (e *baseErrorImpl) Code() string {
 	return e.code
 }
 
 // Body implements Error.
-func (e baseErrorImpl) Body() string {
+func (e *baseErrorImpl) Body() string {
 	return ""
 }
 
 // Errors implements MultiError.
-func (e baseErrorImpl) Errors() []Error {
+func (e *baseErrorImpl) Errors() []Error {
 	return []Error{e}
 }
 
 // ToCME implements Error.
-func (e baseErrorImpl) ToCME() v1.ConfigManagementError {
+func (e *baseErrorImpl) ToCME() v1.ConfigManagementError {
 	return fromError(e)
 }
 
 // ToCSE implements Error.
-func (e baseErrorImpl) ToCSE() v1beta1.ConfigSyncError {
+func (e *baseErrorImpl) ToCSE() v1beta1.ConfigSyncError {
 	return cseFromError(e)
 }
 
 // Cause implements causer.
-func (e baseErrorImpl) Cause() error {
+func (e *baseErrorImpl) Cause() error {
 	return nil
 }

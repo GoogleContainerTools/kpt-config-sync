@@ -31,7 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
@@ -53,6 +53,7 @@ import (
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/util/log"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -813,8 +814,8 @@ func fakeCRD(kind, group string) *apiextensionsv1.CustomResourceDefinition {
 							Properties: map[string]apiextensionsv1.JSONSchemaProps{
 								"lbs": {
 									Type:    "integer",
-									Minimum: pointer.Float64(1.0),
-									Maximum: pointer.Float64(9000.0),
+									Minimum: ptr.To(1.0),
+									Maximum: ptr.To(9000.0),
 								},
 							},
 						},
@@ -836,8 +837,8 @@ func fakeCRD(kind, group string) *apiextensionsv1.CustomResourceDefinition {
 							Properties: map[string]apiextensionsv1.JSONSchemaProps{
 								"lbs": {
 									Type:    "integer",
-									Minimum: pointer.Float64(1.0),
-									Maximum: pointer.Float64(9000.0),
+									Minimum: ptr.To(1.0),
+									Maximum: ptr.To(9000.0),
 								},
 							},
 						},
@@ -877,7 +878,7 @@ func truncateSourceErrors() testpredicates.Predicate {
 				return nil
 			}
 		}
-		return fmt.Errorf("the source errors should be truncated")
+		return fmt.Errorf("the source errors should be truncated:\n%s", log.AsYAML(rs))
 	}
 }
 

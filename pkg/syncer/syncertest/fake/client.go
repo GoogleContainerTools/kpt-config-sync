@@ -21,6 +21,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/watch"
 	"kpt.dev/configsync/pkg/kinds"
@@ -78,6 +79,16 @@ func NewClient(t *testing.T, scheme *runtime.Scheme, objs ...client.Object) *Cli
 	}
 
 	return &result
+}
+
+// GroupVersionKindFor returns the GroupVersionKind for the given object.
+func (c *Client) GroupVersionKindFor(_ runtime.Object) (schema.GroupVersionKind, error) {
+	return schema.GroupVersionKind{}, fmt.Errorf("GroupVersionKindFor not implemented")
+}
+
+// IsObjectNamespaced returns true if the GroupVersionKind of the object is namespaced.
+func (c *Client) IsObjectNamespaced(_ runtime.Object) (bool, error) {
+	return false, fmt.Errorf("IsObjectNamespaced not implemented")
 }
 
 // Get implements client.Client.

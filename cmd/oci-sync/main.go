@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/klog/v2/klogr"
+	"k8s.io/klog/v2/textlogger"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/oci"
 	"kpt.dev/configsync/pkg/reconcilermanager"
@@ -52,7 +52,7 @@ var flMaxSyncFailures = flag.Int("max-sync-failures", util.EnvInt("OCI_SYNC_MAX_
 
 func main() {
 	utillog.Setup()
-	log := utillog.NewLogger(klogr.New(), *flRoot, *flErrorFile)
+	log := utillog.NewLogger(textlogger.NewLogger(textlogger.NewConfig()), *flRoot, *flErrorFile)
 
 	log.Info("pulling OCI image with arguments", "--image", *flImage,
 		"--auth", *flAuth, "--root", *flRoot, "--dest", *flDest, "--wait", *flWait,

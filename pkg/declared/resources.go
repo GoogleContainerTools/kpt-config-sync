@@ -18,6 +18,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/elliotchance/orderedmap/v2"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog/v2"
@@ -33,12 +34,12 @@ import (
 // repo.
 type Resources struct {
 	mutex sync.RWMutex
-	// objectSet is a map of object IDs to the unstructured format of those
+	// objectMap is a map of object IDs to the unstructured format of those
 	// objects. Note that the pointer to this map is threadsafe but the map itself
 	// is not threadsafe. This map should never be returned from a function
 	// directly. The map should never be written to once it has been assigned to
 	// this reference; it should be treated as read-only from then on.
-	objectSet map[core.ID]*unstructured.Unstructured
+	objectMap *orderedmap.OrderedMap[core.ID, *unstructured.Unstructured]
 	// commit of the source in which the resources were declared
 	commit string
 }
@@ -46,7 +47,7 @@ type Resources struct {
 // Update performs an atomic update on the resource declaration set.
 func (r *Resources) Update(ctx context.Context, objects []client.Object, commit string) ([]client.Object, status.Error) {
 	// First build up the new map using a local pointer/reference.
-	newSet := make(map[core.ID]*unstructured.Unstructured)
+	newSet := orderedmap.NewOrderedMap[core.ID, *unstructured.Unstructured]()
 	newObjects := []client.Object{}
 	for _, obj := range objects {
 		if obj == nil {
@@ -61,31 +62,34 @@ func (r *Resources) Update(ctx context.Context, objects []client.Object, commit 
 			return nil, status.InternalErrorBuilder.Wrap(err).
 				Sprintf("converting %v to unstructured.Unstructured", id).Build()
 		}
-		newSet[id] = u
+		newSet.Set(id, u)
 		newObjects = append(newObjects, obj)
 	}
 
 	// Record the declared_resources metric, after parsing but before validation.
 	metrics.RecordDeclaredResources(ctx, commit, len(newObjects))
 
-	previousSet, _ := r.getObjectSet()
+	previousSet, _ := r.getObjectMap()
 	if err := deletesAllNamespaces(previousSet, newSet); err != nil {
 		return nil, err
 	}
 
 	// Now assign the pointer for the new map to the struct reference in a
 	// threadsafe context. From now on, this map is read-only.
-	r.setObjectSet(newSet, commit)
+	r.setObjectMap(newSet, commit)
 	return newObjects, nil
 }
 
 // Get returns a copy of the resource declaration as read from Git
 func (r *Resources) Get(id core.ID) (*unstructured.Unstructured, string, bool) {
-	objSet, commit := r.getObjectSet()
+	objSet, commit := r.getObjectMap()
+	if objSet == nil || objSet.Len() == 0 {
+		return nil, commit, false
+	}
 
 	// A local reference to the map is threadsafe since only the struct reference
 	// is replaced on update.
-	u, found := objSet[id]
+	u, found := objSet.Get(id)
 	// We return a copy of the Unstructured, as
 	// 1) client.Client methods mutate the objects passed into them.
 	// 2) We don't want to persist any changes made to an object we retrieved
@@ -96,13 +100,16 @@ func (r *Resources) Get(id core.ID) (*unstructured.Unstructured, string, bool) {
 // DeclaredUnstructureds returns all resource objects declared in the source,
 // along with the source commit.
 func (r *Resources) DeclaredUnstructureds() ([]*unstructured.Unstructured, string) {
-	var objects []*unstructured.Unstructured
-	objSet, commit := r.getObjectSet()
+	objSet, commit := r.getObjectMap()
+	if objSet == nil || objSet.Len() == 0 {
+		return nil, commit
+	}
 
 	// A local reference to the map is threadsafe since only the struct reference
 	// is replaced on update.
-	for _, obj := range objSet {
-		objects = append(objects, obj)
+	var objects []*unstructured.Unstructured
+	for pair := objSet.Front(); pair != nil; pair = pair.Next() {
+		objects = append(objects, pair.Value)
 	}
 	return objects, commit
 }
@@ -110,13 +117,16 @@ func (r *Resources) DeclaredUnstructureds() ([]*unstructured.Unstructured, strin
 // DeclaredObjects returns all resource objects declared in the source, along
 // with the source commit.
 func (r *Resources) DeclaredObjects() ([]client.Object, string) {
-	var objects []client.Object
-	objSet, commit := r.getObjectSet()
+	objSet, commit := r.getObjectMap()
+	if objSet == nil || objSet.Len() == 0 {
+		return nil, commit
+	}
 
 	// A local reference to the map is threadsafe since only the struct reference
 	// is replaced on update.
-	for _, obj := range objSet {
-		objects = append(objects, obj)
+	var objects []client.Object
+	for pair := objSet.Front(); pair != nil; pair = pair.Next() {
+		objects = append(objects, pair.Value)
 	}
 	return objects, commit
 }
@@ -124,26 +134,29 @@ func (r *Resources) DeclaredObjects() ([]client.Object, string) {
 // DeclaredGVKs returns the set of all GroupVersionKind found in the source,
 // along with the source commit.
 func (r *Resources) DeclaredGVKs() (map[schema.GroupVersionKind]struct{}, string) {
-	gvkSet := make(map[schema.GroupVersionKind]struct{})
-	objSet, commit := r.getObjectSet()
+	objSet, commit := r.getObjectMap()
+	if objSet == nil || objSet.Len() == 0 {
+		return nil, commit
+	}
 
 	// A local reference to the objSet map is threadsafe since only the pointer to
 	// the map is replaced on update.
-	for _, obj := range objSet {
-		gvkSet[obj.GroupVersionKind()] = struct{}{}
+	gvkSet := make(map[schema.GroupVersionKind]struct{})
+	for pair := objSet.Front(); pair != nil; pair = pair.Next() {
+		gvkSet[pair.Value.GroupVersionKind()] = struct{}{}
 	}
 	return gvkSet, commit
 }
 
-func (r *Resources) getObjectSet() (map[core.ID]*unstructured.Unstructured, string) {
+func (r *Resources) getObjectMap() (*orderedmap.OrderedMap[core.ID, *unstructured.Unstructured], string) {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
-	return r.objectSet, r.commit
+	return r.objectMap, r.commit
 }
 
-func (r *Resources) setObjectSet(objectSet map[core.ID]*unstructured.Unstructured, commit string) {
+func (r *Resources) setObjectMap(objectMap *orderedmap.OrderedMap[core.ID, *unstructured.Unstructured], commit string) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	r.objectSet = objectSet
+	r.objectMap = objectMap
 	r.commit = commit
 }

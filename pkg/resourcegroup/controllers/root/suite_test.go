@@ -25,7 +25,7 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
-	"k8s.io/klog/v2/klogr"
+	"k8s.io/klog/v2/textlogger"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -81,14 +81,14 @@ func StartTestManager(t *testing.T, mgr manager.Manager) {
 
 func NewReconciler(mgr manager.Manager) (*Reconciler, error) {
 	resmap := resourcemap.NewResourceMap()
-	watches, err := watch.NewManager(mgr.GetConfig(), resmap, nil, nil)
+	watches, err := watch.NewManager(mgr.GetConfig(), mgr.GetHTTPClient(), resmap, nil, nil)
 	if err != nil {
 		return nil, err
 	}
 	r := &Reconciler{
 		Client:  mgr.GetClient(),
 		cfg:     mgr.GetConfig(),
-		log:     klogr.New().WithName("controllers").WithName("Root"),
+		log:     textlogger.NewLogger(textlogger.NewConfig()).WithName("controllers").WithName("Root"),
 		resMap:  resmap,
 		watches: watches,
 	}

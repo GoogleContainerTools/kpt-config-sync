@@ -21,7 +21,7 @@ import (
 	"strings"
 
 	"k8s.io/klog/v2"
-	"k8s.io/klog/v2/klogr"
+	"k8s.io/klog/v2/textlogger"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/declared"
@@ -129,7 +129,7 @@ var flags = struct {
 func main() {
 	log.Setup()
 	profiler.Service()
-	ctrl.SetLogger(klogr.New())
+	ctrl.SetLogger(textlogger.NewLogger(textlogger.NewConfig()))
 
 	if *debug {
 		status.EnablePanicOnMisuse()

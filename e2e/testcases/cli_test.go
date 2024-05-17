@@ -605,12 +605,14 @@ func TestNomosHydrateWithUnknownScopedObject(t *testing.T) {
 		nt.T.Error(err)
 	}
 
+	expectedErrorPrefix := `KNV1021: No CustomResourceDefinition is defined for the type "VirtualMachine.kubevirt.io" in the cluster.`
+
 	// Verify that `nomos vet` returns a KNV1021 error.
 	out, err = nt.Shell.Command("nomos", "vet", "--source-format=unstructured", fmt.Sprintf("--path=%s", kubevirtPath)).CombinedOutput()
 	if err == nil {
 		nt.T.Error(fmt.Errorf("`nomos vet --path=%s` expects an error, got nil", kubevirtPath))
 	} else {
-		if !strings.Contains(string(out), "Error: 1 error(s)") || !strings.Contains(string(out), "KNV1021") {
+		if !strings.HasPrefix(string(out), "Error: "+expectedErrorPrefix) {
 			nt.T.Error(fmt.Errorf("`nomos vet --path=%s` expects only one KNV1021 error, got %v", kubevirtPath, string(out)))
 		}
 	}
@@ -637,7 +639,7 @@ func TestNomosHydrateWithUnknownScopedObject(t *testing.T) {
 	if err == nil {
 		nt.T.Error(fmt.Errorf("`nomo hydrate --path=%s` expects an error, got nil", kubevirtPath))
 	} else {
-		if !strings.Contains(string(out), ": 1 error(s)") || !strings.Contains(string(out), "KNV1021") {
+		if !strings.HasPrefix(string(out), `errors for Cluster "defaultcluster": `+expectedErrorPrefix) {
 			nt.T.Error(fmt.Errorf("`nomos hydrate --path=%s` expects only one KNV1021 error, got %v", kubevirtPath, string(out)))
 		}
 	}
@@ -660,7 +662,7 @@ func TestNomosHydrateWithUnknownScopedObject(t *testing.T) {
 	if err == nil {
 		nt.T.Error(fmt.Errorf("`nomos vet --path=%s` expects an error, got nil", compiledDirWithoutAPIServerCheck))
 	} else {
-		if !strings.Contains(string(out), "Error: 1 error(s)") || !strings.Contains(string(out), "KNV1021") {
+		if !strings.HasPrefix(string(out), "Error: "+expectedErrorPrefix) {
 			nt.T.Error(fmt.Errorf("`nomos vet --path=%s` expects only one KNV1021 error, got %v", compiledDirWithoutAPIServerCheck, string(out)))
 		}
 	}

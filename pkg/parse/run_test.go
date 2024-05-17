@@ -17,9 +17,11 @@ package parse
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -28,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	applierfake "kpt.dev/configsync/pkg/applier/fake"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/hydrate"
@@ -37,12 +40,14 @@ import (
 	"kpt.dev/configsync/pkg/importer/reader"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
+	remediatorfake "kpt.dev/configsync/pkg/remediator/fake"
 	"kpt.dev/configsync/pkg/reconciler/namespacecontroller"
 	"kpt.dev/configsync/pkg/rootsync"
 	"kpt.dev/configsync/pkg/status"
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/testing/openapitest"
+	"kpt.dev/configsync/pkg/testing/testerrors"
 	"kpt.dev/configsync/pkg/util"
 	"sigs.k8s.io/cli-utils/pkg/testutil"
 )
@@ -72,8 +77,12 @@ func newParser(t *testing.T, fs *FileSource, renderingEnabled bool, retryPeriod 
 		Updater: Updater{
 			Scope:      declared.RootReconciler,
 			Resources:  &declared.Resources{},
-			Remediator: &noOpRemediator{},
-			Applier:    &fakeApplier{},
+			Remediator: &remediatorfake.Remediator{},
+			Applier: &applierfake.Applier{
+				ApplyOutputs: []applierfake.ApplierOutputs{
+					{}, // One Apply call, no errors
+				},
+			},
 		},
 		mux:              &sync.Mutex{},
 		RenderingEnabled: renderingEnabled,
@@ -168,6 +177,7 @@ func TestRun(t *testing.T) {
 			t.Error(err)
 		}
 	})
+	sourceDir0 := filepath.Join(tempDir, "0", "source")
 
 	testCases := []struct {
 		id                         string
@@ -184,7 +194,7 @@ func TestRun(t *testing.T) {
 		needRetry                  bool
 		expectedMsg                string
 		expectedErrorSourceRefs    []v1beta1.ErrorSource
-		expectedErrors             string
+		expectedErrors             status.MultiError
 		expectedStateSourceErrs    status.MultiError
 		expectedStateRenderingErrs status.MultiError
 	}{
@@ -196,8 +206,16 @@ func TestRun(t *testing.T) {
 			needRetry:               true,
 			expectedMsg:             "Source",
 			expectedErrorSourceRefs: []v1beta1.ErrorSource{v1beta1.SourceError},
-			expectedErrors:          fmt.Sprintf("1 error(s)\n\n\n[1] KNV2004: failed to check the status of the source root directory \"%s/0/source\": stat %s/0/source: no such file or directory\n\nFor more information, see https://g.co/cloud/acm-errors#knv2004\n", tempDir, tempDir),
-			expectedStateSourceErrs: status.SourceError.Sprintf("KNV2004: failed to check the status of the source root directory \"%s/0/source\": stat %s/0/source: no such file or directory\n\nFor more information, see https://g.co/cloud/acm-errors#knv2004\n", tempDir, tempDir).Build(),
+			expectedErrors: status.SourceError.Wrap(
+				util.NewRetriableError(
+					fmt.Errorf("failed to check the status of the source root directory %q: %w", sourceDir0,
+						&fs.PathError{Op: "stat", Path: sourceDir0, Err: syscall.Errno(2)}))).
+				Build(),
+			expectedStateSourceErrs: status.SourceError.Wrap(
+				util.NewRetriableError(
+					fmt.Errorf("failed to check the status of the source root directory %q: %w", sourceDir0,
+						&fs.PathError{Op: "stat", Path: sourceDir0, Err: syscall.Errno(2)}))).
+				Build(),
 		},
 		{
 			id:                   "1",
@@ -208,12 +226,19 @@ func TestRun(t *testing.T) {
 			expectedMsg:          "Sync Completed",
 		},
 		{
-			id:                      "2",
-			name:                    "source error",
-			sourceError:             "git sync permission issue",
-			needRetry:               true,
-			expectedErrors:          "1 error(s)\n\n\n[1] KNV2004: error in the git-sync container: git sync permission issue\n\nFor more information, see https://g.co/cloud/acm-errors#knv2004\n",
-			expectedStateSourceErrs: status.SourceError.Sprint("error in the git-sync container: git sync permission issue").Build(),
+			id:          "2",
+			name:        "source error",
+			sourceError: "git sync permission issue",
+			needRetry:   true,
+			expectedErrors: status.SourceError.Wrap(
+				fmt.Errorf("error in the git-sync container: %w",
+					fmt.Errorf("git sync permission issue"))).
+				Build(),
+			expectedStateSourceErrs: status.SourceError.Wrap(
+				util.NewRetriableError(
+					fmt.Errorf("error in the git-sync container: %w",
+						fmt.Errorf("git sync permission issue")))).
+				Build(),
 			// source error is exposed to the RootSync status
 			expectedMsg:             "Source",
 			expectedErrorSourceRefs: []v1beta1.ErrorSource{v1beta1.SourceError},
@@ -236,7 +261,7 @@ func TestRun(t *testing.T) {
 			hydratedError:              `{"code": "1068", "error": "rendering error"}`,
 			needRetry:                  true,
 			expectedMsg:                "Rendering failed",
-			expectedErrors:             "1 error(s)\n\n\n[1] KNV1068: rendering error\n\nFor more information, see https://g.co/cloud/acm-errors#knv1068\n",
+			expectedErrors:             status.HydrationError(status.ActionableHydrationErrorCode, fmt.Errorf("rendering error")),
 			expectedStateRenderingErrs: status.HydrationError(status.ActionableHydrationErrorCode, fmt.Errorf("rendering error")),
 			// rendering error is exposed to the RootSync status
 			expectedErrorSourceRefs: []v1beta1.ErrorSource{v1beta1.RenderingError},
@@ -269,7 +294,7 @@ func TestRun(t *testing.T) {
 			needRetry:                  true,
 			expectedMsg:                "Rendering not required but is currently enabled",
 			expectedErrorSourceRefs:    []v1beta1.ErrorSource{v1beta1.RenderingError},
-			expectedErrors:             "1 error(s)\n\n\n[1] KNV2016: sync source contains only wet configs and hydration-controller is running\n\nFor more information, see https://g.co/cloud/acm-errors#knv2016\n",
+			expectedErrors:             status.HydrationError(status.TransientErrorCode, fmt.Errorf("sync source contains only wet configs and hydration-controller is running")),
 			expectedStateRenderingErrs: status.HydrationError(status.TransientErrorCode, fmt.Errorf("sync source contains only wet configs and hydration-controller is running")),
 		},
 		{
@@ -282,7 +307,7 @@ func TestRun(t *testing.T) {
 			needRetry:                  true,
 			expectedMsg:                "Rendering required but is currently disabled",
 			expectedErrorSourceRefs:    []v1beta1.ErrorSource{v1beta1.RenderingError},
-			expectedErrors:             "1 error(s)\n\n\n[1] KNV2016: sync source contains dry configs and hydration-controller is not running\n\nFor more information, see https://g.co/cloud/acm-errors#knv2016\n",
+			expectedErrors:             status.HydrationError(status.TransientErrorCode, fmt.Errorf("sync source contains dry configs and hydration-controller is not running")),
 			expectedStateRenderingErrs: status.HydrationError(status.TransientErrorCode, fmt.Errorf("sync source contains dry configs and hydration-controller is not running")),
 		},
 	}
@@ -380,14 +405,9 @@ func TestRun(t *testing.T) {
 			run(context.Background(), parser, triggerReimport, state)
 
 			assert.Equal(t, tc.needRetry, state.cache.needToRetry)
-			if tc.expectedErrors == "" {
-				assert.Nil(t, state.cache.errs)
-			} else {
-				assert.Equal(t, tc.expectedErrors, state.cache.errs.Error())
-			}
-
-			testutil.AssertEqual(t, tc.expectedStateSourceErrs, state.sourceStatus.errs, "[%s] unexpected state.sourceStatus.errs return", tc.name)
-			testutil.AssertEqual(t, tc.expectedStateRenderingErrs, state.renderingStatus.errs, "[%s] unexpected state.renderingStatus.errs return", tc.name)
+			testerrors.AssertEqual(t, tc.expectedErrors, state.cache.errs, "[%s] unexpected state.cache.errs return", tc.name)
+			testerrors.AssertEqual(t, tc.expectedStateSourceErrs, state.sourceStatus.errs, "[%s] unexpected state.sourceStatus.errs return", tc.name)
+			testerrors.AssertEqual(t, tc.expectedStateRenderingErrs, state.renderingStatus.errs, "[%s] unexpected state.renderingStatus.errs return", tc.name)
 
 			rs := &v1beta1.RootSync{}
 			if err = parser.options().Client.Get(context.Background(), rootsync.ObjectKey(parser.options().SyncName), rs); err != nil {

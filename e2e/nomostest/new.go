@@ -467,7 +467,12 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 	// understand the Repo and RootSync types as ConfigSync is now installed.
 	nt.RenewClient()
 
-	// Create the RootSync if it doesn't exist, and wait for it to be Synced.
+	// Initialize the base RootSync using SSA for field management
+	rs := RootSyncObjectV1Beta1FromRootRepo(nt, configsync.RootSyncName)
+	if err := nt.KubeClient.Apply(rs); err != nil {
+		nt.T.Fatal(err)
+	}
+	// Wait for Config Sync to be ready and the base RootSync to be synced.
 	if err := WaitForConfigSyncReady(nt); err != nil {
 		nt.T.Fatalf("waiting for ConfigSync Deployments to become available: %v", err)
 	}

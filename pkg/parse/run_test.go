@@ -56,7 +56,7 @@ const (
 	symLink = "rev"
 )
 
-func newParser(t *testing.T, fs *FileSource, renderingEnabled bool, retryPeriod time.Duration, pollingPeriod time.Duration) Parser {
+func newParser(t *testing.T, fs FileSource, renderingEnabled bool, retryPeriod time.Duration, pollingPeriod time.Duration) Parser {
 	parser := &root{}
 	converter, err := openapitest.ValueConverterForTest()
 	if err != nil {
@@ -74,6 +74,7 @@ func newParser(t *testing.T, fs *FileSource, renderingEnabled bool, retryPeriod 
 		Client:             syncerFake.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName)),
 		DiscoveryInterface: syncerFake.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
 		Converter:          converter,
+		Files:              Files{FileSource: fs},
 		Updater: Updater{
 			Scope:      declared.RootReconciler,
 			Resources:  &declared.Resources{},
@@ -89,10 +90,6 @@ func newParser(t *testing.T, fs *FileSource, renderingEnabled bool, retryPeriod 
 		RetryPeriod:      retryPeriod,
 		ResyncPeriod:     2 * time.Second,
 		PollingPeriod:    pollingPeriod,
-	}
-
-	if fs != nil {
-		parser.Options.Files = Files{FileSource: *fs}
 	}
 
 	return parser
@@ -395,7 +392,7 @@ func TestRun(t *testing.T) {
 				SourceRepo:   "https://github.com/test/test.git",
 				SourceBranch: "main",
 			}
-			parser := newParser(t, &fs, tc.renderingEnabled, configsync.DefaultReconcilerRetryPeriod, configsync.DefaultReconcilerPollingPeriod)
+			parser := newParser(t, fs, tc.renderingEnabled, configsync.DefaultReconcilerRetryPeriod, configsync.DefaultReconcilerPollingPeriod)
 			state := &reconcilerState{
 				backoff:     defaultBackoff(),
 				retryTimer:  time.NewTimer(configsync.DefaultReconcilerRetryPeriod),
@@ -432,7 +429,7 @@ func TestRun(t *testing.T) {
 }
 
 func TestBackoffRetryCount(t *testing.T) {
-	parser := newParser(t, nil, false, 10*time.Microsecond, 150*time.Microsecond)
+	parser := newParser(t, emptyFileSource(), false, 10*time.Microsecond, 150*time.Microsecond)
 	testState := &namespacecontroller.State{}
 	reimportCount := 0
 	retryCount := 0
@@ -458,7 +455,7 @@ func TestBackoffReimportCount(t *testing.T) {
 	const reimportCountMin = 25
 	const reimportCountMax = 32
 
-	parser := newParser(t, nil, false, 10*time.Microsecond, 150*time.Microsecond)
+	parser := newParser(t, emptyFileSource(), false, 10*time.Microsecond, 150*time.Microsecond)
 	testState := &namespacecontroller.State{}
 	reimportCount := 0
 	retryCount := 0
@@ -495,5 +492,19 @@ func mockRun(reimportCount *int, retryCount *int, cancelFn func(), testIsDone fu
 		if testIsDone(reimportCount, retryCount) {
 			cancelFn()
 		}
+	}
+}
+
+func emptyFileSource() FileSource {
+	return FileSource{
+		SourceDir:    "",
+		HydratedRoot: "",
+		RepoRoot:     "",
+		HydratedLink: "",
+		SyncDir:      "",
+		SourceType:   "",
+		SourceRepo:   "",
+		SourceBranch: "",
+		SourceRev:    "",
 	}
 }

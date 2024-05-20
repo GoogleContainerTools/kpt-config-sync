@@ -221,6 +221,7 @@ func Run(ctx context.Context, p Parser, nsControllerState *namespacecontroller.S
 	}
 }
 
+// DefaultRunOpts returns the default options for Run
 func DefaultRunOpts() RunOpts {
 	return RunOpts{
 		runFunc: run,

@@ -69,15 +69,15 @@ const (
 
 // RunOpts are the options used when calling Run
 type RunOpts struct {
-	runFn           RunFn
-	backoffDuration time.Duration
+	runFunc RunFunc
+	backoff wait.Backoff
 }
 
-// RunFn is the function signature of the function that starts the parse-apply-watch loop
-type RunFn func(ctx context.Context, p Parser, trigger string, state *reconcilerState)
+// RunFunc is the function signature of the function that starts the parse-apply-watch loop
+type RunFunc func(ctx context.Context, p Parser, trigger string, state *reconcilerState)
 
 // Run keeps checking whether a parse-apply-watch loop is necessary and starts a loop if needed.
-func Run(ctx context.Context, p Parser, nsControllerState *namespacecontroller.State, runOpts *RunOpts) {
+func Run(ctx context.Context, p Parser, nsControllerState *namespacecontroller.State, runOpts RunOpts) {
 	opts := p.options()
 	// Use timers, not tickers.
 	// Tickers can cause memory leaks and continuous execution, when execution
@@ -98,28 +98,11 @@ func Run(ctx context.Context, p Parser, nsControllerState *namespacecontroller.S
 	nsEventTimer := time.NewTimer(nsEventPeriod)
 	defer nsEventTimer.Stop()
 
-	var state *reconcilerState
-	var runFn RunFn
-
-	if runOpts != nil {
-		runFn = runOpts.runFn
-		state = &reconcilerState{
-			backoff: wait.Backoff{
-				Duration: runOpts.backoffDuration,
-				Factor:   2,
-				Steps:    retryLimit,
-				Jitter:   0.1,
-			},
-			retryTimer:  retryTimer,
-			retryPeriod: opts.RetryPeriod,
-		}
-	} else {
-		runFn = run
-		state = &reconcilerState{
-			backoff:     defaultBackoff(),
-			retryTimer:  retryTimer,
-			retryPeriod: opts.RetryPeriod,
-		}
+	runFn := runOpts.runFunc
+	state := &reconcilerState{
+		backoff:     runOpts.backoff,
+		retryTimer:  retryTimer,
+		retryPeriod: opts.RetryPeriod,
 	}
 
 	for {
@@ -235,6 +218,13 @@ func Run(ctx context.Context, p Parser, nsControllerState *namespacecontroller.S
 			// state of backoff retry.
 			nsEventTimer.Reset(nsEventPeriod) // Schedule namespace event check attempt
 		}
+	}
+}
+
+func DefaultRunOpts() RunOpts {
+	return RunOpts{
+		runFunc: run,
+		backoff: defaultBackoff(),
 	}
 }
 

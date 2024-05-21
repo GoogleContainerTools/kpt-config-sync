@@ -32,6 +32,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/policy"
+	e2eretry "kpt.dev/configsync/e2e/nomostest/retry"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
@@ -523,21 +524,25 @@ func TestReconcileFinalizerReconcileTimeout(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	nt.T.Cleanup(func() {
-		namespace := &corev1.Namespace{}
-		if err := nt.KubeClient.Get(namespaceNN.Name, namespaceNN.Namespace, namespace); err != nil {
-			if apierrors.IsNotFound(err) { // Happy path - exit
-				return
+		_, err := e2eretry.Retry(30*time.Second, func() error {
+			namespace := &corev1.Namespace{}
+			if err := nt.KubeClient.Get(namespaceNN.Name, namespaceNN.Namespace, namespace); err != nil {
+				if apierrors.IsNotFound(err) { // Happy path - exit
+					return nil
+				}
+				return err // unexpected error
 			}
-			nt.T.Error(err) // unexpected error
-			return
-		}
-		if testutils.RemoveFinalizer(namespace, nomostest.ConfigSyncE2EFinalizer) {
-			// The test failed to remove the finalizer. Remove to enable deletion.
-			if err := nt.KubeClient.Update(namespace); err != nil {
-				nt.T.Error(err)
-			} else {
+			if testutils.RemoveFinalizer(namespace, nomostest.ConfigSyncE2EFinalizer) {
+				// The test failed to remove the finalizer. Remove to enable deletion.
+				if err := nt.KubeClient.Update(namespace); err != nil {
+					return err
+				}
 				nt.T.Log("removed finalizer in test cleanup")
 			}
+			return nil
+		})
+		if err != nil {
+			nt.T.Fatal(err)
 		}
 	})
 	// Add a fake finalizer to the namespace to block deletion

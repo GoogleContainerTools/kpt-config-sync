@@ -380,7 +380,7 @@ func Run(opts Options) {
 
 	klog.Info("Starting Parser")
 	// TODO: Convert the Parser to use the controller-manager framework.
-	parse.Run(ctx, parser, nsControllerState) // blocks until ctx.Done()
+	parse.Run(ctx, parser, nsControllerState, parse.DefaultRunOpts()) // blocks until ctx.Done()
 	klog.Info("Parser exited")
 
 	// Wait for Remediator to exit

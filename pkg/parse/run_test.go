@@ -429,7 +429,7 @@ func TestRun(t *testing.T) {
 }
 
 func TestBackoffRetryCount(t *testing.T) {
-	parser := newParser(t, emptyFileSource(), false, 10*time.Microsecond, 150*time.Microsecond)
+	parser := newParser(t, FileSource{}, false, 10*time.Microsecond, 150*time.Microsecond)
 	testState := &namespacecontroller.State{}
 	reimportCount := 0
 	retryCount := 0
@@ -455,7 +455,7 @@ func TestBackoffReimportCount(t *testing.T) {
 	const reimportCountMin = 25
 	const reimportCountMax = 32
 
-	parser := newParser(t, emptyFileSource(), false, 10*time.Microsecond, 150*time.Microsecond)
+	parser := newParser(t, FileSource{}, false, 10*time.Microsecond, 150*time.Microsecond)
 	testState := &namespacecontroller.State{}
 	reimportCount := 0
 	retryCount := 0
@@ -492,19 +492,5 @@ func mockRun(reimportCount *int, retryCount *int, cancelFn func(), testIsDone fu
 		if testIsDone(reimportCount, retryCount) {
 			cancelFn()
 		}
-	}
-}
-
-func emptyFileSource() FileSource {
-	return FileSource{
-		SourceDir:    "",
-		HydratedRoot: "",
-		RepoRoot:     "",
-		HydratedLink: "",
-		SyncDir:      "",
-		SourceType:   "",
-		SourceRepo:   "",
-		SourceBranch: "",
-		SourceRev:    "",
 	}
 }

@@ -17,6 +17,7 @@ package e2e
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -36,6 +37,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/policy"
+	e2eretry "kpt.dev/configsync/e2e/nomostest/retry"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testutils"
@@ -219,19 +221,25 @@ func TestReconcilerManagerTeardownRootSyncWithReconcileTimeout(t *testing.T) {
 
 	nt.T.Log("Inject a fake finalizer in the Deployment to prevent deletion")
 	nt.T.Cleanup(func() {
-		rootSyncReconciler := &appsv1.Deployment{}
-		if err := nt.KubeClient.Get(rootSyncReconcilerNN.Name, rootSyncReconcilerNN.Namespace, rootSyncReconciler); err != nil {
-			if apierrors.IsNotFound(err) { // Happy path - exit
-				return
+		_, err := e2eretry.Retry(30*time.Second, func() error {
+			rootSyncReconciler := &appsv1.Deployment{}
+			if err := nt.KubeClient.Get(rootSyncReconcilerNN.Name, rootSyncReconcilerNN.Namespace, rootSyncReconciler); err != nil {
+				if apierrors.IsNotFound(err) { // Happy path - exit
+					return nil
+				}
+				return err // unexpected error
 			}
-			nt.T.Fatal(err) // unexpected error
-		}
-		if testutils.RemoveFinalizer(rootSyncReconciler, nomostest.ConfigSyncE2EFinalizer) {
-			// The test failed to remove the finalizer. Remove to enable deletion.
-			if err := nt.KubeClient.Update(rootSyncReconciler); err != nil {
-				nt.T.Fatal(err)
+			if testutils.RemoveFinalizer(rootSyncReconciler, nomostest.ConfigSyncE2EFinalizer) {
+				// The test failed to remove the finalizer. Remove to enable deletion.
+				if err := nt.KubeClient.Update(rootSyncReconciler); err != nil {
+					return err
+				}
+				nt.T.Log("removed finalizer in test cleanup")
 			}
-			nt.T.Log("removed finalizer in test cleanup")
+			return nil
+		})
+		if err != nil {
+			nt.T.Fatal(err)
 		}
 	})
 	rootSyncReconciler := &appsv1.Deployment{}
@@ -297,19 +305,25 @@ func TestReconcilerManagerTeardownRepoSyncWithReconcileTimeout(t *testing.T) {
 
 	nt.T.Log("Inject a fake finalizer in the Deployment to prevent deletion")
 	nt.T.Cleanup(func() {
-		repoSyncReconciler := &appsv1.Deployment{}
-		if err := nt.KubeClient.Get(repoSyncReconcilerNN.Name, repoSyncReconcilerNN.Namespace, repoSyncReconciler); err != nil {
-			if apierrors.IsNotFound(err) { // Happy path - exit
-				return
+		_, err := e2eretry.Retry(30*time.Second, func() error {
+			repoSyncReconciler := &appsv1.Deployment{}
+			if err := nt.KubeClient.Get(repoSyncReconcilerNN.Name, repoSyncReconcilerNN.Namespace, repoSyncReconciler); err != nil {
+				if apierrors.IsNotFound(err) { // Happy path - exit
+					return nil
+				}
+				return err // unexpected error
 			}
-			nt.T.Fatal(err) // unexpected error
-		}
-		if testutils.RemoveFinalizer(repoSyncReconciler, nomostest.ConfigSyncE2EFinalizer) {
-			// The test failed to remove the finalizer. Remove to enable deletion.
-			if err := nt.KubeClient.Update(repoSyncReconciler); err != nil {
-				nt.T.Fatal(err)
+			if testutils.RemoveFinalizer(repoSyncReconciler, nomostest.ConfigSyncE2EFinalizer) {
+				// The test failed to remove the finalizer. Remove to enable deletion.
+				if err := nt.KubeClient.Update(repoSyncReconciler); err != nil {
+					return err
+				}
+				nt.T.Log("removed finalizer in test cleanup")
 			}
-			nt.T.Log("removed finalizer in test cleanup")
+			return nil
+		})
+		if err != nil {
+			nt.T.Fatal(err)
 		}
 	})
 	repoSyncReconciler := &appsv1.Deployment{}

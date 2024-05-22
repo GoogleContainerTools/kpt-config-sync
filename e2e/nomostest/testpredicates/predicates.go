@@ -1151,6 +1151,39 @@ func validateRootSyncCondition(actual *v1beta1.RootSyncCondition, expected *v1be
 	return nil
 }
 
+// HasConditionStatus returns a Predicate that errors if the object does not
+// have the specified condition or does but the status does not match the
+// expected status.
+func HasConditionStatus(scheme *runtime.Scheme, conditionType string, expectedStatus corev1.ConditionStatus) Predicate {
+	return func(obj client.Object) error {
+		if obj == nil {
+			return ErrObjectNotFound
+		}
+		uObj, err := kinds.ToUnstructured(obj, scheme)
+		if err != nil {
+			return fmt.Errorf("failed to convert %T %s to unstructured: %w",
+				obj, core.ObjectNamespacedName(obj), err)
+		}
+		cObj, err := status.GetObjectWithConditions(uObj.UnstructuredContent())
+		if err != nil {
+			return fmt.Errorf("failed to parse conditions from %s %s: %w",
+				uObj.GroupVersionKind().Kind, core.ObjectNamespacedName(obj), err)
+		}
+		for _, condition := range cObj.Status.Conditions {
+			if condition.Type == conditionType {
+				if condition.Status != expectedStatus {
+					return fmt.Errorf("%s condition with type %s has unexpected status %s, expected %s",
+						uObj.GroupVersionKind().Kind, conditionType, condition.Status, expectedStatus)
+				}
+				// Success!
+				return nil
+			}
+		}
+		return fmt.Errorf("%s condition with type %s not found",
+			uObj.GroupVersionKind().Kind, conditionType)
+	}
+}
+
 // RepoSyncHasCondition returns a Predicate that errors if the RepoSync does not
 // have the specified RepoSyncCondition. Fields such as timestamps are ignored.
 func RepoSyncHasCondition(expected *v1beta1.RepoSyncCondition) Predicate {
@@ -1350,6 +1383,29 @@ func ClusterRoleBindingSubjectNamesEqual(subjects ...string) func(o client.Objec
 			return WrongTypeErr(o, r)
 		}
 		return subjectNamesEqual(subjects, r.Subjects)
+	}
+}
+
+// Or returns a Predicate that errors only if all of the Predicates errored.
+// If any one of the specified Predicates succeeds, the Or Predicate succeeds.
+// Logs the index of the first successful predicates.
+func Or(logger *testlogger.TestLogger, predicates ...Predicate) Predicate {
+	return func(o client.Object) error {
+		var multiErr error
+		for i, predicate := range predicates {
+			if err := predicate(o); err != nil {
+				multiErr = multierr.Append(multiErr, err)
+			} else {
+				// Success!
+				logger.Infof("One of the predicates was satisfied (index: %d)", i)
+				return nil
+			}
+		}
+		if multiErr != nil {
+			logger.Infof("None of the predicates were satisfied (%d)", len(predicates))
+			return multiErr
+		}
+		return fmt.Errorf("No predicates were specified")
 	}
 }
 

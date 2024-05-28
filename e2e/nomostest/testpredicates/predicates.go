@@ -1141,6 +1141,27 @@ func RootSyncHasCondition(expected *v1beta1.RootSyncCondition) Predicate {
 	}
 }
 
+// RootSyncSpecEquals returns a Predicate that errors if the RootSync does not
+// have the specified RootSyncCondition. Fields such as timestamps are ignored.
+func RootSyncSpecEquals(expected v1beta1.RootSyncSpec) Predicate {
+	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
+		rs, ok := o.(*v1beta1.RootSync)
+		if !ok {
+			return WrongTypeErr(rs, &v1beta1.RootSync{})
+		}
+		spec := rs.Spec
+		if !equality.Semantic.DeepEqual(expected, spec) {
+			diff := cmp.Diff(expected, spec)
+			return fmt.Errorf("expected RootSync to have spec:\n%sbut got:\n%s\n%s",
+				log.AsYAML(expected), log.AsYAML(spec), diff)
+		}
+		return nil
+	}
+}
+
 func validateRootSyncCondition(actual *v1beta1.RootSyncCondition, expected *v1beta1.RootSyncCondition) error {
 	e := expected.DeepCopy()
 	e.LastUpdateTime = actual.LastUpdateTime

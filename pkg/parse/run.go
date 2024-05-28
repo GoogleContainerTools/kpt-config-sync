@@ -79,6 +79,12 @@ type RunFunc func(ctx context.Context, p Parser, trigger string, state *reconcil
 
 // Run keeps checking whether a parse-apply-watch loop is necessary and starts a loop if needed.
 func Run(ctx context.Context, p Parser, nsControllerState *namespacecontroller.State, runOpts RunOpts) {
+	// Pre-initialize count metrics to ensure visibility, even if errors haven't occurred.
+	// Special label indicates initial state. Metrics are cumulative and used for rate aggregation
+	// to detect ongoing errors. Zero value means no recent errors.
+	metrics.RecordResourceFight(ctx, metrics.Initialization)
+	metrics.RecordInternalError(ctx, metrics.Initialization)
+	metrics.RecordResourceConflict(ctx, metrics.Initialization)
 	opts := p.options()
 	// Use timers, not tickers.
 	// Tickers can cause memory leaks and continuous execution, when execution

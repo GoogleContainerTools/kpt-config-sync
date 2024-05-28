@@ -27,6 +27,9 @@ import (
 	"kpt.dev/configsync/pkg/status"
 )
 
+// Initialization is the tag value to initiate a Count
+const Initialization = "cs_counter_initialization"
+
 func record(ctx context.Context, ms ...stats.Measurement) {
 	stats.Record(ctx, ms...)
 	if klog.V(5).Enabled() {
@@ -136,11 +139,12 @@ func RecordApplyDuration(ctx context.Context, status, commit string, startTime t
 }
 
 // RecordResourceFight produces measurements for the ResourceFights view.
-func RecordResourceFight(ctx context.Context, _ string) {
-	//tagCtx, _ := tag.New(ctx,
-	//tag.Upsert(KeyName, GetResourceLabels()),
-	//tag.Upsert(KeyOperation, operation),
-	//)
+func RecordResourceFight(ctx context.Context, tag string) {
+	if tag == Initialization {
+		measurement := ResourceFights.M(0)
+		record(ctx, measurement)
+		return
+	}
 	measurement := ResourceFights.M(1)
 	record(ctx, measurement)
 }
@@ -157,9 +161,13 @@ func RecordRemediateDuration(ctx context.Context, status string, startTime time.
 // RecordResourceConflict produces measurements for the ResourceConflicts view.
 func RecordResourceConflict(ctx context.Context, commit string) {
 	tagCtx, _ := tag.New(ctx,
-		// tag.Upsert(KeyName, GetResourceLabels()),
 		tag.Upsert(KeyCommit, commit),
 	)
+	if commit == Initialization {
+		measurement := ResourceConflicts.M(0)
+		record(tagCtx, measurement)
+		return
+	}
 	measurement := ResourceConflicts.M(1)
 	record(tagCtx, measurement)
 }
@@ -167,6 +175,11 @@ func RecordResourceConflict(ctx context.Context, commit string) {
 // RecordInternalError produces measurements for the InternalErrors view.
 func RecordInternalError(ctx context.Context, source string) {
 	tagCtx, _ := tag.New(ctx, tag.Upsert(KeyInternalErrorSource, source))
+	if source == Initialization {
+		measurement := InternalErrors.M(0)
+		record(tagCtx, measurement)
+		return
+	}
 	measurement := InternalErrors.M(1)
 	record(tagCtx, measurement)
 }

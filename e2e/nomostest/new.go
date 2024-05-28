@@ -62,16 +62,13 @@ func newOptStruct(testName, tmpDir string, ntOptions ...ntopts.Opt) *ntopts.New 
 	optsStruct := &ntopts.New{
 		Name:   testName,
 		TmpDir: tmpDir,
-		Nomos: ntopts.Nomos{
-			SourceFormat: filesystem.SourceFormatHierarchy,
-			MultiRepo:    true,
-		},
 		MultiRepo: ntopts.MultiRepo{
 			NamespaceRepos: make(map[types.NamespacedName]ntopts.RepoOpts),
 			RootRepos:      map[string]ntopts.RepoOpts{configsync.RootSyncName: {}},
 			// Default to 1m to keep tests fast.
 			// To override, use WithReconcileTimeout.
 			ReconcileTimeout: ptr.To(1 * time.Minute),
+			SourceFormat:     filesystem.SourceFormatHierarchy,
 		},
 	}
 	for _, opt := range ntOptions {
@@ -380,7 +377,7 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		return setupRegistry(nt)
 	})
 	tg.Go(func() error {
-		return installConfigSync(nt, opts.Nomos)
+		return installConfigSync(nt)
 	})
 	tg.Go(func() error {
 		return installPrometheus(nt)

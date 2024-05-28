@@ -201,7 +201,7 @@ func parseConfigSyncManifests(nt *NT) ([]client.Object, error) {
 }
 
 // installConfigSync installs ConfigSync on the test cluster
-func installConfigSync(nt *NT, nomos ntopts.Nomos) error {
+func installConfigSync(nt *NT) error {
 	nt.T.Log("[SETUP] Installing Config Sync")
 	objs, err := parseConfigSyncManifests(nt)
 	if err != nil {
@@ -209,10 +209,6 @@ func installConfigSync(nt *NT, nomos ntopts.Nomos) error {
 	}
 	for _, o := range objs {
 		nt.T.Logf("installConfigSync obj: %v", core.GKNN(o))
-		if o.GetObjectKind().GroupVersionKind().GroupKind() == kinds.ConfigMap().GroupKind() && o.GetName() == reconcilermanager.SourceFormat {
-			cm := o.(*corev1.ConfigMap)
-			cm.Data[filesystem.SourceFormatKey] = string(nomos.SourceFormat)
-		}
 		if err := nt.KubeClient.Apply(o); err != nil {
 			return err
 		}

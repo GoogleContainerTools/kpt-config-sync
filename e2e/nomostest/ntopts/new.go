@@ -66,7 +66,6 @@ type New struct {
 	// TestFeature is the feature that the test verifies
 	TestFeature testing.Feature
 
-	Nomos
 	MultiRepo
 	TestType
 }

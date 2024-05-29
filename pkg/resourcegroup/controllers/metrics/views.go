@@ -22,7 +22,7 @@ import (
 var (
 	// ReconcileDurationView aggregates the ReconcileDuration metric measurements.
 	ReconcileDurationView = &view.View{
-		Name:        ReconcileDuration.Name(),
+		Name:        RGReconcileDurationName,
 		Measure:     ReconcileDuration,
 		Description: "The distribution of time taken to reconcile a ResourceGroup CR",
 		TagKeys:     []tag.Key{KeyStallReason},
@@ -31,7 +31,7 @@ var (
 
 	// ResourceGroupTotalView aggregates the ResourceGroupTotal metric measurements.
 	ResourceGroupTotalView = &view.View{
-		Name:        ResourceGroupTotal.Name(),
+		Name:        ResourceGroupTotalName,
 		Measure:     ResourceGroupTotal,
 		Description: "The current number of ResourceGroup CRs",
 		Aggregation: view.LastValue(),
@@ -39,7 +39,7 @@ var (
 
 	// ResourceCountView aggregates the ResourceCount metric measurements.
 	ResourceCountView = &view.View{
-		Name:        ResourceCount.Name(),
+		Name:        ResourceCountName,
 		Measure:     ResourceCount,
 		Description: "The total number of resources tracked by a ResourceGroup",
 		TagKeys:     []tag.Key{KeyResourceGroup},
@@ -48,7 +48,7 @@ var (
 
 	// ReadyResourceCountView aggregates the resources ready in a ResourceGroup
 	ReadyResourceCountView = &view.View{
-		Name:        ReadyResourceCount.Name(),
+		Name:        ReadyResourceCountName,
 		Measure:     ReadyResourceCount,
 		Description: "The total number of ready resources in a ResourceGroup",
 		TagKeys:     []tag.Key{KeyResourceGroup},
@@ -57,7 +57,7 @@ var (
 
 	// NamespaceCountView counts number of namespaces in a ResourceGroup
 	NamespaceCountView = &view.View{
-		Name:        NamespaceCount.Name(),
+		Name:        NamespaceCountName,
 		Measure:     NamespaceCount,
 		Description: "The number of namespaces used by resources in a ResourceGroup",
 		TagKeys:     []tag.Key{KeyResourceGroup},
@@ -66,7 +66,7 @@ var (
 
 	// ClusterScopedResourceCountView counts number of namespaces in a ResourceGroup
 	ClusterScopedResourceCountView = &view.View{
-		Name:        ClusterScopedResourceCount.Name(),
+		Name:        ClusterScopedResourceCountName,
 		Measure:     ClusterScopedResourceCount,
 		Description: "The number of cluster scoped resources in a ResourceGroup",
 		TagKeys:     []tag.Key{KeyResourceGroup},
@@ -75,7 +75,7 @@ var (
 
 	// CRDCountView counts number of namespaces in a ResourceGroup
 	CRDCountView = &view.View{
-		Name:        CRDCount.Name(),
+		Name:        CRDCountName,
 		Measure:     CRDCount,
 		Description: "The number of CRDs in a ResourceGroup",
 		TagKeys:     []tag.Key{KeyResourceGroup},
@@ -84,7 +84,7 @@ var (
 
 	// KCCResourceCountView aggregates the KCC resources in a ResourceGroup
 	KCCResourceCountView = &view.View{
-		Name:        KCCResourceCount.Name(),
+		Name:        KCCResourceCountName,
 		Measure:     KCCResourceCount,
 		Description: "The total number of KCC resources in a ResourceGroup",
 		TagKeys:     []tag.Key{KeyResourceGroup},
@@ -94,7 +94,7 @@ var (
 	// PipelineErrorView aggregates the PipelineError by components
 	// TODO: add link to same metric in Config Sync under pkg/metrics/views.go
 	PipelineErrorView = &view.View{
-		Name:        PipelineError.Name(),
+		Name:        PipelineErrorName,
 		Measure:     PipelineError,
 		Description: "A boolean value indicates if error happened from different stages when syncing a commit",
 		TagKeys:     []tag.Key{KeyName, KeyComponent, KeyType},

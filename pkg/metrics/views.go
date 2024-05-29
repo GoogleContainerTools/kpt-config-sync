@@ -28,7 +28,7 @@ var longDistributionBounds = []float64{1, 5, 10, 30, 60, 300, 600, 1200, 1800, 3
 var (
 	// APICallDurationView aggregates the APICallDuration metric measurements.
 	APICallDurationView = &view.View{
-		Name:        APICallDuration.Name(),
+		Name:        APICallDurationName,
 		Measure:     APICallDuration,
 		Description: "The latency distribution of API server calls",
 		TagKeys:     []tag.Key{KeyOperation, KeyStatus},
@@ -37,7 +37,7 @@ var (
 
 	// ReconcilerErrorsView aggregates the ReconcilerErrors metric measurements.
 	ReconcilerErrorsView = &view.View{
-		Name:        ReconcilerErrors.Name(),
+		Name:        ReconcilerErrorsName,
 		Measure:     ReconcilerErrors,
 		Description: "The current number of errors in the RootSync and RepoSync reconcilers",
 		TagKeys:     []tag.Key{KeyComponent, KeyErrorClass},
@@ -49,7 +49,7 @@ var (
 	// controller, or the Prometheus exporter will error. b/247516388
 	// https://github.com/GoogleContainerTools/kpt-resource-group/blob/main/controllers/metrics/views.go#L123
 	PipelineErrorView = &view.View{
-		Name:        PipelineError.Name(),
+		Name:        PipelineErrorName,
 		Measure:     PipelineError,
 		Description: "A boolean value indicates if error happened from different stages when syncing a commit",
 		TagKeys:     []tag.Key{KeyName, KeyReconcilerType, KeyComponent},
@@ -58,7 +58,7 @@ var (
 
 	// ReconcileDurationView aggregates the ReconcileDuration metric measurements.
 	ReconcileDurationView = &view.View{
-		Name:        ReconcileDuration.Name(),
+		Name:        ReconcileDurationName,
 		Measure:     ReconcileDuration,
 		Description: "The latency distribution of RootSync and RepoSync reconcile events",
 		TagKeys:     []tag.Key{KeyStatus},
@@ -67,7 +67,7 @@ var (
 
 	// ParserDurationView aggregates the ParserDuration metric measurements.
 	ParserDurationView = &view.View{
-		Name:        ParserDuration.Name(),
+		Name:        ParserDurationName,
 		Measure:     ParserDuration,
 		Description: "The latency distribution of the parse-apply-watch loop",
 		TagKeys:     []tag.Key{KeyStatus, KeyTrigger, KeyParserSource},
@@ -76,7 +76,7 @@ var (
 
 	// LastSyncTimestampView aggregates the LastSyncTimestamp metric measurements.
 	LastSyncTimestampView = &view.View{
-		Name:        LastSync.Name(),
+		Name:        LastSyncName,
 		Measure:     LastSync,
 		Description: "The timestamp of the most recent sync from Git",
 		TagKeys:     []tag.Key{KeyCommit, KeyStatus},
@@ -85,7 +85,7 @@ var (
 
 	// DeclaredResourcesView aggregates the DeclaredResources metric measurements.
 	DeclaredResourcesView = &view.View{
-		Name:        DeclaredResources.Name(),
+		Name:        DeclaredResourcesName,
 		Measure:     DeclaredResources,
 		Description: "The current number of declared resources parsed from Git",
 		TagKeys:     []tag.Key{KeyCommit},
@@ -94,7 +94,7 @@ var (
 
 	// ApplyOperationsView aggregates the ApplyOps metric measurements.
 	ApplyOperationsView = &view.View{
-		Name:        ApplyOperations.Name() + "_total",
+		Name:        ApplyOperationsName,
 		Measure:     ApplyOperations,
 		Description: "The total number of operations that have been performed to sync resources to source of truth",
 		TagKeys:     []tag.Key{KeyController, KeyOperation, KeyStatus},
@@ -103,7 +103,7 @@ var (
 
 	// ApplyDurationView aggregates the ApplyDuration metric measurements.
 	ApplyDurationView = &view.View{
-		Name:        ApplyDuration.Name(),
+		Name:        ApplyDurationName,
 		Measure:     ApplyDuration,
 		Description: "The latency distribution of applier resource sync events",
 		TagKeys:     []tag.Key{KeyCommit, KeyStatus},
@@ -112,7 +112,7 @@ var (
 
 	// LastApplyTimestampView aggregates the LastApplyTimestamp metric measurements.
 	LastApplyTimestampView = &view.View{
-		Name:        LastApply.Name(),
+		Name:        LastApplyName,
 		Measure:     LastApply,
 		Description: "The timestamp of the most recent applier resource sync event",
 		TagKeys:     []tag.Key{KeyCommit, KeyStatus},
@@ -121,7 +121,7 @@ var (
 
 	// ResourceFightsView aggregates the ResourceFights metric measurements.
 	ResourceFightsView = &view.View{
-		Name:        ResourceFights.Name() + "_total",
+		Name:        ResourceFightsName,
 		Measure:     ResourceFights,
 		Description: "The total number of resources that are being synced too frequently",
 		Aggregation: view.Count(),
@@ -129,7 +129,7 @@ var (
 
 	// RemediateDurationView aggregates the RemediateDuration metric measurements.
 	RemediateDurationView = &view.View{
-		Name:        RemediateDuration.Name(),
+		Name:        RemediateDurationName,
 		Measure:     RemediateDuration,
 		Description: "The latency distribution of remediator reconciliation events",
 		TagKeys:     []tag.Key{KeyStatus},
@@ -138,7 +138,7 @@ var (
 
 	// ResourceConflictsView aggregates the ResourceConflicts metric measurements.
 	ResourceConflictsView = &view.View{
-		Name:        ResourceConflicts.Name() + "_total",
+		Name:        ResourceConflictsName,
 		Measure:     ResourceConflicts,
 		Description: "The total number of resource conflicts resulting from a mismatch between the cached resources and cluster resources",
 		TagKeys:     []tag.Key{KeyCommit},
@@ -147,7 +147,7 @@ var (
 
 	// InternalErrorsView aggregates the InternalErrors metric measurements.
 	InternalErrorsView = &view.View{
-		Name:        InternalErrors.Name() + "_total",
+		Name:        InternalErrorsName,
 		Measure:     InternalErrors,
 		Description: "The total number of internal errors triggered by Config Sync",
 		TagKeys:     []tag.Key{KeyInternalErrorSource},

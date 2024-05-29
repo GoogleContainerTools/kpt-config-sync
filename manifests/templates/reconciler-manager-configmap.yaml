@@ -67,6 +67,9 @@ data:
            volumeMounts:
            - name: repo
              mountPath: /repo
+           - name: service-account
+             mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+             readOnly: true
            imagePullPolicy: IfNotPresent
            securityContext:
              allowPrivilegeEscalation: false
@@ -274,6 +277,8 @@ data:
            configMap:
              name: otel-agent
              defaultMode: 420
+         - name: service-account
+           emptyDir: {}
          securityContext:
            fsGroup: 65533
            runAsUser: 1000

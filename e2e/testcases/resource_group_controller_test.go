@@ -300,7 +300,7 @@ func TestResourceGroupCustomResource(t *testing.T) {
 			nt.T.Error(err)
 		}
 	})
-	if err := nt.KubeClient.Create(crdObj); err != nil {
+	if err := nt.KubeClient.Create(crdObj); err != nil && !apierrors.IsAlreadyExists(err) {
 		nt.T.Fatal(err)
 	}
 	if err := nt.Watcher.WatchForCurrentStatus(kinds.CustomResourceDefinitionV1(), crdObj.Name, ""); err != nil {

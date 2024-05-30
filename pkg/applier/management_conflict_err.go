@@ -15,6 +15,7 @@
 package applier
 
 import (
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -23,10 +24,12 @@ import (
 // KptManagementConflictError indicates that the passed resource is illegally
 // declared in multiple repositories.
 // TODO: merge with status.ManagementConflictError if cli-utils supports reporting the conflicting manager in InventoryOverlapError.
-func KptManagementConflictError(resource client.Object) status.Error {
+func KptManagementConflictError(resource client.Object) status.ManagementConflictError {
+	newManager := core.GetAnnotation(resource, metadata.ResourceManagerKey)
+	currentManager := "UNKNOWN"
 	return status.ManagementConflictErrorBuilder.
 		Sprintf("The %q reconciler cannot manage resources declared in another repository. "+
 			"Remove the declaration for this resource from either the current repository, or the managed repository.",
-			resource.GetAnnotations()[metadata.ResourceManagerKey]).
-		BuildWithResources(resource)
+			newManager).
+		BuildWithConflictingManagers(resource, newManager, currentManager)
 }

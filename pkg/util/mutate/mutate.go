@@ -58,8 +58,8 @@ func RetriableOrConflict(err error) bool {
 // unnecessary (`NoUpdateError` from the `mutate.Func`). Retries are quick, with
 // no backoff.
 // Returns an error if the status update fails OR if the mutate func fails.
-func Spec(ctx context.Context, c client.Client, obj client.Object, mutateFn Func) (bool, error) {
-	return withRetry(ctx, &specClient{client: c}, obj, mutateFn)
+func Spec(ctx context.Context, c client.Client, obj client.Object, mutateFn Func, opts ...client.UpdateOption) (bool, error) {
+	return withRetry(ctx, &specClient{client: c, updateOptions: opts}, obj, mutateFn)
 }
 
 // Status attempts to update the status of an object until successful or update
@@ -67,7 +67,7 @@ func Spec(ctx context.Context, c client.Client, obj client.Object, mutateFn Func
 // quick, with no backoff.
 // Returns an error if the status update fails OR if the mutate func fails OR if
 // the generation changes before the status update succeeds.
-func Status(ctx context.Context, c client.Client, obj client.Object, mutateFn Func) (bool, error) {
+func Status(ctx context.Context, c client.Client, obj client.Object, mutateFn Func, opts ...client.UpdateOption) (bool, error) {
 	oldGen := obj.GetGeneration()
 	mutateFn2 := func() error {
 		newGen := obj.GetGeneration()
@@ -79,7 +79,7 @@ func Status(ctx context.Context, c client.Client, obj client.Object, mutateFn Fu
 		}
 		return mutateFn()
 	}
-	return withRetry(ctx, &statusClient{client: c}, obj, mutateFn2)
+	return withRetry(ctx, &statusClient{client: c, updateOptions: opts}, obj, mutateFn2)
 }
 
 // withRetry attempts to update an object until successful or update becomes
@@ -169,7 +169,8 @@ type updater interface {
 }
 
 type specClient struct {
-	client client.Client
+	client        client.Client
+	updateOptions []client.UpdateOption
 }
 
 // Get the current spec of the specified object.
@@ -179,7 +180,7 @@ func (c *specClient) Get(ctx context.Context, obj client.Object) error {
 
 // Update the spec of the specified object.
 func (c *specClient) Update(ctx context.Context, obj client.Object) error {
-	return c.client.Update(ctx, obj)
+	return c.client.Update(ctx, obj, c.updateOptions...)
 }
 
 // WrapError returns the specified error wrapped with extra context specific
@@ -189,7 +190,8 @@ func (c *specClient) WrapError(_ context.Context, obj client.Object, err error) 
 }
 
 type statusClient struct {
-	client client.Client
+	client        client.Client
+	updateOptions []client.UpdateOption
 }
 
 // Get the current status of the specified object.
@@ -199,11 +201,23 @@ func (c *statusClient) Get(ctx context.Context, obj client.Object) error {
 
 // Update the status of the specified object.
 func (c *statusClient) Update(ctx context.Context, obj client.Object) error {
-	return c.client.Status().Update(ctx, obj)
+	return c.client.Status().Update(ctx, obj, convertUpdateOptions(c.updateOptions)...)
 }
 
 // WrapError returns the specified error wrapped with extra context specific
 // to this updater.
 func (c *statusClient) WrapError(_ context.Context, obj client.Object, err error) error {
 	return fmt.Errorf("failed to update object status: %s: %w", kinds.ObjectSummary(obj), err)
+}
+
+// convertUpdateOptions converts []client.UpdateOption to []client.SubResourceUpdateOption
+func convertUpdateOptions(optList []client.UpdateOption) []client.SubResourceUpdateOption {
+	if len(optList) == 0 {
+		return nil
+	}
+	opts := &client.UpdateOptions{}
+	opts.ApplyOptions(optList)
+	return []client.SubResourceUpdateOption{
+		&client.SubResourceUpdateOptions{UpdateOptions: *opts},
+	}
 }

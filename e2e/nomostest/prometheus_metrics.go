@@ -256,8 +256,12 @@ func reconcilerOperationMetrics(nt *NT, syncLabels prometheusmodel.LabelSet, op 
 	return func(ctx context.Context, v1api prometheusv1.API) error {
 		var err error
 		err = multierr.Append(err, metricAPICallDurationViewOperationHasStatus(ctx, nt, v1api, syncLabels, string(op.Operation), ocmetrics.StatusSuccess))
-		err = multierr.Append(err, metricApplyOperationsViewHasValueAtLeast(ctx, nt, v1api, syncLabels, string(op.Operation), ocmetrics.StatusSuccess, op.Count))
+		// err = multierr.Append(err, metricAPICallDurationViewOperationMustNotHaveStatus(ctx, nt, v1api, syncLabels, string(op.Operation), ocmetrics.StatusError))
+		// err = multierr.Append(err, metricApplyOperationsViewMustNotHaveStatus(ctx, nt, v1api, syncLabels, ocmetrics.RemediatorController, string(op.Operation), ocmetrics.StatusError))
+		// err = multierr.Append(err, metricApplyOperationsViewMustNotHaveStatus(ctx, nt, v1api, syncLabels, ocmetrics.ApplierController, string(op.Operation), ocmetrics.StatusError))
+		err = multierr.Append(err, metricApplyOperationsViewHasValueAtLeast(ctx, nt, v1api, syncLabels, ocmetrics.ApplierController, string(op.Operation), ocmetrics.StatusSuccess, op.Count))
 		err = multierr.Append(err, metricRemediateDurationViewHasStatus(ctx, nt, v1api, syncLabels, ocmetrics.StatusSuccess))
+		// err = multierr.Append(err, metricRemediateDurationViewMustNotHaveStatus(ctx, nt, v1api, syncLabels, ocmetrics.StatusError))
 		return err
 	}
 }
@@ -462,18 +466,45 @@ func metricAPICallDurationViewOperationHasStatus(ctx context.Context, nt *NT, v1
 	return metricExists(ctx, nt, v1api, query)
 }
 
-func metricApplyOperationsViewHasValueAtLeast(ctx context.Context, nt *NT, v1api prometheusv1.API, syncLabels prometheusmodel.LabelSet, operation, status string, value int) error {
+func metricAPICallDurationViewOperationMustNotHaveStatus(ctx context.Context, nt *NT, v1api prometheusv1.API, syncLabels prometheusmodel.LabelSet, operation, status string) error {
+	metricName := ocmetrics.APICallDurationView.Name
+	// APICallDurationView is a distribution. Query count to aggregate.
+	metricName = fmt.Sprintf("%s%s%s", prometheusConfigSyncMetricPrefix, metricName, prometheusDistributionCountSuffix)
+	labels := prometheusmodel.LabelSet{
+		prometheusmodel.LabelName(ocmetrics.KeyComponent.Name()): prometheusmodel.LabelValue(ocmetrics.OtelCollectorName),
+		prometheusmodel.LabelName(ocmetrics.KeyOperation.Name()): prometheusmodel.LabelValue(operation),
+		prometheusmodel.LabelName(ocmetrics.KeyStatus.Name()):    prometheusmodel.LabelValue(status),
+	}.Merge(syncLabels)
+	query := fmt.Sprintf("%s%s", metricName, labels)
+	return metricMustNotExist(ctx, nt, v1api, query)
+}
+
+func metricApplyOperationsViewHasValueAtLeast(ctx context.Context, nt *NT, v1api prometheusv1.API, syncLabels prometheusmodel.LabelSet, controller, operation, status string, value int) error {
 	metricName := ocmetrics.ApplyOperationsView.Name
 	metricName = fmt.Sprintf("%s%s", prometheusConfigSyncMetricPrefix, metricName)
 	labels := prometheusmodel.LabelSet{
 		prometheusmodel.LabelName(ocmetrics.KeyComponent.Name()):  prometheusmodel.LabelValue(ocmetrics.OtelCollectorName),
-		prometheusmodel.LabelName(ocmetrics.KeyController.Name()): prometheusmodel.LabelValue(ocmetrics.ApplierController),
+		prometheusmodel.LabelName(ocmetrics.KeyController.Name()): prometheusmodel.LabelValue(controller),
 		prometheusmodel.LabelName(ocmetrics.KeyOperation.Name()):  prometheusmodel.LabelValue(operation),
 		prometheusmodel.LabelName(ocmetrics.KeyStatus.Name()):     prometheusmodel.LabelValue(status),
 	}.Merge(syncLabels)
 	// ApplyOperationsView is a count, so we don't need to aggregate
 	query := fmt.Sprintf("%s%s", metricName, labels)
 	return metricExistsWithValueAtLeast(ctx, nt, v1api, query, float64(value))
+}
+
+func metricApplyOperationsViewMustNotHaveStatus(ctx context.Context, nt *NT, v1api prometheusv1.API, syncLabels prometheusmodel.LabelSet, controller, operation, status string) error {
+	metricName := ocmetrics.ApplyOperationsView.Name
+	metricName = fmt.Sprintf("%s%s", prometheusConfigSyncMetricPrefix, metricName)
+	labels := prometheusmodel.LabelSet{
+		prometheusmodel.LabelName(ocmetrics.KeyComponent.Name()):  prometheusmodel.LabelValue(ocmetrics.OtelCollectorName),
+		prometheusmodel.LabelName(ocmetrics.KeyController.Name()): prometheusmodel.LabelValue(controller),
+		prometheusmodel.LabelName(ocmetrics.KeyOperation.Name()):  prometheusmodel.LabelValue(operation),
+		prometheusmodel.LabelName(ocmetrics.KeyStatus.Name()):     prometheusmodel.LabelValue(status),
+	}.Merge(syncLabels)
+	// ApplyOperationsView is a count, so we don't need to aggregate
+	query := fmt.Sprintf("%s%s", metricName, labels)
+	return metricMustNotExist(ctx, nt, v1api, query)
 }
 
 func metricRemediateDurationViewHasStatus(ctx context.Context, nt *NT, v1api prometheusv1.API, syncLabels prometheusmodel.LabelSet, status string) error {
@@ -486,6 +517,18 @@ func metricRemediateDurationViewHasStatus(ctx context.Context, nt *NT, v1api pro
 	}.Merge(syncLabels)
 	query := fmt.Sprintf("%s%s", metricName, labels)
 	return metricExists(ctx, nt, v1api, query)
+}
+
+func metricRemediateDurationViewMustNotHaveStatus(ctx context.Context, nt *NT, v1api prometheusv1.API, syncLabels prometheusmodel.LabelSet, status string) error {
+	metricName := ocmetrics.RemediateDurationView.Name
+	// RemediateDurationView is a distribution. Query count to aggregate.
+	metricName = fmt.Sprintf("%s%s%s", prometheusConfigSyncMetricPrefix, metricName, prometheusDistributionCountSuffix)
+	labels := prometheusmodel.LabelSet{
+		prometheusmodel.LabelName(ocmetrics.KeyComponent.Name()): prometheusmodel.LabelValue(ocmetrics.OtelCollectorName),
+		prometheusmodel.LabelName(ocmetrics.KeyStatus.Name()):    prometheusmodel.LabelValue(status),
+	}.Merge(syncLabels)
+	query := fmt.Sprintf("%s%s", metricName, labels)
+	return metricMustNotExist(ctx, nt, v1api, query)
 }
 
 // metricQueryNow performs the specified query with the default timeout.
@@ -503,6 +546,36 @@ func metricQueryNow(ctx context.Context, nt *NT, v1api prometheusv1.API, query s
 		nt.T.Logf("prometheus warnings: %v", warnings)
 	}
 	return response, nil
+}
+
+// metricResultMustNotExist validates that the query response includes zero
+// vector or matrix results. Response is debug logged.
+// This function does not perform the query, just validates and logs it.
+func metricResultMustNotExist(nt *NT, query string, response prometheusmodel.Value) error {
+	switch result := response.(type) {
+	case prometheusmodel.Vector:
+		if len(result) > 0 {
+			nt.Logger.Debugf("prometheus vector response:\n%s", result)
+			return fmt.Errorf("unexpected results from prometheus query (found %d, expected 0): %s", len(result), query)
+		}
+		return nil
+	case prometheusmodel.Matrix:
+		if len(result) > 0 {
+			nt.Logger.Debugf("prometheus matrix response:\n%s", result)
+			return fmt.Errorf("unexpected results from prometheus query (found %d, expected 0): %s", len(result), query)
+		}
+		return nil
+	default:
+		return fmt.Errorf("unsupported prometheus response: %T", response)
+	}
+}
+
+func metricMustNotExist(ctx context.Context, nt *NT, v1api prometheusv1.API, query string) error {
+	response, err := metricQueryNow(ctx, nt, v1api, query)
+	if err != nil {
+		return err
+	}
+	return metricResultMustNotExist(nt, query, response)
 }
 
 // metricResultMustExist validates that the query response includes at least one

@@ -23,6 +23,7 @@ import (
 	"golang.org/x/net/context"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
@@ -87,6 +88,16 @@ func idFrom(identifier object.ObjMetadata) core.ID {
 	}
 }
 
+func idFromInvObjMeta(objMeta v1alpha1.ObjMetadata) core.ID {
+	return core.ID{
+		GroupKind: objMeta.GK(),
+		ObjectKey: client.ObjectKey{
+			Namespace: objMeta.Namespace,
+			Name:      objMeta.Name,
+		},
+	}
+}
+
 func idFromInventory(rg *live.InventoryResourceGroup) core.ID {
 	return core.ID{
 		GroupKind: live.ResourceGroupGVK.GroupKind(),
@@ -126,7 +137,7 @@ func getObjectSize(u *unstructured.Unstructured) (int, error) {
 	return len(data), nil
 }
 
-func annotateStatusMode(ctx context.Context, c client.Client, u *unstructured.Unstructured, statusMode string) error {
+func annotateStatusMode(ctx context.Context, c client.Client, u *unstructured.Unstructured, statusMode InventoryStatusMode) error {
 	err := c.Get(ctx, client.ObjectKey{Name: u.GetName(), Namespace: u.GetNamespace()}, u)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -138,7 +149,7 @@ func annotateStatusMode(ctx context.Context, c client.Client, u *unstructured.Un
 	if annotations == nil {
 		annotations = make(map[string]string)
 	}
-	annotations[StatusModeKey] = statusMode
+	annotations[StatusModeKey] = statusMode.String()
 	u.SetAnnotations(annotations)
 	return c.Update(ctx, u)
 }

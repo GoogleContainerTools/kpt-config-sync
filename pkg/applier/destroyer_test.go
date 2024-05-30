@@ -198,7 +198,19 @@ func TestDestroy(t *testing.T) {
 			destroyer, err := NewNamespaceSupervisor(cs, "test-namespace", "rs", 5*time.Minute)
 			require.NoError(t, err)
 
-			errs := destroyer.Destroy(context.Background())
+			var errs status.MultiError
+			superEventHandler := func(event SuperEvent) {
+				if errEvent, ok := event.(SuperErrorEvent); ok {
+					if errs == nil {
+						errs = errEvent.Error
+					} else {
+						errs = status.Append(errs, errEvent.Error)
+					}
+				}
+			}
+
+			// TODO: Test statusMap & stats
+			_, _ = destroyer.Destroy(context.Background(), superEventHandler)
 			testerrors.AssertEqual(t, tc.multiErr, errs)
 		})
 	}

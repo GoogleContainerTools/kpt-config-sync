@@ -294,7 +294,9 @@ func TestRepoSyncFinalize(t *testing.T) {
 			}
 			fakeDestroyer := newFakeDestroyer(tc.destroyErrs, destroyFunc)
 			finalizer := &RepoSyncFinalizer{
-				Destroyer:          fakeDestroyer,
+				baseFinalizer: baseFinalizer{
+					Destroyer: fakeDestroyer,
+				},
 				Client:             fakeClient,
 				StopControllers:    stopFunc,
 				ControllersStopped: continueCh,

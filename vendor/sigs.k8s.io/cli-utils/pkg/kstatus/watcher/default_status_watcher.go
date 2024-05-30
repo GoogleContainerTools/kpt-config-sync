@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/cli-utils/pkg/kstatus/polling/clusterreader"
 	"sigs.k8s.io/cli-utils/pkg/kstatus/polling/engine"
@@ -43,6 +44,15 @@ type DefaultStatusWatcher struct {
 	// required for computing parent object status, to compensate for
 	// controllers that aren't following status conventions.
 	ClusterReader engine.ClusterReader
+
+	// Indexers control how the watch cache is indexed, allowing namespace
+	// filtering and field selectors. If you watch at namespace scope, you must
+	// provide the namespace indexer. If you specify a field selector filter,
+	// you must also provide an indexer for that field.
+	Indexers cache.Indexers
+
+	// Filters allows filtering the objects being watched.
+	Filters *Filters
 }
 
 var _ StatusWatcher = &DefaultStatusWatcher{}
@@ -60,6 +70,7 @@ func NewDefaultStatusWatcher(dynamicClient dynamic.Interface, mapper meta.RESTMa
 			DynamicClient: dynamicClient,
 			Mapper:        mapper,
 		},
+		Indexers: DefaultIndexers(),
 	}
 }
 
@@ -88,13 +99,18 @@ func (w *DefaultStatusWatcher) Watch(ctx context.Context, ids object.ObjMetadata
 	}
 
 	informer := &ObjectStatusReporter{
-		InformerFactory: NewDynamicInformerFactory(w.DynamicClient, w.ResyncPeriod),
-		Mapper:          w.Mapper,
-		StatusReader:    w.StatusReader,
-		ClusterReader:   w.ClusterReader,
-		Targets:         targets,
-		ObjectFilter:    &AllowListObjectFilter{AllowList: ids},
-		RESTScope:       scope,
+		InformerFactory: &DynamicInformerFactory{
+			Client:       w.DynamicClient,
+			ResyncPeriod: w.ResyncPeriod,
+			Indexers:     w.Indexers,
+			Filters:      w.Filters,
+		},
+		Mapper:        w.Mapper,
+		StatusReader:  w.StatusReader,
+		ClusterReader: w.ClusterReader,
+		Targets:       targets,
+		ObjectFilter:  &AllowListObjectFilter{AllowList: ids},
+		RESTScope:     scope,
 	}
 	return informer.Start(ctx)
 }

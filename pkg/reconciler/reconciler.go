@@ -77,9 +77,6 @@ type Options struct {
 	// PollingPeriod is the period of time between checking the filesystem for
 	// source updates to sync.
 	PollingPeriod time.Duration
-	// RetryPeriod is the period of time between checking the filesystem for
-	// source updates to sync, after an error.
-	RetryPeriod time.Duration
 	// StatusUpdatePeriod is how long the parser waits between updates of the
 	// sync status, to account for management conflict errors from the remediator.
 	StatusUpdatePeriod time.Duration
@@ -105,7 +102,7 @@ type Options struct {
 	// SyncDir is the relative path to the configurations in the source.
 	SyncDir cmpath.Relative
 	// StatusMode controls the kpt applier to inject the actuation status data or not
-	StatusMode string
+	StatusMode applier.InventoryStatusMode
 	// ReconcileTimeout controls the reconcile/prune Timeout in kpt applier
 	ReconcileTimeout string
 	// APIServerTimeout is the client-side timeout used for talking to the API server
@@ -194,7 +191,7 @@ func Run(opts Options) {
 	if reconcileTimeout < 0 {
 		klog.Fatalf("Invalid reconcileTimeout: %v, timeout should not be negative", reconcileTimeout)
 	}
-	clientSet, err := applier.NewClientSet(cl, configFlags, opts.StatusMode)
+	clientSet, err := applier.NewClientSet(cl, configFlags, opts.StatusMode, opts.SyncName, opts.ReconcilerScope)
 	if err != nil {
 		klog.Fatalf("Error creating clients: %v", err)
 	}
@@ -241,17 +238,17 @@ func Run(opts Options) {
 		SyncName:           opts.SyncName,
 		PollingPeriod:      opts.PollingPeriod,
 		ResyncPeriod:       opts.ResyncPeriod,
-		RetryPeriod:        opts.RetryPeriod,
 		StatusUpdatePeriod: opts.StatusUpdatePeriod,
 		DiscoveryInterface: discoveryClient,
 		RenderingEnabled:   opts.RenderingEnabled,
 		Files:              parse.Files{FileSource: fs},
 		WebhookEnabled:     opts.WebhookEnabled,
 		Updater: parse.Updater{
-			Scope:      opts.ReconcilerScope,
-			Resources:  decls,
-			Applier:    supervisor,
-			Remediator: rem,
+			Scope:              opts.ReconcilerScope,
+			Resources:          decls,
+			Applier:            supervisor,
+			Remediator:         rem,
+			StatusUpdatePeriod: opts.StatusUpdatePeriod,
 		},
 	}
 	// Only instantiate the converter when the webhook is enabled because the
@@ -284,6 +281,9 @@ func Run(opts Options) {
 			klog.Fatalf("Instantiating Namespace Repository Parser: %v", err)
 		}
 	}
+
+	// Updater needs the type-specific parser to known how to update the RSync sync status.
+	parseOpts.Updater.SyncStatusUpdater = parser
 
 	// Start listening to signals
 	signalCtx := signals.SetupSignalHandler()

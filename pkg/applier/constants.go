@@ -19,10 +19,10 @@ import "kpt.dev/configsync/pkg/api/configsync"
 const (
 	// StatusEnabled is used to allow kpt applier to inject the actuation status
 	// into the ResourceGroup object.
-	StatusEnabled = "enabled"
+	StatusEnabled InventoryStatusMode = "enabled"
 	//  StatusDisabled is used to stop kpt applier to inject the actuation status
 	// into the ResourceGroup object.
-	StatusDisabled = "disabled"
+	StatusDisabled InventoryStatusMode = "disabled"
 
 	// StatusModeKey annotates a ResourceGroup CR
 	// to communicate with the ResourceGroup controller.
@@ -30,3 +30,12 @@ const (
 	// ignores the ResourceGroup CR.
 	StatusModeKey = configsync.ConfigSyncPrefix + "status"
 )
+
+// InventoryStatusMode is an enum describing how to report object status in the inventory.
+type InventoryStatusMode string
+
+// String returns the InventoryStatusMode as a string.
+// Satisfies the Stringer interface.
+func (m InventoryStatusMode) String() string {
+	return string(m)
+}

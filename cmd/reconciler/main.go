@@ -24,6 +24,7 @@ import (
 	"k8s.io/klog/v2/textlogger"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
@@ -180,7 +181,6 @@ func main() {
 		ReconcilerScope:          declared.Scope(*scope),
 		ResyncPeriod:             *resyncPeriod,
 		PollingPeriod:            *pollingPeriod,
-		RetryPeriod:              configsync.DefaultReconcilerRetryPeriod,
 		StatusUpdatePeriod:       configsync.DefaultReconcilerSyncStatusUpdatePeriod,
 		SourceRoot:               absSourceDir,
 		RepoRoot:                 absRepoRoot,
@@ -193,7 +193,7 @@ func main() {
 		SyncDir:                  relSyncDir,
 		SyncName:                 *syncName,
 		ReconcilerName:           *reconcilerName,
-		StatusMode:               *statusMode,
+		StatusMode:               applier.InventoryStatusMode(*statusMode),
 		ReconcileTimeout:         *reconcileTimeout,
 		APIServerTimeout:         *apiServerTimeout,
 		RenderingEnabled:         *renderingEnabled,

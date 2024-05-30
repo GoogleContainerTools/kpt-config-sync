@@ -16,6 +16,8 @@ package declared
 
 import (
 	"k8s.io/apimachinery/pkg/util/validation"
+	"kpt.dev/configsync/pkg/api/configmanagement"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/status"
 )
 
@@ -40,4 +42,28 @@ func ValidateScope(s string) error {
 		return status.InternalErrorf("invalid scope %q: %v", s, errs)
 	}
 	return nil
+}
+
+// ScopeFromSync returns the scope associated with a specific RootSync or RepoSync.
+func ScopeFromSync(syncKind, syncNamespace string) Scope {
+	if syncKind == configsync.RootSyncKind {
+		return RootReconciler
+	}
+	return Scope(syncNamespace)
+}
+
+// SyncNamespaceFromScope returns the namespace associated with a specific scope.
+func SyncNamespaceFromScope(syncScope Scope) string {
+	if syncScope == RootReconciler {
+		return configmanagement.ControllerNamespace
+	}
+	return string(syncScope)
+}
+
+// SyncKindFromScope returns the namespace associated with a specific scope.
+func SyncKindFromScope(syncScope Scope) string {
+	if syncScope == RootReconciler {
+		return configsync.RootSyncKind
+	}
+	return configsync.RepoSyncKind
 }

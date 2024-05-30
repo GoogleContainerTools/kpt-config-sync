@@ -19,8 +19,8 @@ import (
 	"fmt"
 
 	"k8s.io/klog/v2"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
-	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/rootsync"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/util/mutate"
@@ -31,8 +31,9 @@ import (
 // to destroy all managed user objects previously applied from source.
 // Implements the Finalizer interface.
 type RootSyncFinalizer struct {
-	Destroyer applier.Destroyer
-	Client    client.Client
+	baseFinalizer
+
+	Client client.Client
 
 	// StopControllers will be called by the Finalize() method to stop the Parser and Remediator.
 	StopControllers context.CancelFunc
@@ -96,7 +97,7 @@ func (f *RootSyncFinalizer) AddFinalizer(ctx context.Context, syncObj client.Obj
 			return &mutate.NoUpdateError{}
 		}
 		return nil
-	})
+	}, client.FieldOwner(configsync.FieldManager))
 	if err != nil {
 		return updated, fmt.Errorf("failed to add finalizer: %w", err)
 	}
@@ -119,7 +120,7 @@ func (f *RootSyncFinalizer) RemoveFinalizer(ctx context.Context, syncObj client.
 			return &mutate.NoUpdateError{}
 		}
 		return nil
-	})
+	}, client.FieldOwner(configsync.FieldManager))
 	if err != nil {
 		return updated, fmt.Errorf("failed to remove finalizer: %w", err)
 	}
@@ -140,7 +141,7 @@ func (f *RootSyncFinalizer) setFinalizingCondition(ctx context.Context, syncObj 
 			return &mutate.NoUpdateError{}
 		}
 		return nil
-	})
+	}, client.FieldOwner(configsync.FieldManager))
 	if err != nil {
 		return updated, fmt.Errorf("failed to set ReconcilerFinalizing condition: %w", err)
 	}
@@ -161,7 +162,7 @@ func (f *RootSyncFinalizer) removeFinalizingCondition(ctx context.Context, syncO
 			return &mutate.NoUpdateError{}
 		}
 		return nil
-	})
+	}, client.FieldOwner(configsync.FieldManager))
 	if err != nil {
 		return updated, fmt.Errorf("failed to remove ReconcilerFinalizing condition: %w", err)
 	}
@@ -176,7 +177,7 @@ func (f *RootSyncFinalizer) removeFinalizingCondition(ctx context.Context, syncO
 // deleteManagedObjects uses the destroyer to delete managed objects and then
 // updates the ReconcilerFinalizerFailure condition on the specified object.
 func (f *RootSyncFinalizer) deleteManagedObjects(ctx context.Context, syncObj *v1beta1.RootSync) error {
-	destroyErrs := f.Destroyer.Destroy(ctx)
+	destroyErrs := f.destroy(ctx)
 	// Update the FinalizerFailure condition whether the destroy succeeded or failed
 	if _, updateErr := f.updateFailureCondition(ctx, syncObj, destroyErrs); updateErr != nil {
 		updateErr = fmt.Errorf("updating FinalizerFailure condition: %w", updateErr)
@@ -207,7 +208,7 @@ func (f *RootSyncFinalizer) updateFailureCondition(ctx context.Context, syncObj 
 			}
 		}
 		return nil
-	})
+	}, client.FieldOwner(configsync.FieldManager))
 	if err != nil {
 		return updated, fmt.Errorf("failed to set ReconcilerFinalizerFailure condition: %w", err)
 	}

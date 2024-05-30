@@ -14,7 +14,9 @@
 
 package configsync
 
-import "time"
+import (
+	"time"
+)
 
 const (
 	// GroupName is the name of the group of configsync resources.
@@ -23,7 +25,8 @@ const (
 	// ConfigSyncPrefix is the prefix for all ConfigSync annotations and labels.
 	ConfigSyncPrefix = GroupName + "/"
 
-	// FieldManager is the field manager name for server-side apply.
+	// FieldManager is the field manager name used by the reconciler.
+	// This avoids conflicts between the reconciler and reconciler-manager.
 	FieldManager = GroupName
 
 	// ControllerNamespace is the Namespace used for Nomos controllers

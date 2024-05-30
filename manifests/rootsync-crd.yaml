@@ -987,6 +987,10 @@ spec:
                     format: date-time
                     nullable: true
                     type: string
+                  objectCount:
+                    description: objectCount is the number of objects detected in
+                      the source of truth, after rendering, if applicable.
+                    type: integer
                   ociStatus:
                     description: ociStatus contains fields describing the status of
                       an OCI source of truth.
@@ -1144,6 +1148,10 @@ spec:
                     format: date-time
                     nullable: true
                     type: string
+                  objectCount:
+                    description: objectCount is the number of objects intended to
+                      be synced to the cluster.
+                    type: integer
                   ociStatus:
                     description: ociStatus contains fields describing the status of
                       an OCI source of truth.
@@ -2124,6 +2132,10 @@ spec:
                     format: date-time
                     nullable: true
                     type: string
+                  objectCount:
+                    description: objectCount is the number of objects detected in
+                      the source of truth, after rendering, if applicable.
+                    type: integer
                   ociStatus:
                     description: ociStatus contains fields describing the status of
                       an OCI source of truth.
@@ -2281,6 +2293,10 @@ spec:
                     format: date-time
                     nullable: true
                     type: string
+                  objectCount:
+                    description: objectCount is the number of objects intended to
+                      be synced to the cluster.
+                    type: integer
                   ociStatus:
                     description: ociStatus contains fields describing the status of
                       an OCI source of truth.

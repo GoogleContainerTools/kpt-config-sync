@@ -14,9 +14,15 @@
 
 package reconcilermanager
 
+import "kpt.dev/configsync/pkg/api/configsync"
+
 const (
 	// ManagerName is the name of the controller which creates reconcilers.
 	ManagerName = "reconciler-manager"
+
+	// FieldManager is the field manager used by the reconciler-manager.
+	// This avoids conflicts between the reconciler and reconciler-manager.
+	FieldManager = configsync.ConfigSyncPrefix + ManagerName
 )
 
 const (

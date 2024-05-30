@@ -30,6 +30,7 @@ require (
 	github.com/spf13/cobra v1.7.0
 	github.com/spyzhov/ajson v0.9.0
 	github.com/stretchr/testify v1.8.4
+	github.com/wk8/go-ordered-map v1.0.0
 	go.opencensus.io v0.24.0
 	go.uber.org/multierr v1.11.0
 	go.uber.org/zap v1.26.0
@@ -52,7 +53,7 @@ require (
 	k8s.io/kubectl v0.28.9
 	k8s.io/kubernetes v1.28.9
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
-	sigs.k8s.io/cli-utils v0.35.1-0.20240504222723-227a03f4a7f9
+	sigs.k8s.io/cli-utils v0.36.1-0.20240525003310-87074c9799d2
 	sigs.k8s.io/controller-runtime v0.16.3
 	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20231023142458-b9f29826ee83
 	sigs.k8s.io/kind v0.20.0

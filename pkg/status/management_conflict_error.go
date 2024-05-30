@@ -19,6 +19,7 @@ import (
 
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/metadata"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -32,6 +33,8 @@ var ManagementConflictErrorBuilder = NewErrorBuilder(ManagementConflictErrorCode
 // ManagementConflictError indicates that the passed resource is illegally
 // declared in multiple repositories.
 type ManagementConflictError interface {
+	// ConflictingObjectID returns the ID of the object with the management conflict.
+	ConflictingObjectID() core.ID
 	// ConflictingManager returns the annotation value of the other conflicting manager.
 	ConflictingManager() string
 	// CurrentManagerError returns the error that will be surfaced to the current manager.
@@ -121,4 +124,8 @@ func (m *managementConflictErrorImpl) Is(target error) bool {
 		return false
 	}
 	return m.underlying.Is(target)
+}
+
+func (m managementConflictErrorImpl) ConflictingObjectID() core.ID {
+	return core.IDOf(m.resource)
 }

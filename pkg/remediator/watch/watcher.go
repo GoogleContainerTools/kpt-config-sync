@@ -18,6 +18,7 @@ import (
 	"context"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/rest"
@@ -38,6 +39,7 @@ type watcherConfig struct {
 	syncName        string
 	startWatch      WatchFunc
 	conflictHandler conflict.Handler
+	labelSelector   labels.Selector
 }
 
 // watcherFactory knows how to build watch.Runnables.

@@ -25,6 +25,8 @@ import (
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
+	"kpt.dev/configsync/pkg/remediator/conflict"
+	"kpt.dev/configsync/pkg/remediator/queue"
 	"kpt.dev/configsync/pkg/status"
 	syncerclient "kpt.dev/configsync/pkg/syncer/client"
 	syncerreconcile "kpt.dev/configsync/pkg/syncer/reconcile"
@@ -47,7 +49,8 @@ type reconciler struct {
 	// declared is the threadsafe in-memory representation of declared configuration.
 	declared *declared.Resources
 
-	fightHandler fight.Handler
+	conflictHandler conflict.Handler
+	fightHandler    fight.Handler
 }
 
 // newReconciler instantiates a new reconciler.
@@ -56,14 +59,16 @@ func newReconciler(
 	syncName string,
 	applier syncerreconcile.Applier,
 	declared *declared.Resources,
+	conflictHandler conflict.Handler,
 	fightHandler fight.Handler,
 ) *reconciler {
 	return &reconciler{
-		scope:        scope,
-		syncName:     syncName,
-		applier:      applier,
-		declared:     declared,
-		fightHandler: fightHandler,
+		scope:           scope,
+		syncName:        syncName,
+		applier:         applier,
+		declared:        declared,
+		conflictHandler: conflictHandler,
+		fightHandler:    fightHandler,
 	}
 }
 
@@ -85,6 +90,15 @@ func (r *reconciler) Remediate(ctx context.Context, id core.ID, obj client.Objec
 		Actual:   obj,
 	}
 
+	// Build GVKNN from Diff, if possible
+	gvknn := queue.GVKNN{ID: id}
+	if objDiff.Actual != nil {
+		gvknn.Version = objDiff.Actual.GetObjectKind().GroupVersionKind().Version
+	} else if objDiff.Declared != nil {
+		gvknn.Version = objDiff.Declared.GetObjectKind().GroupVersionKind().Version
+	}
+	// else: GVKNN won't match any previous conflicts, so RemoveConflictError will be a No Op.
+
 	err := r.remediate(ctx, id, objDiff)
 
 	// Record duration, even if there's an error
@@ -95,6 +109,10 @@ func (r *reconciler) Remediate(ctx context.Context, id core.ID, obj client.Objec
 		case syncerclient.ResourceConflictCode:
 			// Record conflict, if there was one
 			metrics.RecordResourceConflict(ctx, commit)
+		case status.ManagementConflictErrorCode:
+			// TODO: Casting will panic if another status.Error wraps the ManagementConflictError. Is that possible here?
+			r.conflictHandler.AddConflictError(gvknn, err.(status.ManagementConflictError))
+			metrics.RecordResourceConflict(ctx, commit)
 		case status.FightErrorCode:
 			operation := objDiff.Operation(r.scope, r.syncName)
 			metrics.RecordResourceFight(ctx, string(operation))
@@ -103,6 +121,9 @@ func (r *reconciler) Remediate(ctx context.Context, id core.ID, obj client.Objec
 		return err
 	}
 
+	// TODO: Convert RemoveConflictError to use ID, instead of GVKNN
+	// TODO: Should we resolve conflicts in the watcher or the worker?
+	// r.conflictHandler.RemoveConflictError(gvknn)
 	r.fightHandler.RemoveFightError(id)
 	return nil
 }
@@ -113,6 +134,11 @@ func (r *reconciler) remediate(ctx context.Context, id core.ID, objDiff diff.Dif
 	switch t := objDiff.Operation(r.scope, r.syncName); t {
 	case diff.NoOp:
 		return nil
+	case diff.ManagementConflict:
+		oldManager := core.GetAnnotation(objDiff.Actual, metadata.ResourceManagerKey)
+		newManager := declared.ResourceManager(r.scope, r.syncName)
+		klog.Warningf("Remediator skipping object %v: management conflict detected (current: %s, desired: %s)", id, oldManager, newManager)
+		return status.ManagementConflictErrorWrap(objDiff.Actual, newManager)
 	case diff.Create:
 		declared, err := objDiff.UnstructuredDeclared()
 		if err != nil {

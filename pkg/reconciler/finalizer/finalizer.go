@@ -37,14 +37,18 @@ type Finalizer interface {
 func New(scope declared.Scope, destroyer applier.Destroyer, c client.Client, stopControllers context.CancelFunc, controllersStopped <-chan struct{}) Finalizer {
 	if scope == declared.RootReconciler {
 		return &RootSyncFinalizer{
-			Destroyer:          destroyer,
+			baseFinalizer: baseFinalizer{
+				Destroyer: destroyer,
+			},
 			Client:             c,
 			StopControllers:    stopControllers,
 			ControllersStopped: controllersStopped,
 		}
 	}
 	return &RepoSyncFinalizer{
-		Destroyer:          destroyer,
+		baseFinalizer: baseFinalizer{
+			Destroyer: destroyer,
+		},
 		Client:             c,
 		StopControllers:    stopControllers,
 		ControllersStopped: controllersStopped,

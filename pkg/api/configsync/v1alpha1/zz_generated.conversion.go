@@ -1241,6 +1241,7 @@ func autoConvert_v1alpha1_SourceStatus_To_v1beta1_SourceStatus(in *SourceStatus,
 	out.Oci = (*v1beta1.OciStatus)(unsafe.Pointer(in.Oci))
 	out.Helm = (*v1beta1.HelmStatus)(unsafe.Pointer(in.Helm))
 	out.Commit = in.Commit
+	out.ObjectCount = in.ObjectCount
 	out.LastUpdate = in.LastUpdate
 	out.Errors = *(*[]v1beta1.ConfigSyncError)(unsafe.Pointer(&in.Errors))
 	out.ErrorSummary = (*v1beta1.ErrorSummary)(unsafe.Pointer(in.ErrorSummary))
@@ -1257,6 +1258,7 @@ func autoConvert_v1beta1_SourceStatus_To_v1alpha1_SourceStatus(in *v1beta1.Sourc
 	out.Oci = (*OciStatus)(unsafe.Pointer(in.Oci))
 	out.Helm = (*HelmStatus)(unsafe.Pointer(in.Helm))
 	out.Commit = in.Commit
+	out.ObjectCount = in.ObjectCount
 	out.LastUpdate = in.LastUpdate
 	out.Errors = *(*[]ConfigSyncError)(unsafe.Pointer(&in.Errors))
 	out.ErrorSummary = (*ErrorSummary)(unsafe.Pointer(in.ErrorSummary))
@@ -1315,6 +1317,7 @@ func autoConvert_v1alpha1_SyncStatus_To_v1beta1_SyncStatus(in *SyncStatus, out *
 	out.Oci = (*v1beta1.OciStatus)(unsafe.Pointer(in.Oci))
 	out.Helm = (*v1beta1.HelmStatus)(unsafe.Pointer(in.Helm))
 	out.Commit = in.Commit
+	out.ObjectCount = in.ObjectCount
 	out.LastUpdate = in.LastUpdate
 	out.Errors = *(*[]v1beta1.ConfigSyncError)(unsafe.Pointer(&in.Errors))
 	out.ErrorSummary = (*v1beta1.ErrorSummary)(unsafe.Pointer(in.ErrorSummary))
@@ -1331,6 +1334,7 @@ func autoConvert_v1beta1_SyncStatus_To_v1alpha1_SyncStatus(in *v1beta1.SyncStatu
 	out.Oci = (*OciStatus)(unsafe.Pointer(in.Oci))
 	out.Helm = (*HelmStatus)(unsafe.Pointer(in.Helm))
 	out.Commit = in.Commit
+	out.ObjectCount = in.ObjectCount
 	out.LastUpdate = in.LastUpdate
 	out.Errors = *(*[]ConfigSyncError)(unsafe.Pointer(&in.Errors))
 	out.ErrorSummary = (*ErrorSummary)(unsafe.Pointer(in.ErrorSummary))

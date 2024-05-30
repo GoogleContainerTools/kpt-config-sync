@@ -45,9 +45,9 @@ import (
 // into namespaces that are dynamically present on the cluster. It also sets a
 // default namespace on any namespace-scoped object that does not already
 // have a namespace or namespace selector set.
-func NamespaceSelectors(ctx context.Context, c client.Client) objects.ScopedVisitor {
+func NamespaceSelectors(ctx context.Context, c client.Client, fieldManager string) objects.ScopedVisitor {
 	return func(objs *objects.Scoped) status.MultiError {
-		nsSelectors, errs := buildSelectorMap(ctx, c, objs)
+		nsSelectors, errs := buildSelectorMap(ctx, c, fieldManager, objs)
 		if errs != nil {
 			return errs
 		}
@@ -84,7 +84,7 @@ func NamespaceSelectors(ctx context.Context, c client.Client) objects.ScopedVisi
 // of NamespaceSelector names to the namespaces that are selected by each one.
 // Note that this modifies the Scoped objects to filter out the
 // NamespaceSelectors since they are no longer needed after this point.
-func buildSelectorMap(ctx context.Context, c client.Client, objs *objects.Scoped) (map[string][]string, status.MultiError) {
+func buildSelectorMap(ctx context.Context, c client.Client, fieldManager string, objs *objects.Scoped) (map[string][]string, status.MultiError) {
 	var namespaces, others []ast.FileObject
 	nsSelectorMap := make(map[string]labels.Selector)
 	selectedNamespaceMap := make(map[string][]labels.Selector)
@@ -122,7 +122,7 @@ func buildSelectorMap(ctx context.Context, c client.Client, objs *objects.Scoped
 		// The DynamicNSSelectorEnabled state mismatches with the required state, set the
 		// annotation so that the reconciler-manager will recreate the reconciler
 		// with the correct setting for the Namespace watch.
-		if err := setDynamicNSSelectorEnabled(ctx, c, objs.SyncName, hasDynamicNSSelector); err != nil {
+		if err := setDynamicNSSelectorEnabled(ctx, c, fieldManager, objs.SyncName, hasDynamicNSSelector); err != nil {
 			errs = status.Append(errs, err)
 			return nil, errs
 		}
@@ -218,7 +218,7 @@ func convertToNamespaceSelector(obj ast.FileObject) (*v1.NamespaceSelector, stat
 }
 
 // setDynamicNSSelectorEnabled sets the requires-ns-controller annotation on the RootSync object.
-func setDynamicNSSelectorEnabled(ctx context.Context, c client.Client, syncName string, hasDynamicNSSelector bool) status.Error {
+func setDynamicNSSelectorEnabled(ctx context.Context, c client.Client, fieldManager, syncName string, hasDynamicNSSelector bool) status.Error {
 	rs := &v1beta1.RootSync{}
 	objKey := rootsync.ObjectKey(syncName)
 	if err := c.Get(ctx, objKey, rs); err != nil {
@@ -235,7 +235,7 @@ func setDynamicNSSelectorEnabled(ctx context.Context, c client.Client, syncName 
 		metadata.DynamicNSSelectorEnabledAnnotationKey, curVal, reconcilermanager.DynamicNSSelectorEnabled, newVal, newVal)
 	existing := rs.DeepCopy()
 	core.SetAnnotation(rs, metadata.DynamicNSSelectorEnabledAnnotationKey, newVal)
-	if err := c.Patch(ctx, rs, client.MergeFrom(existing)); err != nil {
+	if err := c.Patch(ctx, rs, client.MergeFrom(existing), client.FieldOwner(fieldManager)); err != nil {
 		return status.APIServerErrorf(err, fmt.Sprintf("failed to patch RootSync %s to set the %s annotation to %s",
 			objKey, metadata.DynamicNSSelectorEnabledAnnotationKey, newVal))
 	}

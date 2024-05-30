@@ -193,7 +193,7 @@ func setupRootReconciler(t *testing.T, objs ...client.Object) (*syncerFake.Clien
 
 	ctx := context.Background()
 	for _, obj := range objs {
-		err := cs.Client.Create(ctx, obj)
+		err := cs.Client.Create(ctx, obj, client.FieldOwner(reconcilermanager.FieldManager))
 		if err != nil {
 			t.Fatalf("Failed to create object: %v", err)
 		}
@@ -459,7 +459,7 @@ func TestCreateAndUpdateRootReconcilerWithOverride(t *testing.T) {
 			Resources: overrideSelectedResources,
 		},
 	}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -492,7 +492,7 @@ func TestCreateAndUpdateRootReconcilerWithOverride(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	rs.Spec.Override = nil
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -592,7 +592,7 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 			Resources: overrideAllContainerResources,
 		},
 	}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -648,7 +648,7 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 			Resources: overrideReconcilerAndHydrationResources,
 		},
 	}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -694,7 +694,7 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 			Resources: overrideGitSyncResources,
 		},
 	}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -728,7 +728,7 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 	}
 	// Clear rs.Spec.Override
 	rs.Spec.Override = &v1beta1.RootSyncOverrideSpec{}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -837,7 +837,7 @@ func TestRootSyncUpdateNoSSLVerify(t *testing.T) {
 	}
 	// Set rs.Spec.NoSSLVerify to false
 	rs.Spec.NoSSLVerify = false
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -858,7 +858,7 @@ func TestRootSyncUpdateNoSSLVerify(t *testing.T) {
 	}
 	// Set rs.Spec.NoSSLVerify to true
 	rs.Spec.NoSSLVerify = true
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -891,7 +891,7 @@ func TestRootSyncUpdateNoSSLVerify(t *testing.T) {
 	}
 	// Set rs.Spec.NoSSLVerify to false
 	rs.Spec.NoSSLVerify = false
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -1009,7 +1009,7 @@ func TestRootSyncUpdateCACertSecret(t *testing.T) {
 	}
 	// Unset rs.Spec.CACertSecretRef
 	rs.Spec.CACertSecretRef = nil
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -1027,7 +1027,7 @@ func TestRootSyncUpdateCACertSecret(t *testing.T) {
 	}
 	// Set rs.Spec.CACertSecretRef
 	rs.Spec.CACertSecretRef = &v1beta1.SecretReference{Name: caCertSecret}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -1060,7 +1060,7 @@ func TestRootSyncUpdateCACertSecret(t *testing.T) {
 	}
 	// Unset rs.Spec.CACertSecretRef
 	rs.Spec.CACertSecretRef = nil
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -1123,7 +1123,7 @@ func TestRootSyncReconcileAdmissionWebhook(t *testing.T) {
 
 			for _, o := range tc.existingObjects {
 				t.Log("creating obj", o.GetObjectKind().GroupVersionKind().Kind)
-				if err := fakeClient.Create(context.Background(), o); err != nil {
+				if err := fakeClient.Create(context.Background(), o, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -1285,7 +1285,7 @@ func TestRootSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 	// Test overriding the git sync depth to a positive value
 	var depth int64 = 5
 	rs.Spec.SafeOverride().GitSyncDepth = &depth
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -1317,7 +1317,7 @@ func TestRootSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 	// Test overriding the git sync depth to 0
 	depth = 0
 	rs.Spec.SafeOverride().GitSyncDepth = &depth
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -1351,7 +1351,7 @@ func TestRootSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 	}
 	// Set rs.Spec.Override.GitSyncDepth to nil.
 	rs.Spec.SafeOverride().GitSyncDepth = nil
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -1384,7 +1384,7 @@ func TestRootSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 	}
 	// Clear rs.Spec.Override
 	rs.Spec.Override = &v1beta1.RootSyncOverrideSpec{}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -1480,7 +1480,7 @@ func TestRootSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 	// Test overriding the reconcile timeout to 50s
 	reconcileTimeout := metav1.Duration{Duration: 50 * time.Second}
 	rs.Spec.SafeOverride().ReconcileTimeout = &reconcileTimeout
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -1514,7 +1514,7 @@ func TestRootSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 	}
 	// Set rs.Spec.Override.ReconcileTimeout to nil.
 	rs.Spec.SafeOverride().ReconcileTimeout = nil
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -1547,7 +1547,7 @@ func TestRootSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 	}
 	// Clear rs.Spec.Override
 	rs.Spec.Override = &v1beta1.RootSyncOverrideSpec{}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -1639,7 +1639,7 @@ func TestRootSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 	// Test overriding the reconcile timeout to 50s
 	reconcileTimeout := metav1.Duration{Duration: 50 * time.Second}
 	rs.Spec.SafeOverride().ReconcileTimeout = &reconcileTimeout
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -1669,7 +1669,7 @@ func TestRootSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 	}
 	// Set rs.Spec.Override.ReconcileTimeout to nil.
 	rs.Spec.SafeOverride().ReconcileTimeout = nil
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -1699,7 +1699,7 @@ func TestRootSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 	}
 	// Clear rs.Spec.Override
 	rs.Spec.Override = &v1beta1.RootSyncOverrideSpec{}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -1865,7 +1865,7 @@ func TestRootSyncCreateWithOverrideRoleRefs(t *testing.T) {
 	}
 
 	rs.Spec.SafeOverride().RoleRefs = nil
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("Failed to update RootSync: %q", err)
 	}
 	t.Log("RootSync updated to remove RoleRefs override")
@@ -2007,7 +2007,7 @@ func TestRootSyncSwitchAuthTypes(t *testing.T) {
 	// Test updating RootSync resources with SSH auth type.
 	rs.Spec.Auth = configsync.AuthSSH
 	rs.Spec.Git.SecretRef = &v1beta1.SecretReference{Name: rootsyncSSHKey}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 
@@ -2041,7 +2041,7 @@ func TestRootSyncSwitchAuthTypes(t *testing.T) {
 	// Test updating RootSync resources with None auth type.
 	rs.Spec.Auth = configsync.AuthNone
 	rs.Spec.SecretRef = &v1beta1.SecretReference{}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 
@@ -2120,7 +2120,9 @@ func TestRootSyncReconcilerRestart(t *testing.T) {
 	t.Logf("Applying Patch: %s", string(patchData))
 	_, err = fakeDynamicClient.Resource(kinds.DeploymentResource()).
 		Namespace(rootDeployment.Namespace).
-		Patch(ctx, rootDeployment.Name, types.StrategicMergePatchType, patchData, metav1.PatchOptions{})
+		Patch(ctx, rootDeployment.Name, types.StrategicMergePatchType, patchData, metav1.PatchOptions{
+			FieldManager: reconcilermanager.FieldManager,
+		})
 	if err != nil {
 		t.Fatalf("failed to patch the deployment: %v", err)
 	}
@@ -2248,7 +2250,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	t.Log("ServiceAccount, ClusterRoleBinding and Deployment successfully created")
 
 	// Test reconciler rs2: root-sync
-	if err := fakeClient.Create(ctx, rs2); err != nil {
+	if err := fakeClient.Create(ctx, rs2, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName2); err != nil {
@@ -2309,7 +2311,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	t.Log("Deployments, ServiceAccounts, and ClusterRoleBindings successfully created")
 
 	// Test reconciler rs3: my-rs-3
-	if err := fakeClient.Create(ctx, rs3); err != nil {
+	if err := fakeClient.Create(ctx, rs3, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName3); err != nil {
@@ -2371,10 +2373,10 @@ func TestMultipleRootSyncs(t *testing.T) {
 	t.Log("Deployments, ServiceAccounts, and ClusterRoleBindings successfully created")
 
 	// Test reconciler rs4: my-rs-4
-	if err := fakeClient.Create(ctx, rs4); err != nil {
+	if err := fakeClient.Create(ctx, rs4, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
-	if err := fakeClient.Create(ctx, secret4); err != nil {
+	if err := fakeClient.Create(ctx, secret4, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName4); err != nil {
@@ -2436,10 +2438,10 @@ func TestMultipleRootSyncs(t *testing.T) {
 	t.Log("Deployments, ServiceAccounts, and ClusterRoleBindings successfully created")
 
 	// Test reconciler rs5: my-rs-5
-	if err := fakeClient.Create(ctx, rs5); err != nil {
+	if err := fakeClient.Create(ctx, rs5, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
-	if err := fakeClient.Create(ctx, secret5); err != nil {
+	if err := fakeClient.Create(ctx, secret5, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName5); err != nil {
@@ -2506,7 +2508,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	}
 	// Test updating Deployment resources for rs1: my-root-sync
 	rs1.Spec.Git.Revision = gitUpdatedRevision
-	if err := fakeClient.Update(ctx, rs1); err != nil {
+	if err := fakeClient.Update(ctx, rs1, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -2548,7 +2550,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	}
 	// Test updating Deployment resources for rs2: root-sync
 	rs2.Spec.Git.Revision = gitUpdatedRevision
-	if err := fakeClient.Update(ctx, rs2); err != nil {
+	if err := fakeClient.Update(ctx, rs2, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v, want error: nil", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName2); err != nil {
@@ -2590,7 +2592,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	// Test updating  Deployment resources for rs3: my-rs-3
 	rs3.Spec.Git.Revision = gitUpdatedRevision
 	rs3.Spec.Git.Revision = gitUpdatedRevision
-	if err := fakeClient.Update(ctx, rs3); err != nil {
+	if err := fakeClient.Update(ctx, rs3, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName3); err != nil {
@@ -2963,7 +2965,7 @@ func TestInjectFleetWorkloadIdentityCredentialsToRootSync(t *testing.T) {
 	// Test updating RootSync resources with SSH auth type.
 	rs.Spec.Auth = configsync.AuthSSH
 	rs.Spec.Git.SecretRef = &v1beta1.SecretReference{Name: rootsyncSSHKey}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 
@@ -2997,7 +2999,7 @@ func TestInjectFleetWorkloadIdentityCredentialsToRootSync(t *testing.T) {
 	// Test updating RootSync resources with None auth type.
 	rs.Spec.Auth = configsync.AuthNone
 	rs.Spec.SecretRef = &v1beta1.SecretReference{}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 
@@ -3092,7 +3094,7 @@ func TestRootSyncWithHelm(t *testing.T) {
 	// Test 2: updating RootSync resources with None auth type.
 	rs.Spec.Helm.Auth = configsync.AuthNone
 	rs.Spec.Helm.SecretRef = nil
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -3124,7 +3126,7 @@ func TestRootSyncWithHelm(t *testing.T) {
 	existing := rs.DeepCopy()
 	rs.Spec.Helm.Auth = configsync.AuthGCPServiceAccount
 	rs.Spec.Helm.GCPServiceAccountEmail = gcpSAEmail
-	if err := fakeClient.Patch(ctx, rs, client.MergeFrom(existing)); err != nil {
+	if err := fakeClient.Patch(ctx, rs, client.MergeFrom(existing), client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -3201,7 +3203,7 @@ func TestRootSyncWithHelm(t *testing.T) {
 	// Test 5: Migrate from GSA to KSA for authentication using Fleet WI.
 	existing = rs.DeepCopy()
 	rs.Spec.Helm.Auth = configsync.AuthK8sServiceAccount
-	if err := fakeClient.Patch(ctx, rs, client.MergeFrom(existing)); err != nil {
+	if err := fakeClient.Patch(ctx, rs, client.MergeFrom(existing), client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -3253,7 +3255,7 @@ func TestRootSyncWithHelm(t *testing.T) {
 			Resources: overrideHelmSyncResources,
 		},
 	}
-	if err := fakeClient.Patch(ctx, rs, client.MergeFrom(existing)); err != nil {
+	if err := fakeClient.Patch(ctx, rs, client.MergeFrom(existing), client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 
@@ -3343,7 +3345,7 @@ func TestRootSyncWithOCI(t *testing.T) {
 	// test 2: switch to authenticate with `gcenode` type.
 	t.Log("Test updating RootSync resources with gcenode auth type.")
 	rs.Spec.Oci.Auth = configsync.AuthGCENode
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -3377,7 +3379,7 @@ func TestRootSyncWithOCI(t *testing.T) {
 	existing := rs.DeepCopy()
 	rs.Spec.Oci.Auth = configsync.AuthGCPServiceAccount
 	rs.Spec.Oci.GCPServiceAccountEmail = gcpSAEmail
-	if err := fakeClient.Patch(ctx, rs, client.MergeFrom(existing)); err != nil {
+	if err := fakeClient.Patch(ctx, rs, client.MergeFrom(existing), client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -3454,7 +3456,7 @@ func TestRootSyncWithOCI(t *testing.T) {
 	// test 5: Migrate from GSA to KSA for authentication using Fleet WI.
 	existing = rs.DeepCopy()
 	rs.Spec.Oci.Auth = configsync.AuthK8sServiceAccount
-	if err := fakeClient.Patch(ctx, rs, client.MergeFrom(existing)); err != nil {
+	if err := fakeClient.Patch(ctx, rs, client.MergeFrom(existing), client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -3506,7 +3508,7 @@ func TestRootSyncWithOCI(t *testing.T) {
 			Resources: overrideOciSyncResources,
 		},
 	}
-	if err := fakeClient.Patch(ctx, rs, client.MergeFrom(existing)); err != nil {
+	if err := fakeClient.Patch(ctx, rs, client.MergeFrom(existing), client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 
@@ -3560,7 +3562,7 @@ func TestRootSyncSpecValidation(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	rs.Spec.SourceType = string(v1beta1.GitSource)
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -3575,7 +3577,7 @@ func TestRootSyncSpecValidation(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	rs.Spec.SourceType = string(v1beta1.OciSource)
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -3590,7 +3592,7 @@ func TestRootSyncSpecValidation(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	rs.Spec.SourceType = string(v1beta1.HelmSource)
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -3606,7 +3608,7 @@ func TestRootSyncSpecValidation(t *testing.T) {
 	}
 	rs.Spec.SourceType = string(v1beta1.OciSource)
 	rs.Spec.Oci = &v1beta1.Oci{}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -3622,7 +3624,7 @@ func TestRootSyncSpecValidation(t *testing.T) {
 	}
 	rs.Spec.SourceType = string(v1beta1.OciSource)
 	rs.Spec.Oci = &v1beta1.Oci{Image: ociImage}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -3639,7 +3641,7 @@ func TestRootSyncSpecValidation(t *testing.T) {
 	rs.Spec.SourceType = string(v1beta1.HelmSource)
 	rs.Spec.Helm = &v1beta1.HelmRootSync{}
 	rs.Spec.Oci = nil
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -3655,7 +3657,7 @@ func TestRootSyncSpecValidation(t *testing.T) {
 	}
 	rs.Spec.SourceType = string(v1beta1.HelmSource)
 	rs.Spec.Helm = &v1beta1.HelmRootSync{HelmBase: v1beta1.HelmBase{Repo: helmRepo}}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -3671,7 +3673,7 @@ func TestRootSyncSpecValidation(t *testing.T) {
 	}
 	rs.Spec.SourceType = string(v1beta1.HelmSource)
 	rs.Spec.Helm = &v1beta1.HelmRootSync{HelmBase: v1beta1.HelmBase{Repo: helmRepo, Chart: helmChart}}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -3689,12 +3691,12 @@ func TestRootSyncSpecValidation(t *testing.T) {
 	rs.Spec.Git = nil
 	rs.Spec.Helm = nil
 	rs.Spec.Oci = &v1beta1.Oci{Image: ociImage, Auth: configsync.AuthNone}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 	// Clear the stalled condition
 	rs.Status = v1beta1.RootSyncStatus{}
-	if err := fakeClient.Status().Update(ctx, rs); err != nil {
+	if err := fakeClient.Status().Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -3715,12 +3717,12 @@ func TestRootSyncSpecValidation(t *testing.T) {
 	rs.Spec.Git = nil
 	rs.Spec.Oci = nil
 	rs.Spec.Helm = &v1beta1.HelmRootSync{HelmBase: v1beta1.HelmBase{Repo: helmRepo, Chart: helmChart, Auth: configsync.AuthNone}}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 	// Clear the stalled condition
 	rs.Status = v1beta1.RootSyncStatus{}
-	if err := fakeClient.Status().Update(ctx, rs); err != nil {
+	if err := fakeClient.Status().Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -3790,7 +3792,7 @@ func TestRootSyncReconcileStaleClientCache(t *testing.T) {
 	err = fakeClient.Get(ctx, core.ObjectNamespacedName(rs), rs)
 	require.NoError(t, err, "unexpected Get error")
 	rs.Spec.SourceType = string(v1beta1.GitSource)
-	err = fakeClient.Update(ctx, rs)
+	err = fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager))
 	require.NoError(t, err, "unexpected Update error")
 
 	// Reconcile should succeed and update the RootSync
@@ -4005,7 +4007,7 @@ func TestUpdateRootReconcilerLogLevelWithOverride(t *testing.T) {
 			LogLevels: overrideLogLevel,
 		},
 	}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -4095,7 +4097,7 @@ func TestCreateAndUpdateRootReconcilerWithOverrideOnAutopilot(t *testing.T) {
 			Resources: overrideSelectedResources,
 		},
 	}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -4128,7 +4130,7 @@ func TestCreateAndUpdateRootReconcilerWithOverrideOnAutopilot(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	rs.Spec.Override = nil
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 

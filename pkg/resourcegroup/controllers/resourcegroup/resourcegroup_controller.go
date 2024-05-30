@@ -177,7 +177,7 @@ func (r *reconciler) updateStatusKptGroup(ctx context.Context, resgroup *v1alpha
 		}
 		resgroup.Status = newStatus
 		// Use `r.Status().Update()` here instead of `r.Update()` to update only resgroup.Status.
-		return r.Status().Update(ctx, resgroup)
+		return r.Status().Update(ctx, resgroup, client.FieldOwner(FieldManager))
 	})
 }
 

@@ -103,6 +103,7 @@ which you could kubectl apply -fR to the cluster, or have Config Sync sync to th
 		if err != nil {
 			return err
 		}
+		validateOpts.FieldManager = util.FieldManager
 
 		if sourceFormat == filesystem.SourceFormatHierarchy {
 			files = filesystem.FilterHierarchyFiles(rootDir, files)

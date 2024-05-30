@@ -19,6 +19,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"kpt.dev/configsync/pkg/metadata"
+	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -85,7 +86,7 @@ func (r nsReconcilerFinalizerHandler) handleReconcilerFinalizer(ctx context.Cont
 		r.logger(ctx).Info("Reconciler finalizer not found")
 		return true, nil
 	}
-	if err := r.client.Update(ctx, syncObj); err != nil {
+	if err := r.client.Update(ctx, syncObj, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		err = status.APIServerError(err, "failed to update RepoSync to remove the reconciler finalizer")
 		r.logger(ctx).Error(err, "Removal of reconciler finalizer removal failed")
 		return false, err

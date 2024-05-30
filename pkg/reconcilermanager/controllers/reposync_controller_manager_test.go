@@ -33,6 +33,7 @@ import (
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
+	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reposync"
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	watchutil "kpt.dev/configsync/pkg/util/watch"
@@ -101,7 +102,7 @@ func TestRepoSyncReconcilerDeploymentLifecycle(t *testing.T) {
 	})
 
 	t.Log("Creating RepoSync")
-	err = fakeClient.Create(ctx, rs)
+	err = fakeClient.Create(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager))
 	require.NoError(t, err)
 
 	t.Log("Waiting for Deployment Controller simulation & RepoSync validation to stop")
@@ -129,7 +130,7 @@ func TestRepoSyncReconcilerDeploymentLifecycle(t *testing.T) {
 	err = fakeClient.Get(ctx, crbKey, saObj)
 	require.NoError(t, err)
 	require.True(t, controllerutil.AddFinalizer(saObj, testFinalizer))
-	err = fakeClient.Update(ctx, saObj)
+	err = fakeClient.Update(ctx, saObj, client.FieldOwner(reconcilermanager.FieldManager))
 	require.NoError(t, err)
 
 	t.Log("Deleting sync object")
@@ -149,7 +150,7 @@ func TestRepoSyncReconcilerDeploymentLifecycle(t *testing.T) {
 
 	t.Log("Simulating teardown unblocked")
 	require.True(t, controllerutil.RemoveFinalizer(saObj, testFinalizer))
-	err = fakeClient.Update(ctx, saObj)
+	err = fakeClient.Update(ctx, saObj, client.FieldOwner(reconcilermanager.FieldManager))
 	require.NoError(t, err)
 
 	t.Log("Waiting for RepoSync NotFound")
@@ -202,7 +203,7 @@ func TestReconcileInvalidRepoSyncLifecycle(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Log("creating RepoSync")
-	err = fakeClient.Create(ctx, rs)
+	err = fakeClient.Create(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager))
 	require.NoError(t, err)
 
 	var rsObj *v1beta1.RepoSync
@@ -277,7 +278,7 @@ func TestReconcileRepoSyncLifecycleValidToInvalid(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create RepoSync
-	err = fakeClient.Create(ctx, rs)
+	err = fakeClient.Create(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager))
 	require.NoError(t, err)
 
 	var reconcilerObj *appsv1.Deployment
@@ -313,7 +314,7 @@ func TestReconcileRepoSyncLifecycleValidToInvalid(t *testing.T) {
 	rs.Spec.Auth = configsync.AuthToken
 	// reconciler-manager makes async changes, so retry on conflict
 	err = retry.RetryOnConflict(retry.DefaultBackoff, func() error {
-		return fakeClient.Update(ctx, rs)
+		return fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager))
 	})
 	require.NoError(t, err)
 

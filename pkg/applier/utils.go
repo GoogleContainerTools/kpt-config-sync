@@ -23,6 +23,7 @@ import (
 	"golang.org/x/net/context"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
@@ -140,7 +141,7 @@ func annotateStatusMode(ctx context.Context, c client.Client, u *unstructured.Un
 	}
 	annotations[StatusModeKey] = statusMode
 	u.SetAnnotations(annotations)
-	return c.Update(ctx, u)
+	return c.Update(ctx, u, client.FieldOwner(configsync.FieldManager))
 }
 
 func refsFromIDs(ids ...core.ID) []mutation.ResourceReference {

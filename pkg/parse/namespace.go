@@ -89,6 +89,7 @@ func (p *namespace) parseSource(ctx context.Context, state sourceState) ([]ast.F
 		AllowAPICall:             false,
 		DynamicNSSelectorEnabled: false,
 		WebhookEnabled:           p.WebhookEnabled,
+		FieldManager:             configsync.FieldManager,
 	}
 	options = OptionsForScope(options, p.Scope)
 
@@ -161,7 +162,7 @@ func (p *namespace) setSourceStatusWithRetries(ctx context.Context, newStatus so
 			rs.Namespace, rs.Name, cmp.Diff(currentRS.Status, rs.Status))
 	}
 
-	if err := p.Client.Status().Update(ctx, &rs); err != nil {
+	if err := p.Client.Status().Update(ctx, &rs, client.FieldOwner(configsync.FieldManager)); err != nil {
 		// If the update failure was caused by the size of the RepoSync object, we would truncate the errors and retry.
 		if isRequestTooLargeError(err) {
 			klog.Infof("Failed to update RepoSync source status (total error count: %d, denominator: %d): %s.", rs.Status.Source.ErrorSummary.TotalCount, denominator, err)
@@ -184,7 +185,7 @@ func (p *namespace) setRequiresRendering(ctx context.Context, renderingRequired 
 	}
 	existing := rs.DeepCopy()
 	core.SetAnnotation(rs, metadata.RequiresRenderingAnnotationKey, newVal)
-	return p.Client.Patch(ctx, rs, client.MergeFrom(existing))
+	return p.Client.Patch(ctx, rs, client.MergeFrom(existing), client.FieldOwner(configsync.FieldManager))
 }
 
 // setRenderingStatus implements the Parser interface
@@ -238,7 +239,7 @@ func (p *namespace) setRenderingStatusWithRetires(ctx context.Context, newStatus
 			rs.Namespace, rs.Name, cmp.Diff(currentRS.Status, rs.Status))
 	}
 
-	if err := p.Client.Status().Update(ctx, &rs); err != nil {
+	if err := p.Client.Status().Update(ctx, &rs, client.FieldOwner(configsync.FieldManager)); err != nil {
 		// If the update failure was caused by the size of the RepoSync object, we would truncate the errors and retry.
 		if isRequestTooLargeError(err) {
 			klog.Infof("Failed to update RepoSync rendering status (total error count: %d, denominator: %d): %s.", rs.Status.Rendering.ErrorSummary.TotalCount, denominator, err)
@@ -304,7 +305,7 @@ func (p *namespace) setSyncStatusWithRetries(ctx context.Context, newStatus sync
 			rs.Namespace, rs.Name, cmp.Diff(currentRS.Status, rs.Status))
 	}
 
-	if err := p.Client.Status().Update(ctx, rs); err != nil {
+	if err := p.Client.Status().Update(ctx, rs, client.FieldOwner(configsync.FieldManager)); err != nil {
 		// If the update failure was caused by the size of the RepoSync object, we would truncate the errors and retry.
 		if isRequestTooLargeError(err) {
 			klog.Infof("Failed to update RepoSync sync status (total error count: %d, denominator: %d): %s.", rs.Status.Sync.ErrorSummary.TotalCount, denominator, err)

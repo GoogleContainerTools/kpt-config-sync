@@ -127,9 +127,9 @@ func (c *Client) Delete(ctx context.Context, obj client.Object, opts ...client.D
 // and posts the update to the server.
 // Return the current object state and a NoUpdateNeeded error from the updateFn
 // to skip posting the update if no changes are required.
-func (c *Client) Apply(ctx context.Context, obj client.Object, updateFn update) (client.Object, status.Error) {
+func (c *Client) Apply(ctx context.Context, obj client.Object, updateFn update, opts ...client.UpdateOption) (client.Object, status.Error) {
 	return c.apply(ctx, obj, updateFn, func(ctx context.Context, obj client.Object) error {
-		return c.Client.Update(ctx, obj)
+		return c.Client.Update(ctx, obj, opts...)
 	})
 }
 
@@ -137,9 +137,9 @@ func (c *Client) Apply(ctx context.Context, obj client.Object, updateFn update) 
 // updateFn, and posts the update to the server.
 // Return the current object state and a NoUpdateNeeded error from the updateFn
 // to skip posting the update if no changes are required.
-func (c *Client) ApplyStatus(ctx context.Context, obj client.Object, updateFn update) (client.Object, status.Error) {
+func (c *Client) ApplyStatus(ctx context.Context, obj client.Object, updateFn update, opts ...client.SubResourceUpdateOption) (client.Object, status.Error) {
 	return c.apply(ctx, obj, updateFn, func(ctx context.Context, obj client.Object) error {
-		return c.Client.Status().Update(ctx, obj)
+		return c.Client.Status().Update(ctx, obj, opts...)
 	})
 }
 
@@ -210,12 +210,12 @@ func (c *Client) apply(ctx context.Context, obj client.Object, updateFn update,
 
 // Update posts the update to the server and records latency metrics.
 // Specify a ResourceVersion to avoid overwriting asynchronous changes.
-func (c *Client) Update(ctx context.Context, obj client.Object) status.Error {
+func (c *Client) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) status.Error {
 	description := getResourceInfo(obj)
 	klog.V(1).Infof("Will update %s to %s", description, spew.Sdump(obj))
 	oldV := resourceVersion(obj)
 	start := time.Now()
-	err := c.Client.Update(ctx, obj)
+	err := c.Client.Update(ctx, obj, opts...)
 	c.recordLatency(start, "update", metrics.StatusLabel(err))
 	m.RecordAPICallDuration(ctx, "update", m.StatusTagKey(err), start)
 	switch {

@@ -180,7 +180,7 @@ func TestStatus(t *testing.T) {
 			scheme := core.Scheme
 			fakeClient := fake.NewClient(t, scheme, tc.existingObjs...)
 			ctx := context.Background()
-			updated, err := Status(ctx, fakeClient, tc.obj, tc.mutateFunc)
+			updated, err := Status(ctx, fakeClient, tc.obj, tc.mutateFunc, client.FieldOwner(fake.FieldManager))
 			testerrors.AssertEqual(t, tc.expectedError, err)
 			assert.Equal(t, tc.expectedUpdated, updated)
 			fakeClient.Check(t, tc.expectedObj)
@@ -337,7 +337,7 @@ func TestSpec(t *testing.T) {
 				// Fake async re-create (with different UID)
 				replacementObj := obj.DeepCopy()
 				replacementObj.SetUID("2")
-				err = fakeClient.Create(context.Background(), replacementObj)
+				err = fakeClient.Create(context.Background(), replacementObj, client.FieldOwner(fake.FieldManager))
 				if err != nil {
 					return fmt.Errorf("failed to create object: %w", err)
 				}
@@ -374,7 +374,7 @@ func TestSpec(t *testing.T) {
 			scheme := core.Scheme
 			fakeClient = fake.NewClient(t, scheme, tc.existingObjs...)
 			ctx := context.Background()
-			updated, err := Spec(ctx, fakeClient, tc.obj, tc.mutateFunc)
+			updated, err := Spec(ctx, fakeClient, tc.obj, tc.mutateFunc, client.FieldOwner(fake.FieldManager))
 			testerrors.AssertEqual(t, tc.expectedError, err)
 			assert.Equal(t, tc.expectedUpdated, updated)
 			fakeClient.Check(t, tc.expectedObj)

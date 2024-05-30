@@ -469,12 +469,13 @@ func TestRoot_Parse(t *testing.T) {
 					{}, // One Apply call
 				},
 			}
+			tc.existingObjects = append(tc.existingObjects, fake.RootSyncObjectV1Beta1(rootSyncName))
 			parser := &root{
 				Options: &Options{
 					Parser:             fakeConfigParser,
 					SyncName:           rootSyncName,
 					ReconcilerName:     rootReconcilerName,
-					Client:             syncertest.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName)),
+					Client:             syncertest.NewClient(t, core.Scheme, tc.existingObjects...),
 					DiscoveryInterface: syncertest.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
 					Converter:          converter,
 					Updater: Updater{
@@ -489,11 +490,6 @@ func TestRoot_Parse(t *testing.T) {
 					SourceFormat:      tc.format,
 					NamespaceStrategy: tc.namespaceStrategy,
 				},
-			}
-			for _, o := range tc.existingObjects {
-				if err := parser.Client.Create(context.Background(), o); err != nil {
-					t.Fatal(err)
-				}
 			}
 			files := []cmpath.Absolute{
 				"example.yaml",
@@ -687,12 +683,13 @@ func TestRoot_DeclaredFields(t *testing.T) {
 					{}, // One Apply call
 				},
 			}
+			tc.existingObjects = append(tc.existingObjects, fake.RootSyncObjectV1Beta1(rootSyncName))
 			parser := &root{
 				Options: &Options{
 					Parser:             fakeConfigParser,
 					SyncName:           rootSyncName,
 					ReconcilerName:     rootReconcilerName,
-					Client:             syncertest.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName)),
+					Client:             syncertest.NewClient(t, core.Scheme, tc.existingObjects...),
 					DiscoveryInterface: syncertest.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
 					Converter:          converter,
 					WebhookEnabled:     tc.webhookEnabled,
@@ -708,12 +705,6 @@ func TestRoot_DeclaredFields(t *testing.T) {
 					SourceFormat:      filesystem.SourceFormatUnstructured,
 					NamespaceStrategy: configsync.NamespaceStrategyExplicit,
 				},
-			}
-			for _, o := range tc.existingObjects {
-				t.Log("creating obj", o.GetObjectKind().GroupVersionKind().Kind)
-				if err := parser.Client.Create(context.Background(), o); err != nil {
-					t.Fatal(err)
-				}
 			}
 			state := &reconcilerState{}
 			if err := parseAndUpdate(context.Background(), parser, triggerReimport, state); err != nil {

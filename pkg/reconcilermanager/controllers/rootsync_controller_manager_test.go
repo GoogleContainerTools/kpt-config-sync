@@ -116,7 +116,7 @@ func TestRootSyncReconcilerDeploymentLifecycle(t *testing.T) {
 	})
 
 	t.Log("Creating RootSync")
-	err = fakeClient.Create(ctx, rs)
+	err = fakeClient.Create(ctx, rs, client.FieldOwner(syncerFake.FieldManager))
 	require.NoError(t, err)
 
 	t.Log("Waiting for Deployment Controller simulation & RootSync validation to stop")
@@ -144,7 +144,7 @@ func TestRootSyncReconcilerDeploymentLifecycle(t *testing.T) {
 	err = fakeClient.Get(ctx, crbKey, saObj)
 	require.NoError(t, err)
 	require.True(t, controllerutil.AddFinalizer(saObj, testFinalizer))
-	err = fakeClient.Update(ctx, saObj)
+	err = fakeClient.Update(ctx, saObj, client.FieldOwner(syncerFake.FieldManager))
 	require.NoError(t, err)
 
 	t.Log("Deleting sync object")
@@ -164,7 +164,7 @@ func TestRootSyncReconcilerDeploymentLifecycle(t *testing.T) {
 
 	t.Log("Simulating teardown unblocked")
 	require.True(t, controllerutil.RemoveFinalizer(saObj, testFinalizer))
-	err = fakeClient.Update(ctx, saObj)
+	err = fakeClient.Update(ctx, saObj, client.FieldOwner(syncerFake.FieldManager))
 	require.NoError(t, err)
 
 	t.Log("Waiting for RootSync NotFound")
@@ -217,7 +217,7 @@ func TestReconcileInvalidRootSyncLifecycle(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Log("creating RootSync")
-	err = fakeClient.Create(ctx, rs)
+	err = fakeClient.Create(ctx, rs, client.FieldOwner(syncerFake.FieldManager))
 	require.NoError(t, err)
 
 	var rsObj *v1beta1.RootSync
@@ -292,7 +292,7 @@ func TestReconcileRootSyncLifecycleValidToInvalid1(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create RootSync
-	err = fakeClient.Create(ctx, rs)
+	err = fakeClient.Create(ctx, rs, client.FieldOwner(syncerFake.FieldManager))
 	require.NoError(t, err)
 
 	var reconcilerObj *appsv1.Deployment
@@ -327,7 +327,7 @@ func TestReconcileRootSyncLifecycleValidToInvalid1(t *testing.T) {
 	t.Log("updating RootSync to make it invalid")
 	existing := rs.DeepCopy()
 	rs.Spec.Auth = configsync.AuthToken
-	err = fakeClient.Patch(ctx, rs, client.MergeFrom(existing))
+	err = fakeClient.Patch(ctx, rs, client.MergeFrom(existing), client.FieldOwner(syncerFake.FieldManager))
 	require.NoError(t, err)
 
 	var rsObj *v1beta1.RootSync
@@ -540,7 +540,7 @@ func testDriftProtection(t *testing.T, fakeClient *syncerFake.Client, testReconc
 	require.NoError(t, err)
 
 	// Create RootSync
-	err = fakeClient.Create(ctx, syncObj)
+	err = fakeClient.Create(ctx, syncObj, client.FieldOwner(syncerFake.FieldManager))
 	require.NoError(t, err)
 
 	// Consume watch events until success or timeout
@@ -574,7 +574,7 @@ func testDriftProtection(t *testing.T, fakeClient *syncerFake.Client, testReconc
 	require.NoError(t, err)
 	// reconciler-manager makes async changes, so retry on conflict
 	err = retry.RetryOnConflict(retry.DefaultBackoff, func() error {
-		return fakeClient.Update(ctx, obj)
+		return fakeClient.Update(ctx, obj, client.FieldOwner(syncerFake.FieldManager))
 	})
 	require.NoError(t, err)
 
@@ -751,7 +751,7 @@ func simulateDeploymentController(ctx context.Context, t *testing.T, fakeClient 
 				t.Log("Simulating scheduling complete")
 				reconcilerObj.Status.Replicas = *reconcilerObj.Spec.Replicas
 				reconcilerObj.Status.UpdatedReplicas = *reconcilerObj.Spec.Replicas
-				if err := fakeClient.Status().Update(ctx, reconcilerObj); err != nil {
+				if err := fakeClient.Status().Update(ctx, reconcilerObj, client.FieldOwner(syncerFake.FieldManager)); err != nil {
 					return err
 				}
 				// keep watching
@@ -766,7 +766,7 @@ func simulateDeploymentController(ctx context.Context, t *testing.T, fakeClient 
 					*newDeploymentCondition(appsv1.DeploymentAvailable, corev1.ConditionTrue, "unused", "unused"),
 					*newDeploymentCondition(appsv1.DeploymentProgressing, corev1.ConditionTrue, "NewReplicaSetAvailable", "unused"),
 				)
-				if err := fakeClient.Status().Update(ctx, reconcilerObj); err != nil {
+				if err := fakeClient.Status().Update(ctx, reconcilerObj, client.FieldOwner(syncerFake.FieldManager)); err != nil {
 					return err
 				}
 				// Simulation complete - stop watching

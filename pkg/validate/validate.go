@@ -83,6 +83,8 @@ type Options struct {
 	NSControllerState *namespacecontroller.State
 	// WebhookEnabled indicates whether the admission webhook configuration is enabled
 	WebhookEnabled bool
+	// FieldManager to use when performing cluster operations
+	FieldManager string
 }
 
 // Hierarchical validates and hydrates the given FileObjects from a structured,
@@ -217,7 +219,7 @@ func Unstructured(ctx context.Context, c client.Client, objs []ast.FileObject, o
 
 	scopedObjects.Scope = opts.Scope
 	scopedObjects.SyncName = opts.SyncName
-	if errs := scoped.Unstructured(ctx, c, scopedObjects); errs != nil {
+	if errs := scoped.Unstructured(ctx, c, opts.FieldManager, scopedObjects); errs != nil {
 		return nil, status.Append(nonBlockingErrs, errs)
 	}
 

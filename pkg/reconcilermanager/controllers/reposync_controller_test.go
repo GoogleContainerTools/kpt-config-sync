@@ -306,7 +306,7 @@ func setupNSReconciler(t *testing.T, objs ...client.Object) (*syncerFake.Client,
 
 	ctx := context.Background()
 	for _, obj := range objs {
-		err := cs.Client.Create(ctx, obj)
+		err := cs.Client.Create(ctx, obj, client.FieldOwner(reconcilermanager.FieldManager))
 		if err != nil {
 			t.Fatalf("Failed to create object: %v", err)
 		}
@@ -419,7 +419,7 @@ func TestCreateAndUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 			Resources: overrideReconcilerCPUAndGitSyncMemResources,
 		},
 	}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 
@@ -457,7 +457,7 @@ func TestCreateAndUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
 	rs.Spec.Override = &v1beta1.RepoSyncOverrideSpec{}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 
@@ -565,7 +565,7 @@ func TestUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 			Resources: overrideReconcilerAndGitSyncResources,
 		},
 	}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 
@@ -623,7 +623,7 @@ func TestUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 			Resources: overrideReconcilerResources,
 		},
 	}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 
@@ -673,7 +673,7 @@ func TestUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 			Resources: overrideGitSyncResources,
 		},
 	}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 
@@ -710,7 +710,7 @@ func TestUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
 	rs.Spec.Override = &v1beta1.RepoSyncOverrideSpec{}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 
@@ -842,7 +842,7 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 		*newDeploymentCondition(appsv1.DeploymentAvailable, corev1.ConditionFalse, "unused", "unused"),
 		*newDeploymentCondition(appsv1.DeploymentProgressing, corev1.ConditionTrue, "NewReplicaSetAvailable", "unused"),
 	)
-	if err := fakeClient.Status().Update(ctx, deployment); err != nil {
+	if err := fakeClient.Status().Update(ctx, deployment, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the reconciler deployment status: %v", err)
 	}
 
@@ -869,7 +869,7 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 		*newDeploymentCondition(appsv1.DeploymentAvailable, corev1.ConditionTrue, "unused", "unused"),
 		*newDeploymentCondition(appsv1.DeploymentProgressing, corev1.ConditionTrue, "NewReplicaSetAvailable", "unused"),
 	)
-	if err := fakeClient.Status().Update(ctx, deployment); err != nil {
+	if err := fakeClient.Status().Update(ctx, deployment, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the reconciler deployment status: %v", err)
 	}
 
@@ -887,7 +887,7 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
 	rs.Spec.NoSSLVerify = false
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 
@@ -913,7 +913,7 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
 	rs.Spec.NoSSLVerify = true
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 
@@ -956,7 +956,7 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 		*newDeploymentCondition(appsv1.DeploymentAvailable, corev1.ConditionFalse, "unused", "unused"),
 		*newDeploymentCondition(appsv1.DeploymentProgressing, corev1.ConditionTrue, "NewReplicaSetAvailable", "unused"),
 	)
-	if err := fakeClient.Status().Update(ctx, deployment); err != nil {
+	if err := fakeClient.Status().Update(ctx, deployment, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the reconciler deployment status: %v", err)
 	}
 
@@ -982,7 +982,7 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 		*newDeploymentCondition(appsv1.DeploymentAvailable, corev1.ConditionTrue, "unused", "unused"),
 		*newDeploymentCondition(appsv1.DeploymentProgressing, corev1.ConditionTrue, "NewReplicaSetAvailable", "unused"),
 	)
-	if err := fakeClient.Status().Update(ctx, deployment); err != nil {
+	if err := fakeClient.Status().Update(ctx, deployment, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the reconciler deployment status: %v", err)
 	}
 
@@ -1017,7 +1017,7 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
 	rs.Spec.NoSSLVerify = false
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 
@@ -1038,7 +1038,7 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 		*newDeploymentCondition(appsv1.DeploymentAvailable, corev1.ConditionFalse, "unused", "unused"),
 		*newDeploymentCondition(appsv1.DeploymentProgressing, corev1.ConditionTrue, "NewReplicaSetAvailable", "unused"),
 	)
-	if err := fakeClient.Status().Update(ctx, deployment); err != nil {
+	if err := fakeClient.Status().Update(ctx, deployment, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the reconciler deployment status: %v", err)
 	}
 
@@ -1082,7 +1082,7 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 		*newDeploymentCondition(appsv1.DeploymentAvailable, corev1.ConditionTrue, "unused", "unused"),
 		*newDeploymentCondition(appsv1.DeploymentProgressing, corev1.ConditionTrue, "NewReplicaSetAvailable", "unused"),
 	)
-	if err := fakeClient.Status().Update(ctx, deployment); err != nil {
+	if err := fakeClient.Status().Update(ctx, deployment, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the reconciler deployment status: %v", err)
 	}
 
@@ -1182,7 +1182,7 @@ func TestRepoSyncUpdateCACert(t *testing.T) {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
 	rs.Spec.CACertSecretRef = nil
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -1200,7 +1200,7 @@ func TestRepoSyncUpdateCACert(t *testing.T) {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
 	rs.Spec.CACertSecretRef = &v1beta1.SecretReference{Name: caCertSecret}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -1231,7 +1231,7 @@ func TestRepoSyncUpdateCACert(t *testing.T) {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
 	rs.Spec.CACertSecretRef = nil
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -1294,7 +1294,7 @@ func TestRepoSyncReconcileAdmissionWebhook(t *testing.T) {
 
 			for _, o := range tc.existingObjects {
 				t.Log("creating obj", o.GetObjectKind().GroupVersionKind().Kind)
-				if err := fakeClient.Create(context.Background(), o); err != nil {
+				if err := fakeClient.Create(context.Background(), o, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -1452,7 +1452,7 @@ func TestRepoSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 	}
 	var depth int64 = 5
 	rs.Spec.SafeOverride().GitSyncDepth = &depth
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 
@@ -1485,7 +1485,7 @@ func TestRepoSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 	}
 	depth = 0
 	rs.Spec.SafeOverride().GitSyncDepth = &depth
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 
@@ -1517,7 +1517,7 @@ func TestRepoSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
 	rs.Spec.SafeOverride().GitSyncDepth = nil
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v, want error: nil", err)
 	}
 
@@ -1548,7 +1548,7 @@ func TestRepoSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
 	rs.Spec.Override = &v1beta1.RepoSyncOverrideSpec{}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v, want error: nil", err)
 	}
 
@@ -1640,7 +1640,7 @@ func TestRepoSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 	}
 	reconcileTimeout := metav1.Duration{Duration: 50 * time.Second}
 	rs.Spec.SafeOverride().ReconcileTimeout = &reconcileTimeout
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 
@@ -1672,7 +1672,7 @@ func TestRepoSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
 	rs.Spec.SafeOverride().ReconcileTimeout = nil
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v, want error: nil", err)
 	}
 
@@ -1703,7 +1703,7 @@ func TestRepoSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
 	rs.Spec.Override = &v1beta1.RepoSyncOverrideSpec{}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v, want error: nil", err)
 	}
 
@@ -1792,7 +1792,7 @@ func TestRepoSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 	}
 	reconcileTimeout := metav1.Duration{Duration: 50 * time.Second}
 	rs.Spec.SafeOverride().APIServerTimeout = &reconcileTimeout
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 
@@ -1824,7 +1824,7 @@ func TestRepoSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
 	rs.Spec.SafeOverride().APIServerTimeout = nil
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v, want error: nil", err)
 	}
 
@@ -1855,7 +1855,7 @@ func TestRepoSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
 	rs.Spec.Override = &v1beta1.RepoSyncOverrideSpec{}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v, want error: nil", err)
 	}
 
@@ -1934,7 +1934,7 @@ func TestRepoSyncSwitchAuthTypes(t *testing.T) {
 	}
 	rs.Spec.Auth = configsync.AuthSSH
 	rs.Spec.Git.SecretRef = &v1beta1.SecretReference{Name: reposyncSSHKey}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 
@@ -1966,7 +1966,7 @@ func TestRepoSyncSwitchAuthTypes(t *testing.T) {
 	}
 	rs.Spec.Auth = configsync.AuthNone
 	rs.Spec.SecretRef = &v1beta1.SecretReference{}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 
@@ -2051,7 +2051,9 @@ func TestRepoSyncReconcilerRestart(t *testing.T) {
 	}
 	_, err = fakeDynamicClient.Resource(kinds.DeploymentResource()).
 		Namespace(repoDeployment.Namespace).
-		Patch(ctx, repoDeployment.Name, types.StrategicMergePatchType, patchData, metav1.PatchOptions{})
+		Patch(ctx, repoDeployment.Name, types.StrategicMergePatchType, patchData, metav1.PatchOptions{
+			FieldManager: reconcilermanager.FieldManager,
+		})
 	if err != nil {
 		t.Fatalf("failed to update the deployment, got error: %v, want error: nil", err)
 	}
@@ -2181,7 +2183,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	t.Log("ServiceAccount, RoleBinding, Deployment successfully created")
 
 	// Test reconciler rs2: repo-sync
-	if err := fakeClient.Create(ctx, rs2); err != nil {
+	if err := fakeClient.Create(ctx, rs2, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName2); err != nil {
@@ -2242,7 +2244,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	t.Log("Deployments, ServiceAccounts, and RoleBindings successfully created")
 
 	// Test reconciler rs3: my-rs-3
-	if err := fakeClient.Create(ctx, rs3); err != nil {
+	if err := fakeClient.Create(ctx, rs3, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName3); err != nil {
@@ -2299,10 +2301,10 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	t.Log("Deployments, ServiceAccounts, and RoleBindings successfully created")
 
 	// Test reconciler rs4: my-rs-4
-	if err := fakeClient.Create(ctx, rs4); err != nil {
+	if err := fakeClient.Create(ctx, rs4, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
-	if err := fakeClient.Create(ctx, secret4); err != nil {
+	if err := fakeClient.Create(ctx, secret4, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName4); err != nil {
@@ -2359,10 +2361,10 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	t.Log("Deployments, ServiceAccounts, and RoleBindings successfully created")
 
 	// Test reconciler rs5: my-rs-5
-	if err := fakeClient.Create(ctx, rs5); err != nil {
+	if err := fakeClient.Create(ctx, rs5, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
-	if err := fakeClient.Create(ctx, secret5); err != nil {
+	if err := fakeClient.Create(ctx, secret5, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName5); err != nil {
@@ -2424,7 +2426,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
 	rs1.Spec.Git.Revision = gitUpdatedRevision
-	if err := fakeClient.Update(ctx, rs1); err != nil {
+	if err := fakeClient.Update(ctx, rs1, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 
@@ -2460,7 +2462,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
 	rs2.Spec.Git.Revision = gitUpdatedRevision
-	if err := fakeClient.Update(ctx, rs2); err != nil {
+	if err := fakeClient.Update(ctx, rs2, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 
@@ -2496,7 +2498,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
 	rs3.Spec.Git.Revision = gitUpdatedRevision
-	if err := fakeClient.Update(ctx, rs3); err != nil {
+	if err := fakeClient.Update(ctx, rs3, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 
@@ -3089,7 +3091,7 @@ func TestInjectFleetWorkloadIdentityCredentialsToRepoSync(t *testing.T) {
 	}
 	rs.Spec.Auth = configsync.AuthSSH
 	rs.Spec.Git.SecretRef = &v1beta1.SecretReference{Name: reposyncSSHKey}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 
@@ -3122,7 +3124,7 @@ func TestInjectFleetWorkloadIdentityCredentialsToRepoSync(t *testing.T) {
 	}
 	rs.Spec.Auth = configsync.AuthNone
 	rs.Spec.SecretRef = &v1beta1.SecretReference{}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 
@@ -3211,7 +3213,7 @@ func TestRepoSyncWithHelm(t *testing.T) {
 	existing := rs.DeepCopy()
 	rs.Spec.Helm.Auth = configsync.AuthNone
 	rs.Spec.Helm.SecretRef = nil
-	if err := fakeClient.Patch(ctx, rs, client.MergeFrom(existing)); err != nil {
+	if err := fakeClient.Patch(ctx, rs, client.MergeFrom(existing), client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -3243,7 +3245,7 @@ func TestRepoSyncWithHelm(t *testing.T) {
 	existing = rs.DeepCopy()
 	rs.Spec.Helm.Auth = configsync.AuthGCPServiceAccount
 	rs.Spec.Helm.GCPServiceAccountEmail = gcpSAEmail
-	if err := fakeClient.Patch(ctx, rs, client.MergeFrom(existing)); err != nil {
+	if err := fakeClient.Patch(ctx, rs, client.MergeFrom(existing), client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -3321,7 +3323,7 @@ func TestRepoSyncWithHelm(t *testing.T) {
 	// Test 5: Migrate from GSA to KSA for authentication using Fleet WI.
 	existing = rs.DeepCopy()
 	rs.Spec.Helm.Auth = configsync.AuthK8sServiceAccount
-	if err := fakeClient.Patch(ctx, rs, client.MergeFrom(existing)); err != nil {
+	if err := fakeClient.Patch(ctx, rs, client.MergeFrom(existing), client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -3372,7 +3374,7 @@ func TestRepoSyncWithHelm(t *testing.T) {
 			Resources: overrideHelmSyncResources,
 		},
 	}
-	if err := fakeClient.Patch(ctx, rs, client.MergeFrom(existing)); err != nil {
+	if err := fakeClient.Patch(ctx, rs, client.MergeFrom(existing), client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -3460,7 +3462,7 @@ func TestRepoSyncWithOCI(t *testing.T) {
 	t.Log("Test updating RepoSync resources with gcenode auth type.")
 	existing := rs.DeepCopy()
 	rs.Spec.Oci.Auth = configsync.AuthGCENode
-	if err := fakeClient.Patch(ctx, rs, client.MergeFrom(existing)); err != nil {
+	if err := fakeClient.Patch(ctx, rs, client.MergeFrom(existing), client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -3495,7 +3497,7 @@ func TestRepoSyncWithOCI(t *testing.T) {
 	existing = rs.DeepCopy()
 	rs.Spec.Oci.Auth = configsync.AuthGCPServiceAccount
 	rs.Spec.Oci.GCPServiceAccountEmail = gcpSAEmail
-	if err := fakeClient.Patch(ctx, rs, client.MergeFrom(existing)); err != nil {
+	if err := fakeClient.Patch(ctx, rs, client.MergeFrom(existing), client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -3575,7 +3577,7 @@ func TestRepoSyncWithOCI(t *testing.T) {
 	// test 5: Migrate from GSA to KSA for authentication using Fleet WI.
 	existing = rs.DeepCopy()
 	rs.Spec.Oci.Auth = configsync.AuthK8sServiceAccount
-	if err := fakeClient.Patch(ctx, rs, client.MergeFrom(existing)); err != nil {
+	if err := fakeClient.Patch(ctx, rs, client.MergeFrom(existing), client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 
@@ -3631,7 +3633,7 @@ func TestRepoSyncWithOCI(t *testing.T) {
 			Resources: overrideOciSyncResources,
 		},
 	}
-	if err := fakeClient.Patch(ctx, rs, client.MergeFrom(existing)); err != nil {
+	if err := fakeClient.Patch(ctx, rs, client.MergeFrom(existing), client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 
@@ -3683,7 +3685,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
 	rs.Spec.SourceType = string(v1beta1.GitSource)
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -3698,7 +3700,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
 	rs.Spec.SourceType = string(v1beta1.OciSource)
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -3713,7 +3715,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
 	rs.Spec.SourceType = string(v1beta1.HelmSource)
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -3729,7 +3731,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 	}
 	rs.Spec.SourceType = string(v1beta1.OciSource)
 	rs.Spec.Oci = &v1beta1.Oci{}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -3745,7 +3747,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 	}
 	rs.Spec.SourceType = string(v1beta1.OciSource)
 	rs.Spec.Oci = &v1beta1.Oci{Image: ociImage}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -3762,7 +3764,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 	rs.Spec.SourceType = string(v1beta1.HelmSource)
 	rs.Spec.Oci = nil
 	rs.Spec.Helm = &v1beta1.HelmRepoSync{}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -3778,7 +3780,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 	}
 	rs.Spec.SourceType = string(v1beta1.HelmSource)
 	rs.Spec.Helm = &v1beta1.HelmRepoSync{HelmBase: v1beta1.HelmBase{Repo: helmRepo}}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -3794,7 +3796,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 	}
 	rs.Spec.SourceType = string(v1beta1.HelmSource)
 	rs.Spec.Helm = &v1beta1.HelmRepoSync{HelmBase: v1beta1.HelmBase{Repo: helmRepo, Chart: helmChart}}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -3812,12 +3814,12 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 	rs.Spec.Git = nil
 	rs.Spec.Helm = nil
 	rs.Spec.Oci = &v1beta1.Oci{Image: ociImage, Auth: configsync.AuthNone}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 	// Clear the stalled condition
 	rs.Status = v1beta1.RepoSyncStatus{}
-	if err := fakeClient.Status().Update(ctx, rs); err != nil {
+	if err := fakeClient.Status().Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -3838,12 +3840,12 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 	rs.Spec.Git = nil
 	rs.Spec.Oci = nil
 	rs.Spec.Helm = &v1beta1.HelmRepoSync{HelmBase: v1beta1.HelmBase{Repo: helmRepo, Chart: helmChart, Auth: configsync.AuthNone}}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 	// Clear the stalled condition
 	rs.Status = v1beta1.RepoSyncStatus{}
-	if err := fakeClient.Status().Update(ctx, rs); err != nil {
+	if err := fakeClient.Status().Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
@@ -3912,7 +3914,7 @@ func TestRepoSyncReconcileStaleClientCache(t *testing.T) {
 	require.NoError(t, err, "unexpected Get error")
 	rs.Spec.SourceType = string(v1beta1.GitSource)
 	rs.ResourceVersion = "2" // doesn't need to be increasing or even numeric
-	err = fakeClient.Update(ctx, rs)
+	err = fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager))
 	require.NoError(t, err, "unexpected Update error")
 
 	// Reconcile should succeed and update the RepoSync
@@ -4121,7 +4123,7 @@ func TestUpdateNamespaceReconcilerLogLevelWithOverride(t *testing.T) {
 			LogLevels: overrideLogLevel,
 		},
 	}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 
@@ -4221,7 +4223,7 @@ func TestCreateAndUpdateNamespaceReconcilerWithOverrideOnAutopilot(t *testing.T)
 			Resources: overrideReconcilerCPUAndGitSyncMemResources,
 		},
 	}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 
@@ -4259,7 +4261,7 @@ func TestCreateAndUpdateNamespaceReconcilerWithOverrideOnAutopilot(t *testing.T)
 		t.Fatalf("failed to get the repo sync: %v", err)
 	}
 	rs.Spec.Override = nil
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the repo sync request, got error: %v", err)
 	}
 
@@ -4365,7 +4367,7 @@ func TestRepoSyncGarbageCollectSecrets(t *testing.T) {
 	}
 	rs.Spec.CACertSecretRef = &v1beta1.SecretReference{Name: caCertSecret2Name}
 	rs.Spec.SecretRef = &v1beta1.SecretReference{Name: gitSecret2Name}
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -4385,7 +4387,7 @@ func TestRepoSyncGarbageCollectSecrets(t *testing.T) {
 	rs.Spec.CACertSecretRef = nil
 	rs.Spec.SecretRef = nil
 	rs.Spec.Auth = configsync.AuthNone
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -4403,7 +4405,7 @@ func TestRepoSyncGarbageCollectSecrets(t *testing.T) {
 	// Verify Secret garbage collection behavior with OCI source type
 	rs = repoSyncWithOCI(reposyncNs, reposyncName, reposyncOCIAuthType(configsync.AuthNone),
 		reposyncCACert(v1beta1.OciSource, caCertSecret1Name))
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -4417,7 +4419,7 @@ func TestRepoSyncGarbageCollectSecrets(t *testing.T) {
 	// Switch secret reference to a different Secret
 	rs = repoSyncWithOCI(reposyncNs, reposyncName, reposyncOCIAuthType(configsync.AuthNone),
 		reposyncCACert(v1beta1.OciSource, caCertSecret2Name))
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -4430,7 +4432,7 @@ func TestRepoSyncGarbageCollectSecrets(t *testing.T) {
 
 	// Remove CA cert secret ref
 	rs = repoSyncWithOCI(reposyncNs, reposyncName, reposyncOCIAuthType(configsync.AuthNone))
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -4446,7 +4448,7 @@ func TestRepoSyncGarbageCollectSecrets(t *testing.T) {
 	// Verify Secret garbage collection behavior with helm source type
 	rs = repoSyncWithHelm(reposyncNs, reposyncName, reposyncHelmAuthType(configsync.AuthNone),
 		reposyncCACert(v1beta1.HelmSource, caCertSecret1Name))
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -4460,7 +4462,7 @@ func TestRepoSyncGarbageCollectSecrets(t *testing.T) {
 	// Switch secret reference to a different Secret
 	rs = repoSyncWithHelm(reposyncNs, reposyncName, reposyncHelmAuthType(configsync.AuthNone),
 		reposyncCACert(v1beta1.HelmSource, caCertSecret2Name))
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 
@@ -4473,7 +4475,7 @@ func TestRepoSyncGarbageCollectSecrets(t *testing.T) {
 
 	// Remove CA cert secret ref
 	rs = repoSyncWithHelm(reposyncNs, reposyncName, reposyncHelmAuthType(configsync.AuthNone))
-	if err := fakeClient.Update(ctx, rs); err != nil {
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the root sync request, got error: %v, want error: nil", err)
 	}
 

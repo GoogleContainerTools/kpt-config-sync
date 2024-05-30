@@ -418,7 +418,7 @@ func TestNamespaceSelectors(t *testing.T) {
 			tc.objs.AllowAPICall = true
 			tc.objs.DynamicNSSelectorEnabled = tc.originalDynamicNSSelectorEnabled
 			tc.objs.NSControllerState = &namespacecontroller.State{}
-			errs := NamespaceSelectors(context.Background(), fakeClient)(tc.objs)
+			errs := NamespaceSelectors(context.Background(), fakeClient, syncerFake.FieldManager)(tc.objs)
 			if !errors.Is(errs, tc.wantErrs) {
 				t.Errorf("Got NamespaceSelectors() error %v, want %v", errs, tc.wantErrs)
 			}

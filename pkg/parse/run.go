@@ -24,6 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/hydrate"
@@ -491,7 +492,8 @@ func parseSource(ctx context.Context, p Parser, trigger string, state *reconcile
 	state.cache.setParserResult(objs, sourceErrs)
 
 	if !status.HasBlockingErrors(sourceErrs) && p.options().WebhookEnabled {
-		err := webhookconfiguration.Update(ctx, p.options().k8sClient(), p.options().discoveryClient(), objs)
+		err := webhookconfiguration.Update(ctx, p.options().k8sClient(), p.options().discoveryClient(), objs,
+			client.FieldOwner(configsync.FieldManager))
 		if err != nil {
 			// Don't block if updating the admission webhook fails.
 			// Return an error instead if we remove the remediator as otherwise we

@@ -31,6 +31,7 @@ import (
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/resourcemap"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/typeresolver"
+	"kpt.dev/configsync/pkg/syncer/syncertest/fake"
 )
 
 const contextRootControllerKey = contextKey("root-controller")
@@ -75,7 +76,7 @@ func TestRootReconciler(t *testing.T) {
 		},
 	}
 
-	err = c.Create(ctx, resourceGroupKpt)
+	err = c.Create(ctx, resourceGroupKpt, client.FieldOwner(fake.FieldManager))
 	assert.NoError(t, err)
 
 	// Create triggers an reconciliation,
@@ -138,7 +139,7 @@ func TestRootReconciler(t *testing.T) {
 		Resources: resources,
 	}
 	// Update the resource group
-	err = c.Update(ctx, resourceGroupKpt)
+	err = c.Update(ctx, resourceGroupKpt, client.FieldOwner(fake.FieldManager))
 	assert.NoError(t, err)
 
 	// The update triggers another reconcile

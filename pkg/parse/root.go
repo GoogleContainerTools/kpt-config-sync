@@ -136,6 +136,7 @@ func (p *root) parseSource(ctx context.Context, state sourceState) ([]ast.FileOb
 		DynamicNSSelectorEnabled: p.DynamicNSSelectorEnabled,
 		NSControllerState:        p.NSControllerState,
 		WebhookEnabled:           p.WebhookEnabled,
+		FieldManager:             configsync.FieldManager,
 	}
 	options = OptionsForScope(options, p.Scope)
 
@@ -208,7 +209,7 @@ func (p *root) setSourceStatusWithRetries(ctx context.Context, newStatus sourceS
 			rs.Namespace, rs.Name, cmp.Diff(currentRS.Status, rs.Status))
 	}
 
-	if err := p.Client.Status().Update(ctx, &rs); err != nil {
+	if err := p.Client.Status().Update(ctx, &rs, client.FieldOwner(configsync.FieldManager)); err != nil {
 		// If the update failure was caused by the size of the RootSync object, we would truncate the errors and retry.
 		if isRequestTooLargeError(err) {
 			klog.Infof("Failed to update RootSync source status (total error count: %d, denominator: %d): %s.", rs.Status.Source.ErrorSummary.TotalCount, denominator, err)
@@ -270,7 +271,7 @@ func (p *root) setRequiresRendering(ctx context.Context, renderingRequired bool)
 	}
 	existing := rs.DeepCopy()
 	core.SetAnnotation(rs, metadata.RequiresRenderingAnnotationKey, newVal)
-	return p.Client.Patch(ctx, rs, client.MergeFrom(existing))
+	return p.Client.Patch(ctx, rs, client.MergeFrom(existing), client.FieldOwner(configsync.FieldManager))
 }
 
 // setRenderingStatus implements the Parser interface
@@ -324,7 +325,7 @@ func (p *root) setRenderingStatusWithRetires(ctx context.Context, newStatus rend
 			rs.Namespace, rs.Name, cmp.Diff(currentRS.Status, rs.Status))
 	}
 
-	if err := p.Client.Status().Update(ctx, &rs); err != nil {
+	if err := p.Client.Status().Update(ctx, &rs, client.FieldOwner(configsync.FieldManager)); err != nil {
 		// If the update failure was caused by the size of the RootSync object, we would truncate the errors and retry.
 		if isRequestTooLargeError(err) {
 			klog.Infof("Failed to update RootSync rendering status (total error count: %d, denominator: %d): %s.", rs.Status.Rendering.ErrorSummary.TotalCount, denominator, err)
@@ -429,7 +430,7 @@ func (p *root) setSyncStatusWithRetries(ctx context.Context, newStatus syncStatu
 			rs.Namespace, rs.Name, cmp.Diff(currentRS.Status, rs.Status))
 	}
 
-	if err := p.Client.Status().Update(ctx, rs); err != nil {
+	if err := p.Client.Status().Update(ctx, rs, client.FieldOwner(configsync.FieldManager)); err != nil {
 		// If the update failure was caused by the size of the RootSync object, we would truncate the errors and retry.
 		if isRequestTooLargeError(err) {
 			klog.Infof("Failed to update RootSync sync status (total error count: %d, denominator: %d): %s.", rs.Status.Sync.ErrorSummary.TotalCount, denominator, err)
@@ -567,13 +568,13 @@ func (p *root) K8sClient() client.Client {
 }
 
 // prependRootSyncRemediatorStatus adds the conflict error detected by the remediator to the front of the sync errors.
-func prependRootSyncRemediatorStatus(ctx context.Context, client client.Client, syncName string, conflictErrs []status.ManagementConflictError, denominator int) error {
+func prependRootSyncRemediatorStatus(ctx context.Context, c client.Client, syncName string, conflictErrs []status.ManagementConflictError, denominator int) error {
 	if denominator <= 0 {
 		return fmt.Errorf("The denominator must be a positive number")
 	}
 
 	var rs v1beta1.RootSync
-	if err := client.Get(ctx, rootsync.ObjectKey(syncName), &rs); err != nil {
+	if err := c.Get(ctx, rootsync.ObjectKey(syncName), &rs); err != nil {
 		return status.APIServerError(err, "failed to get RootSync: "+syncName)
 	}
 
@@ -604,11 +605,11 @@ func prependRootSyncRemediatorStatus(ctx context.Context, client client.Client, 
 	setSyncStatusErrors(&rs.Status.Status, errs, denominator)
 	rs.Status.Sync.LastUpdate = metav1.Now()
 
-	if err := client.Status().Update(ctx, &rs); err != nil {
+	if err := c.Status().Update(ctx, &rs, client.FieldOwner(configsync.FieldManager)); err != nil {
 		// If the update failure was caused by the size of the RootSync object, we would truncate the errors and retry.
 		if isRequestTooLargeError(err) {
 			klog.Infof("Failed to update RootSync sync status (total error count: %d, denominator: %d): %s.", rs.Status.Sync.ErrorSummary.TotalCount, denominator, err)
-			return prependRootSyncRemediatorStatus(ctx, client, syncName, conflictErrs, denominator*2)
+			return prependRootSyncRemediatorStatus(ctx, c, syncName, conflictErrs, denominator*2)
 		}
 		return status.APIServerError(err, "failed to update RootSync sync status")
 	}

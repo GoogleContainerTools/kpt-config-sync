@@ -74,15 +74,10 @@ func TestWorker_Run_Remediates(t *testing.T) {
 	q := queue.New("test")
 	defer q.ShutDown()
 
-	c := testingfake.NewClient(t, core.Scheme)
-	for _, obj := range existingObjs {
-		if err := c.Create(ctx, obj); err != nil {
-			t.Fatalf("Failed to create object in fake client: %v", err)
-		}
-	}
+	c := testingfake.NewClient(t, core.Scheme, existingObjs...)
 
 	d := makeDeclared(t, randomCommitHash(), declaredObjs...)
-	w := NewWorker(declared.RootReconciler, configsync.RootSyncName, c.Applier(), q, d, syncertestfake.NewFightHandler())
+	w := NewWorker(declared.RootReconciler, configsync.RootSyncName, c.Applier(configsync.FieldManager), q, d, syncertestfake.NewFightHandler())
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -101,7 +96,7 @@ func TestWorker_Run_Remediates(t *testing.T) {
 				t.Fatalf("Failed to delete object in fake client: %v", err)
 			}
 		} else {
-			if err := c.Update(ctx, obj); err != nil {
+			if err := c.Update(ctx, obj, client.FieldOwner(testingfake.FieldManager)); err != nil {
 				t.Fatalf("Failed to update object in fake client: %v", err)
 			}
 		}
@@ -163,12 +158,7 @@ func TestWorker_Run_RemediatesExisting(t *testing.T) {
 	q := queue.New("test")
 	defer q.ShutDown()
 
-	c := testingfake.NewClient(t, core.Scheme)
-	for _, obj := range existingObjs {
-		if err := c.Create(ctx, obj); err != nil {
-			t.Fatalf("Failed to create object in fake client: %v", err)
-		}
-	}
+	c := testingfake.NewClient(t, core.Scheme, existingObjs...)
 
 	// Execute runtime changes
 	for _, obj := range changedObjs {
@@ -177,7 +167,7 @@ func TestWorker_Run_RemediatesExisting(t *testing.T) {
 				t.Fatalf("Failed to delete object in fake client: %v", err)
 			}
 		} else {
-			if err := c.Update(ctx, obj); err != nil {
+			if err := c.Update(ctx, obj, client.FieldOwner(testingfake.FieldManager)); err != nil {
 				t.Fatalf("Failed to update object in fake client: %v", err)
 			}
 		}
@@ -189,7 +179,7 @@ func TestWorker_Run_RemediatesExisting(t *testing.T) {
 	}
 
 	d := makeDeclared(t, randomCommitHash(), declaredObjs...)
-	w := NewWorker(declared.RootReconciler, configsync.RootSyncName, c.Applier(), q, d, syncertestfake.NewFightHandler())
+	w := NewWorker(declared.RootReconciler, configsync.RootSyncName, c.Applier(configsync.FieldManager), q, d, syncertestfake.NewFightHandler())
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -290,14 +280,14 @@ func TestWorker_ProcessNextObject(t *testing.T) {
 			c := testingfake.NewClient(t, core.Scheme)
 			for _, obj := range tc.toProcess {
 				if !queue.WasDeleted(context.Background(), obj) {
-					if err := c.Create(context.Background(), obj); err != nil {
+					if err := c.Create(context.Background(), obj, client.FieldOwner(testingfake.FieldManager)); err != nil {
 						t.Fatalf("Failed to create object in fake client: %v", err)
 					}
 				}
 			}
 
 			d := makeDeclared(t, randomCommitHash(), tc.declared...)
-			w := NewWorker(declared.RootReconciler, configsync.RootSyncName, c.Applier(), q, d, syncertestfake.NewFightHandler())
+			w := NewWorker(declared.RootReconciler, configsync.RootSyncName, c.Applier(configsync.FieldManager), q, d, syncertestfake.NewFightHandler())
 
 			for _, obj := range tc.toProcess {
 				if err := w.processNextObject(context.Background()); err != nil {
@@ -317,7 +307,7 @@ func TestWorker_Run_CancelledWhenEmpty(t *testing.T) {
 	defer q.ShutDown()
 	c := testingfake.NewClient(t, core.Scheme)
 	d := makeDeclared(t, randomCommitHash()) // no resources declared
-	w := NewWorker(declared.RootReconciler, configsync.RootSyncName, c.Applier(), q, d, syncertestfake.NewFightHandler())
+	w := NewWorker(declared.RootReconciler, configsync.RootSyncName, c.Applier(configsync.FieldManager), q, d, syncertestfake.NewFightHandler())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -381,15 +371,9 @@ func TestWorker_Run_CancelledWhenNotEmpty(t *testing.T) {
 	q := queue.New("test")
 	defer q.ShutDown()
 
-	c := testingfake.NewClient(t, core.Scheme)
-	for _, obj := range existingObjs {
-		if err := c.Create(ctx, obj); err != nil {
-			t.Fatalf("Failed to create object in fake client: %v", err)
-		}
-	}
-
+	c := testingfake.NewClient(t, core.Scheme, existingObjs...)
 	d := makeDeclared(t, randomCommitHash(), declaredObjs...)
-	a := &testingfake.Applier{Client: c}
+	a := &testingfake.Applier{Client: c, FieldManager: configsync.FieldManager}
 	w := NewWorker(declared.RootReconciler, configsync.RootSyncName, a, q, d, syncertestfake.NewFightHandler())
 
 	// Run worker in the background
@@ -409,7 +393,7 @@ func TestWorker_Run_CancelledWhenNotEmpty(t *testing.T) {
 				t.Fatalf("Failed to delete object in fake client: %v", err)
 			}
 		} else {
-			if err := c.Update(ctx, obj); err != nil {
+			if err := c.Update(ctx, obj, client.FieldOwner(testingfake.FieldManager)); err != nil {
 				t.Fatalf("Failed to update object in fake client: %v", err)
 			}
 		}

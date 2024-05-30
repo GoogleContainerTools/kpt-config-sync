@@ -1103,7 +1103,7 @@ func (r *RepoSyncReconciler) updateSyncStatus(ctx context.Context, rs *v1beta1.R
 					cmp.Diff(before.Status, rs.Status)))
 		}
 		return nil
-	})
+	}, client.FieldOwner(reconcilermanager.FieldManager))
 	if err != nil {
 		return updated, fmt.Errorf("Sync status update failed: %w", err)
 	}

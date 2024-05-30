@@ -20,6 +20,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"kpt.dev/configsync/pkg/reconcilermanager"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
@@ -43,7 +44,7 @@ func CreateOrUpdate(ctx context.Context, c client.Client, obj client.Object, f c
 		if err := mutateWrapper(f, key, obj); err != nil {
 			return controllerutil.OperationResultNone, err
 		}
-		if err := c.Create(ctx, obj); err != nil {
+		if err := c.Create(ctx, obj, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 			return controllerutil.OperationResultNone, NewObjectOperationErrorWithKey(err, obj, OperationCreate, key)
 		}
 		return controllerutil.OperationResultCreated, nil
@@ -58,7 +59,7 @@ func CreateOrUpdate(ctx context.Context, c client.Client, obj client.Object, f c
 		return controllerutil.OperationResultNone, nil
 	}
 
-	if err := c.Update(ctx, obj); err != nil {
+	if err := c.Update(ctx, obj, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		return controllerutil.OperationResultNone, NewObjectOperationErrorWithKey(err, obj, OperationUpdate, key)
 	}
 	return controllerutil.OperationResultUpdated, nil

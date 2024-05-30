@@ -212,7 +212,7 @@ func (c *clientApplier) create(ctx context.Context, obj *unstructured.Unstructur
 		return status.ResourceWrap(err, "could not generate apply annotation on create", obj)
 	}
 
-	return c.client.Create(ctx, obj)
+	return c.client.Create(ctx, obj, client.FieldOwner(configsync.FieldManager))
 }
 
 // clientFor returns the client which may interact with the passed object.
@@ -380,7 +380,9 @@ func attemptPatch(ctx context.Context, resClient dynamic.ResourceInterface, name
 	}
 
 	start := time.Now()
-	_, err := resClient.Patch(ctx, name, patchType, patch, metav1.PatchOptions{})
+	_, err := resClient.Patch(ctx, name, patchType, patch, metav1.PatchOptions{
+		FieldManager: configsync.FieldManager,
+	})
 	duration := time.Since(start).Seconds()
 	metrics.APICallDuration.WithLabelValues("update", metrics.StatusLabel(err)).Observe(duration)
 	m.RecordAPICallDuration(ctx, "update", m.StatusTagKey(err), start)

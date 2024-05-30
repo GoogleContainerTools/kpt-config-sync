@@ -72,7 +72,7 @@ func NewClient(t *testing.T, scheme *runtime.Scheme, objs ...client.Object) *Cli
 	StartWatchSupervisor(t, watchSupervisor)
 
 	for _, o := range objs {
-		err := result.Create(context.Background(), o)
+		err := result.Create(context.Background(), o, client.FieldOwner(FieldManager))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -228,8 +228,8 @@ func (c *Client) Watch(ctx context.Context, exampleList client.ObjectList, opts 
 
 // Applier returns a fake.Applier wrapping this fake.Client. Callers using the
 // resulting Applier will read from/write to the original fake.Client.
-func (c *Client) Applier() reconcile.Applier {
-	return &Applier{Client: c}
+func (c *Client) Applier(fieldManager string) reconcile.Applier {
+	return &Applier{Client: c, FieldManager: fieldManager}
 }
 
 // Codecs returns the CodecFactory.

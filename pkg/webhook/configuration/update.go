@@ -31,7 +31,7 @@ import (
 //
 // Returns an error if the API Server returns invalid API Resource lists or
 // there is a problem updating the Configuration.
-func Update(ctx context.Context, c client.Client, dc discovery.ServerResourcer, objs []ast.FileObject) status.MultiError {
+func Update(ctx context.Context, c client.Client, dc discovery.ServerResourcer, objs []ast.FileObject, opts ...client.UpdateOption) status.MultiError {
 	if len(objs) == 0 {
 		// Nothing to do.
 		return nil
@@ -68,7 +68,7 @@ func Update(ctx context.Context, c client.Client, dc discovery.ServerResourcer, 
 	// We aren't yet concerned with removing stale rules, so just merge the two
 	// together.
 	newCfg = Merge(oldCfg, newCfg)
-	if err = c.Update(ctx, newCfg); err != nil {
+	if err = c.Update(ctx, newCfg, opts...); err != nil {
 		return status.APIServerError(err, "applying changes to admission webhook")
 	}
 	return nil

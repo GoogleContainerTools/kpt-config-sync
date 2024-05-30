@@ -63,6 +63,9 @@ func diff(got, want []*view.Row) string {
 		if got[i] == want[i] {
 			continue
 		}
+		if i >= len(want) {
+			break
+		}
 		if len(got[i].Tags) > 0 && len(want[i].Tags) > 0 && !reflect.DeepEqual(got[i].Tags, want[i].Tags) {
 			return fmt.Sprintf("Expected metric tags not found, -want, +got:\n- %s\n+ %s",
 				want[i].Tags, got[i].Tags)
@@ -71,6 +74,15 @@ func diff(got, want []*view.Row) string {
 			return fmt.Sprintf("Expected metric value not found, -want, +got:\n- %s\n+ %s",
 				want[i].Data, got[i].Data)
 		}
+	}
+	if len(got) > len(want) {
+		var sb strings.Builder
+		sb.WriteString("Unexpected metric(s) found:\n")
+		for _, row := range got[len(want):] {
+			sb.WriteString("+ ")
+			sb.WriteString(row.String())
+		}
+		return sb.String()
 	}
 	if len(want) > len(got) {
 		var sb strings.Builder

@@ -41,6 +41,9 @@ type New struct {
 	// ClusterName is the name of the target cluster used by the test.
 	ClusterName string
 
+	// ClusterHash is a 64 character long unique identifier formed in hex used to identify a GKE cluster.
+	ClusterHash string
+
 	// IsEphemeralCluster indicates whether the cluster will be destroyed.
 	IsEphemeralCluster bool
 

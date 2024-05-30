@@ -115,6 +115,8 @@ type Cluster interface {
 	Delete() error
 	// Connect to the k8s cluster (generate kubeconfig)
 	Connect() error
+	// Hash returns the cluster hash.
+	Hash() (string, error)
 }
 
 // upsertCluster creates the cluster if it does not exist
@@ -224,4 +226,10 @@ func RestConfig(t testing.NTB, opts *ntopts.New) {
 		t.Fatalf("building rest.Config: %v", err)
 	}
 	opts.RESTConfig = restConfig
+
+	clusterHash, err := cluster.Hash()
+	if err != nil {
+		t.Fatalf("getting the GKE cluster hash: %v", err)
+	}
+	opts.ClusterHash = clusterHash
 }

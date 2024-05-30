@@ -147,7 +147,6 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	sharedNt := SharedNT(t)
 	// Set t on the logger to ensure proper interleaving of logs
 	sharedNt.Logger.SetNTBForTest(t)
-	t.Logf("using shared test env %s", sharedNt.ClusterName)
 
 	nt := &NT{
 		Context:                 sharedNt.Context,
@@ -155,6 +154,7 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		Logger:                  sharedNt.Logger,
 		Shell:                   sharedNt.Shell,
 		ClusterName:             sharedNt.ClusterName,
+		ClusterHash:             sharedNt.ClusterHash,
 		TmpDir:                  opts.TmpDir,
 		Config:                  sharedNt.Config,
 		repoSyncPermissions:     opts.RepoSyncPermissions,
@@ -184,6 +184,7 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	}
 
 	nt.detectClusterVersion()
+	t.Logf("using shared test env: %s, cluster version: %s, cluster hash: %s", sharedNt.ClusterName, nt.ClusterVersion, nt.ClusterHash)
 
 	if opts.SkipConfigSyncInstall {
 		return nt
@@ -258,6 +259,7 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		Logger:                  logger,
 		Shell:                   shell,
 		ClusterName:             opts.ClusterName,
+		ClusterHash:             opts.ClusterHash,
 		TmpDir:                  opts.TmpDir,
 		Config:                  opts.RESTConfig,
 		repoSyncPermissions:     opts.RepoSyncPermissions,

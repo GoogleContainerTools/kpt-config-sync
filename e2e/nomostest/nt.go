@@ -115,6 +115,9 @@ type NT struct {
 	// ClusterVersion is the parsed version of the target test cluster
 	ClusterVersion *clusterversion.ClusterVersion
 
+	// ClusterHash is a 64 character long unique identifier formed in hex used to identify a GKE cluster.
+	ClusterHash string
+
 	// DefaultWaitTimeout is the default timeout for tests to wait for sync completion.
 	DefaultWaitTimeout time.Duration
 

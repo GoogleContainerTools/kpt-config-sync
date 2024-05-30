@@ -136,6 +136,11 @@ func (c *KindCluster) Connect() error {
 	return c.provider.ExportKubeConfig(c.Name, c.KubeConfigPath, false)
 }
 
+// Hash returns N/A for kind cluster
+func (c *KindCluster) Hash() (string, error) {
+	return "N/A for KinD cluster", nil
+}
+
 // asKindVersion returns the latest Kind version associated with a given
 // Kubernetes minor version.
 func asKindVersion(version string) (KindVersion, error) {

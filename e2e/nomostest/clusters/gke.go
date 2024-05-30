@@ -65,6 +65,11 @@ func (c *GKECluster) Connect() error {
 	return getGKECredentials(c.T, c.Name, c.KubeConfigPath)
 }
 
+// Hash returns the cluster hash
+func (c *GKECluster) Hash() (string, error) {
+	return getClusterHash(c.T, c.Name, c.KubeConfigPath)
+}
+
 func withKubeConfig(cmd *exec.Cmd, kubeconfig string) *exec.Cmd {
 	cmd.Env = os.Environ()
 	cmd.Env = append(cmd.Env, fmt.Sprintf("KUBECONFIG=%s", kubeconfig))
@@ -312,4 +317,29 @@ func clusterExistsGKE(t testing.NTB, clusterName string) (bool, error) {
 		return true, nil
 	}
 	return false, nil
+}
+
+// getClusterHash fetches GKE cluster hash
+func getClusterHash(t testing.NTB, clusterName, kubeconfig string) (string, error) {
+	args := []string{
+		"container", "clusters", "describe",
+		clusterName, "--project", *e2e.GCPProject,
+	}
+	if *e2e.GCPZone != "" {
+		args = append(args, "--zone", *e2e.GCPZone)
+	}
+	if *e2e.GCPRegion != "" {
+		args = append(args, "--region", *e2e.GCPRegion)
+	}
+	args = append(args, "--format", "value(id)")
+	t.Logf("gcloud %s", strings.Join(args, " "))
+	cmd := withKubeConfig( // gcloud container clusters describe <args> --format 'value(id)'
+		exec.Command("gcloud", args...),
+		kubeconfig,
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("failed to get cluster hash: %v\nstdout/stderr:\n%s", err, string(out))
+	}
+	return string(out), nil
 }

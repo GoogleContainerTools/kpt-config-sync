@@ -36,6 +36,14 @@ func (s *PruneEventStats) Add(status event.PruneEventStatus) {
 	s.EventByOp[status]++
 }
 
+// Set records a total number of events
+func (s *PruneEventStats) Set(status event.PruneEventStatus, count uint64) {
+	if s.EventByOp == nil {
+		s.EventByOp = map[event.PruneEventStatus]uint64{}
+	}
+	s.EventByOp[status] = count
+}
+
 // String returns the stats as a human readable string.
 func (s PruneEventStats) String() string {
 	var strs []string
@@ -75,6 +83,14 @@ func (s *DeleteEventStats) Add(status event.DeleteEventStatus) {
 		s.EventByOp = map[event.DeleteEventStatus]uint64{}
 	}
 	s.EventByOp[status]++
+}
+
+// Set records a total number of events
+func (s *DeleteEventStats) Set(status event.DeleteEventStatus, count uint64) {
+	if s.EventByOp == nil {
+		s.EventByOp = map[event.DeleteEventStatus]uint64{}
+	}
+	s.EventByOp[status] = count
 }
 
 // String returns the stats as a human readable string.
@@ -119,6 +135,14 @@ func (s *ApplyEventStats) Add(status event.ApplyEventStatus) {
 	s.EventByOp[status]++
 }
 
+// Set records a total number of events
+func (s *ApplyEventStats) Set(status event.ApplyEventStatus, count uint64) {
+	if s.EventByOp == nil {
+		s.EventByOp = map[event.ApplyEventStatus]uint64{}
+	}
+	s.EventByOp[status] = count
+}
+
 // String returns the stats as a human readable string.
 func (s ApplyEventStats) String() string {
 	var strs []string
@@ -159,6 +183,14 @@ func (s *WaitEventStats) Add(status event.WaitEventStatus) {
 		s.EventByOp = map[event.WaitEventStatus]uint64{}
 	}
 	s.EventByOp[status]++
+}
+
+// Set records a total number of events
+func (s *WaitEventStats) Set(status event.WaitEventStatus, count uint64) {
+	if s.EventByOp == nil {
+		s.EventByOp = map[event.WaitEventStatus]uint64{}
+	}
+	s.EventByOp[status] = count
 }
 
 // String returns the stats as a human readable string.
@@ -247,6 +279,49 @@ func (s SyncStats) String() string {
 // Empty returns true if no events were recorded.
 func (s *SyncStats) Empty() bool {
 	return s == nil || s.ErrorTypeEvents == 0 && s.PruneEvent.Empty() && s.DeleteEvent.Empty() && s.ApplyEvent.Empty() && s.WaitEvent.Empty() && s.DisableObjs.Empty()
+}
+
+// WithApplyEvents sets the number of times this apply event status occurred.
+// Intended for easy test expectation construction.
+func (s *SyncStats) WithApplyEvents(status event.ApplyEventStatus, count uint64) *SyncStats {
+	s.ApplyEvent.Set(status, count)
+	return s
+}
+
+// WithPruneEvents sets the number of times this prune event status occurred.
+// Intended for easy test expectation construction.
+func (s *SyncStats) WithPruneEvents(status event.PruneEventStatus, count uint64) *SyncStats {
+	s.PruneEvent.Set(status, count)
+	return s
+}
+
+// WithDeleteEvents sets the number of times this delete event status occurred.
+// Intended for easy test expectation construction.
+func (s *SyncStats) WithDeleteEvents(status event.DeleteEventStatus, count uint64) *SyncStats {
+	s.DeleteEvent.Set(status, count)
+	return s
+}
+
+// WithWaitEvent sets the number of times this wait event status occurred.
+// Intended for easy test expectation construction.
+func (s *SyncStats) WithWaitEvent(status event.WaitEventStatus, count uint64) *SyncStats {
+	s.WaitEvent.Set(status, count)
+	return s
+}
+
+// WithDisabledObjStats sets the disabled object stats.
+// Intended for easy test expectation construction.
+func (s *SyncStats) WithDisabledObjStats(total, succeeded uint64) *SyncStats {
+	s.DisableObjs.Total = total
+	s.DisableObjs.Succeeded = succeeded
+	return s
+}
+
+// WithErrorEvents sets the total number of error events.
+// Intended for easy test expectation construction.
+func (s *SyncStats) WithErrorEvents(count uint64) *SyncStats {
+	s.ErrorTypeEvents = count
+	return s
 }
 
 // NewSyncStats constructs a SyncStats with empty event maps.

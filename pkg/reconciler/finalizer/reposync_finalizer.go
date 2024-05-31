@@ -20,7 +20,6 @@ import (
 
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
-	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/reposync"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/util/mutate"
@@ -31,8 +30,10 @@ import (
 // to destroy all managed user objects previously applied from source.
 // Implements the Finalizer interface.
 type RepoSyncFinalizer struct {
-	Destroyer applier.Destroyer
-	Client    client.Client
+	baseFinalizer
+
+	// Client used to update RSync spec and status.
+	Client client.Client
 
 	// StopControllers will be called by the Finalize() method to stop the Parser and Remediator.
 	StopControllers context.CancelFunc
@@ -176,7 +177,7 @@ func (f *RepoSyncFinalizer) removeFinalizingCondition(ctx context.Context, syncO
 // deleteManagedObjects uses the destroyer to delete managed objects and then
 // updates the ReconcilerFinalizerFailure condition on the specified object.
 func (f *RepoSyncFinalizer) deleteManagedObjects(ctx context.Context, syncObj *v1beta1.RepoSync) error {
-	destroyErrs := f.Destroyer.Destroy(ctx)
+	destroyErrs := f.destroy(ctx)
 	// Update the FinalizerFailure condition whether the destroy succeeded or failed
 	if _, updateErr := f.updateFailureCondition(ctx, syncObj, destroyErrs); updateErr != nil {
 		updateErr = fmt.Errorf("updating FinalizerFailure condition: %w", updateErr)

@@ -1066,13 +1066,15 @@ func TestRoot_SourceReconcilerErrorsMetricValidation(t *testing.T) {
 func TestRoot_SourceAndSyncReconcilerErrorsMetricValidation(t *testing.T) {
 	testCases := []struct {
 		name            string
-		applyErrors     status.MultiError
+		applyErrors     []status.Error
 		expectedError   status.MultiError
 		expectedMetrics []*view.Row
 	}{
 		{
-			name:          "single reconciler error in sync component",
-			applyErrors:   applier.Error(errors.New("sync error")),
+			name: "single reconciler error in sync component",
+			applyErrors: []status.Error{
+				applier.Error(errors.New("sync error")),
+			},
 			expectedError: applier.Error(errors.New("sync error")),
 			expectedMetrics: []*view.Row{
 				{Data: &view.LastValueData{Value: 0}, Tags: []tag.Tag{{Key: metrics.KeyComponent, Value: "source"}, {Key: metrics.KeyErrorClass, Value: "1xxx"}}},
@@ -1085,10 +1087,10 @@ func TestRoot_SourceAndSyncReconcilerErrorsMetricValidation(t *testing.T) {
 		},
 		{
 			name: "multiple reconciler errors in sync component",
-			applyErrors: status.Wrap(
+			applyErrors: []status.Error{
 				applier.Error(errors.New("sync error")),
 				status.InternalError("internal error"),
-			),
+			},
 			expectedError: status.Wrap(
 				applier.Error(errors.New("sync error")),
 				status.InternalError("internal error"),

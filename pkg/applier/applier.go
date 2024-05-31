@@ -68,28 +68,47 @@ var (
 type Applier interface {
 	// Apply creates, updates, or prunes all managed resources, depending on
 	// the new desired resource objects.
-	// Returns the set of GVKs which were successfully applied and any errors.
+	// Error events are sent to the eventHandler.
+	// Returns the status of the applied objects and statistics of the sync.
 	// This is called by the reconciler when changes are detected in the
 	// source of truth (git, OCI, helm) and periodically.
-	Apply(ctx context.Context, desiredResources []client.Object) status.MultiError
-	// Errors returns the errors encountered during apply.
-	// This method may be called while Destroy is running, to get the set of
-	// errors encountered so far.
-	Errors() status.MultiError
+	Apply(ctx context.Context, eventHandler func(Event), desiredResources []client.Object) (ObjectStatusMap, *stats.SyncStats)
 }
 
 // Destroyer is a bulk client for deleting all the managed resource objects
 // tracked in a single ResourceGroup inventory.
 type Destroyer interface {
 	// Destroy deletes all managed resources.
-	// Returns any errors encountered while destroying.
+	// Error events are sent to the eventHandler.
+	// Returns the status of the destroyed objects and statistics of the sync.
 	// This is called by the reconciler finalizer when deletion propagation is
 	// enabled.
-	Destroy(ctx context.Context) status.MultiError
-	// Errors returns the errors encountered during destroy.
-	// This method may be called while Destroy is running, to get the set of
-	// errors encountered so far.
-	Errors() status.MultiError
+	Destroy(ctx context.Context, eventHandler func(Event)) (ObjectStatusMap, *stats.SyncStats)
+}
+
+// EventType is the type used by SuperEvent.Type
+type EventType string
+
+const (
+	// ErrorEventType is the type of the ErrorEvent
+	ErrorEventType EventType = "ErrorEvent"
+)
+
+// Event is sent to the eventHandler by the supervisor.
+type Event interface {
+	// Type returns the type of the event.
+	Type() EventType
+}
+
+// ErrorEvent is sent after the supervisor has errored.
+// Generally, the supervisor will still continue until success or timeout.
+type ErrorEvent struct {
+	Error status.Error
+}
+
+// Type returns the type of the event.
+func (e ErrorEvent) Type() EventType {
+	return ErrorEventType
 }
 
 // Supervisor is a bulk client for applying and deleting a mutable set of
@@ -125,11 +144,6 @@ type supervisor struct {
 
 	// execMux prevents concurrent Apply/Destroy calls
 	execMux sync.Mutex
-	// errorMux prevents concurrent modifications to the cached set of errors
-	errorMux sync.RWMutex
-	// errs received from the current (if running) or previous Apply/Destroy.
-	// These errors is cleared at the start of the Apply/Destroy methods.
-	errs status.MultiError
 }
 
 var _ Applier = &supervisor{}
@@ -211,16 +225,9 @@ func wrapInventoryObj(obj *unstructured.Unstructured) (*live.InventoryResourceGr
 	return inv, nil
 }
 
-type eventHandler struct {
-	// isDestroy indicates whether the events being processed are for a Destroy
-	isDestroy bool
-	// clientSet is used for accessing various k8s clients
-	clientSet *ClientSet
-}
-
-func (h *eventHandler) processApplyEvent(ctx context.Context, e event.ApplyEvent, s *stats.ApplyEventStats, objectStatusMap ObjectStatusMap, unknownTypeResources map[core.ID]struct{}, resourceMap map[core.ID]client.Object) status.Error {
+func (s *supervisor) processApplyEvent(ctx context.Context, e event.ApplyEvent, syncStats *stats.ApplyEventStats, objectStatusMap ObjectStatusMap, unknownTypeResources map[core.ID]struct{}, resourceMap map[core.ID]client.Object) status.Error {
 	id := idFrom(e.Identifier)
-	s.Add(e.Status)
+	syncStats.Add(e.Status)
 
 	objectStatus, ok := objectStatusMap[id]
 	if !ok || objectStatus == nil {
@@ -256,16 +263,16 @@ func (h *eventHandler) processApplyEvent(ctx context.Context, e event.ApplyEvent
 	case event.ApplySkipped:
 		objectStatus.Actuation = actuation.ActuationSkipped
 		// Skip event always includes an error with the reason
-		return h.handleApplySkippedEvent(e.Resource, id, e.Error)
+		return s.handleApplySkippedEvent(e.Resource, id, e.Error)
 
 	default:
 		return ErrorForResource(fmt.Errorf("unexpected prune event status: %v", e.Status), id)
 	}
 }
 
-func (h *eventHandler) processWaitEvent(e event.WaitEvent, s *stats.WaitEventStats, objectStatusMap ObjectStatusMap) error {
+func (s *supervisor) processWaitEvent(e event.WaitEvent, syncStats *stats.WaitEventStats, objectStatusMap ObjectStatusMap, isDestroy bool) error {
 	id := idFrom(e.Identifier)
-	s.Add(e.Status)
+	syncStats.Add(e.Status)
 
 	objectStatus, ok := objectStatusMap[id]
 	if !ok || objectStatus == nil {
@@ -283,13 +290,13 @@ func (h *eventHandler) processWaitEvent(e event.WaitEvent, s *stats.WaitEventSta
 	case event.ReconcileFailed:
 		objectStatus.Reconcile = actuation.ReconcileFailed
 		// ReconcileFailed is treated as an error for destroy
-		if h.isDestroy {
+		if isDestroy {
 			return WaitErrorForResource(fmt.Errorf("reconcile failed"), id)
 		}
 	case event.ReconcileTimeout:
 		objectStatus.Reconcile = actuation.ReconcileTimeout
 		// ReconcileTimeout is treated as an error for destroy
-		if h.isDestroy {
+		if isDestroy {
 			return WaitErrorForResource(fmt.Errorf("reconcile timeout"), id)
 		}
 	default:
@@ -299,7 +306,7 @@ func (h *eventHandler) processWaitEvent(e event.WaitEvent, s *stats.WaitEventSta
 }
 
 // handleApplySkippedEvent translates from apply skipped event into resource error.
-func (h *eventHandler) handleApplySkippedEvent(obj *unstructured.Unstructured, id core.ID, err error) status.Error {
+func (s *supervisor) handleApplySkippedEvent(obj *unstructured.Unstructured, id core.ID, err error) status.Error {
 	var depErr *filter.DependencyPreventedActuationError
 	if errors.As(err, &depErr) {
 		return SkipErrorForResource(err, id, depErr.Strategy)
@@ -323,9 +330,9 @@ func (h *eventHandler) handleApplySkippedEvent(obj *unstructured.Unstructured, i
 }
 
 // processPruneEvent handles PruneEvents from the Applier
-func (h *eventHandler) processPruneEvent(ctx context.Context, e event.PruneEvent, s *stats.PruneEventStats, objectStatusMap ObjectStatusMap) status.Error {
+func (s *supervisor) processPruneEvent(ctx context.Context, e event.PruneEvent, syncStats *stats.PruneEventStats, objectStatusMap ObjectStatusMap) status.Error {
 	id := idFrom(e.Identifier)
-	s.Add(e.Status)
+	syncStats.Add(e.Status)
 
 	objectStatus, ok := objectStatusMap[id]
 	if !ok || objectStatus == nil {
@@ -352,7 +359,7 @@ func (h *eventHandler) processPruneEvent(ctx context.Context, e event.PruneEvent
 	case event.PruneSkipped:
 		objectStatus.Actuation = actuation.ActuationSkipped
 		// Skip event always includes an error with the reason
-		return h.handleDeleteSkippedEvent(ctx, event.PruneType, e.Object, id, e.Error)
+		return s.handleDeleteSkippedEvent(ctx, event.PruneType, e.Object, id, e.Error)
 
 	default:
 		return PruneErrorForResource(fmt.Errorf("unexpected prune event status: %v", e.Status), id)
@@ -360,9 +367,9 @@ func (h *eventHandler) processPruneEvent(ctx context.Context, e event.PruneEvent
 }
 
 // processDeleteEvent handles DeleteEvents from the Destroyer
-func (h *eventHandler) processDeleteEvent(ctx context.Context, e event.DeleteEvent, s *stats.DeleteEventStats, objectStatusMap ObjectStatusMap) status.Error {
+func (s *supervisor) processDeleteEvent(ctx context.Context, e event.DeleteEvent, syncStats *stats.DeleteEventStats, objectStatusMap ObjectStatusMap) status.Error {
 	id := idFrom(e.Identifier)
-	s.Add(e.Status)
+	syncStats.Add(e.Status)
 
 	objectStatus, ok := objectStatusMap[id]
 	if !ok || objectStatus == nil {
@@ -389,7 +396,7 @@ func (h *eventHandler) processDeleteEvent(ctx context.Context, e event.DeleteEve
 	case event.DeleteSkipped:
 		objectStatus.Actuation = actuation.ActuationSkipped
 		// Skip event always includes an error with the reason
-		return h.handleDeleteSkippedEvent(ctx, event.DeleteType, e.Object, id, e.Error)
+		return s.handleDeleteSkippedEvent(ctx, event.DeleteType, e.Object, id, e.Error)
 
 	default:
 		return DeleteErrorForResource(fmt.Errorf("unexpected delete event status: %v", e.Status), id)
@@ -398,11 +405,11 @@ func (h *eventHandler) processDeleteEvent(ctx context.Context, e event.DeleteEve
 
 // handleDeleteSkippedEvent translates from prune skip or delete skip event into
 // a resource error.
-func (h *eventHandler) handleDeleteSkippedEvent(ctx context.Context, eventType event.Type, obj *unstructured.Unstructured, id core.ID, err error) status.Error {
+func (s *supervisor) handleDeleteSkippedEvent(ctx context.Context, eventType event.Type, obj *unstructured.Unstructured, id core.ID, err error) status.Error {
 	// Disable protected namespaces that were removed from the desired object set.
 	if isNamespace(obj) && differ.SpecialNamespaces[obj.GetName()] {
 		// the `client.lifecycle.config.k8s.io/deletion: detach` annotation is not a part of the Config Sync metadata, and will not be removed here.
-		err := h.abandonObject(ctx, obj)
+		err := s.abandonObject(ctx, obj)
 		handleMetrics(ctx, "unmanage", err)
 		if err != nil {
 			err = fmt.Errorf("failed to remove the Config Sync metadata from %v (protected namespace): %v",
@@ -450,7 +457,7 @@ func (h *eventHandler) handleDeleteSkippedEvent(ctx context.Context, eventType e
 		// For prunes/deletes, this is desired behavior, not a fatal error.
 		klog.Infof("Resource object removed from inventory, but not deleted: %v: %v", id, err)
 		// The `client.lifecycle.config.k8s.io/deletion: detach` annotation is not a part of the Config Sync metadata, and will not be removed here.
-		err := h.abandonObject(ctx, obj)
+		err := s.abandonObject(ctx, obj)
 		handleMetrics(ctx, "unmanage", err)
 		if err != nil {
 			err = fmt.Errorf("failed to remove the Config Sync metadata from %v (%s: %s): %v",
@@ -480,43 +487,40 @@ func handleMetrics(ctx context.Context, operation string, err error) {
 
 // checkInventoryObjectSize checks the inventory object size limit.
 // If it is close to the size limit 1M, log a warning.
-func (a *supervisor) checkInventoryObjectSize(ctx context.Context, c client.Client) {
-	u := newInventoryUnstructured(a.syncKind, a.syncName, a.syncNamespace, a.clientSet.StatusMode)
-	err := c.Get(ctx, client.ObjectKey{Namespace: a.syncNamespace, Name: a.syncName}, u)
+func (s *supervisor) checkInventoryObjectSize(ctx context.Context, c client.Client) {
+	u := newInventoryUnstructured(s.syncKind, s.syncName, s.syncNamespace, s.clientSet.StatusMode)
+	err := c.Get(ctx, client.ObjectKey{Namespace: s.syncNamespace, Name: s.syncName}, u)
 	if err == nil {
 		size, err := getObjectSize(u)
 		if err != nil {
-			klog.Warningf("Failed to marshal ResourceGroup %s/%s to get its size: %s", a.syncNamespace, a.syncName, err)
+			klog.Warningf("Failed to marshal ResourceGroup %s/%s to get its size: %s", s.syncNamespace, s.syncName, err)
 		}
 		if int64(size) > maxRequestBytes/2 {
 			klog.Warningf("ResourceGroup %s/%s is close to the maximum object size limit (size: %d, max: %s). "+
 				"There are too many resources being synced than Config Sync can handle! Please split your repo into smaller repos "+
-				"to avoid future failure.", a.syncNamespace, a.syncName, size, maxRequestBytesStr)
+				"to avoid future failure.", s.syncNamespace, s.syncName, size, maxRequestBytesStr)
 		}
 	}
 }
 
 // applyInner triggers a kpt live apply library call to apply a set of resources.
-func (a *supervisor) applyInner(ctx context.Context, objs []client.Object) status.MultiError {
-	a.checkInventoryObjectSize(ctx, a.clientSet.Client)
-	eh := eventHandler{
-		isDestroy: false,
-		clientSet: a.clientSet,
-	}
+func (s *supervisor) applyInner(ctx context.Context, eventHandler func(Event), objs []client.Object) (ObjectStatusMap, *stats.SyncStats) {
+	s.checkInventoryObjectSize(ctx, s.clientSet.Client)
+	isDestroy := false
 
-	s := stats.NewSyncStats()
+	syncStats := stats.NewSyncStats()
 	objStatusMap := make(ObjectStatusMap)
 	// disabledObjs are objects for which the management are disabled
 	// through annotation.
 	enabledObjs, disabledObjs := partitionObjs(objs)
 	if len(disabledObjs) > 0 {
 		klog.Infof("%v objects to be disabled: %v", len(disabledObjs), core.GKNNs(disabledObjs))
-		disabledCount, err := eh.handleDisabledObjects(ctx, a.inventory, disabledObjs)
+		disabledCount, err := s.handleDisabledObjects(ctx, s.inventory, disabledObjs)
 		if err != nil {
-			a.addError(err)
-			return a.Errors()
+			sendErrorEvent(err, eventHandler)
+			return objStatusMap, syncStats
 		}
-		s.DisableObjs = &stats.DisabledObjStats{
+		syncStats.DisableObjs = &stats.DisabledObjStats{
 			Total:     uint64(len(disabledObjs)),
 			Succeeded: disabledCount,
 		}
@@ -524,8 +528,8 @@ func (a *supervisor) applyInner(ctx context.Context, objs []client.Object) statu
 	klog.Infof("%v objects to be applied: %v", len(enabledObjs), core.GKNNs(enabledObjs))
 	resources, err := toUnstructured(enabledObjs)
 	if err != nil {
-		a.addError(err)
-		return a.Errors()
+		sendErrorEvent(err, eventHandler)
+		return objStatusMap, syncStats
 	}
 
 	unknownTypeResources := make(map[core.ID]struct{})
@@ -535,14 +539,14 @@ func (a *supervisor) applyInner(ctx context.Context, objs []client.Object) statu
 			ForceConflicts:  true,
 			FieldManager:    configsync.FieldManager,
 		},
-		InventoryPolicy: a.policy,
+		InventoryPolicy: s.policy,
 		// Leaving ReconcileTimeout and PruneTimeout unset may cause a WaitTask to wait forever.
 		// ReconcileTimeout defines the timeout for a wait task after an apply task.
 		// ReconcileTimeout is a task-level setting instead of an object-level setting.
-		ReconcileTimeout: a.reconcileTimeout,
+		ReconcileTimeout: s.reconcileTimeout,
 		// PruneTimeout defines the timeout for a wait task after a prune task.
 		// PruneTimeout is a task-level setting instead of an object-level setting.
-		PruneTimeout: a.reconcileTimeout,
+		PruneTimeout: s.reconcileTimeout,
 		// PrunePropagationPolicy defines what policy to use when pruning
 		// managed objects.
 		// Use "Background" for now, otherwise managed RootSyncs cannot be
@@ -554,15 +558,15 @@ func (a *supervisor) applyInner(ctx context.Context, objs []client.Object) statu
 
 	// Reset shared mapper before each apply to invalidate the discovery cache.
 	// This allows for picking up CRD changes.
-	meta.MaybeResetRESTMapper(a.clientSet.Mapper)
+	meta.MaybeResetRESTMapper(s.clientSet.Mapper)
 
 	// Builds a map of id -> resource
 	resourceMap := make(map[core.ID]client.Object)
 	for _, obj := range resources {
-		resourceMap[idFrom(object.UnstructuredToObjMetadata(obj))] = obj
+		resourceMap[idFrom(ObjMetaFromObject(obj))] = obj
 	}
 
-	events := a.clientSet.KptApplier.Run(ctx, a.inventory, object.UnstructuredSet(resources), options)
+	events := s.clientSet.KptApplier.Run(ctx, s.inventory, object.UnstructuredSet(resources), options)
 	for e := range events {
 		switch e.Type {
 		case event.InitType:
@@ -573,12 +577,12 @@ func (a *supervisor) applyInner(ctx context.Context, objs []client.Object) statu
 			klog.Info(e.ActionGroupEvent)
 		case event.ErrorType:
 			klog.Info(e.ErrorEvent)
-			if util.IsRequestTooLargeError(e.ErrorEvent.Err) {
-				a.addError(largeResourceGroupError(e.ErrorEvent.Err, idFromInventory(a.inventory)))
-			} else {
-				a.addError(e.ErrorEvent.Err)
+			err := e.ErrorEvent.Err
+			if util.IsRequestTooLargeError(err) {
+				err = largeResourceGroupError(err, idFromInventory(s.inventory))
 			}
-			s.ErrorTypeEvents++
+			sendErrorEvent(err, eventHandler)
+			syncStats.ErrorTypeEvents++
 		case event.WaitType:
 			// Pending events are sent for any objects that haven't reconciled
 			// when the WaitEvent starts. They're not very useful to the user.
@@ -588,89 +592,58 @@ func (a *supervisor) applyInner(ctx context.Context, objs []client.Object) statu
 			} else {
 				klog.V(1).Info(e.WaitEvent)
 			}
-			a.addError(eh.processWaitEvent(e.WaitEvent, s.WaitEvent, objStatusMap))
+			if err := s.processWaitEvent(e.WaitEvent, syncStats.WaitEvent, objStatusMap, isDestroy); err != nil {
+				sendErrorEvent(err, eventHandler)
+			}
 		case event.ApplyType:
 			if e.ApplyEvent.Error != nil {
 				klog.Info(e.ApplyEvent)
 			} else {
 				klog.V(1).Info(e.ApplyEvent)
 			}
-			a.addError(eh.processApplyEvent(ctx, e.ApplyEvent, s.ApplyEvent, objStatusMap, unknownTypeResources, resourceMap))
+			if err := s.processApplyEvent(ctx, e.ApplyEvent, syncStats.ApplyEvent, objStatusMap, unknownTypeResources, resourceMap); err != nil {
+				sendErrorEvent(err, eventHandler)
+			}
 		case event.PruneType:
 			if e.PruneEvent.Error != nil {
 				klog.Info(e.PruneEvent)
 			} else {
 				klog.V(1).Info(e.PruneEvent)
 			}
-			a.addError(eh.processPruneEvent(ctx, e.PruneEvent, s.PruneEvent, objStatusMap))
+			if err := s.processPruneEvent(ctx, e.PruneEvent, syncStats.PruneEvent, objStatusMap); err != nil {
+				sendErrorEvent(err, eventHandler)
+			}
 		default:
 			klog.Infof("Unhandled event (%s): %v", e.Type, e)
 		}
 	}
 
-	errs := a.Errors()
-	if errs == nil {
-		klog.V(4).Infof("Apply completed without error: all resources are up to date.")
-	}
-	if s.Empty() {
-		klog.V(4).Infof("Applier made no new progress")
-	} else {
-		klog.Infof("Applier made new progress: %s", s.String())
-		objStatusMap.Log(klog.V(0))
-	}
-	return errs
+	return objStatusMap, syncStats
 }
 
-// Errors returns the errors encountered during the last apply or current apply
-// if still running.
-// Errors implements the Applier and Destroyer interfaces.
-func (a *supervisor) Errors() status.MultiError {
-	a.errorMux.RLock()
-	defer a.errorMux.RUnlock()
-
-	if a.errs != nil {
-		// Return a copy to avoid persisting caller modifications
-		return status.Wrap(a.errs.Errors()...)
-	}
-	return nil
+func sendErrorEvent(err error, eventHandler func(Event)) {
+	eventHandler(ErrorEvent{Error: wrapError(err)})
 }
 
-func (a *supervisor) addError(err error) {
-	if err == nil {
-		return
+func wrapError(err error) status.Error {
+	if statusErr, ok := err.(status.Error); ok {
+		return statusErr
 	}
-	a.errorMux.Lock()
-	defer a.errorMux.Unlock()
-
-	if _, ok := err.(status.Error); !ok {
-		// Wrap as an applier.Error to indicate the source of the error
-		err = Error(err)
-	}
-
-	a.errs = status.Append(a.errs, err)
-}
-
-func (a *supervisor) invalidateErrors() {
-	a.errorMux.Lock()
-	defer a.errorMux.Unlock()
-
-	a.errs = nil
+	// Wrap as an applier.Error to indicate the source of the error
+	return Error(err)
 }
 
 // destroyInner triggers a kpt live destroy library call to destroy a set of resources.
-func (a *supervisor) destroyInner(ctx context.Context) status.MultiError {
-	s := stats.NewSyncStats()
+func (s *supervisor) destroyInner(ctx context.Context, eventHandler func(Event)) (ObjectStatusMap, *stats.SyncStats) {
+	syncStats := stats.NewSyncStats()
 	objStatusMap := make(ObjectStatusMap)
-	eh := eventHandler{
-		isDestroy: true,
-		clientSet: a.clientSet,
-	}
+	isDestroy := true
 
 	options := apply.DestroyerOptions{
-		InventoryPolicy: a.policy,
+		InventoryPolicy: s.policy,
 		// DeleteTimeout defines the timeout for a wait task after a delete task.
 		// DeleteTimeout is a task-level setting instead of an object-level setting.
-		DeleteTimeout: a.reconcileTimeout,
+		DeleteTimeout: s.reconcileTimeout,
 		// DeletePropagationPolicy defines what policy to use when deleting
 		// managed objects.
 		// Use "Foreground" to ensure owned resources are deleted in the right
@@ -681,9 +654,9 @@ func (a *supervisor) destroyInner(ctx context.Context) status.MultiError {
 
 	// Reset shared mapper before each destroy to invalidate the discovery cache.
 	// This allows for picking up CRD changes.
-	meta.MaybeResetRESTMapper(a.clientSet.Mapper)
+	meta.MaybeResetRESTMapper(s.clientSet.Mapper)
 
-	events := a.clientSet.KptDestroyer.Run(ctx, a.inventory, options)
+	events := s.clientSet.KptDestroyer.Run(ctx, s.inventory, options)
 	for e := range events {
 		switch e.Type {
 		case event.InitType:
@@ -694,12 +667,12 @@ func (a *supervisor) destroyInner(ctx context.Context) status.MultiError {
 			klog.Info(e.ActionGroupEvent)
 		case event.ErrorType:
 			klog.Info(e.ErrorEvent)
-			if util.IsRequestTooLargeError(e.ErrorEvent.Err) {
-				a.addError(largeResourceGroupError(e.ErrorEvent.Err, idFromInventory(a.inventory)))
-			} else {
-				a.addError(e.ErrorEvent.Err)
+			err := e.ErrorEvent.Err
+			if util.IsRequestTooLargeError(err) {
+				err = largeResourceGroupError(err, idFromInventory(s.inventory))
 			}
-			s.ErrorTypeEvents++
+			sendErrorEvent(err, eventHandler)
+			syncStats.ErrorTypeEvents++
 		case event.WaitType:
 			// Pending events are sent for any objects that haven't reconciled
 			// when the WaitEvent starts. They're not very useful to the user.
@@ -709,56 +682,42 @@ func (a *supervisor) destroyInner(ctx context.Context) status.MultiError {
 			} else {
 				klog.V(1).Info(e.WaitEvent)
 			}
-			a.addError(eh.processWaitEvent(e.WaitEvent, s.WaitEvent, objStatusMap))
+			if err := s.processWaitEvent(e.WaitEvent, syncStats.WaitEvent, objStatusMap, isDestroy); err != nil {
+				sendErrorEvent(err, eventHandler)
+			}
 		case event.DeleteType:
 			if e.DeleteEvent.Error != nil {
 				klog.Info(e.DeleteEvent)
 			} else {
 				klog.V(1).Info(e.DeleteEvent)
 			}
-			a.addError(eh.processDeleteEvent(ctx, e.DeleteEvent, s.DeleteEvent, objStatusMap))
+			if err := s.processDeleteEvent(ctx, e.DeleteEvent, syncStats.DeleteEvent, objStatusMap); err != nil {
+				sendErrorEvent(err, eventHandler)
+			}
 		default:
 			klog.Infof("Unhandled event (%s): %v", e.Type, e)
 		}
 	}
 
-	errs := a.Errors()
-	if errs == nil {
-		klog.V(4).Infof("Destroy completed without error: all resources are deleted.")
-	}
-	if s.Empty() {
-		klog.V(4).Infof("Destroyer made no new progress")
-	} else {
-		klog.Infof("Destroyer made new progress: %s.", s.String())
-		objStatusMap.Log(klog.V(0))
-	}
-	return errs
+	return objStatusMap, syncStats
 }
 
-// Apply all managed resource objects and return any errors.
+// Apply all managed resource objects and return their status.
 // Apply implements the Applier interface.
-func (a *supervisor) Apply(ctx context.Context, desiredResource []client.Object) status.MultiError {
-	a.execMux.Lock()
-	defer a.execMux.Unlock()
+func (s *supervisor) Apply(ctx context.Context, eventHandler func(Event), desiredResource []client.Object) (ObjectStatusMap, *stats.SyncStats) {
+	s.execMux.Lock()
+	defer s.execMux.Unlock()
 
-	// Ideally we want to avoid invalidating errors that will continue to happen,
-	// but for now, invalidate all errors until they recur.
-	// TODO: improve error cache invalidation to make rsync status more stable
-	a.invalidateErrors()
-	return a.applyInner(ctx, desiredResource)
+	return s.applyInner(ctx, eventHandler, desiredResource)
 }
 
-// Destroy all managed resource objects and return any errors.
+// Destroy all managed resource objects and return their status.
 // Destroy implements the Destroyer interface.
-func (a *supervisor) Destroy(ctx context.Context) status.MultiError {
-	a.execMux.Lock()
-	defer a.execMux.Unlock()
+func (s *supervisor) Destroy(ctx context.Context, eventHandler func(Event)) (ObjectStatusMap, *stats.SyncStats) {
+	s.execMux.Lock()
+	defer s.execMux.Unlock()
 
-	// Ideally we want to avoid invalidating errors that will continue to happen,
-	// but for now, invalidate all errors until they recur.
-	// TODO: improve error cache invalidation to make rsync status more stable
-	a.invalidateErrors()
-	return a.destroyInner(ctx)
+	return s.destroyInner(ctx, eventHandler)
 }
 
 // newInventoryUnstructured creates an inventory object as an unstructured.
@@ -785,10 +744,10 @@ func InventoryID(name, namespace string) string {
 // then disables them, one by one, by removing the ConfigSync metadata.
 // Returns the number of objects which are disabled successfully, and any errors
 // encountered.
-func (h *eventHandler) handleDisabledObjects(ctx context.Context, rg *live.InventoryResourceGroup, objs []client.Object) (uint64, status.MultiError) {
+func (s *supervisor) handleDisabledObjects(ctx context.Context, rg *live.InventoryResourceGroup, objs []client.Object) (uint64, status.MultiError) {
 	// disabledCount tracks the number of objects which are disabled successfully
 	var disabledCount uint64
-	err := h.removeFromInventory(rg, objs)
+	err := s.removeFromInventory(rg, objs)
 	if err != nil {
 		if nomosutil.IsRequestTooLargeError(err) {
 			return disabledCount, largeResourceGroupError(err, idFromInventory(rg))
@@ -798,7 +757,7 @@ func (h *eventHandler) handleDisabledObjects(ctx context.Context, rg *live.Inven
 	var errs status.MultiError
 	for _, obj := range objs {
 		id := core.IDOf(obj)
-		err := h.abandonObject(ctx, obj)
+		err := s.abandonObject(ctx, obj)
 		handleMetrics(ctx, "unmanage", err)
 		if err != nil {
 			err = fmt.Errorf("failed to remove the Config Sync metadata from %v (%s: %s): %v",
@@ -816,8 +775,8 @@ func (h *eventHandler) handleDisabledObjects(ctx context.Context, rg *live.Inven
 
 // removeFromInventory removes the specified objects from the inventory, if it
 // exists.
-func (h *eventHandler) removeFromInventory(rg *live.InventoryResourceGroup, objs []client.Object) error {
-	clusterInv, err := h.clientSet.InvClient.GetClusterInventoryInfo(rg)
+func (s *supervisor) removeFromInventory(rg *live.InventoryResourceGroup, objs []client.Object) error {
+	clusterInv, err := s.clientSet.InvClient.GetClusterInventoryInfo(rg)
 	if err != nil {
 		return err
 	}
@@ -838,19 +797,19 @@ func (h *eventHandler) removeFromInventory(rg *live.InventoryResourceGroup, objs
 	if err != nil {
 		return err
 	}
-	return h.clientSet.InvClient.Replace(rg, newObjs, nil, common.DryRunNone)
+	return s.clientSet.InvClient.Replace(rg, newObjs, nil, common.DryRunNone)
 }
 
 // abandonObject removes ConfigSync labels and annotations from an object,
 // disabling management.
-func (h *eventHandler) abandonObject(ctx context.Context, obj client.Object) error {
-	gvk, err := kinds.Lookup(obj, h.clientSet.Client.Scheme())
+func (s *supervisor) abandonObject(ctx context.Context, obj client.Object) error {
+	gvk, err := kinds.Lookup(obj, s.clientSet.Client.Scheme())
 	if err != nil {
 		return err
 	}
 	uObj := &unstructured.Unstructured{}
 	uObj.SetGroupVersionKind(gvk)
-	err = h.clientSet.Client.Get(ctx, client.ObjectKeyFromObject(obj), uObj)
+	err = s.clientSet.Client.Get(ctx, client.ObjectKeyFromObject(obj), uObj)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			klog.Warningf("Failed to abandon object: object not found: %s", core.IDOf(obj))
@@ -877,7 +836,7 @@ func (h *eventHandler) abandonObject(ctx context.Context, obj client.Object) err
 		// Use merge-patch instead of server-side-apply, because we don't have
 		// the object's source of truth handy and don't want to take ownership
 		// of all the fields managed by other clients.
-		return h.clientSet.Client.Patch(ctx, toObj, client.MergeFrom(fromObj),
+		return s.clientSet.Client.Patch(ctx, toObj, client.MergeFrom(fromObj),
 			client.FieldOwner(configsync.FieldManager))
 	}
 	return nil

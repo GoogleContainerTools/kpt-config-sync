@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/applier"
+	"kpt.dev/configsync/pkg/applier/stats"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
@@ -76,7 +77,7 @@ func TestRootSyncFinalize(t *testing.T) {
 		name                       string
 		rsync                      client.Object
 		setup                      func(*fake.Client) error
-		destroyErrs                status.MultiError
+		destroyErrs                []status.Error
 		expectedRsyncBeforeDestroy client.Object
 		expectedError              error
 		expectedStopped            bool
@@ -131,7 +132,9 @@ func TestRootSyncFinalize(t *testing.T) {
 				}
 				return obj
 			}(),
-			destroyErrs: status.APIServerError(fmt.Errorf("destroy error"), "example message"),
+			destroyErrs: []status.Error{
+				status.APIServerError(fmt.Errorf("destroy error"), "example message"),
+			},
 			expectedError: fmt.Errorf(
 				"deleting managed objects: %w",
 				status.APIServerError(fmt.Errorf("destroy error"), "example message")),
@@ -288,7 +291,7 @@ func TestRootSyncFinalize(t *testing.T) {
 				defer close(continueCh)
 				stopped = true
 			}
-			destroyFunc := func(context.Context) status.MultiError {
+			destroyFunc := func(context.Context) []status.Error {
 				// Lookup the current RootSync
 				key := client.ObjectKeyFromObject(rootSync1)
 				rsync := &v1beta1.RootSync{}
@@ -300,7 +303,9 @@ func TestRootSyncFinalize(t *testing.T) {
 			}
 			fakeDestroyer := newFakeDestroyer(tc.destroyErrs, destroyFunc)
 			finalizer := &RootSyncFinalizer{
-				Destroyer:          fakeDestroyer,
+				baseFinalizer: baseFinalizer{
+					Destroyer: fakeDestroyer,
+				},
 				Client:             fakeClient,
 				StopControllers:    stopFunc,
 				ControllersStopped: continueCh,
@@ -619,26 +624,31 @@ func updateToRemoveFinalizers(ctx context.Context, fakeClient *fake.Client, obj 
 }
 
 type fakeDestroyer struct {
-	errs        status.MultiError
-	destroyFunc func(context.Context) status.MultiError
+	errors      []status.Error
+	destroyFunc func(context.Context) []status.Error
 }
 
 var _ applier.Destroyer = &fakeDestroyer{}
 
-func newFakeDestroyer(errs status.MultiError, destroyFunc func(context.Context) status.MultiError) *fakeDestroyer {
+func newFakeDestroyer(errs []status.Error, destroyFunc func(context.Context) []status.Error) *fakeDestroyer {
 	return &fakeDestroyer{
-		errs:        errs,
+		errors:      errs,
 		destroyFunc: destroyFunc,
 	}
 }
 
-func (d *fakeDestroyer) Destroy(ctx context.Context) status.MultiError {
+func (d *fakeDestroyer) Destroy(ctx context.Context, eventHandler func(applier.Event)) (applier.ObjectStatusMap, *stats.SyncStats) {
+	var errs []status.Error
 	if d.destroyFunc != nil {
-		return d.destroyFunc(ctx)
+		errs = d.destroyFunc(ctx)
+	} else {
+		errs = d.errors
 	}
-	return d.errs
-}
-
-func (d *fakeDestroyer) Errors() status.MultiError {
-	return d.errs
+	for _, err := range errs {
+		eventHandler(applier.ErrorEvent{
+			Error: err,
+		})
+	}
+	// TODO: test ObjectStatusMap & SyncStats
+	return applier.ObjectStatusMap{}, &stats.SyncStats{}
 }

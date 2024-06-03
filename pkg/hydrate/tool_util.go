@@ -140,7 +140,8 @@ func kustomizeBuild(input, output string, sendMetrics bool) HydrationError {
 	// inflation function are supported. This provides us with a fallback plan
 	// if the new Helm inflation function is having issues.
 	// It has no side-effect if no Helm chart in the DRY configs.
-	args := []string{"--enable-alpha-plugins", "--enable-exec", "--enable-helm", "--output", output}
+	// The `--load-restrictor` flag is to allow files to be loaded from outside the root directory
+	args := []string{"--enable-alpha-plugins", "--enable-exec", "--enable-helm", "--load-restrictor=LoadRestrictionsNone", "--output", output}
 
 	if _, err := os.Stat(output); err == nil {
 		mustDeleteOutput(err, output)

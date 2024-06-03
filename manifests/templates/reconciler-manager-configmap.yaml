@@ -67,7 +67,7 @@ data:
            volumeMounts:
            - name: repo
              mountPath: /repo
-           - name: service-account
+           - name: service-account # This is needed to prevent any credentials from being exposed to malicious users.
              mountPath: /var/run/secrets/kubernetes.io/serviceaccount
              readOnly: true
            imagePullPolicy: IfNotPresent

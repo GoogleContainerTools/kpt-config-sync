@@ -177,7 +177,7 @@ func TestNamespaceSelectors(t *testing.T) {
 		{
 			name: "Select namespace-scoped resources in both static namespaces and on-cluster namespaces",
 			objs: &objects.Scoped{
-				Scope:    declared.RootReconciler,
+				Scope:    declared.RootScope,
 				SyncName: configsync.RootSyncName,
 				Cluster: []ast.FileObject{
 					devOnlyDynamicNSS,
@@ -192,7 +192,7 @@ func TestNamespaceSelectors(t *testing.T) {
 				fake.NamespaceObject("dev2", core.Label("environment", "dev")),
 			},
 			want: &objects.Scoped{
-				Scope:    declared.RootReconciler,
+				Scope:    declared.RootScope,
 				SyncName: configsync.RootSyncName,
 				Cluster: []ast.FileObject{
 					fake.Namespace("namespaces/prod", core.Label("environment", "prod")),
@@ -212,7 +212,7 @@ func TestNamespaceSelectors(t *testing.T) {
 		{
 			name: "namespace-scoped resources should NOT be selected in matching but terminating Namespaces",
 			objs: &objects.Scoped{
-				Scope:    declared.RootReconciler,
+				Scope:    declared.RootScope,
 				SyncName: configsync.RootSyncName,
 				Cluster: []ast.FileObject{
 					devOnlyDynamicNSS,
@@ -226,7 +226,7 @@ func TestNamespaceSelectors(t *testing.T) {
 				fake.NamespaceObject("dev2", core.Label("environment", "dev")),
 			},
 			want: &objects.Scoped{
-				Scope:    declared.RootReconciler,
+				Scope:    declared.RootScope,
 				SyncName: configsync.RootSyncName,
 				Namespace: []ast.FileObject{
 					// Role on `dev1` Namespace is not selected because `dev1` is terminating
@@ -240,7 +240,7 @@ func TestNamespaceSelectors(t *testing.T) {
 		{
 			name: "Select namespace-scoped resources in both static namespaces and on-cluster namespaces, but they should not be double selected",
 			objs: &objects.Scoped{
-				Scope:    declared.RootReconciler,
+				Scope:    declared.RootScope,
 				SyncName: configsync.RootSyncName,
 				Cluster: []ast.FileObject{
 					devOnlyDynamicNSS,
@@ -256,7 +256,7 @@ func TestNamespaceSelectors(t *testing.T) {
 				fake.NamespaceObject("dev2", core.Label("environment", "dev")),
 			},
 			want: &objects.Scoped{
-				Scope:    declared.RootReconciler,
+				Scope:    declared.RootScope,
 				SyncName: configsync.RootSyncName,
 				Cluster: []ast.FileObject{
 					fake.Namespace("namespaces/prod", core.Label("environment", "prod")),
@@ -276,7 +276,7 @@ func TestNamespaceSelectors(t *testing.T) {
 		{
 			name: "Unselect namespace-scoped resources in on-cluster namespaces",
 			objs: &objects.Scoped{
-				Scope:    declared.RootReconciler,
+				Scope:    declared.RootScope,
 				SyncName: configsync.RootSyncName,
 				Cluster: []ast.FileObject{
 					devOnlyNSS,
@@ -292,7 +292,7 @@ func TestNamespaceSelectors(t *testing.T) {
 			},
 			originalDynamicNSSelectorEnabled: true,
 			want: &objects.Scoped{
-				Scope:    declared.RootReconciler,
+				Scope:    declared.RootScope,
 				SyncName: configsync.RootSyncName,
 				Cluster: []ast.FileObject{
 					fake.Namespace("namespaces/prod", core.Label("environment", "prod")),
@@ -373,7 +373,7 @@ func TestNamespaceSelectors(t *testing.T) {
 		{
 			name: "unknown namespace selector mode",
 			objs: &objects.Scoped{
-				Scope:    declared.RootReconciler,
+				Scope:    declared.RootScope,
 				SyncName: configsync.RootSyncName,
 				Cluster: []ast.FileObject{
 					unknownModeNSS,
@@ -384,7 +384,7 @@ func TestNamespaceSelectors(t *testing.T) {
 				},
 			},
 			want: &objects.Scoped{
-				Scope:    declared.RootReconciler,
+				Scope:    declared.RootScope,
 				SyncName: configsync.RootSyncName,
 				Cluster: []ast.FileObject{
 					unknownModeNSS,

@@ -109,7 +109,7 @@ which you could kubectl apply -fR to the cluster, or have Config Sync sync to th
 			files = filesystem.FilterHierarchyFiles(rootDir, files)
 		} else {
 			// hydrate as a root repository to preview all the hydrated configs
-			validateOpts.Scope = declared.RootReconciler
+			validateOpts.Scope = declared.RootScope
 		}
 
 		filePaths := reader.FilePaths{

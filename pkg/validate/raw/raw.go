@@ -15,7 +15,6 @@
 package raw
 
 import (
-	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/validate/objects"
@@ -50,7 +49,7 @@ func Hierarchical(objs *objects.Raw) status.MultiError {
 		objects.VisitAllRaw(validate.CRDName),
 		objects.VisitAllRaw(validate.RootSync),
 		objects.VisitAllRaw(validate.RepoSync),
-		objects.VisitAllRaw(validate.SelfReconcile(reconcilerName(objs.Scope, objs.SyncName))),
+		objects.VisitAllRaw(validate.SelfReconcile(declared.ReconcilerNameFromScope(objs.Scope, objs.SyncName))),
 		validate.DisallowedFields,
 		validate.RemovedCRDs,
 		validate.ClusterSelectorsForHierarchical,
@@ -106,7 +105,7 @@ func Unstructured(objs *objects.Raw) status.MultiError {
 		objects.VisitAllRaw(validate.CRDName),
 		objects.VisitAllRaw(validate.RootSync),
 		objects.VisitAllRaw(validate.RepoSync),
-		objects.VisitAllRaw(validate.SelfReconcile(reconcilerName(objs.Scope, objs.SyncName))),
+		objects.VisitAllRaw(validate.SelfReconcile(declared.ReconcilerNameFromScope(objs.Scope, objs.SyncName))),
 		validate.DisallowedFields,
 		validate.RemovedCRDs,
 		validate.ClusterSelectorsForUnstructured,
@@ -136,12 +135,4 @@ func Unstructured(objs *objects.Raw) status.MultiError {
 		errs = status.Append(errs, hydrator(objs))
 	}
 	return errs
-}
-
-// reconcilerName returns the reconciler name of the corresponding R*Sync.
-func reconcilerName(scope declared.Scope, syncName string) string {
-	if scope == declared.RootReconciler {
-		return core.RootReconcilerName(syncName)
-	}
-	return core.NsReconcilerName(string(scope), syncName)
 }

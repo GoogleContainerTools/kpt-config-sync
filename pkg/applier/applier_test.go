@@ -113,7 +113,7 @@ func TestApply(t *testing.T) {
 	objs := []client.Object{deploymentObj, testObj1}
 
 	namespaceObj := fake.UnstructuredObject(kinds.Namespace(),
-		core.Name(string(syncScope)))
+		core.Name(syncScope.SyncNamespace()))
 	namespaceObjMeta := object.UnstructuredToObjMetadata(namespaceObj)
 	namespaceObjID := core.IDOf(namespaceObj)
 
@@ -121,7 +121,7 @@ func TestApply(t *testing.T) {
 		GroupKind: live.ResourceGroupGVK.GroupKind(),
 		ObjectKey: client.ObjectKey{
 			Name:      syncName,
-			Namespace: string(syncScope),
+			Namespace: syncScope.SyncNamespace(),
 		},
 	}
 
@@ -344,7 +344,7 @@ func TestApply(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			rsObj := &unstructured.Unstructured{}
 			rsObj.SetGroupVersionKind(kinds.RepoSyncV1Beta1())
-			rsObj.SetNamespace(string(syncScope))
+			rsObj.SetNamespace(syncScope.SyncNamespace())
 			rsObj.SetName(syncName)
 			tc.serverObjs = append(tc.serverObjs, rsObj)
 

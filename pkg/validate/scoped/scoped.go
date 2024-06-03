@@ -55,7 +55,7 @@ func Hierarchical(objs *objects.Scoped) status.MultiError {
 func Unstructured(ctx context.Context, c client.Client, fieldManager string, objs *objects.Scoped) status.MultiError {
 	var errs status.MultiError
 	var validateClusterScoped objects.ObjectVisitor
-	if objs.Scope == declared.RootReconciler {
+	if objs.Scope == declared.RootScope {
 		validateClusterScoped = validate.ClusterScoped
 	} else {
 		validateClusterScoped = validate.ClusterScopedForNamespaceReconciler

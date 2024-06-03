@@ -264,7 +264,7 @@ func Run(opts Options) {
 	}
 
 	var nsControllerState *namespacecontroller.State
-	if opts.ReconcilerScope == declared.RootReconciler {
+	if opts.ReconcilerScope == declared.RootScope {
 		rootOpts := &parse.RootOptions{
 			SourceFormat:             opts.SourceFormat,
 			NamespaceStrategy:        opts.NamespaceStrategy,
@@ -303,7 +303,7 @@ func Run(opts Options) {
 	// Otherwise, all namespaced informers will watch at the cluster-scope.
 	// This prevents Namespaced Reconcilers from needing cluster-scoped read
 	// permissions.
-	if opts.ReconcilerScope != declared.RootReconciler {
+	if opts.ReconcilerScope != declared.RootScope {
 		mgrOptions.Cache.DefaultNamespaces = map[string]cache.Config{
 			string(opts.ReconcilerScope): {},
 		}

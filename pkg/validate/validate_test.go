@@ -972,7 +972,7 @@ func TestUnstructured(t *testing.T) {
 		},
 		{
 			name:    "cluster-scoped object",
-			options: Options{Scope: declared.RootReconciler},
+			options: Options{Scope: declared.RootScope},
 			objs: []ast.FileObject{
 				fake.ClusterRoleAtPath("cluster/cr.yaml"),
 			},
@@ -1004,7 +1004,7 @@ func TestUnstructured(t *testing.T) {
 		},
 		{
 			name:    "CRD and CR",
-			options: Options{Scope: declared.RootReconciler},
+			options: Options{Scope: declared.RootScope},
 			objs: []ast.FileObject{
 				fake.FileObject(crdUnstructured(t, kinds.Anvil()), "crd.yaml"),
 				fake.AnvilAtPath("anvil.yaml"),
@@ -1025,7 +1025,7 @@ func TestUnstructured(t *testing.T) {
 				fake.Namespace("test-namespace"),
 			},
 			options: Options{
-				Scope:          declared.RootReconciler,
+				Scope:          declared.RootScope,
 				WebhookEnabled: true,
 			},
 			want: []ast.FileObject{
@@ -1039,7 +1039,7 @@ func TestUnstructured(t *testing.T) {
 			name: "objects with cluster selectors",
 			options: Options{
 				ClusterName: "prod",
-				Scope:       declared.RootReconciler,
+				Scope:       declared.RootScope,
 			},
 			objs: []ast.FileObject{
 				fake.Cluster(
@@ -1122,7 +1122,7 @@ func TestUnstructured(t *testing.T) {
 		},
 		{
 			name:    "objects with namespace selectors (static mode)",
-			options: Options{Scope: declared.RootReconciler, SyncName: configsync.RootSyncName},
+			options: Options{Scope: declared.RootScope, SyncName: configsync.RootSyncName},
 			objs: []ast.FileObject{
 				fake.FileObject(namespaceSelector("sre", "sre-supported", "true", v1.NSSelectorStaticMode), "sre_nss.yaml"),
 				fake.FileObject(namespaceSelector("dev", "dev-supported", "true", v1.NSSelectorStaticMode), "dev_nss.yaml"),
@@ -1162,7 +1162,7 @@ func TestUnstructured(t *testing.T) {
 		},
 		{
 			name:    "objects with namespace selectors (dynamic mode)",
-			options: Options{Scope: declared.RootReconciler, SyncName: configsync.RootSyncName},
+			options: Options{Scope: declared.RootScope, SyncName: configsync.RootSyncName},
 			objs: []ast.FileObject{
 				fake.FileObject(namespaceSelector("sre", "sre-supported", "true", v1.NSSelectorDynamicMode), "sre_nss.yaml"),
 				fake.FileObject(namespaceSelector("dev", "dev-supported", "true", v1.NSSelectorDynamicMode), "dev_nss.yaml"),
@@ -1219,7 +1219,7 @@ func TestUnstructured(t *testing.T) {
 		},
 		{
 			name:    "CR with management disabled that is missing its CRD",
-			options: Options{Scope: declared.RootReconciler},
+			options: Options{Scope: declared.RootScope},
 			objs: []ast.FileObject{
 				fake.Namespace("namespaces/foo"),
 				fake.UnstructuredAtPath(
@@ -1268,7 +1268,7 @@ func TestUnstructured(t *testing.T) {
 				PreviousCRDs: []*apiextensionsv1beta1.CustomResourceDefinition{
 					crdObject(kinds.Anvil()),
 				},
-				Scope: declared.RootReconciler,
+				Scope: declared.RootScope,
 			},
 			objs: []ast.FileObject{
 				fake.AnvilAtPath("anvil.yaml"),
@@ -1278,7 +1278,7 @@ func TestUnstructured(t *testing.T) {
 		{
 			name: "RootSync manages itself",
 			options: Options{
-				Scope:    declared.RootReconciler,
+				Scope:    declared.RootScope,
 				SyncName: "root-sync",
 			},
 			objs: []ast.FileObject{
@@ -1289,7 +1289,7 @@ func TestUnstructured(t *testing.T) {
 		{
 			name: "RootSync manages other RootSync object",
 			options: Options{
-				Scope:    declared.RootReconciler,
+				Scope:    declared.RootScope,
 				SyncName: "root-sync",
 			},
 			objs: []ast.FileObject{

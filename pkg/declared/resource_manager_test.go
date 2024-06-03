@@ -29,9 +29,9 @@ func TestResourceManager(t *testing.T) {
 	}{
 		{
 			name:     "default root-sync",
-			scope:    RootReconciler,
+			scope:    RootScope,
 			syncName: configsync.RootSyncName,
-			want:     string(RootReconciler),
+			want:     string(RootScope),
 		},
 		{
 			name:     "default repo-sync",
@@ -41,7 +41,7 @@ func TestResourceManager(t *testing.T) {
 		},
 		{
 			name:     "custom root-sync",
-			scope:    RootReconciler,
+			scope:    RootScope,
 			syncName: "test-root-sync",
 			want:     ":root_test-root-sync",
 		},
@@ -71,7 +71,7 @@ func TestIsRootManager(t *testing.T) {
 	}{
 		{
 			name:    "default root-sync",
-			manager: string(RootReconciler),
+			manager: string(RootScope),
 			want:    true,
 		},
 		{
@@ -111,8 +111,8 @@ func TestManagerScopeAndName(t *testing.T) {
 	}{
 		{
 			name:      "default root-sync",
-			manager:   string(RootReconciler),
-			wantScope: RootReconciler,
+			manager:   string(RootScope),
+			wantScope: RootScope,
 			wantName:  configsync.RootSyncName,
 		},
 		{
@@ -124,7 +124,7 @@ func TestManagerScopeAndName(t *testing.T) {
 		{
 			name:      "custom root-sync",
 			manager:   ":root_test-root-sync",
-			wantScope: RootReconciler,
+			wantScope: RootScope,
 			wantName:  "test-root-sync",
 		},
 		{

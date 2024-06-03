@@ -94,7 +94,7 @@ func TestGCENodeCSR(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	kustomizecomponents.ValidateAllTenants(nt, string(declared.RootReconciler), "base", "tenant-a", "tenant-b", "tenant-c")
+	kustomizecomponents.ValidateAllTenants(nt, string(declared.RootScope), "base", "tenant-a", "tenant-b", "tenant-c")
 	if err := testutils.ReconcilerPodMissingFWICredsAnnotation(nt, nomostest.DefaultRootReconcilerName); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -158,7 +158,7 @@ func TestGCENodeOCI(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	kustomizecomponents.ValidateAllTenants(nt, string(declared.RootReconciler), "base", "tenant-a", "tenant-b", "tenant-c")
+	kustomizecomponents.ValidateAllTenants(nt, string(declared.RootScope), "base", "tenant-a", "tenant-b", "tenant-c")
 	kustomizecomponents.ValidateTenant(nt, repoSyncRef.Namespace, repoSyncRef.Namespace, "base")
 
 	tenant := "tenant-b"
@@ -174,7 +174,7 @@ func TestGCENodeOCI(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	kustomizecomponents.ValidateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
+	kustomizecomponents.ValidateAllTenants(nt, string(declared.RootScope), "../base", tenant)
 }
 
 // TestGCENodeHelm tests the `gcenode` auth type for the Helm repository.
@@ -234,7 +234,7 @@ func TestGCENodeHelm(t *testing.T) {
 
 	err = nt.Validate(fmt.Sprintf("%s-%s", rootSyncHelm.Spec.Helm.ReleaseName, rootChart.Name),
 		"default", &appsv1.Deployment{},
-		testpredicates.IsManagedBy(nt.Scheme, declared.RootReconciler, rootSyncRef.Name))
+		testpredicates.IsManagedBy(nt.Scheme, declared.RootScope, rootSyncRef.Name))
 	if err != nil {
 		nt.T.Fatal(err)
 	}

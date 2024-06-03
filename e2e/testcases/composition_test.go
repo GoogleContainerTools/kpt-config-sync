@@ -232,8 +232,8 @@ func TestComposition(t *testing.T) {
 	// Validate that the R*Syncs and ConfigMap exist, are reconciled, and have the right manager.
 	managedObjs := map[gvknn]manager{
 		{kinds.RootSyncV1Beta1(), lvl0NN}: {}, // no manager
-		{kinds.RootSyncV1Beta1(), lvl1NN}: {declared.RootReconciler, lvl0NN.Name},
-		{kinds.RepoSyncV1Beta1(), lvl2NN}: {declared.RootReconciler, lvl1NN.Name},
+		{kinds.RootSyncV1Beta1(), lvl1NN}: {declared.RootScope, lvl0NN.Name},
+		{kinds.RepoSyncV1Beta1(), lvl2NN}: {declared.RootScope, lvl1NN.Name},
 		{kinds.RepoSyncV1Beta1(), lvl3NN}: {declared.Scope(lvl2NN.Namespace), lvl2NN.Name},
 		{kinds.ConfigMap(), lvl4NN}:       {declared.Scope(lvl3NN.Namespace), lvl3NN.Name},
 	}

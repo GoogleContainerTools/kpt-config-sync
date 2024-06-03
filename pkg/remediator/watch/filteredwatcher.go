@@ -171,7 +171,7 @@ func (w *filteredWatcher) SetManagementConflict(object client.Object, commit str
 	// In this case, set `managementConflict` true to trigger the namespace reconciler's
 	// parse-apply-watch loop. The kpt_applier should report the ManagementConflictError (KNV1060).
 	// No need to add the conflictError to the remediator because it will be surfaced by kpt_applier.
-	if w.scope != declared.RootReconciler {
+	if w.scope != declared.RootScope {
 		w.managementConflict = true
 		return
 	}

@@ -118,7 +118,7 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 		nt.T.Error(err)
 	}
 
-	kustomizecomponents.ValidateAllTenants(nt, string(declared.RootReconciler), "base", "tenant-a", "tenant-b", "tenant-c")
+	kustomizecomponents.ValidateAllTenants(nt, string(declared.RootScope), "base", "tenant-a", "tenant-b", "tenant-c")
 
 	nt.T.Log("Remove kustomization.yaml to make the sync fail")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("./kustomize-components/kustomization.yml"))
@@ -227,7 +227,7 @@ func TestHydrateHelmComponents(t *testing.T) {
 		nt.T.Error(err)
 	}
 
-	validateHelmComponents(nt, string(declared.RootReconciler))
+	validateHelmComponents(nt, string(declared.RootScope))
 
 	nt.T.Log("Use a remote values.yaml file from a public repo")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/helm-components-remote-values-kustomization.yaml", "./helm-components/kustomization.yaml"))

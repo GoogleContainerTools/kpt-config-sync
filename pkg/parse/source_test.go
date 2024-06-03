@@ -112,7 +112,7 @@ func TestReadConfigFiles(t *testing.T) {
 					Client:             syncertest.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName)),
 					DiscoveryInterface: syncertest.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
 					Updater: Updater{
-						Scope:     declared.RootReconciler,
+						Scope:     declared.RootScope,
 						Resources: &declared.Resources{},
 					},
 					mux: &sync.Mutex{},

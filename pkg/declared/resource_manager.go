@@ -27,14 +27,14 @@ const delimiter = "_"
 // Otherwise, return scope_name.
 func ResourceManager(scope Scope, rsName string) string {
 	if rsName == configsync.RootSyncName || rsName == configsync.RepoSyncName {
-		return string(scope)
+		return scope.String()
 	}
-	return string(scope) + delimiter + rsName
+	return scope.String() + delimiter + rsName
 }
 
 // IsRootManager returns whether the manager is running on a root reconciler.
 func IsRootManager(manager string) bool {
-	return strings.HasPrefix(manager, string(RootReconciler))
+	return strings.HasPrefix(manager, string(RootScope))
 }
 
 // ManagerScopeAndName returns the scope and name of the resource manager.
@@ -45,7 +45,7 @@ func ManagerScopeAndName(manager string) (Scope, string) {
 	}
 	scope := Scope(scopeAndName[0])
 	switch scope {
-	case RootReconciler:
+	case RootScope:
 		if len(scopeAndName) > 1 {
 			return scope, scopeAndName[1]
 		}

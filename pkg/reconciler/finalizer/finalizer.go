@@ -35,7 +35,7 @@ type Finalizer interface {
 // New constructs a new RootSyncFinalizer or RepoSyncFinalizer, depending on the
 // specified scope.
 func New(scope declared.Scope, destroyer applier.Destroyer, c client.Client, stopControllers context.CancelFunc, controllersStopped <-chan struct{}) Finalizer {
-	if scope == declared.RootReconciler {
+	if scope == declared.RootScope {
 		return &RootSyncFinalizer{
 			baseFinalizer: baseFinalizer{
 				Destroyer: destroyer,

@@ -89,6 +89,7 @@ func runVet(ctx context.Context, namespace string, sourceFormat filesystem.Sourc
 	if err != nil {
 		return err
 	}
+	validateOpts.FieldManager = util.FieldManager
 
 	switch sourceFormat {
 	case filesystem.SourceFormatHierarchy:

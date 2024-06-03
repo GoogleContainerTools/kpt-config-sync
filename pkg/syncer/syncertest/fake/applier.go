@@ -28,10 +28,11 @@ import (
 //
 // reconcile.Applier not imported due to import cycle considerations.
 type Applier struct {
-	Client      *Client
-	CreateError status.Error
-	UpdateError status.Error
-	DeleteError status.Error
+	Client       *Client
+	FieldManager string
+	CreateError  status.Error
+	UpdateError  status.Error
+	DeleteError  status.Error
 }
 
 var _ reconcile.Applier = &Applier{}
@@ -41,7 +42,7 @@ func (a *Applier) Create(ctx context.Context, obj *unstructured.Unstructured) st
 	if a.CreateError != nil {
 		return a.CreateError
 	}
-	err := a.Client.Create(ctx, obj)
+	err := a.Client.Create(ctx, obj, client.FieldOwner(a.FieldManager))
 	if err != nil {
 		return status.APIServerError(err, "creating")
 	}
@@ -53,7 +54,7 @@ func (a *Applier) Update(ctx context.Context, intendedState, _ *unstructured.Uns
 	if a.UpdateError != nil {
 		return a.UpdateError
 	}
-	err := a.Client.Update(ctx, intendedState)
+	err := a.Client.Update(ctx, intendedState, client.FieldOwner(a.FieldManager))
 	if err != nil {
 		return status.APIServerError(err, "updating")
 	}
@@ -67,7 +68,7 @@ func (a *Applier) RemoveNomosMeta(ctx context.Context, intent *unstructured.Unst
 		return nil
 	}
 
-	err := a.Client.Update(ctx, intent)
+	err := a.Client.Update(ctx, intent, client.FieldOwner(a.FieldManager))
 	if err != nil {
 		return status.APIServerError(err, "removing meta")
 	}

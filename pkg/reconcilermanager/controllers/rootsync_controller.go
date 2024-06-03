@@ -1093,7 +1093,7 @@ func (r *RootSyncReconciler) createRBACBinding(ctx context.Context, reconcilerRe
 	binding.SetGenerateName(fmt.Sprintf("%s-", reconcilerRef.Name))
 	binding.SetLabels(ManagedObjectLabelMap(r.syncKind, rsRef))
 
-	if err := r.client.Create(ctx, binding); err != nil {
+	if err := r.client.Create(ctx, binding, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		return client.ObjectKey{}, err
 	}
 	rbRef := client.ObjectKey{
@@ -1138,7 +1138,7 @@ func (r *RootSyncReconciler) updateSyncStatus(ctx context.Context, rs *v1beta1.R
 					cmp.Diff(before.Status, rs.Status)))
 		}
 		return nil
-	})
+	}, client.FieldOwner(reconcilermanager.FieldManager))
 	if err != nil {
 		return updated, fmt.Errorf("Sync status update failed: %w", err)
 	}

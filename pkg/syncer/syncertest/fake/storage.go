@@ -34,15 +34,32 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
+	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/util/log"
 	"sigs.k8s.io/cli-utils/pkg/testutil"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+)
+
+const (
+	// FieldManager is the field manager used by NewClient, when initializing
+	// objects on the cluster.
+	// This avoids conflicts between the reconciler and reconciler-manager.
+	FieldManager = configsync.ConfigSyncPrefix + "fake-client"
+)
+
+var (
+	defaultAllowedFieldManagers = sets.New[string](
+		FieldManager,
+		configsync.FieldManager,
+		reconcilermanager.FieldManager,
+	)
 )
 
 // RealNow is the default Now function used by NewClient.
@@ -68,16 +85,41 @@ type MemoryStorage struct {
 	// The map is indexed by ID.
 	// TODO: The version stored should be the storage version according to the scheme.
 	objects map[core.ID]*unstructured.Unstructured
+	// allowedFieldManagers is the set of field managers allowed to be used.
+	// All other field managers will cause an error.
+	allowedFieldManagers sets.Set[string]
 }
 
 // NewInMemoryStorage constructs a new MemoryStorage
 func NewInMemoryStorage(scheme *runtime.Scheme, watchSupervisor *WatchSupervisor) *MemoryStorage {
 	return &MemoryStorage{
-		scheme:          scheme,
-		watchSupervisor: watchSupervisor,
-		Now:             RealNow,
-		objects:         make(map[core.ID]*unstructured.Unstructured),
+		scheme:               scheme,
+		watchSupervisor:      watchSupervisor,
+		Now:                  RealNow,
+		objects:              make(map[core.ID]*unstructured.Unstructured),
+		allowedFieldManagers: defaultAllowedFieldManagers,
 	}
+}
+
+// SetAllowedFieldManagers allows overriding the default allowed field managers.
+// By default, one of the following must be used:
+// - fake.FieldManager
+// - configsync.FieldManager
+// - reconcilermanager.FieldManager
+//
+// WARNING: fake.DynamicClient does not support passing through field manager
+// due to tech debt in the client-go FakeDynamicClient. So the fake.FieldManager
+// is always used instead.
+// TODO: Pass through FieldManager from Create, Update, & Patch (requires client-go & client-gen changes)
+func (ms *MemoryStorage) SetAllowedFieldManagers(fieldManagers sets.Set[string]) {
+	ms.allowedFieldManagers = fieldManagers
+}
+
+func (ms *MemoryStorage) validateFieldManager(fieldManager string) error {
+	if !ms.allowedFieldManagers.Has(fieldManager) {
+		return fmt.Errorf("invalid field manager option: %q", fieldManager)
+	}
+	return nil
 }
 
 // TestGet gets an object from storage, without validation or type conversion.
@@ -470,10 +512,7 @@ func (ms *MemoryStorage) validateCreateOptions(opts *client.CreateOptions) error
 			return fmt.Errorf("invalid dry run option: %+v", opts.DryRun)
 		}
 	}
-	if opts.FieldManager != "" && opts.FieldManager != configsync.FieldManager {
-		return fmt.Errorf("invalid field manager option: %v", opts.FieldManager)
-	}
-	return nil
+	return ms.validateFieldManager(opts.FieldManager)
 }
 
 // Delete an object in storage
@@ -751,10 +790,7 @@ func (ms *MemoryStorage) validateUpdateOptions(opts *client.UpdateOptions) error
 			return fmt.Errorf("invalid dry run option: %+v", opts.DryRun)
 		}
 	}
-	if opts.FieldManager != "" && opts.FieldManager != configsync.FieldManager {
-		return fmt.Errorf("invalid field manager option: %v", opts.FieldManager)
-	}
-	return nil
+	return ms.validateFieldManager(opts.FieldManager)
 }
 
 func (ms *MemoryStorage) getStatusFromObject(obj client.Object) (map[string]interface{}, bool, error) {
@@ -929,13 +965,10 @@ func (ms *MemoryStorage) validatePatchOptions(opts *client.PatchOptions, patch c
 			return fmt.Errorf("invalid dry run option: %+v", opts.DryRun)
 		}
 	}
-	if opts.FieldManager != "" && opts.FieldManager != configsync.FieldManager {
-		return fmt.Errorf("invalid field manager option: %v", opts.FieldManager)
-	}
 	if patch != client.Apply && opts.Force != nil {
 		return fmt.Errorf("invalid force option: Forbidden: may not be specified for non-apply patch")
 	}
-	return nil
+	return ms.validateFieldManager(opts.FieldManager)
 }
 
 func (ms *MemoryStorage) updateGeneration(oldObj, newObj client.Object) error {

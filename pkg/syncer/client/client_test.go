@@ -66,7 +66,7 @@ func TestClient_Create(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			sc := syncerclient.New(tc.client, nil)
 
-			err := sc.Create(context.Background(), tc.declared)
+			err := sc.Create(context.Background(), tc.declared, client.FieldOwner(syncertestfake.FieldManager))
 			testerrors.AssertEqual(t, tc.wantErr, err)
 		})
 	}
@@ -151,7 +151,7 @@ func TestClient_Update(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			sc := syncerclient.New(tc.client, nil)
 
-			err := sc.Update(context.Background(), tc.declared)
+			err := sc.Update(context.Background(), tc.declared, client.FieldOwner(syncertestfake.FieldManager))
 			testerrors.AssertEqual(t, tc.wantErr, err)
 		})
 	}

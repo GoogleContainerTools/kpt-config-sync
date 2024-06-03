@@ -19,6 +19,7 @@ import (
 	"fmt"
 
 	"k8s.io/klog/v2"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/reposync"
 	"kpt.dev/configsync/pkg/status"
@@ -97,7 +98,7 @@ func (f *RepoSyncFinalizer) AddFinalizer(ctx context.Context, syncObj client.Obj
 			return &mutate.NoUpdateError{}
 		}
 		return nil
-	})
+	}, client.FieldOwner(configsync.FieldManager))
 	if err != nil {
 		return updated, fmt.Errorf("failed to add finalizer: %w", err)
 	}
@@ -120,7 +121,7 @@ func (f *RepoSyncFinalizer) RemoveFinalizer(ctx context.Context, syncObj client.
 			return &mutate.NoUpdateError{}
 		}
 		return nil
-	})
+	}, client.FieldOwner(configsync.FieldManager))
 	if err != nil {
 		return updated, fmt.Errorf("failed to remove finalizer: %w", err)
 	}
@@ -141,7 +142,7 @@ func (f *RepoSyncFinalizer) setFinalizingCondition(ctx context.Context, syncObj 
 			return &mutate.NoUpdateError{}
 		}
 		return nil
-	})
+	}, client.FieldOwner(configsync.FieldManager))
 	if err != nil {
 		return updated, fmt.Errorf("failed to set ReconcilerFinalizing condition: %w", err)
 	}
@@ -162,7 +163,7 @@ func (f *RepoSyncFinalizer) removeFinalizingCondition(ctx context.Context, syncO
 			return &mutate.NoUpdateError{}
 		}
 		return nil
-	})
+	}, client.FieldOwner(configsync.FieldManager))
 	if err != nil {
 		return updated, fmt.Errorf("failed to remove ReconcilerFinalizing condition: %w", err)
 	}
@@ -208,7 +209,7 @@ func (f *RepoSyncFinalizer) updateFailureCondition(ctx context.Context, syncObj 
 			}
 		}
 		return nil
-	})
+	}, client.FieldOwner(configsync.FieldManager))
 	if err != nil {
 		return updated, fmt.Errorf("failed to set ReconcilerFinalizerFailure condition: %w", err)
 	}

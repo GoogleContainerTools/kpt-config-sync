@@ -169,7 +169,7 @@ func (r *RepoSyncReconciler) deleteSharedRoleBinding(ctx context.Context, reconc
 		// Delete the whole RB
 		return r.cleanup(ctx, rb)
 	}
-	if err := r.client.Update(ctx, rb); err != nil {
+	if err := r.client.Update(ctx, rb, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		return NewObjectOperationError(err, rb, OperationUpdate)
 	}
 	return nil
@@ -261,7 +261,7 @@ func (r *RootSyncReconciler) deleteSharedClusterRoleBinding(ctx context.Context,
 		// No change
 		return nil
 	}
-	if err := r.client.Update(ctx, crb); err != nil {
+	if err := r.client.Update(ctx, crb, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		return NewObjectOperationError(err, crb, OperationUpdate)
 	}
 	return nil

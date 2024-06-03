@@ -593,7 +593,7 @@ func (r *reconcilerBase) setupOrTeardown(ctx context.Context, syncObj client.Obj
 			// The object is new and doesn't have our finalizer yet.
 			// Add our finalizer and update the object.
 			controllerutil.AddFinalizer(syncObj, metadata.ReconcilerManagerFinalizer)
-			if err := r.client.Update(ctx, syncObj); err != nil {
+			if err := r.client.Update(ctx, syncObj, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 				err = status.APIServerError(err,
 					fmt.Sprintf("failed to update %s to add finalizer", r.syncKind))
 				r.logger(ctx).Error(err, "Finalizer injection failed")
@@ -642,7 +642,7 @@ func (r *reconcilerBase) setupOrTeardown(ctx context.Context, syncObj client.Obj
 
 		// Remove our finalizer and update the object.
 		controllerutil.RemoveFinalizer(syncObj, metadata.ReconcilerManagerFinalizer)
-		if err := r.client.Update(ctx, syncObj); err != nil {
+		if err := r.client.Update(ctx, syncObj, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 			err = status.APIServerError(err,
 				fmt.Sprintf("failed to update %s to remove the reconciler-manager finalizer", r.syncKind))
 			r.logger(ctx).Error(err, "Removal of reconciler-manager finalizer failed")
@@ -684,7 +684,7 @@ func (r *reconcilerBase) updateRBACBinding(ctx context.Context, reconcilerRef, r
 	if equality.Semantic.DeepEqual(existingBinding, binding) {
 		return nil
 	}
-	if err := r.client.Update(ctx, binding); err != nil {
+	if err := r.client.Update(ctx, binding, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		return err
 	}
 	bindingNN := types.NamespacedName{

@@ -1341,6 +1341,7 @@ func TestUnstructured(t *testing.T) {
 			tc.options.AllowAPICall = true
 			tc.options.DynamicNSSelectorEnabled = tc.originalDynamicNSSelectorEnabled
 			tc.options.NSControllerState = &namespacecontroller.State{}
+			tc.options.FieldManager = configsync.FieldManager
 
 			s := runtime.NewScheme()
 			if err := corev1.AddToScheme(s); err != nil {

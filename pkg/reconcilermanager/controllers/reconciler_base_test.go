@@ -580,7 +580,7 @@ func TestCompareDeploymentsToCreatePatchData(t *testing.T) {
 			testCurrent := tc.current.DeepCopy()
 			fakeClient := syncerFake.NewClient(t, core.Scheme)
 			if tc.isAutopilot {
-				err := fakeClient.Create(context.Background(), util.FakeAutopilotWebhookObject())
+				err := fakeClient.Create(context.Background(), util.FakeAutopilotWebhookObject(), client.FieldOwner(syncerFake.FieldManager))
 				require.NoError(t, err)
 			}
 			r := &reconcilerBase{
@@ -698,7 +698,7 @@ func TestCompareDeploymentsToCreatePatchDataResourceLimits(t *testing.T) {
 			}
 			fakeClient := syncerFake.NewClient(t, core.Scheme)
 			if tc.isAutopilot {
-				err := fakeClient.Create(context.Background(), util.FakeAutopilotWebhookObject())
+				err := fakeClient.Create(context.Background(), util.FakeAutopilotWebhookObject(), client.FieldOwner(syncerFake.FieldManager))
 				require.NoError(t, err)
 			}
 			r := &reconcilerBase{

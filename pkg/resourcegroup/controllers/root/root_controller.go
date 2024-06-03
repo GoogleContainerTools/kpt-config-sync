@@ -162,7 +162,7 @@ func (r *Reconciler) reconcileDisabledResourceGroup(ctx context.Context, req ctr
 		}
 		resgroup.Status = emptyStatus
 		// Use `r.Status().Update()` here instead of `r.Update()` to update only resgroup.Status.
-		return r.Status().Update(ctx, resgroup)
+		return r.Status().Update(ctx, resgroup, client.FieldOwner(resourcegroup.FieldManager))
 	})
 	if err != nil {
 		return ctrl.Result{}, err

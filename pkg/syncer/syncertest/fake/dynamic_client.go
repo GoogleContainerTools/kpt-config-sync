@@ -172,7 +172,10 @@ func (dc *DynamicClient) create(action clienttesting.Action) (bool, runtime.Obje
 			createAction.GetResource(),
 			gvk, uObj.GroupVersionKind())
 	}
-	err = dc.storage.Create(context.Background(), uObj, &client.CreateOptions{})
+	err = dc.storage.Create(context.Background(), uObj, &client.CreateOptions{
+		// TODO: Pass through FieldManager from CreateOption (requires client-go & client-gen changes)
+		FieldManager: FieldManager,
+	})
 	return true, uObj, err
 }
 
@@ -240,7 +243,10 @@ func (dc *DynamicClient) update(action clienttesting.Action) (bool, runtime.Obje
 			updateAction.GetResource(),
 			gvk, uObj.GroupVersionKind())
 	}
-	err = dc.storage.Update(context.Background(), uObj, &client.UpdateOptions{})
+	err = dc.storage.Update(context.Background(), uObj, &client.UpdateOptions{
+		// TODO: Pass through FieldManager from UpdateOption (requires client-go & client-gen changes)
+		FieldManager: FieldManager,
+	})
 	return true, uObj, err
 }
 
@@ -260,7 +266,10 @@ func (dc *DynamicClient) patch(action clienttesting.Action) (bool, runtime.Objec
 	uObj.SetNamespace(patchAction.GetNamespace())
 	uObj.SetName(patchAction.GetName())
 	patch := client.RawPatch(patchAction.GetPatchType(), patchAction.GetPatch())
-	err = dc.storage.Patch(context.Background(), uObj, patch, &client.PatchOptions{})
+	err = dc.storage.Patch(context.Background(), uObj, patch, &client.PatchOptions{
+		// TODO: Pass through FieldManager from PatchOptions (requires client-go & client-gen changes)
+		FieldManager: FieldManager,
+	})
 	return true, uObj, err
 }
 

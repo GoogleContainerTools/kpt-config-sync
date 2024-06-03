@@ -620,7 +620,7 @@ func updateToRemoveFinalizers(ctx context.Context, fakeClient *fake.Client, obj 
 		return err
 	}
 	obj.SetFinalizers(nil)
-	return fakeClient.Update(ctx, obj)
+	return fakeClient.Update(ctx, obj, client.FieldOwner(fake.FieldManager))
 }
 
 type fakeDestroyer struct {

@@ -52,7 +52,7 @@ func Hierarchical(objs *objects.Scoped) status.MultiError {
 // Unstructured performs the second round of validation and hydration for an
 // unstructured repo against the given Scoped objects. Note that this will
 // modify the Scoped objects in-place.
-func Unstructured(ctx context.Context, c client.Client, objs *objects.Scoped) status.MultiError {
+func Unstructured(ctx context.Context, c client.Client, fieldManager string, objs *objects.Scoped) status.MultiError {
 	var errs status.MultiError
 	var validateClusterScoped objects.ObjectVisitor
 	if objs.Scope == declared.RootReconciler {
@@ -75,7 +75,7 @@ func Unstructured(ctx context.Context, c client.Client, objs *objects.Scoped) st
 	}
 
 	hydrators := []objects.ScopedVisitor{
-		hydrate.NamespaceSelectors(ctx, c),
+		hydrate.NamespaceSelectors(ctx, c, fieldManager),
 		hydrate.UnknownScope,
 	}
 	for _, hydrator := range hydrators {

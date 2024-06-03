@@ -27,6 +27,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"kpt.dev/configsync/pkg/api/configmanagement"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
@@ -191,7 +192,7 @@ func updateDeploymentAnnotation(ctx context.Context, c client.Client, annotation
 		return nil
 	}
 
-	return c.Patch(ctx, dep, patch)
+	return c.Patch(ctx, dep, patch, client.FieldOwner(configsync.FieldManager))
 }
 
 // Register otel controller with reconciler-manager.

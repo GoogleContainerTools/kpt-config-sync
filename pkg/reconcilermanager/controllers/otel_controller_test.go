@@ -28,6 +28,7 @@ import (
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
+	"kpt.dev/configsync/pkg/reconcilermanager"
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/cli-utils/pkg/testutil"
@@ -345,7 +346,7 @@ func TestOtelSAReconciler(t *testing.T) {
 
 	// Change the GCPSAAnnotationKey annotation
 	core.SetAnnotation(sa, GCPSAAnnotationKey, test2GSAEmail)
-	if err := fakeClient.Update(ctx, sa); err != nil {
+	if err := fakeClient.Update(ctx, sa, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the default service account: %v", err)
 	}
 	// Reconcile the default service account under the config-management-monitoring namespace.
@@ -360,7 +361,7 @@ func TestOtelSAReconciler(t *testing.T) {
 
 	// Resets the annotations of the default SA
 	sa.SetAnnotations(map[string]string{})
-	if err := fakeClient.Update(ctx, sa); err != nil {
+	if err := fakeClient.Update(ctx, sa, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatalf("failed to update the default service account: %v", err)
 	}
 	// Reconcile the default service account under the config-management-monitoring namespace.

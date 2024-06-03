@@ -30,6 +30,7 @@ import (
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/resourcemap"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/typeresolver"
+	"kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"sigs.k8s.io/cli-utils/pkg/common"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -92,7 +93,7 @@ func TestReconcile(t *testing.T) {
 			Resources: resources,
 		},
 	}
-	err = c.Create(ctx, resgroupKpt)
+	err = c.Create(ctx, resgroupKpt, client.FieldOwner(fake.FieldManager))
 	assert.NoError(t, err)
 	// Wait 5 seconds before querying resgroup from API server
 	time.Sleep(5 * time.Second)
@@ -140,7 +141,7 @@ func TestReconcile(t *testing.T) {
 		Resources: resources,
 	}
 
-	err = c.Update(ctx, updatedResgroupKpt)
+	err = c.Update(ctx, updatedResgroupKpt, client.FieldOwner(fake.FieldManager))
 	assert.NoError(t, err)
 	time.Sleep(5 * time.Second)
 
@@ -188,7 +189,7 @@ func TestReconcile(t *testing.T) {
 		},
 	}
 
-	err = c.Create(ctx, pod2)
+	err = c.Create(ctx, pod2, client.FieldOwner(fake.FieldManager))
 	assert.NoError(t, err)
 	time.Sleep(5 * time.Second)
 
@@ -206,7 +207,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 	}
-	err = c.Create(ctx, ns1)
+	err = c.Create(ctx, ns1, client.FieldOwner(fake.FieldManager))
 	assert.NoError(t, err)
 	time.Sleep(2 * time.Second)
 
@@ -254,7 +255,7 @@ func TestReconcile(t *testing.T) {
 	updatedResgroupKpt.Spec = v1alpha1.ResourceGroupSpec{
 		Resources: resources,
 	}
-	err = c.Update(ctx, updatedResgroupKpt)
+	err = c.Update(ctx, updatedResgroupKpt, client.FieldOwner(fake.FieldManager))
 	assert.NoError(t, err)
 	time.Sleep(5 * time.Second)
 

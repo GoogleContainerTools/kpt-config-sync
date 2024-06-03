@@ -96,7 +96,9 @@ processors:
   filter/cloudmonitoring:
     metrics:
       include:
-        match_type: regexp
+        # Use strict match type to ensure metrics like 'kustomize_resource_count'
+        # is excluded
+        match_type: strict
         metric_names:
           - reconciler_errors
           - apply_duration_seconds
@@ -129,7 +131,6 @@ processors:
             aggregation_type: max
       - include: declared_resources
         action: update
-        new_name: current_declared_resources
         operations:
           - action: aggregate_labels
             label_set:

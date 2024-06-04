@@ -505,7 +505,19 @@ func DeleteObjectsAndWait(nt *NT, objs ...client.Object) error {
 		nn := client.ObjectKeyFromObject(obj)
 		gvk, err := kinds.Lookup(obj, nt.Scheme)
 		if err != nil {
-			return err
+			tg.Go(func() error {
+				return err
+			})
+			continue
+		}
+		// Remove fake test finalizers if they are blocking deletion
+		if reflect.DeepEqual(obj.GetFinalizers(), []string{ConfigSyncE2EFinalizer}) {
+			if err := nt.KubeClient.MergePatch(obj, `{"metadata":{"finalizers":[]}}`); err != nil {
+				tg.Go(func() error {
+					return err
+				})
+				continue
+			}
 		}
 		if !obj.GetDeletionTimestamp().IsZero() {
 			nt.T.Logf("[CLEANUP] already terminating %s object %s ...", gvk.Kind, nn)
@@ -516,8 +528,11 @@ func DeleteObjectsAndWait(nt *NT, objs ...client.Object) error {
 					// skip waiting
 					continue
 				}
-				return fmt.Errorf("unable to delete %s object %s: %w",
-					gvk.Kind, nn, err)
+				tg.Go(func() error {
+					return fmt.Errorf("unable to delete %s object %s: %w",
+						gvk.Kind, nn, err)
+				})
+				continue
 			}
 		}
 		tg.Go(func() error {

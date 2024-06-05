@@ -177,6 +177,19 @@ func TestSyncUpdateCustomResource(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
+	nt.T.Cleanup(func() {
+		// Cleanup CRD
+		_, err := nt.Shell.Kubectl("delete", "-f", crdFile)
+		if err != nil {
+			nt.T.Fatal(err)
+		}
+
+		err = nt.Watcher.WatchForNotFound(kinds.CustomResourceDefinitionV1(), "anvils.acme.com", "")
+		if err != nil {
+			nt.T.Fatal(err)
+		}
+	})
+
 	err = nt.Watcher.WatchObject(kinds.CustomResourceDefinitionV1(), "anvils.acme.com", "",
 		[]testpredicates.Predicate{nomostest.IsEstablished},
 		testwatcher.WatchTimeout(30*time.Second))

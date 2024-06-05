@@ -80,7 +80,7 @@ func (c *Controller) SetupWithManager(mgr ctrl.Manager) error {
 
 // newExampleObject returns new RootSync or RepoSync with name and namespace set.
 func (c *Controller) newExampleObject() client.Object {
-	if c.SyncScope == declared.RootReconciler {
+	if c.SyncScope == declared.RootScope {
 		exampleObj := &v1beta1.RootSync{}
 		exampleObj.Name = c.SyncName
 		exampleObj.Namespace = configmanagement.ControllerNamespace

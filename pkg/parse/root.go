@@ -154,7 +154,7 @@ func (p *root) parseSource(ctx context.Context, state sourceState) ([]ast.FileOb
 	}
 
 	// Duplicated with namespace.go.
-	e := addAnnotationsAndLabels(objs, declared.RootReconciler, p.SyncName, p.sourceContext(), state.commit)
+	e := addAnnotationsAndLabels(objs, declared.RootScope, p.SyncName, p.sourceContext(), state.commit)
 	if e != nil {
 		err = status.Append(err, status.InternalErrorf("unable to add annotations and labels: %v", e))
 		return nil, err

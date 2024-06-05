@@ -41,7 +41,7 @@ import (
 var (
 	clusterName = flag.String(flags.clusterName, os.Getenv(reconcilermanager.ClusterNameKey),
 		"Cluster name to use for Cluster selection")
-	scope = flag.String("scope", os.Getenv(reconcilermanager.ScopeKey),
+	scopeStr = flag.String("scope", os.Getenv(reconcilermanager.ScopeKey),
 		"Scope of the reconciler, either a namespace or ':root'.")
 	syncName = flag.String("sync-name", os.Getenv(reconcilermanager.SyncNameKey),
 		"Name of the RootSync or RepoSync object.")
@@ -168,7 +168,8 @@ func main() {
 		klog.Fatalf("%s must be an absolute path: %v", flags.sourceDir, err)
 	}
 
-	err = declared.ValidateScope(*scope)
+	scope := declared.Scope(*scopeStr)
+	err = scope.Validate()
 	if err != nil {
 		klog.Fatal(err)
 	}
@@ -177,7 +178,7 @@ func main() {
 		ClusterName:              *clusterName,
 		FightDetectionThreshold:  *fightDetectionThreshold,
 		NumWorkers:               *workers,
-		ReconcilerScope:          declared.Scope(*scope),
+		ReconcilerScope:          scope,
 		ResyncPeriod:             *resyncPeriod,
 		PollingPeriod:            *pollingPeriod,
 		RetryPeriod:              configsync.DefaultReconcilerRetryPeriod,
@@ -201,7 +202,7 @@ func main() {
 		WebhookEnabled:           *webhookEnabled,
 	}
 
-	if declared.Scope(*scope) == declared.RootReconciler {
+	if scope == declared.RootScope {
 		// Default to "hierarchy" if unset.
 		format := filesystem.SourceFormat(*sourceFormat)
 		if format == "" {
@@ -219,7 +220,7 @@ func main() {
 			NamespaceStrategy: nsStrat,
 		}
 	} else {
-		klog.Infof("Starting reconciler for: %s", *scope)
+		klog.Infof("Starting reconciler for: %s", scope)
 
 		if *sourceFormat != "" {
 			klog.Fatalf("Flag %s and environment variable %s must not be passed to a Namespace reconciler",

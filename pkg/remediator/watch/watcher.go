@@ -51,7 +51,7 @@ func watcherFactoryFromListerWatcherFactory(factory ListerWatcherFactory) watche
 		if cfg.startWatch == nil {
 			cfg.startWatch = func(ctx context.Context, options metav1.ListOptions) (watch.Interface, error) {
 				namespace := "" // RootSync watches at the cluster scope or all namespaces
-				if cfg.scope != declared.RootReconciler {
+				if cfg.scope != declared.RootScope {
 					// RepoSync only watches at the namespace scope
 					namespace = string(cfg.scope)
 				}

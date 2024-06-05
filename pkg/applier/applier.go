@@ -153,7 +153,7 @@ var _ Supervisor = &supervisor{}
 // NewSupervisor constructs either a cluster-level or namespace-level Supervisor,
 // based on the specified scope.
 func NewSupervisor(cs *ClientSet, scope declared.Scope, syncName string, reconcileTimeout time.Duration) (Supervisor, error) {
-	if scope == declared.RootReconciler {
+	if scope == declared.RootScope {
 		return NewRootSupervisor(cs, syncName, reconcileTimeout)
 	}
 	return NewNamespaceSupervisor(cs, scope, syncName, reconcileTimeout)

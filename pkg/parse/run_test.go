@@ -76,7 +76,7 @@ func newParser(t *testing.T, fs FileSource, renderingEnabled bool, retryPeriod t
 		Converter:          converter,
 		Files:              Files{FileSource: fs},
 		Updater: Updater{
-			Scope:      declared.RootReconciler,
+			Scope:      declared.RootScope,
 			Resources:  &declared.Resources{},
 			Remediator: &remediatorfake.Remediator{},
 			Applier: &applierfake.Applier{

@@ -103,7 +103,7 @@ func runVet(ctx context.Context, namespace string, sourceFormat filesystem.Sourc
 		files = filesystem.FilterHierarchyFiles(rootDir, files)
 	case filesystem.SourceFormatUnstructured:
 		if namespace == "" {
-			validateOpts = parse.OptionsForScope(validateOpts, declared.RootReconciler)
+			validateOpts = parse.OptionsForScope(validateOpts, declared.RootScope)
 		} else {
 			validateOpts = parse.OptionsForScope(validateOpts, declared.Scope(namespace))
 		}

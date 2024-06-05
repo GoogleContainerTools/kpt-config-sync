@@ -346,7 +346,7 @@ func TestConflictingDefinitions_RootToNamespace(t *testing.T) {
 	nt.T.Logf("Ensure the Role matches the one in the Root repo %s", configsync.RootSyncName)
 	err = nt.Validate("pods", testNs, &rbacv1.Role{},
 		roleHasRules(rootPodRole().Rules),
-		testpredicates.IsManagedBy(nt.Scheme, declared.RootReconciler, configsync.RootSyncName))
+		testpredicates.IsManagedBy(nt.Scheme, declared.RootScope, configsync.RootSyncName))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -472,7 +472,7 @@ func TestConflictingDefinitions_NamespaceToRoot(t *testing.T) {
 	nt.T.Logf("Ensure the Role matches the one in the Root repo %s", configsync.RootSyncName)
 	err = nt.Validate("pods", testNs, &rbacv1.Role{},
 		roleHasRules(rootPodRole().Rules),
-		testpredicates.IsManagedBy(nt.Scheme, declared.RootReconciler, configsync.RootSyncName))
+		testpredicates.IsManagedBy(nt.Scheme, declared.RootScope, configsync.RootSyncName))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -487,7 +487,7 @@ func TestConflictingDefinitions_NamespaceToRoot(t *testing.T) {
 	nt.T.Logf("Ensure the Role still matches the one in the Root repo %s", configsync.RootSyncName)
 	err = nt.Validate("pods", testNs, &rbacv1.Role{},
 		roleHasRules(rootPodRole().Rules),
-		testpredicates.IsManagedBy(nt.Scheme, declared.RootReconciler, configsync.RootSyncName))
+		testpredicates.IsManagedBy(nt.Scheme, declared.RootScope, configsync.RootSyncName))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -531,7 +531,7 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	role := &rbacv1.Role{}
 	err := nt.Validate("pods", testNs, role,
 		roleHasRules(rootPodRole().Rules),
-		testpredicates.IsManagedBy(nt.Scheme, declared.RootReconciler, configsync.RootSyncName))
+		testpredicates.IsManagedBy(nt.Scheme, declared.RootScope, configsync.RootSyncName))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -623,7 +623,7 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	err = nt.Watcher.WatchObject(kinds.Role(), "pods", testNs,
 		[]testpredicates.Predicate{
 			roleHasRules(rootPodRole().Rules),
-			testpredicates.IsManagedBy(nt.Scheme, declared.RootReconciler, rootSync2),
+			testpredicates.IsManagedBy(nt.Scheme, declared.RootScope, rootSync2),
 		})
 	if err != nil {
 		nt.T.Fatal(err)

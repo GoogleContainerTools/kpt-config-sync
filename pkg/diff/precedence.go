@@ -59,9 +59,8 @@ func CanManage(scope declared.Scope, syncName string, obj client.Object, op admi
 		return true
 	}
 	oldManager := core.GetAnnotation(obj, metadata.ResourceManagerKey)
-	newManager := declared.ResourceManager(scope, syncName)
-	reconciler, _ := reconcilerName(newManager)
-	err := ValidateManager(reconciler, oldManager, core.IDOf(obj), op)
+	newReconcilerName := declared.ReconcilerNameFromScope(scope, syncName)
+	err := ValidateManager(newReconcilerName, oldManager, core.IDOf(obj), op)
 	if err != nil {
 		klog.V(3).Infof("diff.CanManage? %v", err)
 		return false
@@ -89,9 +88,10 @@ func ValidateManager(reconciler, manager string, id core.ID, op admissionv1.Oper
 		return nil
 	}
 
-	oldReconciler, syncScope := reconcilerName(manager)
+	syncScope, syncName := declared.ManagerScopeAndName(manager)
+	oldReconciler := declared.ReconcilerNameFromScope(syncScope, syncName)
 
-	if err := declared.ValidateScope(string(syncScope)); err != nil {
+	if err := syncScope.Validate(); err != nil {
 		// All managers are allowed to manage an object with an invalid manager.
 		// But print a warning, because users shouldn't manually modify the manager.
 		klog.Warningf("Invalid manager annotation (object: %q, annotation: %s=%q)", id, metadata.ResourceManagerKey, manager)
@@ -132,7 +132,7 @@ func ValidateManager(reconciler, manager string, id core.ID, op admissionv1.Oper
 		}
 	}
 
-	if isRootReconciler(reconciler) && syncScope != declared.RootReconciler {
+	if isRootReconciler(reconciler) && syncScope != declared.RootScope {
 		// RootReconciler is allowed to adopt an object as long as it's not
 		// managed by another RootReconciler.
 		return nil
@@ -143,17 +143,6 @@ func ValidateManager(reconciler, manager string, id core.ID, op admissionv1.Oper
 			reconciler, op, id, oldReconciler)
 	}
 	return nil
-}
-
-func reconcilerName(manager string) (string, declared.Scope) {
-	syncScope, syncName := declared.ManagerScopeAndName(manager)
-	var reconciler string
-	if syncScope == declared.RootReconciler {
-		reconciler = core.RootReconcilerName(syncName)
-	} else {
-		reconciler = core.NsReconcilerName(string(syncScope), syncName)
-	}
-	return reconciler, syncScope
 }
 
 func isImporter(reconcilerName string) bool {

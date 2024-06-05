@@ -87,7 +87,7 @@ func TestPublicOCI(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	kustomizecomponents.ValidateAllTenants(nt, string(declared.RootReconciler), "base", "tenant-a", "tenant-b", "tenant-c")
+	kustomizecomponents.ValidateAllTenants(nt, string(declared.RootScope), "base", "tenant-a", "tenant-b", "tenant-c")
 
 	tenant := "tenant-a"
 	nt.T.Logf("Update RootSync to sync %s from a public OCI image in GCR", tenant)
@@ -100,7 +100,7 @@ func TestPublicOCI(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	kustomizecomponents.ValidateAllTenants(nt, string(declared.RootReconciler), "../base", tenant)
+	kustomizecomponents.ValidateAllTenants(nt, string(declared.RootScope), "../base", tenant)
 }
 
 func TestSwitchFromGitToOciCentralized(t *testing.T) {

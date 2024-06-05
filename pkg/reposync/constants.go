@@ -24,7 +24,7 @@ import (
 // namespace.
 func ObjectKey(scope declared.Scope, name string) client.ObjectKey {
 	return client.ObjectKey{
-		Namespace: string(scope),
+		Namespace: scope.SyncNamespace(),
 		Name:      name,
 	}
 }

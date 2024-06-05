@@ -63,7 +63,7 @@ func TestFilteredWatcher(t *testing.T) {
 		syncertest.ManagementEnabled, difftest.ManagedBy(scope, syncName))
 	managedByOtherDeployment := fake.DeploymentObject(core.Name("not-declared"),
 		syncertest.ManagementEnabled, difftest.ManagedBy("other", "other-rs"))
-	deploymentForRoot := fake.DeploymentObject(core.Name("managed-by-root"), difftest.ManagedBy(declared.RootReconciler, "any-rs"))
+	deploymentForRoot := fake.DeploymentObject(core.Name("managed-by-root"), difftest.ManagedBy(declared.RootScope, "any-rs"))
 
 	testCases := []struct {
 		name     string

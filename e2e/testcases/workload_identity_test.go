@@ -458,7 +458,7 @@ func TestWorkloadIdentity(t *testing.T) {
 						nsMeta.rsRef:   nsMeta.syncDir})); err != nil {
 					nt.T.Fatal(err)
 				}
-				kustomizecomponents.ValidateAllTenants(nt, string(declared.RootReconciler), "base", "tenant-a", "tenant-b", "tenant-c")
+				kustomizecomponents.ValidateAllTenants(nt, string(declared.RootScope), "base", "tenant-a", "tenant-b", "tenant-c")
 				kustomizecomponents.ValidateTenant(nt, nsMeta.rsRef.Namespace, "test-ns", "base")
 
 			case v1beta1.HelmSource:
@@ -472,7 +472,7 @@ func TestWorkloadIdentity(t *testing.T) {
 				}
 				if err = nt.Validate(truncateStringByLength(fmt.Sprintf("%s-%s", rootChart.Name, rootChart.Name), 63),
 					"default", &appsv1.Deployment{},
-					testpredicates.IsManagedBy(nt.Scheme, declared.RootReconciler, rsRef.Name)); err != nil {
+					testpredicates.IsManagedBy(nt.Scheme, declared.RootScope, rsRef.Name)); err != nil {
 					nt.T.Fatal(err)
 				}
 				if err = nt.Validate(truncateStringByLength(nsChart.Name, 63),
@@ -691,7 +691,7 @@ func migrateFromGSAtoKSA(nt *nomostest.NT, fleetWITest bool, sourceType v1beta1.
 				nsMeta.rsRef:   nsMeta.syncDir})); err != nil {
 			nt.T.Fatal(err)
 		}
-		kustomizecomponents.ValidateAllTenants(nt, string(declared.RootReconciler), "../base", "tenant-a")
+		kustomizecomponents.ValidateAllTenants(nt, string(declared.RootScope), "../base", "tenant-a")
 		if err := nt.ValidateNotFound("tenant-b", "", &corev1.Namespace{}); err != nil {
 			return err
 		}
@@ -710,11 +710,11 @@ func migrateFromGSAtoKSA(nt *nomostest.NT, fleetWITest bool, sourceType v1beta1.
 			nt.T.Fatal(err)
 		}
 		if err = nt.Validate("deploy-ns", "ns", &appsv1.Deployment{},
-			testpredicates.IsManagedBy(nt.Scheme, declared.RootReconciler, rsRef.Name)); err != nil {
+			testpredicates.IsManagedBy(nt.Scheme, declared.RootScope, rsRef.Name)); err != nil {
 			nt.T.Fatal(err)
 		}
 		if err = nt.Validate("deploy-default", "default", &appsv1.Deployment{},
-			testpredicates.IsManagedBy(nt.Scheme, declared.RootReconciler, rsRef.Name)); err != nil {
+			testpredicates.IsManagedBy(nt.Scheme, declared.RootScope, rsRef.Name)); err != nil {
 			nt.T.Fatal(err)
 		}
 		if err = nt.Validate("repo-sync-deployment", testNs, &appsv1.Deployment{},

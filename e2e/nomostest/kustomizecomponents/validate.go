@@ -42,7 +42,7 @@ func ValidateAllTenants(nt *nomostest.NT, reconcilerScope, baseRelPath string, t
 // '../testdata/hydration/kustomize-components' are reconciled.
 func ValidateTenant(nt *nomostest.NT, reconcilerScope, tenant, baseRelPath string) {
 	nt.T.Logf("Validate %s resources are created and managed by %s", tenant, reconcilerScope)
-	if declared.Scope(reconcilerScope) == declared.RootReconciler {
+	if declared.Scope(reconcilerScope) == declared.RootScope {
 		// Only validate Namespace for root reconciler because namespace reconciler can't manage Namespaces.
 		if err := nt.Validate(tenant, "", &corev1.Namespace{},
 			testpredicates.HasAnnotation(metadata.ResourceManagerKey, reconcilerScope)); err != nil {

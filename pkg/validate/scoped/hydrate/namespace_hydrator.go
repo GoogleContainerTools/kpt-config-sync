@@ -63,7 +63,7 @@ func NamespaceSelectors(ctx context.Context, c client.Client, fieldManager strin
 				}
 			} else {
 				if obj.GetNamespace() == "" {
-					if objs.Scope == declared.RootReconciler {
+					if objs.Scope == declared.RootScope {
 						obj.SetNamespace(metav1.NamespaceDefault)
 					} else {
 						obj.SetNamespace(string(objs.Scope))

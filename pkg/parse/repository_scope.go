@@ -27,7 +27,7 @@ import (
 // Scope.
 func OptionsForScope(options validate.Options, scope declared.Scope) validate.Options {
 	options.Scope = scope
-	if scope != declared.RootReconciler {
+	if scope != declared.RootScope {
 		options.Visitors = append(options.Visitors, repositoryScopeVisitor(scope))
 	}
 	return options
@@ -40,15 +40,16 @@ func repositoryScopeVisitor(scope declared.Scope) validate.VisitorFunc {
 	return func(objs []ast.FileObject) ([]ast.FileObject, status.MultiError) {
 		var errs status.MultiError
 		for _, obj := range objs {
+			syncNs := scope.SyncNamespace()
 			// By this point we've validated that there are no cluster-scoped objects
 			// in this repo.
 			switch obj.GetNamespace() {
-			case string(scope):
+			case syncNs:
 				// This is what we want, so ignore.
 			case "":
 				// Missing metadata.namespace, so set it to be the one for this Repo.
 				// Otherwise this will invalidly default to the "default" Namespace.
-				obj.SetNamespace(string(scope))
+				obj.SetNamespace(syncNs)
 			default:
 				// There's an object declaring an invalid metadata.namespace, so this is
 				// an error.

@@ -631,7 +631,7 @@ func reportRootSyncConflicts(ctx context.Context, k8sClient client.Client, confl
 
 	for conflictingManager, conflictErrors := range conflictingManagerErrors {
 		scope, name := declared.ManagerScopeAndName(conflictingManager)
-		if scope == declared.RootReconciler {
+		if scope == declared.RootScope {
 			// RootSync applier uses PolicyAdoptAll.
 			// So it may fight, if the webhook is disabled.
 			// Report the conflict to the other RootSync to make it easier to detect.

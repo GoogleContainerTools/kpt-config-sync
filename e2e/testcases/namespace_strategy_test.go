@@ -96,7 +96,7 @@ func TestNamespaceStrategy(t *testing.T) {
 	err = nt.Validate(fooNamespace.Name, fooNamespace.Namespace, &corev1.Namespace{},
 		testpredicates.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
 		testpredicates.HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
-		testpredicates.HasAnnotation(metadata.ResourceManagerKey, string(declared.RootReconciler)),
+		testpredicates.HasAnnotation(metadata.ResourceManagerKey, string(declared.RootScope)),
 	)
 	if err != nil {
 		nt.T.Fatal(err)
@@ -130,7 +130,7 @@ func TestNamespaceStrategy(t *testing.T) {
 			// Users can still declare the annotation in the explicit namespace.
 			testpredicates.MissingAnnotation(common.LifecycleDeleteAnnotation),
 			testpredicates.HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
-			testpredicates.HasAnnotation(metadata.ResourceManagerKey, string(declared.RootReconciler)),
+			testpredicates.HasAnnotation(metadata.ResourceManagerKey, string(declared.RootScope)),
 		},
 	)
 	if err != nil {
@@ -247,21 +247,21 @@ func TestNamespaceStrategyMultipleRootSyncs(t *testing.T) {
 				// if they choose, but the reconciler does not add it by default.
 				testpredicates.MissingAnnotation(common.LifecycleDeleteAnnotation),
 				testpredicates.HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
-				testpredicates.HasAnnotation(metadata.ResourceManagerKey, declared.ResourceManager(declared.RootReconciler, rootSyncA.Name)),
+				testpredicates.HasAnnotation(metadata.ResourceManagerKey, declared.ResourceManager(declared.RootScope, rootSyncA.Name)),
 			})
 	})
 	tg.Go(func() error {
 		return nt.Watcher.WatchObject(kinds.ConfigMap(), cmX.Name, cmX.Namespace,
 			[]testpredicates.Predicate{
 				testpredicates.HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
-				testpredicates.HasAnnotation(metadata.ResourceManagerKey, declared.ResourceManager(declared.RootReconciler, rootSyncX.Name)),
+				testpredicates.HasAnnotation(metadata.ResourceManagerKey, declared.ResourceManager(declared.RootScope, rootSyncX.Name)),
 			})
 	})
 	tg.Go(func() error {
 		return nt.Watcher.WatchObject(kinds.ConfigMap(), cmY.Name, cmY.Namespace,
 			[]testpredicates.Predicate{
 				testpredicates.HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
-				testpredicates.HasAnnotation(metadata.ResourceManagerKey, declared.ResourceManager(declared.RootReconciler, rootSyncY.Name)),
+				testpredicates.HasAnnotation(metadata.ResourceManagerKey, declared.ResourceManager(declared.RootScope, rootSyncY.Name)),
 			})
 	})
 	if err := tg.Wait(); err != nil {

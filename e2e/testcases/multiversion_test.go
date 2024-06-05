@@ -58,22 +58,6 @@ func TestMultipleVersions_CustomResourceV1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nt.T.Cleanup(func() {
-		// Remove the CRD and CRs
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/foo"))
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster/anvil-crd.yaml"))
-		nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing Anvil CRD and CRs"))
-
-		if err := nt.WatchForAllSyncs(); err != nil {
-			nt.T.Fatal(err)
-		}
-
-		err := nt.ValidateNotFound("anvils.acme.com", "", fake.CustomResourceDefinitionV1Object())
-		if err != nil {
-			nt.T.Fatal(err)
-		}
-	})
-
 	err := nt.Validate("first", "foo", anvilCR("v1", "", 0))
 	if err != nil {
 		nt.T.Fatal(err)

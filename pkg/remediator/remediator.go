@@ -98,7 +98,7 @@ func New(scope declared.Scope, syncName string, cfg *rest.Config, applier syncer
 	fightHandler := fight.NewHandler()
 	conflictHandler := conflict.NewHandler()
 	for i := 0; i < numWorkers; i++ {
-		workers[i] = reconcile.NewWorker(scope, syncName, applier, q, decls, fightHandler)
+		workers[i] = reconcile.NewWorker(scope, syncName, applier, q, decls, conflictHandler, fightHandler)
 	}
 
 	remediator := &Remediator{
@@ -202,7 +202,7 @@ func (r *Remediator) UpdateWatches(ctx context.Context, gvks map[schema.GroupVer
 
 // ManagementConflict implements Interface.
 func (r *Remediator) ManagementConflict() bool {
-	return r.watchMgr.ManagementConflict()
+	return r.conflictHandler.HasConflictErrors()
 }
 
 // ConflictErrors implements Interface.

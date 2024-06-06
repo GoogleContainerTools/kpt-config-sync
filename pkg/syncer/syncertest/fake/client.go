@@ -25,7 +25,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/watch"
 	"kpt.dev/configsync/pkg/kinds"
-	"kpt.dev/configsync/pkg/syncer/reconcile"
 	"sigs.k8s.io/cli-utils/pkg/testutil"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -224,12 +223,6 @@ func (c *Client) Watch(ctx context.Context, exampleList client.ObjectList, opts 
 	}
 	c.test.Cleanup(watcher.Stop)
 	return watcher, nil
-}
-
-// Applier returns a fake.Applier wrapping this fake.Client. Callers using the
-// resulting Applier will read from/write to the original fake.Client.
-func (c *Client) Applier(fieldManager string) reconcile.Applier {
-	return &Applier{Client: c, FieldManager: fieldManager}
 }
 
 // Codecs returns the CodecFactory.

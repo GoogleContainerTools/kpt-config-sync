@@ -14,7 +14,9 @@
 
 package configsync
 
-import "time"
+import (
+	"time"
+)
 
 const (
 	// GroupName is the name of the group of configsync resources.

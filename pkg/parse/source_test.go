@@ -25,6 +25,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/hydrate"
@@ -112,8 +113,9 @@ func TestReadConfigFiles(t *testing.T) {
 					Client:             syncertest.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName)),
 					DiscoveryInterface: syncertest.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
 					Updater: Updater{
-						Scope:     declared.RootScope,
-						Resources: &declared.Resources{},
+						Scope:              declared.RootScope,
+						Resources:          &declared.Resources{},
+						StatusUpdatePeriod: configsync.DefaultReconcilerSyncStatusUpdatePeriod,
 					},
 					mux: &sync.Mutex{},
 				},
@@ -121,6 +123,8 @@ func TestReadConfigFiles(t *testing.T) {
 					SourceFormat: filesystem.SourceFormatUnstructured,
 				},
 			}
+			// Updater uses the root options to known how to update the RootSync sync status.
+			parser.Options.Updater.SyncStatusUpdater = parser
 
 			// set the necessary FileSource of parser
 			parser.SourceDir = symDir

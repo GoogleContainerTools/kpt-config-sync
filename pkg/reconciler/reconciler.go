@@ -194,7 +194,7 @@ func Run(opts Options) {
 	if reconcileTimeout < 0 {
 		klog.Fatalf("Invalid reconcileTimeout: %v, timeout should not be negative", reconcileTimeout)
 	}
-	clientSet, err := applier.NewClientSet(cl, configFlags, opts.StatusMode)
+	clientSet, err := applier.NewClientSet(cl, configFlags, opts.StatusMode, opts.SyncName, opts.ReconcilerScope)
 	if err != nil {
 		klog.Fatalf("Error creating clients: %v", err)
 	}
@@ -241,17 +241,17 @@ func Run(opts Options) {
 		SyncName:           opts.SyncName,
 		PollingPeriod:      opts.PollingPeriod,
 		ResyncPeriod:       opts.ResyncPeriod,
-		RetryPeriod:        opts.RetryPeriod,
 		StatusUpdatePeriod: opts.StatusUpdatePeriod,
 		DiscoveryInterface: discoveryClient,
 		RenderingEnabled:   opts.RenderingEnabled,
 		Files:              parse.Files{FileSource: fs},
 		WebhookEnabled:     opts.WebhookEnabled,
 		Updater: parse.Updater{
-			Scope:      opts.ReconcilerScope,
-			Resources:  decls,
-			Applier:    supervisor,
-			Remediator: rem,
+			Scope:              opts.ReconcilerScope,
+			Resources:          decls,
+			Applier:            supervisor,
+			Remediator:         rem,
+			StatusUpdatePeriod: opts.StatusUpdatePeriod,
 		},
 	}
 	// Only instantiate the converter when the webhook is enabled because the
@@ -284,6 +284,9 @@ func Run(opts Options) {
 			klog.Fatalf("Instantiating Namespace Repository Parser: %v", err)
 		}
 	}
+
+	// Updater needs the type-specific parser to known how to update the RSync sync status.
+	parseOpts.Updater.SyncStatusUpdater = parser
 
 	// Start listening to signals
 	signalCtx := signals.SetupSignalHandler()

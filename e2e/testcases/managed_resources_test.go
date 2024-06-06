@@ -37,19 +37,21 @@ import (
 
 // This file includes tests for drift correction and drift prevention.
 //
-// The drift correction in the mono-repo mode utilizes the following two annotations:
-//  * configmanagement.gke.io/managed
-//  * configsync.gke.io/resource-id
+// The drift correction in the mono-repo mode utilizes the following metadata:
+//  * the configmanagement.gke.io/managed annotation
+//  * the configsync.gke.io/resource-id annotation
 //
-// The drift correction in the multi-repo mode utilizes the following three annotations:
-//  * configmanagement.gke.io/managed
-//  * configsync.gke.io/resource-id
-//  * configsync.gke.io/manager
+// The drift correction in the multi-repo mode utilizes the following metadata:
+//  * the configmanagement.gke.io/managed annotation
+//  * the configsync.gke.io/resource-id annotation
+//  * the configsync.gke.io/manager annotation
+//  * the config.k8s.io/owning-inventory label
 //
-// The drift prevention is only supported in the multi-repo mode, and utilizes the following Config Sync metadata:
+// The drift prevention is only supported in the multi-repo mode, and utilizes the following metadata:
 //  * the configmanagement.gke.io/managed annotation
 //  * the configsync.gke.io/resource-id annotation
 //  * the configsync.gke.io/declared-version label
+//  * the config.k8s.io/owning-inventory label
 
 // The reason we have both TestKubectlCreatesManagedNamespaceResourceMonoRepo and
 // TestKubectlCreatesManagedNamespaceResourceMultiRepo is that the mono-repo mode and
@@ -79,6 +81,8 @@ metadata:
     configmanagement.gke.io/managed: enabled
     configsync.gke.io/resource-id: _namespace_test-ns1
     configsync.gke.io/manager: :root
+  labels:
+    configsync.gke.io/parent-package-id: root-sync.config-management-system.RootSync
 `)
 
 	if err := os.WriteFile(filepath.Join(nt.TmpDir, "test-ns1.yaml"), ns, 0644); err != nil {
@@ -106,7 +110,9 @@ metadata:
   annotations:
     configmanagement.gke.io/managed: enabled
     configsync.gke.io/resource-id: _namespace_test-ns2
-    configsync.gke.io/manager: :abcdef
+    configsync.gke.io/manager: config-management-system_abcdef
+  labels:
+    configsync.gke.io/parent-package-id: abcdef.config-management-system.RootSync
 `)
 
 	if err := os.WriteFile(filepath.Join(nt.TmpDir, "test-ns2.yaml"), ns, 0644); err != nil {
@@ -121,8 +127,10 @@ metadata:
 	// Wait 5 seconds so that the remediator can process the event.
 	time.Sleep(5 * time.Second)
 
-	// The `configsync.gke.io/manager` annotation of `test-ns2` suggests that its manager is ':abcdef'.
-	// The root reconciler does not manage `test-ns2`, therefore should not remove `test-ns2`.
+	// The `configsync.gke.io/manager` annotation of `test-ns2` suggests that
+	// its manager is 'config-management-system_abcdef' (RootSync named 'abcdef').
+	// The root reconciler (RootSync named 'root-sync') does not manage
+	// `test-ns2`, therefore should not remove `test-ns2`.
 	err = nt.Validate("test-ns2", "", &corev1.Namespace{},
 		testpredicates.HasExactlyAnnotationKeys(
 			metadata.ResourceManagementKey,
@@ -233,6 +241,8 @@ metadata:
     configmanagement.gke.io/managed: enabled
     configsync.gke.io/resource-id: _configmap_bookstore_test-cm1
     configsync.gke.io/manager: :root
+  labels:
+    configsync.gke.io/parent-package-id: root-sync.config-management-system.RootSync
 data:
   weekday: "monday"
 `)
@@ -263,6 +273,8 @@ metadata:
     configmanagement.gke.io/managed: enabled
     configsync.gke.io/resource-id: _configmap_bookstore_wrong-cm2
     configsync.gke.io/manager: :root
+  labels:
+    configsync.gke.io/parent-package-id: root-sync.config-management-system.RootSync
 data:
   weekday: "monday"
 `)
@@ -301,7 +313,9 @@ metadata:
   annotations:
     configmanagement.gke.io/managed: enabled
     configsync.gke.io/resource-id: _configmap_bookstore_test-cm3
-    configsync.gke.io/manager: :abcdef
+    configsync.gke.io/manager: config-management-system_abcdef
+  labels:
+    configsync.gke.io/parent-package-id: abcdef.config-management-system.RootSync
 data:
   weekday: "monday"
 `)
@@ -318,8 +332,10 @@ data:
 	// Wait 5 seconds so that the reconciler can process the event.
 	time.Sleep(5 * time.Second)
 
-	// The `configsync.gke.io/manager` annotation of `test-ns3` suggests that its manager is ':abcdef'.
-	// The root reconciler does not manage `test-ns3`, therefore should not remove `test-ns3`.
+	// The `configsync.gke.io/manager` annotation of `test-ns3` suggests that
+	// its manager is 'config-management-system_abcdef' (RootSync named 'abcdef').
+	// The root reconciler (RootSync named 'root-sync') does not manage `test-ns3`,
+	// therefore should not remove `test-ns3`.
 	err = nt.Validate("test-cm3", "bookstore", &corev1.ConfigMap{},
 		testpredicates.HasExactlyAnnotationKeys(
 			metadata.ResourceManagementKey,
@@ -340,6 +356,8 @@ metadata:
   annotations:
     configmanagement.gke.io/managed: enabled
     configsync.gke.io/resource-id: _configmap_bookstore_test-cm4
+  labels:
+    configsync.gke.io/parent-package-id: root-sync.config-management-system.RootSync
 data:
   weekday: "monday"
 `)
@@ -378,6 +396,8 @@ metadata:
     configmanagement.gke.io/managed: enabled
     configsync.gke.io/resource-id: _configmap_bookstore_test-secret
     configsync.gke.io/manager: :root
+  labels:
+    configsync.gke.io/parent-package-id: root-sync.config-management-system.RootSync
 `)
 
 	if err := os.WriteFile(filepath.Join(nt.TmpDir, "test-secret.yaml"), cm, 0644); err != nil {

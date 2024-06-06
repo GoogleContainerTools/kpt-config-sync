@@ -109,16 +109,12 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	// Wait for remediator to detect the drift (managed Anvil CR was deleted)
-	// and record it as a conflict.
-	// TODO: distinguish between management conflict (spec/generation drift) and concurrent status update conflict (resource version change)
-	err = nomostest.ValidateMetrics(nt,
+	// Reverting a manual change is NOT considered a "conflict", unless the new
+	// owner is a different reconciler.
+	nt.Must(nomostest.ValidateMetrics(nt,
 		nomostest.ReconcilerErrorMetrics(nt, rootSyncLabels, firstCommitHash, metrics.ErrorSummary{
-			Conflicts: 1,
-		}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+			Conflicts: 0, // from the remediator
+		})))
 
 	// Reset discovery client to invalidate the cached Anvil CRD
 	nt.RenewClient()

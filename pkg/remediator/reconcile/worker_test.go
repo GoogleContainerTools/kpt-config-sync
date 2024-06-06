@@ -75,9 +75,10 @@ func TestWorker_Run_Remediates(t *testing.T) {
 	defer q.ShutDown()
 
 	c := testingfake.NewClient(t, core.Scheme, existingObjs...)
-
+	a := testingfake.NewApplier(c, configsync.FieldManager)
 	d := makeDeclared(t, randomCommitHash(), declaredObjs...)
-	w := NewWorker(declared.RootScope, configsync.RootSyncName, c.Applier(configsync.FieldManager), q, d, syncertestfake.NewFightHandler())
+	w := NewWorker(declared.RootScope, configsync.RootSyncName, a, q, d,
+		syncertestfake.NewConflictHandler(), syncertestfake.NewFightHandler())
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -178,8 +179,10 @@ func TestWorker_Run_RemediatesExisting(t *testing.T) {
 		q.Add(obj)
 	}
 
+	a := testingfake.NewApplier(c, configsync.FieldManager)
 	d := makeDeclared(t, randomCommitHash(), declaredObjs...)
-	w := NewWorker(declared.RootScope, configsync.RootSyncName, c.Applier(configsync.FieldManager), q, d, syncertestfake.NewFightHandler())
+	w := NewWorker(declared.RootScope, configsync.RootSyncName, a, q, d,
+		syncertestfake.NewConflictHandler(), syncertestfake.NewFightHandler())
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -286,8 +289,10 @@ func TestWorker_ProcessNextObject(t *testing.T) {
 				}
 			}
 
+			a := testingfake.NewApplier(c, configsync.FieldManager)
 			d := makeDeclared(t, randomCommitHash(), tc.declared...)
-			w := NewWorker(declared.RootScope, configsync.RootSyncName, c.Applier(configsync.FieldManager), q, d, syncertestfake.NewFightHandler())
+			w := NewWorker(declared.RootScope, configsync.RootSyncName, a, q, d,
+				syncertestfake.NewConflictHandler(), syncertestfake.NewFightHandler())
 
 			for _, obj := range tc.toProcess {
 				if err := w.processNextObject(context.Background()); err != nil {
@@ -306,8 +311,10 @@ func TestWorker_Run_CancelledWhenEmpty(t *testing.T) {
 	q := queue.New("test") // empty queue
 	defer q.ShutDown()
 	c := testingfake.NewClient(t, core.Scheme)
+	a := testingfake.NewApplier(c, configsync.FieldManager)
 	d := makeDeclared(t, randomCommitHash()) // no resources declared
-	w := NewWorker(declared.RootScope, configsync.RootSyncName, c.Applier(configsync.FieldManager), q, d, syncertestfake.NewFightHandler())
+	w := NewWorker(declared.RootScope, configsync.RootSyncName, a, q, d,
+		syncertestfake.NewConflictHandler(), syncertestfake.NewFightHandler())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -372,9 +379,10 @@ func TestWorker_Run_CancelledWhenNotEmpty(t *testing.T) {
 	defer q.ShutDown()
 
 	c := testingfake.NewClient(t, core.Scheme, existingObjs...)
+	a := testingfake.NewApplier(c, configsync.FieldManager)
 	d := makeDeclared(t, randomCommitHash(), declaredObjs...)
-	a := &testingfake.Applier{Client: c, FieldManager: configsync.FieldManager}
-	w := NewWorker(declared.RootScope, configsync.RootSyncName, a, q, d, syncertestfake.NewFightHandler())
+	w := NewWorker(declared.RootScope, configsync.RootSyncName, a, q, d,
+		syncertestfake.NewConflictHandler(), syncertestfake.NewFightHandler())
 
 	// Run worker in the background
 	doneCh := make(chan struct{})

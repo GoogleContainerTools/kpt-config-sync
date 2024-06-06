@@ -98,10 +98,11 @@ func TestApply(t *testing.T) {
 		"example-to-not-delete":          "anything",
 	})
 	abandonObj.SetLabels(map[string]string{
-		metadata.ManagedByKey:   metadata.ManagedByValue,
-		metadata.SystemLabel:    "anything",
-		metadata.ArchLabel:      "anything",
-		"example-to-not-delete": "anything",
+		metadata.ManagedByKey:         metadata.ManagedByValue,
+		metadata.ParentPackageIDLabel: "anything",
+		metadata.SystemLabel:          "anything",
+		metadata.ArchLabel:            "anything",
+		"example-to-not-delete":       "anything",
 	})
 	abandonObjID := core.IDOf(abandonObj)
 

@@ -431,6 +431,7 @@ func initRepository(nt *NT, repoType gitproviders.RepoType, nn types.NamespacedN
 		if err := repo.Create(); err != nil {
 			nt.T.Fatal(err)
 		}
+		nt.T.Logf("Successfully created repo '%s'", repo.RemoteRepoName)
 		nt.RemoteRepositories[nn] = repo
 	}
 	if err := repo.Init(); err != nil {

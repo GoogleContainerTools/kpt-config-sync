@@ -26,7 +26,6 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/util/retry"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -36,6 +35,7 @@ import (
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reposync"
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
+	"kpt.dev/configsync/pkg/util/mutate"
 	watchutil "kpt.dev/configsync/pkg/util/watch"
 	"sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -311,11 +311,11 @@ func TestReconcileRepoSyncLifecycleValidToInvalid(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Log("updating RepoSync to make it invalid")
-	rs.Spec.Auth = configsync.AuthToken
 	// reconciler-manager makes async changes, so retry on conflict
-	err = retry.RetryOnConflict(retry.DefaultBackoff, func() error {
-		return fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager))
-	})
+	_, err = mutate.Spec(ctx, fakeClient, rs, func() error {
+		rs.Spec.Auth = configsync.AuthToken
+		return nil
+	}, client.FieldOwner(reconcilermanager.FieldManager))
 	require.NoError(t, err)
 
 	var rsObj *v1beta1.RepoSync

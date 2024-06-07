@@ -25,7 +25,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/hydrate"
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
@@ -110,10 +109,6 @@ func TestReadConfigFiles(t *testing.T) {
 					ReconcilerName:     rootReconcilerName,
 					Client:             syncertest.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName)),
 					DiscoveryInterface: syncertest.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
-					Updater: Updater{
-						Scope:     declared.RootScope,
-						Resources: &declared.Resources{},
-					},
 				},
 				RootOptions: &RootOptions{
 					SourceFormat: filesystem.SourceFormatUnstructured,

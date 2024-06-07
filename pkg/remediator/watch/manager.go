@@ -19,10 +19,12 @@ import (
 	"errors"
 	"sync"
 
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/declared"
+	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/remediator/conflict"
 	"kpt.dev/configsync/pkg/remediator/queue"
 	"kpt.dev/configsync/pkg/status"
@@ -48,6 +50,8 @@ type Manager struct {
 
 	// watcherFactory is the function to create a watcher.
 	watcherFactory watcherFactory
+
+	labelSelector labels.Selector
 
 	// The following fields are guarded by the mutex.
 	mux sync.Mutex
@@ -87,6 +91,11 @@ func NewManager(scope declared.Scope, syncName string, cfg *rest.Config,
 		}
 	}
 
+	// Only watch & remediate objects applied by this reconciler
+	packageID := metadata.PackageID(syncName, scope.SyncNamespace(), scope.SyncKind())
+	labelSelector := labels.Set{
+		metadata.ParentPackageIDLabel: packageID,
+	}.AsSelector()
 	return &Manager{
 		scope:           scope,
 		syncName:        syncName,
@@ -94,6 +103,7 @@ func NewManager(scope declared.Scope, syncName string, cfg *rest.Config,
 		resources:       decls,
 		watcherMap:      make(map[schema.GroupVersionKind]Runnable),
 		watcherFactory:  options.watcherFactory,
+		labelSelector:   labelSelector,
 		queue:           q,
 		conflictHandler: ch,
 	}, nil
@@ -104,24 +114,6 @@ func (m *Manager) NeedsUpdate() bool {
 	m.mux.Lock()
 	defer m.mux.Unlock()
 	return m.needsUpdate
-}
-
-// ManagementConflict returns true if any watcher notices any management conflicts. This function is threadsafe.
-func (m *Manager) ManagementConflict() bool {
-	m.mux.Lock()
-	defer m.mux.Unlock()
-
-	managementConflict := false
-	// If one of the watchers noticed a management conflict, the remediator will indicate that
-	// it needs an update so that the parse-apply-watch loop can also detect the conflict and
-	//report it as an error status.
-	for _, watcher := range m.watcherMap {
-		if watcher.ManagementConflict() {
-			managementConflict = true
-			watcher.ClearManagementConflict()
-		}
-	}
-	return managementConflict
 }
 
 // UpdateWatches accepts a map of GVKs that should be watched and takes the
@@ -196,6 +188,7 @@ func (m *Manager) startWatcher(ctx context.Context, gvk schema.GroupVersionKind)
 		scope:           m.scope,
 		syncName:        m.syncName,
 		conflictHandler: m.conflictHandler,
+		labelSelector:   m.labelSelector,
 	}
 	w, err := m.watcherFactory(cfg)
 	if err != nil {

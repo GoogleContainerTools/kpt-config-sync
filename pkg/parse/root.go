@@ -25,6 +25,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
@@ -375,13 +376,68 @@ func setRenderingStatusFields(rendering *v1beta1.RenderingStatus, p Parser, newS
 	rendering.LastUpdate = newStatus.lastUpdate
 }
 
+// SyncStatus implements the Parser interface
+// SyncStatus gets the RootSync sync status.
+func (p *root) SyncStatus(ctx context.Context) (syncStatus, error) {
+	p.mux.Lock()
+	defer p.mux.Unlock()
+
+	rs := &v1beta1.RootSync{}
+	if err := p.Client.Get(ctx, rootsync.ObjectKey(p.SyncName), rs); err != nil {
+		if apierrors.IsNotFound(err) || meta.IsNoMatchError(err) {
+			return syncStatus{}, nil
+		}
+		return syncStatus{}, status.APIServerError(err, "failed to get RootSync")
+	}
+
+	syncing := false
+	for _, condition := range rs.Status.Conditions {
+		if condition.Type == v1beta1.RootSyncSyncing {
+			if condition.Status == metav1.ConditionTrue {
+				syncing = true
+			}
+			break
+		}
+	}
+
+	return syncStatus{
+		syncing: syncing,
+		commit:  rs.Status.Sync.Commit,
+		// Errors are unparsable.
+		// Even if they were, we don't know what stage of the pipeline caused them.
+		// So we're forced to just drop the errors when the controller is restarted/rescheduled.
+		// errs:       errs,
+		lastUpdate: rs.Status.Sync.LastUpdate,
+	}, nil
+}
+
 // SetSyncStatus implements the Parser interface
 // SetSyncStatus sets the RootSync sync status.
 // `errs` includes the errors encountered during the apply step;
 func (p *root) SetSyncStatus(ctx context.Context, newStatus syncStatus) error {
 	p.mux.Lock()
 	defer p.mux.Unlock()
-	return p.setSyncStatusWithRetries(ctx, newStatus, defaultDenominator)
+
+	if err := p.setSyncStatusWithRetries(ctx, newStatus, defaultDenominator); err != nil {
+		return err
+	}
+
+	// Extract conflict errors from sync errors.
+	var conflictErrs []status.ManagementConflictError
+	if newStatus.errs != nil {
+		for _, err := range newStatus.errs.Errors() {
+			if conflictErr, ok := err.(status.ManagementConflictError); ok {
+				conflictErrs = append(conflictErrs, conflictErr)
+			}
+		}
+	}
+	// Report conflict errors to the remote RootSync, if both are RootSyncs.
+	// RepoSync reconcilers do not have permission to update RootSync status,
+	// nor RepoSyncs in a different namespace.
+	if err := reportRootSyncConflicts(ctx, p.K8sClient(), conflictErrs); err != nil {
+		return fmt.Errorf("failed to report remote conflicts: %w", err)
+	}
+	return nil
 }
 
 func (p *root) setSyncStatusWithRetries(ctx context.Context, newStatus syncStatus, denominator int) error {
@@ -483,6 +539,38 @@ func summarizeErrors(sourceStatus v1beta1.SourceStatus, syncStatus v1beta1.SyncS
 	return errorSources, errorSummary
 }
 
+// reportRootSyncConflicts reports conflicts to the RootSync that manages the
+// conflicting resources.
+func reportRootSyncConflicts(ctx context.Context, k8sClient client.Client, conflictErrs []status.ManagementConflictError) error {
+	if len(conflictErrs) == 0 {
+		return nil
+	}
+	conflictingManagerErrors := map[string][]status.ManagementConflictError{}
+	for _, conflictError := range conflictErrs {
+		conflictingManager := conflictError.ConflictingManager()
+		err := conflictError.ConflictingManagerError()
+		conflictingManagerErrors[conflictingManager] = append(conflictingManagerErrors[conflictingManager], err)
+	}
+
+	for conflictingManager, conflictErrors := range conflictingManagerErrors {
+		scope, name := declared.ManagerScopeAndName(conflictingManager)
+		if scope == declared.RootScope {
+			// RootSync applier uses PolicyAdoptAll.
+			// So it may fight, if the webhook is disabled.
+			// Report the conflict to the other RootSync to make it easier to detect.
+			klog.Infof("Detected conflict with RootSync manager %q", conflictingManager)
+			if err := prependRootSyncRemediatorStatus(ctx, k8sClient, name, conflictErrors, defaultDenominator); err != nil {
+				return fmt.Errorf("failed to update RootSync %q to prepend remediator conflicts: %w", name, err)
+			}
+		} else {
+			// RepoSync applier uses PolicyAdoptIfNoInventory.
+			// So it won't fight, even if the webhook is disabled.
+			klog.Infof("Detected conflict with RepoSync manager %q", conflictingManager)
+		}
+	}
+	return nil
+}
+
 // addImplicitNamespaces hydrates the given FileObjects by injecting implicit
 // namespaces into the list before returning it. Implicit namespaces are those
 // that are declared by an object's metadata namespace field but are not present
@@ -547,19 +635,6 @@ func (p *root) addImplicitNamespaces(objs []ast.FileObject) ([]ast.FileObject, s
 	}
 
 	return objs, errs
-}
-
-// SyncErrors returns all the sync errors, including remediator errors,
-// validation errors, applier errors, and watch update errors.
-// SyncErrors implements the Parser interface
-func (p *root) SyncErrors() status.MultiError {
-	return p.Errors()
-}
-
-// Syncing returns true if the updater is running.
-// SyncErrors implements the Parser interface
-func (p *root) Syncing() bool {
-	return p.Updating()
 }
 
 // K8sClient implements the Parser interface

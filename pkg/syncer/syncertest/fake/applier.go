@@ -37,6 +37,11 @@ type Applier struct {
 
 var _ reconcile.Applier = &Applier{}
 
+// NewApplier constructs a new fake Applier.
+func NewApplier(c *Client, fieldManager string) *Applier {
+	return &Applier{Client: c, FieldManager: fieldManager}
+}
+
 // Create implements reconcile.Applier.
 func (a *Applier) Create(ctx context.Context, obj *unstructured.Unstructured) status.Error {
 	if a.CreateError != nil {

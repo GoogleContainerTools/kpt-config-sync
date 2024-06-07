@@ -396,39 +396,29 @@ func TestConflictingDefinitions_NamespaceToRoot(t *testing.T) {
 	)
 
 	podRoleFilePath := fmt.Sprintf("acme/namespaces/%s/pod-role.yaml", testNs)
-	nt.T.Logf("Add a Role to Namespace repo: %s", configsync.RootSyncName)
+	nt.T.Logf("Add a Role to Namespace repo: %v", repoSyncNN)
 	nsRoleObj := namespacePodRole()
 	nt.Must(nt.NonRootRepos[repoSyncNN].Add(podRoleFilePath, nsRoleObj))
 	nt.Must(nt.NonRootRepos[repoSyncNN].CommitAndPush("declare Role"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
-	err := nt.Validate("pods", testNs, &rbacv1.Role{},
+	// Validate Role is managed by the RepoSync reconciler
+	nt.Must(nt.Validate(nsRoleObj.Name, nsRoleObj.Namespace, &rbacv1.Role{},
 		roleHasRules(nsRoleObj.Rules),
-		testpredicates.IsManagedBy(nt.Scheme, declared.Scope(repoSyncNN.Namespace), repoSyncNN.Name))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		testpredicates.IsManagedBy(nt.Scheme, declared.Scope(repoSyncNN.Namespace), repoSyncNN.Name)))
 
 	// Test Role managed by the RepoSync, NOT the RootSync
 	nt.MetricsExpectations.AddObjectApply(configsync.RepoSyncKind, repoSyncNN, nsRoleObj)
 
 	// Validate no errors from root reconciler.
-	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: rootSyncNN,
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	// Validate no errors from namespace reconciler.
-	err = nomostest.ValidateStandardMetricsForRepoSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRepoSync(nt, metrics.Summary{
 		Sync: repoSyncNN,
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	nt.T.Logf("Declare a conflicting Role in the Root repo: %s", configsync.RootSyncName)
 	rootRoleObj := rootPodRole()
@@ -436,61 +426,56 @@ func TestConflictingDefinitions_NamespaceToRoot(t *testing.T) {
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add conflicting pod role to Root"))
 
 	nt.T.Logf("The RootSync should update the Role")
-	err = nt.WatchForAllSyncs(nomostest.RootSyncOnly())
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs(nomostest.RootSyncOnly()))
+
+	// The RepoSync remediator won't try to revert a change to a managed object
+	// if it was adopted by a RepoSync reconciler.
+	// So without a new commit or pod replacement, the reconciler won't
+	// automatically re-sync until the ~1hr resync period expires.
+	// nt.T.Logf("Push a new commit with an empty file to trigger re-sync by the RepoSync reconciler")
+	// nt.Must(nt.NonRootRepos[repoSyncNN].AddFile("acme/empty.txt", []byte{}))
+	// nt.Must(nt.NonRootRepos[repoSyncNN].CommitAndPush("declare Role"))
+
 	nt.T.Logf("The RepoSync %s reports a problem since it can't sync the declaration.", testNs)
 	nt.WaitForRepoSyncSyncError(repoSyncNN.Namespace, repoSyncNN.Name, status.ManagementConflictErrorCode, "declared in another repository", nil)
 
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rootRoleObj)
 
 	// Validate no errors from root reconciler.
-	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: rootSyncNN,
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	// Validate reconciler error metric is emitted from namespace reconciler.
-	rootSyncLabels, err := nomostest.MetricLabelsForRepoSync(nt, repoSyncNN)
+	repoSyncLabels, err := nomostest.MetricLabelsForRepoSync(nt, repoSyncNN)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 	commitHash := nt.NonRootRepos[repoSyncNN].MustHash(nt.T)
 
-	err = nomostest.ValidateMetrics(nt,
-		nomostest.ReconcilerSyncError(nt, rootSyncLabels, commitHash),
-		nomostest.ReconcilerErrorMetrics(nt, rootSyncLabels, commitHash, metrics.ErrorSummary{
-			Sync: 1,
-		}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	// Reverting a manual change IS considered a "conflict" when the new
+	// owner is a different reconciler.
+	nt.Must(nomostest.ValidateMetrics(nt,
+		nomostest.ReconcilerSyncError(nt, repoSyncLabels, commitHash),
+		nomostest.ReconcilerErrorMetrics(nt, repoSyncLabels, commitHash, metrics.ErrorSummary{
+			Conflicts: 1, // from the remediator
+			Sync:      1, // remediator conflict error replaces applier conflict error
+		})))
 
 	nt.T.Logf("Ensure the Role matches the one in the Root repo %s", configsync.RootSyncName)
-	err = nt.Validate("pods", testNs, &rbacv1.Role{},
+	nt.Must(nt.Validate(nsRoleObj.Name, nsRoleObj.Namespace, &rbacv1.Role{},
 		roleHasRules(rootPodRole().Rules),
-		testpredicates.IsManagedBy(nt.Scheme, declared.RootScope, configsync.RootSyncName))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		testpredicates.IsManagedBy(nt.Scheme, declared.RootScope, configsync.RootSyncName)))
 
 	nt.T.Logf("Remove the Role from the Namespace repo %s", repoSyncNN)
 	nt.Must(nt.NonRootRepos[repoSyncNN].Remove(podRoleFilePath))
 	nt.Must(nt.NonRootRepos[repoSyncNN].CommitAndPush("remove conflicting pod role from Namespace repo"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Logf("Ensure the Role still matches the one in the Root repo %s", configsync.RootSyncName)
-	err = nt.Validate("pods", testNs, &rbacv1.Role{},
+	nt.Must(nt.Validate(nsRoleObj.Name, nsRoleObj.Namespace, &rbacv1.Role{},
 		roleHasRules(rootPodRole().Rules),
-		testpredicates.IsManagedBy(nt.Scheme, declared.RootScope, configsync.RootSyncName))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		testpredicates.IsManagedBy(nt.Scheme, declared.RootScope, configsync.RootSyncName)))
 
 	// Test Role managed by the RootSync, NOT the RepoSync
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rootRoleObj)
@@ -498,20 +483,14 @@ func TestConflictingDefinitions_NamespaceToRoot(t *testing.T) {
 	nt.MetricsExpectations.RemoveObject(configsync.RepoSyncKind, repoSyncNN, nsRoleObj)
 
 	// Validate no errors from root reconciler.
-	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: rootSyncNN,
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	// Validate no errors from namespace reconciler.
-	err = nomostest.ValidateStandardMetricsForRepoSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRepoSync(nt, metrics.Summary{
 		Sync: repoSyncNN,
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 }
 
 func TestConflictingDefinitions_RootToRoot(t *testing.T) {

@@ -86,3 +86,8 @@ func (b *DestroyerBuilder) WithStatusWatcher(statusWatcher watcher.StatusWatcher
 	b.statusWatcher = statusWatcher
 	return b
 }
+
+func (b *DestroyerBuilder) WithStatusWatcherFilters(filters *watcher.Filters) *DestroyerBuilder {
+	b.statusWatcherFilters = filters
+	return b
+}

@@ -86,3 +86,8 @@ func (b *ApplierBuilder) WithStatusWatcher(statusWatcher watcher.StatusWatcher) 
 	b.statusWatcher = statusWatcher
 	return b
 }
+
+func (b *ApplierBuilder) WithStatusWatcherFilters(filters *watcher.Filters) *ApplierBuilder {
+	b.statusWatcherFilters = filters
+	return b
+}

@@ -269,11 +269,15 @@ func (r *RootSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 }
 
 // setup performs the following steps:
+// - Patch RootSync to upsert package-id label
 // - Create or update managed objects
 // - Convert any error into RootSync status conditions
 // - Update the RootSync status
 func (r *RootSyncReconciler) setup(ctx context.Context, reconcilerRef types.NamespacedName, rs *v1beta1.RootSync) error {
-	err := r.upsertManagedObjects(ctx, reconcilerRef, rs)
+	_, err := r.patchSyncMetadata(ctx, rs)
+	if err == nil {
+		err = r.upsertManagedObjects(ctx, reconcilerRef, rs)
+	}
 	updated, updateErr := r.updateSyncStatus(ctx, rs, reconcilerRef, func(syncObj *v1beta1.RootSync) error {
 		// Modify the sync status,
 		// but keep the upsert error separate from the status update error.

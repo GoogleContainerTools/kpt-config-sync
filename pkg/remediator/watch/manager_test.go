@@ -22,6 +22,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
 	"kpt.dev/configsync/pkg/declared"
@@ -38,6 +39,7 @@ func fakeRunnable() Runnable {
 			return watch.NewFake(), nil
 		},
 		conflictHandler: fake.NewConflictHandler(),
+		labelSelector:   labels.Everything(),
 	}
 	return NewFiltered(cfg)
 }

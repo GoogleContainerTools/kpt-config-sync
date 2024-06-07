@@ -61,6 +61,12 @@ const (
 	// the resource. Similar to the well known app.kubernetes.io/managed-by label,
 	// but scoped to Config Sync.
 	ConfigSyncManagedByLabel = configsync.ConfigSyncPrefix + "managed-by"
+
+	// ParentPackageIDLabel indicates the parent package a managed object was sourced from.
+	ParentPackageIDLabel = configsync.ConfigSyncPrefix + "parent-package-id"
+
+	// PackageIDLabel indicates the ID of the package represented by a RootSync or RepoSync.
+	PackageIDLabel = configsync.ConfigSyncPrefix + "package-id"
 )
 
 // DepthSuffix is a label suffix for hierarchical namespace depth.

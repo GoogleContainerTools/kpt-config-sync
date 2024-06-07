@@ -105,6 +105,12 @@ func TestHasConfigSyncMetadata(t *testing.T) {
 				core.Label(metadata.ManagedByKey, "random-value")),
 			want: false,
 		},
+		{
+			name: "An object with the `parent-package-id` label",
+			obj: fake.UnstructuredObject(kinds.Deployment(), core.Name("deploy"),
+				core.Label(metadata.ParentPackageIDLabel, "random-value")),
+			want: true,
+		},
 	}
 
 	for _, tc := range testcases {

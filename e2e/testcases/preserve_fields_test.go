@@ -333,7 +333,11 @@ func TestAddUpdateDeleteLabels(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	var defaultLabels = []string{metadata.ManagedByKey, metadata.DeclaredVersionLabel}
+	var defaultLabels = []string{
+		metadata.ManagedByKey,
+		metadata.ParentPackageIDLabel,
+		metadata.DeclaredVersionLabel,
+	}
 
 	// Checking that the configmap with no labels appears on cluster, and
 	// that no user labels are specified
@@ -350,9 +354,13 @@ func TestAddUpdateDeleteLabels(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	// Checking that label is updated after syncing an update.
+	var updatedLabels []string
+	updatedLabels = append(updatedLabels, defaultLabels...)
+	updatedLabels = append(updatedLabels, "baz")
+
+	// Checking that label was added after syncing.
 	err = nt.Validate(cmName, ns, &corev1.ConfigMap{},
-		testpredicates.HasExactlyLabelKeys(append(defaultLabels, "baz")...))
+		testpredicates.HasExactlyLabelKeys(updatedLabels...))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -366,7 +374,7 @@ func TestAddUpdateDeleteLabels(t *testing.T) {
 
 	// Check that the label is deleted after syncing.
 	err = nt.Validate(cmName, ns, &corev1.ConfigMap{},
-		testpredicates.HasExactlyLabelKeys(metadata.ManagedByKey, metadata.DeclaredVersionLabel))
+		testpredicates.HasExactlyLabelKeys(defaultLabels...))
 	if err != nil {
 		nt.T.Fatal(err)
 	}

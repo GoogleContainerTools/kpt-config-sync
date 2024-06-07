@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/utils/ptr"
@@ -346,6 +347,7 @@ func TestFilteredWatcher(t *testing.T) {
 					return <-watches, nil
 				},
 				conflictHandler: testfake.NewConflictHandler(),
+				labelSelector:   labels.Everything(),
 			}
 			w := NewFiltered(cfg)
 

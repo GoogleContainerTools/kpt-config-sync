@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/elliotchance/orderedmap/v2"
 	"github.com/google/go-cmp/cmp"
@@ -53,7 +52,6 @@ import (
 
 // NewRootRunner creates a new runnable parser for parsing a Root repository.
 func NewRootRunner(opts *Options, rootOpts *RootOptions) Parser {
-	opts.mux = &sync.Mutex{}
 	return &root{
 		Options:     opts,
 		RootOptions: rootOpts,

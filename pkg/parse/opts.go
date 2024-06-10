@@ -71,7 +71,7 @@ type Options struct {
 	Converter *declared.ValueConverter
 
 	// mux prevents status update conflicts.
-	mux *sync.Mutex
+	mux sync.Mutex
 
 	// RenderingEnabled indicates whether the hydration-controller is currently
 	// running for this reconciler.

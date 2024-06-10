@@ -62,6 +62,7 @@ echo "$(cat "${KUSTOMIZE_CHECKSUM}")  ${KUSTOMIZE_TARBALL}" | sha256sum -c
 echo "Installing kustomize"
 mkdir -p "${STAGING_DIR}"
 tar -zxvf "${KUSTOMIZE_TARBALL}" -C "${STAGING_DIR}"
+chmod a+x "${STAGING_DIR}/kustomize"
 cp "${STAGING_DIR}/kustomize" "${INSTALL_DIR}/kustomize"
 
 echo "kustomize version: $("${INSTALL_DIR}/kustomize" version)"

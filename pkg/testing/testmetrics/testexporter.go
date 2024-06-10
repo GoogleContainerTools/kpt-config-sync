@@ -60,11 +60,11 @@ func RegisterMetrics(views ...*view.View) *TestExporter {
 // rows' Tags and data Value. It excludes the Start time field from the comparison.
 func diff(got, want []*view.Row) string {
 	for i := 0; i < len(got); i++ {
-		if got[i] == want[i] {
-			continue
-		}
 		if i >= len(want) {
 			break
+		}
+		if got[i] == want[i] {
+			continue
 		}
 		if len(got[i].Tags) > 0 && len(want[i].Tags) > 0 && !reflect.DeepEqual(got[i].Tags, want[i].Tags) {
 			return fmt.Sprintf("Expected metric tags not found, -want, +got:\n- %s\n+ %s",

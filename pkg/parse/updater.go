@@ -73,7 +73,7 @@ func (u *Updater) Errors() status.MultiError {
 	errs = status.Append(errs, u.conflictErrors())
 	errs = status.Append(errs, u.fightErrors())
 	errs = status.Append(errs, u.validationErrs)
-	errs = status.Append(errs, u.applyErrors())
+	errs = status.Append(errs, u.applyErrs)
 	errs = status.Append(errs, u.watchErrs)
 	return errs
 }
@@ -102,12 +102,6 @@ func (u *Updater) setValidationErrs(errs status.MultiError) {
 	u.statusMux.Lock()
 	defer u.statusMux.Unlock()
 	u.validationErrs = errs
-}
-
-func (u *Updater) applyErrors() status.MultiError {
-	u.statusMux.RLock()
-	defer u.statusMux.RUnlock()
-	return u.applyErrs
 }
 
 func (u *Updater) addApplyError(err status.Error) {

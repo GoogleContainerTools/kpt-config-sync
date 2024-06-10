@@ -20,7 +20,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -85,7 +84,6 @@ func newParser(t *testing.T, fs FileSource, renderingEnabled bool, retryPeriod t
 				},
 			},
 		},
-		mux:              &sync.Mutex{},
 		RenderingEnabled: renderingEnabled,
 		RetryPeriod:      retryPeriod,
 		ResyncPeriod:     2 * time.Second,

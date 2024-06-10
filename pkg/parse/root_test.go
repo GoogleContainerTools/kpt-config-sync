@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -484,7 +483,6 @@ func TestRoot_Parse(t *testing.T) {
 						Remediator: &remediatorfake.Remediator{},
 						Applier:    fakeApplier,
 					},
-					mux: &sync.Mutex{},
 				},
 				RootOptions: &RootOptions{
 					SourceFormat:      tc.format,
@@ -699,7 +697,6 @@ func TestRoot_DeclaredFields(t *testing.T) {
 						Remediator: &remediatorfake.Remediator{},
 						Applier:    fakeApplier,
 					},
-					mux: &sync.Mutex{},
 				},
 				RootOptions: &RootOptions{
 					SourceFormat:      filesystem.SourceFormatUnstructured,
@@ -952,7 +949,6 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 						Remediator: &remediatorfake.Remediator{},
 						Applier:    fakeApplier,
 					},
-					mux: &sync.Mutex{},
 				},
 				RootOptions: &RootOptions{
 					SourceFormat:      filesystem.SourceFormatUnstructured,
@@ -1037,7 +1033,6 @@ func TestRoot_SourceReconcilerErrorsMetricValidation(t *testing.T) {
 						Remediator: &remediatorfake.Remediator{},
 						Applier:    fakeApplier,
 					},
-					mux: &sync.Mutex{},
 				},
 				RootOptions: &RootOptions{
 					SourceFormat: filesystem.SourceFormatUnstructured,
@@ -1123,7 +1118,6 @@ func TestRoot_SourceAndSyncReconcilerErrorsMetricValidation(t *testing.T) {
 					ReconcilerName:     rootReconcilerName,
 					Client:             syncertest.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName)),
 					DiscoveryInterface: syncertest.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
-					mux:                &sync.Mutex{},
 				},
 				RootOptions: &RootOptions{
 					SourceFormat: filesystem.SourceFormatUnstructured,

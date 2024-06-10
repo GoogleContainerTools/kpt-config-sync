@@ -200,8 +200,8 @@ func parseConfigSyncManifests(nt *NT) ([]client.Object, error) {
 	return objs, nil
 }
 
-// installConfigSync installs ConfigSync on the test cluster
-func installConfigSync(nt *NT) error {
+// InstallConfigSync installs ConfigSync on the test cluster
+func InstallConfigSync(nt *NT) error {
 	nt.T.Log("[SETUP] Installing Config Sync")
 	objs, err := parseConfigSyncManifests(nt)
 	if err != nil {

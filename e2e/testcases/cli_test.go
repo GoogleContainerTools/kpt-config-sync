@@ -26,20 +26,29 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/strings/slices"
 	"kpt.dev/configsync/cmd/nomos/flags"
+	"kpt.dev/configsync/cmd/nomos/util"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/policy"
+	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
+	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/hydrate"
 	"kpt.dev/configsync/pkg/importer/filesystem"
@@ -48,6 +57,7 @@ import (
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/testing/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func recursiveDiff(file1, file2 string) ([]byte, error) {
@@ -1275,4 +1285,305 @@ func TestApiResourceFormatting(t *testing.T) {
 	header := strings.Fields(strings.Split(string(out), "\n")[0])
 
 	assert.Equal(t, columnName, header)
+}
+
+func TestNomosMigrate(t *testing.T) {
+	nt := nomostest.New(t, nomostesting.NomosCLI, ntopts.SkipConfigSyncInstall)
+
+	nt.T.Cleanup(func() {
+		// Restore state of Config Sync installation after test
+		if err := nomostest.InstallConfigSync(nt); err != nil {
+			nt.T.Fatal(err)
+		}
+	})
+	nt.T.Cleanup(func() {
+		// Delete the ConfigManagement operator in case the test failed early.
+		// If this lingers around it could cause issues for subsequent tests.
+		cmDeployment := fake.DeploymentObject(
+			core.Namespace(configsync.ControllerNamespace),
+			core.Name("config-management"),
+		)
+		if err := nt.KubeClient.Delete(cmDeployment, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil && !apierrors.IsNotFound(err) {
+			nt.T.Fatal(err)
+		}
+		if err := nt.Watcher.WatchForNotFound(kinds.Deployment(), "config-management", configsync.ControllerNamespace); err != nil {
+			nt.T.Error(err)
+		}
+	})
+
+	nt.T.Log("Installing ConfigManagement")
+	nt.MustKubectl("apply", "-f", "../testdata/configmanagement/1.18.0/config-management-operator.yaml")
+
+	if err := nt.Watcher.WatchForCurrentStatus(kinds.CustomResourceDefinitionV1(), "configmanagements.configmanagement.gke.io", ""); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	cmObj := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "configmanagement.gke.io/v1",
+			"kind":       "ConfigManagement",
+			"metadata": map[string]interface{}{
+				"name": "config-management",
+			},
+			"spec": map[string]interface{}{
+				"enableMultiRepo": true,
+			},
+		},
+	}
+
+	nt.T.Log("Configuring ConfigManagement for multi-repo mode")
+	if err := nt.KubeClient.Create(cmObj); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	err := nt.Watcher.WatchObject(kinds.Deployment(), "reconciler-manager", configsync.ControllerNamespace,
+		[]testpredicates.Predicate{
+			testpredicates.DeploymentContainerImageEquals(
+				"reconciler-manager",
+				"gcr.io/config-management-release/reconciler-manager:v1.18.0-rc.3",
+			),
+		})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Log("Running nomos migrate to migrate from ConfigManagement to OSS install")
+	out, err := nt.Shell.Command("nomos", "migrate", "--remove-configmanagement").CombinedOutput()
+	nt.T.Log(string(out))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Log("Wait for legacy resources to be NotFound...")
+	tg := taskgroup.New()
+	tg.Go(func() error {
+		return nt.Watcher.WatchForNotFound(kinds.Deployment(),
+			util.ACMOperatorDeployment, configsync.ControllerNamespace)
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchForNotFound(kinds.Deployment(),
+			"git-importer", configsync.ControllerNamespace)
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchForNotFound(kinds.CustomResourceDefinitionV1(),
+			util.ConfigManagementCRDName, "")
+	})
+	if err := tg.Wait(); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Log("Wait for expected resources to be current...")
+	tg = taskgroup.New()
+	tg.Go(func() error {
+		return nt.Watcher.WatchForCurrentStatus(kinds.Deployment(),
+			util.ReconcilerManagerName, configsync.ControllerNamespace)
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchForCurrentStatus(kinds.Deployment(),
+			configmanagement.RGControllerName, configmanagement.RGControllerNamespace)
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchForNotFound(kinds.Deployment(),
+			core.RootReconcilerName(configsync.RootSyncName), configsync.ControllerNamespace)
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchForNotFound(kinds.RootSyncV1Beta1(),
+			configsync.RootSyncName, configsync.ControllerNamespace)
+	})
+	if err := tg.Wait(); err != nil {
+		nt.T.Fatal(err)
+	}
+}
+
+func TestNomosMigrateMonoRepo(t *testing.T) {
+	nt := nomostest.New(t, nomostesting.NomosCLI, ntopts.SkipConfigSyncInstall)
+
+	nt.T.Cleanup(func() {
+		// Restore state of Config Sync installation after test.
+		// This also emulates upgrading to the current version after migrating
+		if err := nomostest.InstallConfigSync(nt); err != nil {
+			nt.T.Fatal(err)
+		}
+	})
+	nt.T.Cleanup(func() {
+		// Delete the ConfigManagement operator in case the test failed early.
+		// If this lingers around it could cause issues for subsequent tests.
+		cmDeployment := fake.DeploymentObject(
+			core.Namespace(configsync.ControllerNamespace),
+			core.Name("config-management"),
+		)
+		if err := nt.KubeClient.Delete(cmDeployment, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil && !apierrors.IsNotFound(err) {
+			nt.T.Error(err)
+		}
+		if err := nt.Watcher.WatchForNotFound(kinds.Deployment(), "config-management", configsync.ControllerNamespace); err != nil {
+			nt.T.Error(err)
+		}
+		// Ensure the RootSync is deleted since it's not registered with nt
+		rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+		if err := nt.KubeClient.Delete(rs, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil && !apierrors.IsNotFound(err) {
+			nt.T.Error(err)
+		}
+		if err := nt.Watcher.WatchForNotFound(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace); err != nil {
+			nt.T.Error(err)
+		}
+	})
+
+	nt.T.Log("Installing ConfigManagement")
+	nt.MustKubectl("apply", "-f", "../testdata/configmanagement/1.18.0/config-management-operator.yaml")
+
+	if err := nt.Watcher.WatchForCurrentStatus(kinds.CustomResourceDefinitionV1(), util.ConfigManagementCRDName, ""); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	cmObj := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "configmanagement.gke.io/v1",
+			"kind":       "ConfigManagement",
+			"metadata": map[string]interface{}{
+				"name": "config-management",
+			},
+			"spec": map[string]interface{}{
+				"enableMultiRepo": true,
+			},
+		},
+	}
+
+	// Initialize with multi-repo mode to take over ownership of multi-repo objects.
+	// This ensures everything gets cleaned up when switching to mono-repo mode.
+	nt.T.Log("Configuring ConfigManagement for multi-repo mode")
+	if err := nt.KubeClient.Create(cmObj); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	err := nt.Watcher.WatchObject(kinds.Deployment(), "reconciler-manager", configsync.ControllerNamespace,
+		[]testpredicates.Predicate{
+			testpredicates.DeploymentContainerImageEquals(
+				"reconciler-manager",
+				"gcr.io/config-management-release/reconciler-manager:v1.18.0-rc.3",
+			),
+		})
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	cmObj = &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "configmanagement.gke.io/v1",
+			"kind":       "ConfigManagement",
+			"metadata": map[string]interface{}{
+				"name": "config-management",
+			},
+			"spec": map[string]interface{}{
+				"enableMultiRepo": false,
+				"sourceFormat":    "unstructured",
+				"git": map[string]interface{}{
+					"syncRepo":   "https://github.com/config-sync-examples/namespace-repo-bookinfo",
+					"syncBranch": "main",
+					"secretType": "none",
+				},
+			},
+		},
+	}
+	expectedRootSyncSpec := v1beta1.RootSyncSpec{
+		SourceType:   string(v1beta1.GitSource),
+		SourceFormat: string(filesystem.SourceFormatUnstructured),
+		Override:     &v1beta1.RootSyncOverrideSpec{},
+		Git: &v1beta1.Git{
+			Repo:      "https://github.com/config-sync-examples/namespace-repo-bookinfo",
+			Branch:    "main",
+			Auth:      configsync.AuthNone,
+			Revision:  "HEAD",
+			Dir:       ".",
+			Period:    metav1.Duration{Duration: 15 * time.Second},
+			SecretRef: &v1beta1.SecretReference{},
+		},
+	}
+
+	nt.T.Log("Configuring ConfigManagement for legacy mono-repo mode")
+	if err := nt.KubeClient.Apply(cmObj); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	tg := taskgroup.New()
+	tg.Go(func() error {
+		return nt.Watcher.WatchForCurrentStatus(kinds.Deployment(),
+			util.ACMOperatorDeployment, configsync.ControllerNamespace)
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchForCurrentStatus(kinds.Deployment(),
+			"git-importer", configsync.ControllerNamespace)
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchForNotFound(kinds.Deployment(),
+			util.ReconcilerManagerName, configsync.ControllerNamespace)
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchForNotFound(kinds.Namespace(),
+			configmanagement.RGControllerNamespace, "")
+	})
+	if err := tg.Wait(); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Log("Running nomos migrate to migrate from ConfigManagement to OSS install")
+	out, err := nt.Shell.Command("nomos", "migrate", "--remove-configmanagement").CombinedOutput()
+	nt.T.Log(string(out))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Log("Wait for legacy resources to be NotFound...")
+	tg = taskgroup.New()
+	tg.Go(func() error {
+		return nt.Watcher.WatchForNotFound(kinds.Deployment(),
+			util.ACMOperatorDeployment, configsync.ControllerNamespace)
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchForNotFound(kinds.Deployment(),
+			"git-importer", configsync.ControllerNamespace)
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchForNotFound(kinds.CustomResourceDefinitionV1(),
+			util.ConfigManagementCRDName, "")
+	})
+	if err := tg.Wait(); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Log("Wait for expected resources to be current...")
+	tg = taskgroup.New()
+	tg.Go(func() error {
+		return nt.Watcher.WatchForCurrentStatus(kinds.Deployment(),
+			util.ReconcilerManagerName, configsync.ControllerNamespace)
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchForCurrentStatus(kinds.Deployment(),
+			configmanagement.RGControllerName, configmanagement.RGControllerNamespace)
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchForCurrentStatus(kinds.Deployment(),
+			core.RootReconcilerName(configsync.RootSyncName), configsync.ControllerNamespace)
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(),
+			configsync.RootSyncName, configsync.ControllerNamespace,
+			[]testpredicates.Predicate{
+				testpredicates.RootSyncSpecEquals(expectedRootSyncSpec),
+			})
+	})
+	if err := tg.Wait(); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Log("Waiting for RootSync to be synced")
+	err = nt.WatchForSync(kinds.RootSyncV1Beta1(),
+		configsync.RootSyncName, configsync.ControllerNamespace,
+		nomostest.RemoteRootRepoSha1Fn, nomostest.RootSyncHasStatusSyncCommit,
+		&nomostest.SyncDirPredicatePair{
+			Dir:       expectedRootSyncSpec.Dir,
+			Predicate: nomostest.RootSyncHasStatusSyncDirectory,
+		}, testwatcher.WatchTimeout(30*time.Second))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
 }

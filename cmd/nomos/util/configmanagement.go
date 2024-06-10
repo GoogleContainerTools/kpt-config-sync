@@ -22,11 +22,13 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -39,12 +41,16 @@ const (
 	ConfigManagementVersionName = "configManagementVersion"
 	// ACMOperatorDeployment is the name of ACM Operator Deployment
 	ACMOperatorDeployment = "config-management-operator"
-	// rootSyncCRDName is the name of RootSync CRD
-	rootSyncCRDName = "rootsyncs.configsync.gke.io"
+	// ConfigManagementCRDName is the name of the ConfigManagement CustomResourceDefinition
+	ConfigManagementCRDName = "configmanagements.configmanagement.gke.io"
 	// ConfigSyncName is the name of the ConfigSync object for OSS installation.
 	ConfigSyncName = "config-sync"
 	// ReconcilerManagerName is the name of reconciler-manger
 	ReconcilerManagerName = "reconciler-manager"
+	// ManagedByHubAnnotationKey is the annotation key set by Hub
+	ManagedByHubAnnotationKey = "configmanagement.gke.io/managed-by-hub"
+	// ManagedByHubAnnotationValue is the annotation value set by Hub
+	ManagedByHubAnnotationValue = "true"
 )
 
 // DynamicClient obtains a client based on the supplied REST config.
@@ -177,6 +183,25 @@ func (c *ConfigManagementClient) IsMultiRepo(ctx context.Context) (*bool, error)
 	return &isMulti, nil
 }
 
+// IsManagedByHub returns if the ConfigManagement object is managed by Hub.
+func (c *ConfigManagementClient) IsManagedByHub(ctx context.Context) (bool, error) {
+	isManagedByHub, err := c.NestedString(ctx, "metadata", "annotations", ManagedByHubAnnotationKey)
+	if err != nil {
+		return false, err
+	}
+	return isManagedByHub == ManagedByHubAnnotationValue, nil
+}
+
+// RemoveFinalizers removes all finalizers from the ConfigManagement object
+func (c *ConfigManagementClient) RemoveFinalizers(ctx context.Context) error {
+	patch := []byte(`{"metadata":{"finalizers":[]}}`)
+	_, err := c.resInt.Patch(ctx, ConfigManagementName, types.MergePatchType, patch, metav1.PatchOptions{})
+	if apierrors.IsNotFound(err) {
+		return nil
+	}
+	return err
+}
+
 // IsOssInstallation will check for the existence of ConfigManagement object, Operator deployment, and RootSync CRD
 // If RootSync CRD exist but ConfigManagement and Operator doesn't, it indicates an OSS installation
 func IsOssInstallation(ctx context.Context, c *ConfigManagementClient, cl client.Client, ck *kubernetes.Clientset) (bool, error) {
@@ -193,7 +218,7 @@ func IsOssInstallation(ctx context.Context, c *ConfigManagementClient, cl client
 		return false, nil
 	}
 
-	rootSyncCRDErr := cl.Get(ctx, client.ObjectKey{Name: rootSyncCRDName}, &apiextensionsv1.CustomResourceDefinition{})
+	rootSyncCRDErr := cl.Get(ctx, client.ObjectKey{Name: configsync.RootSyncCRDName}, &apiextensionsv1.CustomResourceDefinition{})
 	if rootSyncCRDErr == nil {
 		return true, nil
 	}

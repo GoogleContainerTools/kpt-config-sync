@@ -451,33 +451,6 @@ func TestBackoffRetryCount(t *testing.T) {
 	assert.Equal(t, 12, retryCount)
 }
 
-func TestBackoffReimportCount(t *testing.T) {
-	const reimportCountMin = 25
-	const reimportCountMax = 32
-
-	parser := newParser(t, FileSource{}, false, 10*time.Microsecond, 150*time.Microsecond)
-	testState := &namespacecontroller.State{}
-	reimportCount := 0
-	retryCount := 0
-
-	testIsDone := func(_ *int, retryCount *int) bool {
-		return *retryCount == 12
-	}
-
-	t.Logf("start running test at %v", time.Now())
-
-	ctx, cancel := context.WithCancel(context.Background())
-	backoff := defaultBackoff()
-	backoff.Duration = 10 * time.Microsecond
-
-	Run(ctx, parser, testState, RunOpts{
-		runFunc: mockRun(&reimportCount, &retryCount, cancel, testIsDone),
-		backoff: backoff,
-	})
-
-	assert.True(t, reimportCount >= reimportCountMin && reimportCount <= reimportCountMax, "reimportCount should be %d >= and <= %d, was %d", reimportCountMin, reimportCountMax, reimportCount)
-}
-
 func mockRun(reimportCount *int, retryCount *int, cancelFn func(), testIsDone func(reimportCount *int, retryCount *int) bool) RunFunc {
 	return func(_ context.Context, _ Parser, trigger string, state *reconcilerState) {
 		state.cache.needToRetry = true

@@ -433,7 +433,8 @@ func TestBackoffRetryCount(t *testing.T) {
 
 	t.Logf("start running test at %v", time.Now())
 
-	ctx, _ := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
 	backoff := defaultBackoff()
 	backoff.Duration = time.Nanosecond
 

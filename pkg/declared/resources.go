@@ -42,14 +42,10 @@ type Resources struct {
 	objectMap *orderedmap.OrderedMap[core.ID, *unstructured.Unstructured]
 	// commit of the source in which the resources were declared
 	commit string
-	// previousCommit is the preceding commit to the commit
-	previousCommit string
 }
 
 // Update performs an atomic update on the resource declaration set.
 func (r *Resources) Update(ctx context.Context, objects []client.Object, commit string) ([]client.Object, status.Error) {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
 	// First build up the new map using a local pointer/reference.
 	newSet := orderedmap.NewOrderedMap[core.ID, *unstructured.Unstructured]()
 	newObjects := []client.Object{}
@@ -72,81 +68,95 @@ func (r *Resources) Update(ctx context.Context, objects []client.Object, commit 
 
 	// Record the declared_resources metric, after parsing but before validation.
 	metrics.RecordDeclaredResources(ctx, commit, len(newObjects))
-	if r.previousCommit != commit && r.previousCommit != "" {
-		// For Cloud Monitoring, we have configured otel-collector to remove the
-		// commit label, to reduce cardinality, but this aggregation uses the max
-		// value (b/321875474). So in order for the latest commit to be chosen as
-		// the max value, we reset the previous commit value to zero.
-		// TODO: Remove this workaround after migrating to the otel-collector metrics client and switching from gauge to async gauge
-		metrics.RecordDeclaredResources(ctx, r.previousCommit, 0)
-	}
 
-	if err := deletesAllNamespaces(r.objectMap, newSet); err != nil {
+	previousSet, _ := r.getObjectMap()
+	if err := deletesAllNamespaces(previousSet, newSet); err != nil {
 		return nil, err
 	}
 
-	r.previousCommit = commit
-	r.objectMap = newSet
-	r.commit = commit
+	// Now assign the pointer for the new map to the struct reference in a
+	// threadsafe context. From now on, this map is read-only.
+	r.setObjectMap(newSet, commit)
 	return newObjects, nil
 }
 
 // Get returns a copy of the resource declaration as read from Git
 func (r *Resources) Get(id core.ID) (*unstructured.Unstructured, string, bool) {
-	r.mutex.RLock()
-	defer r.mutex.RUnlock()
-	if r.objectMap == nil || r.objectMap.Len() == 0 {
-		return nil, r.commit, false
+	objSet, commit := r.getObjectMap()
+	if objSet == nil || objSet.Len() == 0 {
+		return nil, commit, false
 	}
-	u, found := r.objectMap.Get(id)
+
+	// A local reference to the map is threadsafe since only the struct reference
+	// is replaced on update.
+	u, found := objSet.Get(id)
 	// We return a copy of the Unstructured, as
 	// 1) client.Client methods mutate the objects passed into them.
 	// 2) We don't want to persist any changes made to an object we retrieved
 	//  from a declared.Resources.
-	return u.DeepCopy(), r.commit, found
+	return u.DeepCopy(), commit, found
 }
 
 // DeclaredUnstructureds returns all resource objects declared in the source,
 // along with the source commit.
 func (r *Resources) DeclaredUnstructureds() ([]*unstructured.Unstructured, string) {
-	r.mutex.RLock()
-	defer r.mutex.RUnlock()
-	if r.objectMap == nil || r.objectMap.Len() == 0 {
-		return nil, r.commit
+	objSet, commit := r.getObjectMap()
+	if objSet == nil || objSet.Len() == 0 {
+		return nil, commit
 	}
+
+	// A local reference to the map is threadsafe since only the struct reference
+	// is replaced on update.
 	var objects []*unstructured.Unstructured
-	for pair := r.objectMap.Front(); pair != nil; pair = pair.Next() {
+	for pair := objSet.Front(); pair != nil; pair = pair.Next() {
 		objects = append(objects, pair.Value)
 	}
-	return objects, r.commit
+	return objects, commit
 }
 
 // DeclaredObjects returns all resource objects declared in the source, along
 // with the source commit.
 func (r *Resources) DeclaredObjects() ([]client.Object, string) {
-	r.mutex.RLock()
-	defer r.mutex.RUnlock()
-	if r.objectMap == nil || r.objectMap.Len() == 0 {
-		return nil, r.commit
+	objSet, commit := r.getObjectMap()
+	if objSet == nil || objSet.Len() == 0 {
+		return nil, commit
 	}
+
+	// A local reference to the map is threadsafe since only the struct reference
+	// is replaced on update.
 	var objects []client.Object
-	for pair := r.objectMap.Front(); pair != nil; pair = pair.Next() {
+	for pair := objSet.Front(); pair != nil; pair = pair.Next() {
 		objects = append(objects, pair.Value)
 	}
-	return objects, r.commit
+	return objects, commit
 }
 
 // DeclaredGVKs returns the set of all GroupVersionKind found in the source,
 // along with the source commit.
 func (r *Resources) DeclaredGVKs() (map[schema.GroupVersionKind]struct{}, string) {
-	r.mutex.RLock()
-	defer r.mutex.RUnlock()
-	if r.objectMap == nil || r.objectMap.Len() == 0 {
-		return nil, r.commit
+	objSet, commit := r.getObjectMap()
+	if objSet == nil || objSet.Len() == 0 {
+		return nil, commit
 	}
+
+	// A local reference to the objSet map is threadsafe since only the pointer to
+	// the map is replaced on update.
 	gvkSet := make(map[schema.GroupVersionKind]struct{})
-	for pair := r.objectMap.Front(); pair != nil; pair = pair.Next() {
+	for pair := objSet.Front(); pair != nil; pair = pair.Next() {
 		gvkSet[pair.Value.GroupVersionKind()] = struct{}{}
 	}
-	return gvkSet, r.commit
+	return gvkSet, commit
+}
+
+func (r *Resources) getObjectMap() (*orderedmap.OrderedMap[core.ID, *unstructured.Unstructured], string) {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+	return r.objectMap, r.commit
+}
+
+func (r *Resources) setObjectMap(objectMap *orderedmap.OrderedMap[core.ID, *unstructured.Unstructured], commit string) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	r.objectMap = objectMap
+	r.commit = commit
 }

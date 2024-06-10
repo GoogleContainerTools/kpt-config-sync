@@ -258,60 +258,12 @@ func TestGCMMetrics(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	_, err = retry.Retry(120*time.Second, func() error {
+	_, err = retry.Retry(60*time.Second, func() error {
 		var err error
 		for _, metricType := range GCMMetricTypes {
 			descriptor := fmt.Sprintf("%s/%s", GCMMetricPrefix, metricType)
 			it := listMetricInGCM(ctx, nt, client, startTime, descriptor)
 			err = multierr.Append(err, validateMetricInGCM(nt, it, descriptor, nt.ClusterName))
-		}
-		return err
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-
-	nt.T.Log("Adding test namespace")
-	namespace := fake.NamespaceObject("foo")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding foo namespace"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
-
-	nt.T.Log("Checking resource related metrics after adding test resource")
-	resourceMetrics := []string{
-		csmetrics.DeclaredResourcesName,
-		rgmetrics.ResourceCountName,
-		rgmetrics.ReadyResourceCountName,
-	}
-	_, err = retry.Retry(120*time.Second, func() error {
-		var err error
-		for _, metricType := range resourceMetrics {
-			descriptor := fmt.Sprintf("%s/%s", GCMMetricPrefix, metricType)
-			it := listMetricInGCM(ctx, nt, client, startTime, descriptor)
-			err = multierr.Append(err, validateMetricInGCM(nt, it, descriptor, nt.ClusterName, metricHasValue(3)))
-		}
-		return err
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-
-	nt.T.Log("Remove the test resource")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/ns.yaml"))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove the test namespace"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
-
-	nt.T.Log("Checking resource related metrics after removing test resource")
-	_, err = retry.Retry(120*time.Second, func() error {
-		var err error
-		for _, metricType := range resourceMetrics {
-			descriptor := fmt.Sprintf("%s/%s", GCMMetricPrefix, metricType)
-			it := listMetricInGCM(ctx, nt, client, startTime, descriptor)
-			err = multierr.Append(err, validateMetricInGCM(nt, it, descriptor, nt.ClusterName, metricHasLastestValue(2)))
 		}
 		return err
 	})
@@ -496,29 +448,6 @@ func metricDoesNotHaveLabel(label string) metricValidatorFunc {
 			return fmt.Errorf("expected metric to not have label, but found %s=%s", label, value)
 		}
 		return nil
-	}
-}
-
-func metricHasValue(value int64) metricValidatorFunc {
-	return func(series *monitoringpb.TimeSeries) error {
-		points := series.GetPoints()
-		for _, point := range points {
-			if point.GetValue().GetInt64Value() == value {
-				return nil
-			}
-		}
-		return fmt.Errorf("expected metric to have value %v but did not find in response", value)
-	}
-}
-
-func metricHasLastestValue(value int64) metricValidatorFunc {
-	return func(series *monitoringpb.TimeSeries) error {
-		points := series.GetPoints()
-		lastPoint := points[len(points)-1]
-		if lastPoint.GetValue().GetInt64Value() == value {
-			return nil
-		}
-		return fmt.Errorf("expected metric to have latest value %v but did not find in response", value)
 	}
 }
 

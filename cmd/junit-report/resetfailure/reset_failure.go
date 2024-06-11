@@ -53,7 +53,7 @@ func ResetFailure(path string) error {
 
 	testSuites := &junit.Testsuites{}
 	if err = xml.Unmarshal(bytes, testSuites); err != nil {
-		return err
+		return fmt.Errorf("unmarshalling xml: %w", err)
 	}
 
 	failureTestSuite := junit.Testsuite{

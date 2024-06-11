@@ -1348,8 +1348,9 @@ func TestNomosMigrate(t *testing.T) {
 	}
 
 	nt.T.Log("Running nomos migrate to migrate from ConfigManagement to OSS install")
-	out, err := nt.Shell.Command("nomos", "migrate", "--remove-configmanagement").CombinedOutput()
-	nt.T.Log(string(out))
+	_, err = nt.Shell.Command("nomos", "migrate", "--remove-configmanagement").CombinedOutput()
+	// TODO: this breaks the XML parsing of the junit report
+	//nt.T.Log(string(out))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -1526,8 +1527,9 @@ func TestNomosMigrateMonoRepo(t *testing.T) {
 	}
 
 	nt.T.Log("Running nomos migrate to migrate from ConfigManagement to OSS install")
-	out, err := nt.Shell.Command("nomos", "migrate", "--remove-configmanagement").CombinedOutput()
-	nt.T.Log(string(out))
+	_, err = nt.Shell.Command("nomos", "migrate", "--remove-configmanagement").CombinedOutput()
+	// TODO: this breaks the XML parsing of the junit report
+	//nt.T.Log(string(out))
 	if err != nil {
 		nt.T.Fatal(err)
 	}

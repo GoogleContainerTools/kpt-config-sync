@@ -118,7 +118,7 @@ func (m *Manager) ManagementConflict() bool {
 	for _, watcher := range m.watcherMap {
 		if watcher.ManagementConflict() {
 			managementConflict = true
-			watcher.ClearManagementConflict()
+			watcher.ClearManagementConflicts()
 		}
 	}
 	return managementConflict
@@ -234,8 +234,8 @@ func (m *Manager) stopWatcher(gvk schema.GroupVersionKind) {
 
 	// Stop the watcher.
 	w.Stop()
-	// Remove all conflict errors for objects with the same GVK because the
+	// Remove all conflict errors for objects with the same GK because the
 	// objects are no longer managed by the reconciler.
-	w.removeAllManagementConflictErrorsWithGVK(gvk)
+	w.ClearManagementConflictsWithKind(gvk.GroupKind())
 	delete(m.watcherMap, gvk)
 }

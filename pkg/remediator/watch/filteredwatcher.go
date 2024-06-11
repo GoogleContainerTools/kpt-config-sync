@@ -75,8 +75,8 @@ type Runnable interface {
 	Run(ctx context.Context) status.Error
 	ManagementConflict() bool
 	SetManagementConflict(object client.Object, commit string)
-	ClearManagementConflict()
-	removeAllManagementConflictErrorsWithGVK(gvk schema.GroupVersionKind)
+	ClearManagementConflicts()
+	ClearManagementConflictsWithKind(gk schema.GroupKind)
 }
 
 const (
@@ -199,19 +199,18 @@ func (w *filteredWatcher) SetManagementConflict(object client.Object, commit str
 	newManager := declared.ResourceManager(w.scope, w.syncName)
 	klog.Warningf("The remediator detects a management conflict for object %q between root reconcilers: %q and %q",
 		core.GKNN(object), newManager, manager)
-	gvknn := queue.GVKNNOf(object)
-	w.conflictHandler.AddConflictError(gvknn, status.ManagementConflictErrorWrap(object, newManager))
+	w.conflictHandler.AddConflictError(core.IDOf(object), status.ManagementConflictErrorWrap(object, newManager))
 	metrics.RecordResourceConflict(context.Background(), commit)
 }
 
-func (w *filteredWatcher) ClearManagementConflict() {
+func (w *filteredWatcher) ClearManagementConflicts() {
 	w.mux.Lock()
 	w.managementConflict = false
 	w.mux.Unlock()
 }
 
-func (w *filteredWatcher) removeAllManagementConflictErrorsWithGVK(gvk schema.GroupVersionKind) {
-	w.conflictHandler.RemoveAllConflictErrors(gvk)
+func (w *filteredWatcher) ClearManagementConflictsWithKind(gk schema.GroupKind) {
+	w.conflictHandler.ClearConflictErrorsWithKind(gk)
 }
 
 // Stop fully stops the filteredWatcher in a threadsafe manner. This means that
@@ -489,13 +488,12 @@ func (w *filteredWatcher) handle(ctx context.Context, event watch.Event) (string
 // shouldProcess returns true if the given object should be enqueued by the
 // watcher for processing.
 func (w *filteredWatcher) shouldProcess(object client.Object) bool {
-	gvknn := queue.GVKNNOf(object)
+	id := core.IDOf(object)
 	// Process the resource if we are the manager regardless if it is declared or not.
 	if diff.IsManager(w.scope, w.syncName, object) {
-		w.conflictHandler.RemoveConflictError(gvknn)
+		w.conflictHandler.RemoveConflictError(id)
 		return true
 	}
-	id := core.IDOf(object)
 	decl, commit, found := w.resources.Get(id)
 	if !found {
 		// The resource is neither declared nor managed by the same reconciler, so don't manage it.
@@ -514,6 +512,6 @@ func (w *filteredWatcher) shouldProcess(object client.Object) bool {
 		w.SetManagementConflict(object, commit)
 		return false
 	}
-	w.conflictHandler.RemoveConflictError(gvknn)
+	w.conflictHandler.RemoveConflictError(id)
 	return true
 }

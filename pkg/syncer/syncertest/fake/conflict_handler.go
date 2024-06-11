@@ -16,8 +16,8 @@ package fake
 
 import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/remediator/conflict"
-	"kpt.dev/configsync/pkg/remediator/queue"
 	"kpt.dev/configsync/pkg/status"
 )
 
@@ -25,10 +25,10 @@ import (
 type ConflictHandler struct{}
 
 // AddConflictError is a fake implementation of AddConflictError of conflict.Handler.
-func (h *ConflictHandler) AddConflictError(queue.GVKNN, status.ManagementConflictError) {}
+func (h *ConflictHandler) AddConflictError(core.ID, status.ManagementConflictError) {}
 
 // RemoveConflictError is a fake implementation of the RemoveConflictError of conflict.Handler.
-func (h *ConflictHandler) RemoveConflictError(queue.GVKNN) {
+func (h *ConflictHandler) RemoveConflictError(core.ID) {
 }
 
 // ConflictErrors is a fake implementation of ConflictErrors of conflict.Handler.
@@ -36,8 +36,8 @@ func (h *ConflictHandler) ConflictErrors() []status.ManagementConflictError {
 	return nil
 }
 
-// RemoveAllConflictErrors is a fake implementation of RemoveAllConflictErrors of conflict.Handler.
-func (h *ConflictHandler) RemoveAllConflictErrors(schema.GroupVersionKind) {
+// ClearConflictErrorsWithKind is a fake implementation of ClearConflictErrorsWithKind of conflict.Handler.
+func (h *ConflictHandler) ClearConflictErrorsWithKind(schema.GroupKind) {
 }
 
 var _ conflict.Handler = &ConflictHandler{}

@@ -20,15 +20,18 @@ import (
 	"github.com/elliotchance/orderedmap/v2"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog/v2"
-	"kpt.dev/configsync/pkg/remediator/queue"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/status"
 )
 
+// UnknownManager is used as a placeholder when the new or old manager is unknown.
+const UnknownManager = "UNKNOWN"
+
 // Handler is the generic interface of the conflict handler.
 type Handler interface {
-	AddConflictError(queue.GVKNN, status.ManagementConflictError)
-	RemoveConflictError(queue.GVKNN)
-	RemoveAllConflictErrors(gvk schema.GroupVersionKind)
+	AddConflictError(core.ID, status.ManagementConflictError)
+	RemoveConflictError(core.ID)
+	ClearConflictErrorsWithKind(gk schema.GroupKind)
 
 	// ConflictErrors returns the management conflict errors (KNV1060) the remediator encounters.
 	ConflictErrors() []status.ManagementConflictError
@@ -40,7 +43,7 @@ type handler struct {
 	mux sync.Mutex
 	// conflictErrs tracks all the conflict errors (KNV1060) the remediator encounters,
 	// and report to RootSync|RepoSync status.
-	conflictErrs *orderedmap.OrderedMap[queue.GVKNN, status.ManagementConflictError]
+	conflictErrs *orderedmap.OrderedMap[core.ID, status.ManagementConflictError]
 }
 
 var _ Handler = &handler{}
@@ -48,32 +51,43 @@ var _ Handler = &handler{}
 // NewHandler instantiates a conflict handler
 func NewHandler() Handler {
 	return &handler{
-		conflictErrs: orderedmap.NewOrderedMap[queue.GVKNN, status.ManagementConflictError](),
+		conflictErrs: orderedmap.NewOrderedMap[core.ID, status.ManagementConflictError](),
 	}
 }
 
-func (h *handler) AddConflictError(gvknn queue.GVKNN, e status.ManagementConflictError) {
+func (h *handler) AddConflictError(id core.ID, newErr status.ManagementConflictError) {
 	h.mux.Lock()
 	defer h.mux.Unlock()
 
-	h.conflictErrs.Set(gvknn, e)
+	// Ignore KptManagementConflictError if a ManagementConflictError was already reported.
+	// KptManagementConflictError don't have a real ConflictingManager recorded.
+	// TODO: Remove if cli-utils supports reporting the conflicting manager in InventoryOverlapError.
+	if newErr.ConflictingManager() == UnknownManager {
+		if oldErr, found := h.conflictErrs.Get(id); found {
+			if oldErr.ConflictingManager() != UnknownManager {
+				return
+			}
+		}
+	}
+
+	h.conflictErrs.Set(id, newErr)
 }
 
-func (h *handler) RemoveConflictError(gvknn queue.GVKNN) {
+func (h *handler) RemoveConflictError(id core.ID) {
 	h.mux.Lock()
 	defer h.mux.Unlock()
 
-	if h.conflictErrs.Delete(gvknn) {
-		klog.Infof("Conflict error resolved for %s", gvknn)
+	if h.conflictErrs.Delete(id) {
+		klog.Infof("Conflict error resolved for %s", id)
 	}
 }
 
-func (h *handler) RemoveAllConflictErrors(gvk schema.GroupVersionKind) {
+func (h *handler) ClearConflictErrorsWithKind(gk schema.GroupKind) {
 	h.mux.Lock()
 	defer h.mux.Unlock()
 
 	for pair := h.conflictErrs.Front(); pair != nil; pair = pair.Next() {
-		if pair.Key.GroupVersionKind() == gvk {
+		if pair.Key.GroupKind == gk {
 			h.conflictErrs.Delete(pair.Key)
 		}
 	}

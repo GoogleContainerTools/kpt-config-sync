@@ -45,16 +45,20 @@ import (
 )
 
 const (
-	migrateDir       = "nomos-migrate"
-	rootSyncYamlFile = "root-sync.yaml"
-	cmOrigYAMLFile   = "cm-original.yaml"
-	cmMultiYAMLFile  = "cm-multi.yaml"
+	monorepoMigrateDir         = "nomos-migrate-monorepo"
+	configManagementMigrateDir = "nomos-migrate-configmanagement"
+	rootSyncYamlFile           = "root-sync.yaml"
+	cmOrigYAMLFile             = "cm-original.yaml"
+	cmOperatorYAMLFile         = "config-management-operator.yaml"
+	cmMultiYAMLFile            = "cm-multi.yaml"
 
 	updatingConfigManagement    = "Updating the ConfigManagement object ..."
-	waitingForRootSyncCRD       = "Waiting for the RootSync CRD to be established ..."
+	waitingForConfigSyncCRDs    = "Waiting for ConfigSync CRDs to be established ..."
 	creatingRootSync            = "Creating the RootSync object ..."
 	waitingForReconcilerManager = "Waiting for the reconciler-manager Pod to be ready ..."
 	waitingForRootReconciler    = "Waiting for the root-reconciler Pod to be ready ..."
+	waitingForRGManager         = "Waiting for the resource-group-controller-manager Pod to be ready ..."
+	deletingConfigManagement    = "Deleting the ConfigManagement operator ..."
 	migrationSuccess            = "The migration process is done. Please check the sync status with `nomos status`"
 
 	defaultWaitTimeout = 10 * time.Minute
@@ -62,6 +66,7 @@ const (
 
 var dryRun bool
 var waitTimeout time.Duration
+var removeConfigManagement bool
 
 func init() {
 	Cmd.Flags().StringSliceVar(&flags.Contexts, "contexts", nil,
@@ -70,6 +75,8 @@ func init() {
 		`If enabled, only prints the migration output.`)
 	Cmd.Flags().DurationVar(&flags.ClientTimeout, "connect-timeout", restconfig.DefaultTimeout, "Timeout for connecting to each cluster")
 	Cmd.Flags().DurationVar(&waitTimeout, "wait-timeout", defaultWaitTimeout, "Timeout for waiting for condition to be true")
+	Cmd.Flags().BoolVar(&removeConfigManagement, "remove-configmanagement", false,
+		`If enabled, removes the ConfigManagement operator and CRD. This establishes a standalone OSS Config Sync install.`)
 }
 
 // Cmd performs the migration from mono-repo to multi-repo for all the provided contexts.
@@ -104,48 +111,37 @@ var Cmd = &cobra.Command{
 			migrationContexts = append(migrationContexts, context)
 			fmt.Println()
 			fmt.Println(util.Separator)
-			fmt.Printf("Enabling the multi-repo mode on cluster %q ...\n", context)
 			cs := &status.ClusterState{Ref: context}
 			if !c.IsInstalled(cmd.Context(), cs) || !c.IsConfigured(cmd.Context(), cs) {
 				printError(cs.Error)
 				migrationError = true
 				continue
 			}
-			isMulti, err := c.ConfigManagement.IsMultiRepo(cmd.Context())
-			if err != nil {
+			if isManagedByHub, err := c.ConfigManagement.IsManagedByHub(cmd.Context()); err != nil {
 				printError(err)
 				migrationError = true
 				continue
-			}
-			if isMulti != nil && *isMulti {
-				printNotice("The cluster is already running in the multi-repo mode. No migration is needed")
+			} else if isManagedByHub {
+				printError("The cluster is managed by Hub. Migration is not supported.")
+				migrationError = true
 				continue
 			}
 
-			rootSync, rsYamlFile, err := saveRootSyncYAML(cmd.Context(), c.ConfigManagement, context)
-			if err != nil {
-				printError(err)
-				migrationError = true
-				continue
-			}
-			cm, cmYamlFile, err := saveConfigManagementYAML(cmd.Context(), c.ConfigManagement, context)
-			if err != nil {
+			if err := migrateMonoRepo(cmd.Context(), c, context); err != nil {
 				printError(err)
 				migrationError = true
 				continue
 			}
 
-			printHint(`Resources for the multi-repo mode have been saved in a temp folder. If the migration process is terminated, it can be recovered manually by running the following commands:
-  kubectl apply -f %s && \
-  kubectl wait --for condition=established crd rootsyncs.configsync.gke.io && \
-  kubectl apply -f %s`, cmYamlFile, rsYamlFile)
-
-			if dryRun {
-				dryrun()
-			} else if err := migrate(cmd.Context(), c, cm, rootSync); err != nil {
-				printError(err)
-				migrationError = true
+			if removeConfigManagement {
+				if err := migrateConfigManagement(cmd.Context(), c, context); err != nil {
+					printError(err)
+					migrationError = true
+					continue
+				}
 			}
+
+			printSuccess(migrationSuccess)
 		}
 
 		if migrationError {
@@ -179,20 +175,19 @@ func printSuccess(format string, a ...interface{}) {
 
 func dryrun() {
 	printInfo(updatingConfigManagement)
-	printInfo(waitingForRootSyncCRD)
+	printInfo(waitingForConfigSyncCRDs)
 	printInfo(creatingRootSync)
 	printInfo(waitingForReconcilerManager)
 	printInfo(waitingForRootReconciler)
-	printSuccess(migrationSuccess)
 }
 
-func migrate(ctx context.Context, sc *status.ClusterClient, cm *unstructured.Unstructured, rs *v1beta1.RootSync) error {
+func executeMonoRepoMigration(ctx context.Context, sc *status.ClusterClient, cm *unstructured.Unstructured, rs *v1beta1.RootSync) error {
 	printInfo(updatingConfigManagement)
 	if err := sc.ConfigManagement.UpdateConfigManagement(ctx, cm); err != nil {
 		return err
 	}
-	printInfo(waitingForRootSyncCRD)
-	if err := waitForRootSyncCRDToBeEstablished(ctx, sc.Client); err != nil {
+	printInfo(waitingForConfigSyncCRDs)
+	if err := waitForMultiRepoCRDsToBeEstablished(ctx, sc.Client); err != nil {
 		return err
 	}
 	printInfo("The RootSync CRD has been established")
@@ -214,7 +209,12 @@ func migrate(ctx context.Context, sc *status.ClusterClient, cm *unstructured.Uns
 	}
 	printInfo("The root-reconciler Pod is running")
 
-	printSuccess(migrationSuccess)
+	printInfo(waitingForRGManager)
+	if err := waitForPodToBeRunning(ctx, sc.K8sClient, configmanagement.RGControllerNamespace, "configsync.gke.io/deployment-name=resource-group-controller-manager"); err != nil {
+		return err
+	}
+	printInfo("The resource-group-controller-manager Pod is running")
+
 	return nil
 }
 
@@ -247,10 +247,25 @@ func waitForPodToBeRunning(ctx context.Context, k8sclient *kubernetes.Clientset,
 	})
 }
 
-func waitForRootSyncCRDToBeEstablished(ctx context.Context, c client.Client) error {
+var configSyncCRDs = []string{
+	configsync.RootSyncCRDName,
+	configsync.RepoSyncCRDName,
+	configsync.ResourceGroupCRDName,
+}
+
+func waitForMultiRepoCRDsToBeEstablished(ctx context.Context, c client.Client) error {
+	for _, crdName := range configSyncCRDs {
+		if err := waitForCRDToBeEstablished(ctx, c, crdName); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func waitForCRDToBeEstablished(ctx context.Context, c client.Client, crdName string) error {
 	return recheck(func() error {
-		rootSyncCRD := &apiextensionsv1.CustomResourceDefinition{}
-		if err := c.Get(ctx, client.ObjectKey{Name: "rootsyncs.configsync.gke.io"}, rootSyncCRD); err != nil {
+		crd := &apiextensionsv1.CustomResourceDefinition{}
+		if err := c.Get(ctx, client.ObjectKey{Name: crdName}, crd); err != nil {
 			if apierrors.IsNotFound(err) {
 				printInfo("%s%s", util.Indent, err)
 			} else {
@@ -258,12 +273,12 @@ func waitForRootSyncCRDToBeEstablished(ctx context.Context, c client.Client) err
 			}
 			return err
 		}
-		for _, cond := range rootSyncCRD.Status.Conditions {
+		for _, cond := range crd.Status.Conditions {
 			if cond.Type == apiextensionsv1.Established && cond.Status == apiextensionsv1.ConditionTrue {
 				return nil
 			}
 		}
-		errMsg := "The RootSync CRD has not been established yet."
+		errMsg := fmt.Sprintf("The %s CRD has not been established yet.", crdName)
 		printInfo("%s%s", util.Indent, errMsg)
 		return errors.New(errMsg)
 	})
@@ -408,7 +423,7 @@ func saveRootSyncYAML(ctx context.Context, cm *util.ConfigManagementClient, cont
 		return rs, "", err
 	}
 
-	dir := filepath.Join(os.TempDir(), migrateDir, context)
+	dir := filepath.Join(os.TempDir(), monorepoMigrateDir, context)
 	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
 		return rs, "", err
 	}
@@ -422,7 +437,7 @@ func saveRootSyncYAML(ctx context.Context, cm *util.ConfigManagementClient, cont
 }
 
 func saveConfigManagementYAML(ctx context.Context, cm *util.ConfigManagementClient, context string) (*unstructured.Unstructured, string, error) {
-	dir := filepath.Join(os.TempDir(), migrateDir, context)
+	dir := filepath.Join(os.TempDir(), monorepoMigrateDir, context)
 	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
 		return nil, "", err
 	}

@@ -45,6 +45,8 @@ const (
 	RootSyncCRDName = "rootsyncs.configsync.gke.io"
 	// RepoSyncCRDName is the name of RepoSync CRD
 	RepoSyncCRDName = "reposyncs.configsync.gke.io"
+	// ResourceGroupCRDName is the name of the ResourceGroup CRD
+	ResourceGroupCRDName = "resourcegroups.kpt.dev"
 )
 
 const (

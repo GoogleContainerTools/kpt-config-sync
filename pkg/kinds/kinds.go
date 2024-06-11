@@ -48,6 +48,11 @@ func Sync() schema.GroupVersionKind {
 	return v1.SchemeGroupVersion.WithKind(configmanagement.SyncKind)
 }
 
+// ConfigManagement returns the canonical ConfigManagement GroupVersionKind.
+func ConfigManagement() schema.GroupVersionKind {
+	return v1.SchemeGroupVersion.WithKind(configmanagement.OperatorKind)
+}
+
 // RoleBinding returns the canonical RoleBinding GroupVersionKind.
 func RoleBinding() schema.GroupVersionKind {
 	return rbacv1.SchemeGroupVersion.WithKind("RoleBinding")

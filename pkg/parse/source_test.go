@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
 	"time"
 
@@ -115,7 +114,6 @@ func TestReadConfigFiles(t *testing.T) {
 						Scope:     declared.RootScope,
 						Resources: &declared.Resources{},
 					},
-					mux: &sync.Mutex{},
 				},
 				RootOptions: &RootOptions{
 					SourceFormat: filesystem.SourceFormatUnstructured,

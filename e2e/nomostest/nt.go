@@ -957,7 +957,7 @@ func gitCommitFromSpec(nt *NT, gitSpec *v1beta1.Git) (string, error) {
 		return "", errors.New("spec.git.repo is empty")
 	}
 	// revision specified
-	if gitSpec.Revision != "" {
+	if gitSpec.Revision != "" && gitSpec.Revision != "HEAD" {
 		return gitSpec.Revision, nil
 	}
 	var pattern string

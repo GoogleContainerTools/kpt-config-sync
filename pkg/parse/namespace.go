@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"sync"
 
 	"github.com/google/go-cmp/cmp"
 	"k8s.io/klog/v2"
@@ -39,7 +38,6 @@ import (
 
 // NewNamespaceRunner creates a new runnable parser for parsing a Namespace repo.
 func NewNamespaceRunner(opts *Options) Parser {
-	opts.mux = &sync.Mutex{}
 	return &namespace{
 		Options: opts,
 	}

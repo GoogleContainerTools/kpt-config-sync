@@ -311,7 +311,7 @@ func TestGCMMetrics(t *testing.T) {
 		for _, metricType := range resourceMetrics {
 			descriptor := fmt.Sprintf("%s/%s", GCMMetricPrefix, metricType)
 			it := listMetricInGCM(ctx, nt, client, startTime, descriptor)
-			err = multierr.Append(err, validateMetricInGCM(nt, it, descriptor, nt.ClusterName, metricHasLastestValue(2)))
+			err = multierr.Append(err, validateMetricInGCM(nt, it, descriptor, nt.ClusterName, metricHasLatestValue(2)))
 		}
 		return err
 	})
@@ -499,26 +499,30 @@ func metricDoesNotHaveLabel(label string) metricValidatorFunc {
 	}
 }
 
-func metricHasValue(value int64) metricValidatorFunc {
+func metricHasValue(expectedValue int64) metricValidatorFunc {
 	return func(series *monitoringpb.TimeSeries) error {
 		points := series.GetPoints()
+		var values []int64
 		for _, point := range points {
-			if point.GetValue().GetInt64Value() == value {
+			value := point.GetValue().GetInt64Value()
+			if value == expectedValue {
 				return nil
 			}
+			values = append(values, value)
 		}
-		return fmt.Errorf("expected metric to have value %v but did not find in response", value)
+		return fmt.Errorf("expected metric to contain value %v but got %v", expectedValue, values)
 	}
 }
 
-func metricHasLastestValue(value int64) metricValidatorFunc {
+func metricHasLatestValue(expectedValue int64) metricValidatorFunc {
 	return func(series *monitoringpb.TimeSeries) error {
 		points := series.GetPoints()
 		lastPoint := points[len(points)-1]
-		if lastPoint.GetValue().GetInt64Value() == value {
+		value := lastPoint.GetValue().GetInt64Value()
+		if value == expectedValue {
 			return nil
 		}
-		return fmt.Errorf("expected metric to have latest value %v but did not find in response", value)
+		return fmt.Errorf("expected metric to have latest value %v but got %v", expectedValue, value)
 	}
 }
 

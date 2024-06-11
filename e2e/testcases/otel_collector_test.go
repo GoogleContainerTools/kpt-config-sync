@@ -285,7 +285,7 @@ func TestGCMMetrics(t *testing.T) {
 		rgmetrics.ResourceCountName,
 		rgmetrics.ReadyResourceCountName,
 	}
-	_, err = retry.Retry(120*time.Second, func() error {
+	_, err = retry.Retry(nt.DefaultWaitTimeout, func() error {
 		var err error
 		for _, metricType := range resourceMetrics {
 			descriptor := fmt.Sprintf("%s/%s", GCMMetricPrefix, metricType)
@@ -306,7 +306,7 @@ func TestGCMMetrics(t *testing.T) {
 	}
 
 	nt.T.Log("Checking resource related metrics after removing test resource")
-	_, err = retry.Retry(120*time.Second, func() error {
+	_, err = retry.Retry(nt.DefaultWaitTimeout, func() error {
 		var err error
 		for _, metricType := range resourceMetrics {
 			descriptor := fmt.Sprintf("%s/%s", GCMMetricPrefix, metricType)

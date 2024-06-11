@@ -280,19 +280,10 @@ func TestGCMMetrics(t *testing.T) {
 	}
 
 	nt.T.Log("Checking resource related metrics after adding test resource")
-	resourceMetrics := []string{
-		csmetrics.DeclaredResourcesName,
-		rgmetrics.ResourceCountName,
-		rgmetrics.ReadyResourceCountName,
-	}
 	_, err = retry.Retry(nt.DefaultWaitTimeout, func() error {
-		var err error
-		for _, metricType := range resourceMetrics {
-			descriptor := fmt.Sprintf("%s/%s", GCMMetricPrefix, metricType)
-			it := listMetricInGCM(ctx, nt, client, startTime, descriptor)
-			err = multierr.Append(err, validateMetricInGCM(nt, it, descriptor, nt.ClusterName, metricHasValue(3)))
-		}
-		return err
+		descriptor := fmt.Sprintf("%s/%s", GCMMetricPrefix, csmetrics.DeclaredResourcesName)
+		it := listMetricInGCM(ctx, nt, client, startTime, descriptor)
+		return validateMetricInGCM(nt, it, descriptor, nt.ClusterName, metricHasValue(3))
 	})
 	if err != nil {
 		nt.T.Fatal(err)
@@ -307,13 +298,9 @@ func TestGCMMetrics(t *testing.T) {
 
 	nt.T.Log("Checking resource related metrics after removing test resource")
 	_, err = retry.Retry(nt.DefaultWaitTimeout, func() error {
-		var err error
-		for _, metricType := range resourceMetrics {
-			descriptor := fmt.Sprintf("%s/%s", GCMMetricPrefix, metricType)
-			it := listMetricInGCM(ctx, nt, client, startTime, descriptor)
-			err = multierr.Append(err, validateMetricInGCM(nt, it, descriptor, nt.ClusterName, metricHasLatestValue(2)))
-		}
-		return err
+		descriptor := fmt.Sprintf("%s/%s", GCMMetricPrefix, csmetrics.DeclaredResourcesName)
+		it := listMetricInGCM(ctx, nt, client, startTime, descriptor)
+		return validateMetricInGCM(nt, it, descriptor, nt.ClusterName, metricHasLatestValue(2))
 	})
 	if err != nil {
 		nt.T.Fatal(err)

@@ -34,6 +34,7 @@ import (
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/importer/reader"
 	"kpt.dev/configsync/pkg/parse"
+	"kpt.dev/configsync/pkg/parse/events"
 	"kpt.dev/configsync/pkg/reconciler/finalizer"
 	"kpt.dev/configsync/pkg/reconciler/namespacecontroller"
 	"kpt.dev/configsync/pkg/remediator"
@@ -43,6 +44,7 @@ import (
 	"kpt.dev/configsync/pkg/syncer/metrics"
 	"kpt.dev/configsync/pkg/syncer/reconcile"
 	"kpt.dev/configsync/pkg/syncer/reconcile/fight"
+	"kpt.dev/configsync/pkg/util"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -271,6 +273,17 @@ func Run(opts Options) {
 		}
 	}
 
+	// Build an event producer to generate events for parser.Run.
+	scheduler := &events.MetaScheduler{
+		Clock:              parseOpts.Clock,
+		SyncPeriod:         opts.PollingPeriod,
+		FullSyncPeriod:     opts.ResyncPeriod,
+		StatusUpdatePeriod: opts.StatusUpdatePeriod,
+		// TODO: Shouldn't this use opts.RetryPeriod as the initial duration?
+		// Limit to 12 retries, with no max retry duration.
+		RetryBackoff: util.BackoffWithDurationAndStepLimit(0, 12),
+	}
+
 	var nsControllerState *namespacecontroller.State
 	if opts.ReconcilerScope == declared.RootScope {
 		rootOpts := &parse.RootOptions{
@@ -279,18 +292,18 @@ func Run(opts Options) {
 			DynamicNSSelectorEnabled: opts.DynamicNSSelectorEnabled,
 		}
 		if opts.DynamicNSSelectorEnabled {
-			// Only set nsControllerState when dynamic NamespaceSelector is enabled on
-			// RootSyncs.
+			// Only set nsControllerState when dynamic NamespaceSelector is
+			// enabled on RootSyncs.
 			// RepoSync can't manage NamespaceSelectors.
 			nsControllerState = namespacecontroller.NewState()
 			rootOpts.NSControllerState = nsControllerState
+			// Enable namespace events (every second)
+			// TODO: Trigger namespace events with a buffered channel from the NamespaceController
+			scheduler.NamespaceControllerPeriod = time.Second
 		}
 		parser = parse.NewRootRunner(parseOpts, rootOpts)
 	} else {
 		parser = parse.NewNamespaceRunner(parseOpts)
-		if err != nil {
-			klog.Fatalf("Instantiating Namespace Repository Parser: %v", err)
-		}
 	}
 
 	// Start listening to signals
@@ -388,7 +401,11 @@ func Run(opts Options) {
 
 	klog.Info("Starting Parser")
 	// TODO: Convert the Parser to use the controller-manager framework.
-	parse.Run(ctx, parser, nsControllerState, parse.DefaultRunOpts()) // blocks until ctx.Done()
+	parse.Run(ctx, parser, nsControllerState, parse.RunOpts{
+		Run:      parse.DefaultRunFunc,
+		Schedule: scheduler.Schedule,
+	})
+	// parse.Run blocks until ctx.Done()
 	klog.Info("Parser exited")
 
 	// Wait for Remediator to exit

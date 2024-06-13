@@ -551,7 +551,7 @@ func (p *root) addImplicitNamespaces(objs []ast.FileObject) ([]ast.FileObject, s
 // validation errors, applier errors, and watch update errors.
 // SyncErrors implements the Parser interface
 func (p *root) SyncErrors() status.MultiError {
-	return p.Errors()
+	return p.SyncErrorCache.Errors()
 }
 
 // Syncing returns true if the updater is running.

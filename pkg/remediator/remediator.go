@@ -92,11 +92,18 @@ var _ Interface = &Remediator{}
 //
 // It is safe for decls to be modified after they have been passed into the
 // Remediator.
-func New(scope declared.Scope, syncName string, cfg *rest.Config, applier syncerreconcile.Applier, decls *declared.Resources, numWorkers int) (*Remediator, error) {
+func New(
+	scope declared.Scope,
+	syncName string,
+	cfg *rest.Config,
+	applier syncerreconcile.Applier,
+	conflictHandler conflict.Handler,
+	fightHandler fight.Handler,
+	decls *declared.Resources,
+	numWorkers int,
+) (*Remediator, error) {
 	q := queue.New(scope.String())
 	workers := make([]*reconcile.Worker, numWorkers)
-	fightHandler := fight.NewHandler()
-	conflictHandler := conflict.NewHandler()
 	for i := 0; i < numWorkers; i++ {
 		workers[i] = reconcile.NewWorker(scope, syncName, applier, q, decls, fightHandler)
 	}

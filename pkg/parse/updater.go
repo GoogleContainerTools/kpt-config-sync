@@ -45,11 +45,10 @@ type Updater struct {
 	// Applier is a bulk client for applying a set of desired resource objects and
 	// tracking them in a ResourceGroup inventory.
 	Applier applier.Applier
-
-	statusMux      sync.RWMutex
-	validationErrs status.MultiError
-	applyErrs      status.MultiError
-	watchErrs      status.MultiError
+	// SyncErrorCache caches the sync errors from the various reconciler
+	// sub-components running in parallel. This allows batching updates and
+	// pushing them asynchronously.
+	SyncErrorCache *SyncErrorCache
 
 	updateMux sync.RWMutex
 	updating  bool
@@ -61,65 +60,6 @@ func (u *Updater) needToUpdateWatch() bool {
 
 func (u *Updater) managementConflict() bool {
 	return u.Remediator.ManagementConflict()
-}
-
-// Errors returns the latest known set of errors from the updater.
-// This method is safe to call while Update is running.
-func (u *Updater) Errors() status.MultiError {
-	u.statusMux.RLock()
-	defer u.statusMux.RUnlock()
-
-	var errs status.MultiError
-	errs = status.Append(errs, u.conflictErrors())
-	errs = status.Append(errs, u.fightErrors())
-	errs = status.Append(errs, u.validationErrs)
-	errs = status.Append(errs, u.applyErrs)
-	errs = status.Append(errs, u.watchErrs)
-	return errs
-}
-
-// conflictErrors converts []ManagementConflictError into []MultiErrors.
-// This method is safe to call while Update is running.
-func (u *Updater) conflictErrors() status.MultiError {
-	var errs status.MultiError
-	for _, conflictErr := range u.Remediator.ConflictErrors() {
-		errs = status.Append(errs, conflictErr)
-	}
-	return errs
-}
-
-// fightErrors converts []Error into []MultiErrors.
-// This method is safe to call while Update is running.
-func (u *Updater) fightErrors() status.MultiError {
-	var errs status.MultiError
-	for _, fightErr := range u.Remediator.FightErrors() {
-		errs = status.Append(errs, fightErr)
-	}
-	return errs
-}
-
-func (u *Updater) setValidationErrs(errs status.MultiError) {
-	u.statusMux.Lock()
-	defer u.statusMux.Unlock()
-	u.validationErrs = errs
-}
-
-func (u *Updater) addApplyError(err status.Error) {
-	u.statusMux.Lock()
-	defer u.statusMux.Unlock()
-	u.applyErrs = status.Append(u.applyErrs, err)
-}
-
-func (u *Updater) resetApplyErrors() {
-	u.statusMux.Lock()
-	defer u.statusMux.Unlock()
-	u.applyErrs = nil
-}
-
-func (u *Updater) setWatchErrs(errs status.MultiError) {
-	u.statusMux.Lock()
-	defer u.statusMux.Unlock()
-	u.watchErrs = errs
 }
 
 // Updating returns true if the Update method is running.
@@ -164,14 +104,7 @@ func (u *Updater) Update(ctx context.Context, cache *cacheForCommit) status.Mult
 		u.updateMux.Unlock()
 	}()
 
-	updateErrs := u.update(ctx, cache)
-
-	// Prepend current conflict and fight errors
-	var errs status.MultiError
-	errs = status.Append(errs, u.conflictErrors())
-	errs = status.Append(errs, u.fightErrors())
-	errs = status.Append(errs, updateErrs)
-	return errs
+	return u.update(ctx, cache)
 }
 
 // update performs most of the work for `Update`, making it easier to
@@ -239,7 +172,7 @@ func (u *Updater) update(ctx context.Context, cache *cacheForCommit) status.Mult
 func (u *Updater) declare(ctx context.Context, objs []client.Object, commit string) ([]client.Object, status.MultiError) {
 	klog.V(1).Info("Declared resources updating...")
 	objs, err := u.Resources.Update(ctx, objs, commit)
-	u.setValidationErrs(err)
+	u.SyncErrorCache.SetValidationErrs(err)
 	if err != nil {
 		klog.Warningf("Failed to validate declared resources: %v", err)
 		return nil, err
@@ -258,12 +191,16 @@ func (u *Updater) apply(ctx context.Context, objs []client.Object, commit string
 			} else {
 				err = status.Append(err, errEvent.Error)
 			}
-			u.addApplyError(errEvent.Error)
+			if conflictErr, ok := errEvent.Error.(status.ManagementConflictError); ok {
+				u.SyncErrorCache.AddConflictError(conflictErr)
+			} else {
+				u.SyncErrorCache.AddApplyError(errEvent.Error)
+			}
 		}
 	}
 	klog.V(1).Info("Applier starting...")
 	start := time.Now()
-	u.resetApplyErrors()
+	u.SyncErrorCache.ResetApplyErrors()
 	objStatusMap, syncStats := u.Applier.Apply(ctx, eventHandler, objs)
 	if syncStats.Empty() {
 		klog.V(4).Info("Applier made no new progress")
@@ -286,7 +223,7 @@ func (u *Updater) apply(ctx context.Context, objs []client.Object, commit string
 func (u *Updater) watch(ctx context.Context, gvks map[schema.GroupVersionKind]struct{}) status.MultiError {
 	klog.V(1).Info("Remediator watches updating...")
 	watchErrs := u.Remediator.UpdateWatches(ctx, gvks)
-	u.setWatchErrs(watchErrs)
+	u.SyncErrorCache.SetWatchErrs(watchErrs)
 	if watchErrs != nil {
 		klog.Warningf("Failed to update resource watches: %v", watchErrs)
 		return watchErrs

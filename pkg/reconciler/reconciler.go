@@ -34,6 +34,7 @@ import (
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/importer/reader"
 	"kpt.dev/configsync/pkg/parse"
+	"kpt.dev/configsync/pkg/parse/events"
 	"kpt.dev/configsync/pkg/reconciler/finalizer"
 	"kpt.dev/configsync/pkg/reconciler/namespacecontroller"
 	"kpt.dev/configsync/pkg/remediator"
@@ -43,6 +44,7 @@ import (
 	"kpt.dev/configsync/pkg/syncer/metrics"
 	"kpt.dev/configsync/pkg/syncer/reconcile"
 	"kpt.dev/configsync/pkg/syncer/reconcile/fight"
+	"kpt.dev/configsync/pkg/util"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -246,9 +248,6 @@ func Run(opts Options) {
 		Client:             cl,
 		ReconcilerName:     opts.ReconcilerName,
 		SyncName:           opts.SyncName,
-		PollingPeriod:      opts.PollingPeriod,
-		ResyncPeriod:       opts.ResyncPeriod,
-		RetryPeriod:        opts.RetryPeriod,
 		StatusUpdatePeriod: opts.StatusUpdatePeriod,
 		DiscoveryInterface: discoveryClient,
 		RenderingEnabled:   opts.RenderingEnabled,
@@ -271,6 +270,17 @@ func Run(opts Options) {
 		}
 	}
 
+	// Use the builder to build a set of event publishers for parser.Run.
+	pgBuilder := &events.PublishingGroupBuilder{
+		Clock:                  parseOpts.Clock,
+		SyncPeriod:             opts.PollingPeriod,
+		SyncWithReimportPeriod: opts.ResyncPeriod,
+		StatusUpdatePeriod:     opts.StatusUpdatePeriod,
+		// TODO: Shouldn't this use opts.RetryPeriod as the initial duration?
+		// Limit to 12 retries, with no max retry duration.
+		RetryBackoff: util.BackoffWithDurationAndStepLimit(0, 12),
+	}
+
 	var nsControllerState *namespacecontroller.State
 	if opts.ReconcilerScope == declared.RootScope {
 		rootOpts := &parse.RootOptions{
@@ -279,18 +289,18 @@ func Run(opts Options) {
 			DynamicNSSelectorEnabled: opts.DynamicNSSelectorEnabled,
 		}
 		if opts.DynamicNSSelectorEnabled {
-			// Only set nsControllerState when dynamic NamespaceSelector is enabled on
-			// RootSyncs.
+			// Only set nsControllerState when dynamic NamespaceSelector is
+			// enabled on RootSyncs.
 			// RepoSync can't manage NamespaceSelectors.
 			nsControllerState = namespacecontroller.NewState()
 			rootOpts.NSControllerState = nsControllerState
+			// Enable namespace events (every second)
+			// TODO: Trigger namespace events with a buffered channel from the NamespaceController
+			pgBuilder.NamespaceControllerPeriod = time.Second
 		}
 		parser = parse.NewRootRunner(parseOpts, rootOpts)
 	} else {
 		parser = parse.NewNamespaceRunner(parseOpts)
-		if err != nil {
-			klog.Fatalf("Instantiating Namespace Repository Parser: %v", err)
-		}
 	}
 
 	// Start listening to signals
@@ -388,7 +398,16 @@ func Run(opts Options) {
 
 	klog.Info("Starting Parser")
 	// TODO: Convert the Parser to use the controller-manager framework.
-	parse.Run(ctx, parser, nsControllerState, parse.DefaultRunOpts()) // blocks until ctx.Done()
+	// Funnel events from the publishers to the subscriber.
+	funnel := &events.Funnel{
+		Publishers: pgBuilder.Build(),
+		// Wrap the parser with an event handler that triggers the RunFunc, as needed.
+		Subscriber: parse.NewEventHandler(ctx, parser, nsControllerState, parse.DefaultRunFunc),
+	}
+	doneChForParser := funnel.Start(ctx)
+
+	// Wait until done
+	<-doneChForParser
 	klog.Info("Parser exited")
 
 	// Wait for Remediator to exit

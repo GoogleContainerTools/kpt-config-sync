@@ -36,6 +36,7 @@ import (
 	"kpt.dev/configsync/pkg/reconciler/finalizer"
 	"kpt.dev/configsync/pkg/reconciler/namespacecontroller"
 	"kpt.dev/configsync/pkg/remediator"
+	"kpt.dev/configsync/pkg/remediator/conflict"
 	"kpt.dev/configsync/pkg/remediator/watch"
 	syncerclient "kpt.dev/configsync/pkg/syncer/client"
 	"kpt.dev/configsync/pkg/syncer/metrics"
@@ -214,7 +215,10 @@ func Run(opts Options) {
 		klog.Fatalf("Error creating rest config for the remediator: %v", err)
 	}
 
-	rem, err := remediator.New(opts.ReconcilerScope, opts.SyncName, cfgForWatch, baseApplier, decls, opts.NumWorkers)
+	conflictHandler := conflict.NewHandler()
+	fightHandler := fight.NewHandler()
+
+	rem, err := remediator.New(opts.ReconcilerScope, opts.SyncName, cfgForWatch, baseApplier, conflictHandler, fightHandler, decls, opts.NumWorkers)
 	if err != nil {
 		klog.Fatalf("Instantiating Remediator: %v", err)
 	}
@@ -248,10 +252,11 @@ func Run(opts Options) {
 		Files:              parse.Files{FileSource: fs},
 		WebhookEnabled:     opts.WebhookEnabled,
 		Updater: parse.Updater{
-			Scope:      opts.ReconcilerScope,
-			Resources:  decls,
-			Applier:    supervisor,
-			Remediator: rem,
+			Scope:          opts.ReconcilerScope,
+			Resources:      decls,
+			Applier:        supervisor,
+			Remediator:     rem,
+			SyncErrorCache: parse.NewSyncErrorCache(conflictHandler, fightHandler),
 		},
 	}
 	// Only instantiate the converter when the webhook is enabled because the

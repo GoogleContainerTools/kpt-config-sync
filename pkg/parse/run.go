@@ -541,18 +541,21 @@ func parseAndUpdate(ctx context.Context, p Parser, trigger string, state *reconc
 
 	klog.V(3).Info("Updater starting...")
 	start := time.Now()
-	syncErrs := p.options().Update(ctx, &state.cache)
-	metrics.RecordParserDuration(ctx, trigger, "update", metrics.StatusTagKey(syncErrs), start)
+	updateErrs := p.options().Update(ctx, &state.cache)
+	metrics.RecordParserDuration(ctx, trigger, "update", metrics.StatusTagKey(updateErrs), start)
 	klog.V(3).Info("Updater stopped")
 
 	// This is to terminate `updateSyncStatusPeriodically`.
 	cancel()
 
+	// SyncErrors include errors from both the Updater and Remediator
 	klog.V(3).Info("Updating sync status (after sync)")
+	syncErrs := p.SyncErrors()
 	if err := setSyncStatus(ctx, p, state, false, syncErrs); err != nil {
 		syncErrs = status.Append(syncErrs, err)
 	}
 
+	// Return all the errors from the Parser, Updater, and Remediator
 	return status.Append(sourceErrs, syncErrs)
 }
 

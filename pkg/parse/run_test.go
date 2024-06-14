@@ -40,9 +40,11 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconciler/namespacecontroller"
+	"kpt.dev/configsync/pkg/remediator/conflict"
 	remediatorfake "kpt.dev/configsync/pkg/remediator/fake"
 	"kpt.dev/configsync/pkg/rootsync"
 	"kpt.dev/configsync/pkg/status"
+	"kpt.dev/configsync/pkg/syncer/reconcile/fight"
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/testing/openapitest"
@@ -83,6 +85,7 @@ func newParser(t *testing.T, fs FileSource, renderingEnabled bool, retryPeriod t
 					{}, // One Apply call, no errors
 				},
 			},
+			SyncErrorCache: NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
 		},
 		RenderingEnabled: renderingEnabled,
 		RetryPeriod:      retryPeriod,

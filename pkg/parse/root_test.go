@@ -44,8 +44,10 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
+	"kpt.dev/configsync/pkg/remediator/conflict"
 	remediatorfake "kpt.dev/configsync/pkg/remediator/fake"
 	"kpt.dev/configsync/pkg/status"
+	"kpt.dev/configsync/pkg/syncer/reconcile/fight"
 	syncertest "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/testing/openapitest"
@@ -478,10 +480,11 @@ func TestRoot_Parse(t *testing.T) {
 					DiscoveryInterface: syncertest.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
 					Converter:          converter,
 					Updater: Updater{
-						Scope:      declared.RootScope,
-						Resources:  &declared.Resources{},
-						Remediator: &remediatorfake.Remediator{},
-						Applier:    fakeApplier,
+						Scope:          declared.RootScope,
+						Resources:      &declared.Resources{},
+						Remediator:     &remediatorfake.Remediator{},
+						Applier:        fakeApplier,
+						SyncErrorCache: NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
 					},
 				},
 				RootOptions: &RootOptions{
@@ -692,10 +695,11 @@ func TestRoot_DeclaredFields(t *testing.T) {
 					Converter:          converter,
 					WebhookEnabled:     tc.webhookEnabled,
 					Updater: Updater{
-						Scope:      declared.RootScope,
-						Resources:  &declared.Resources{},
-						Remediator: &remediatorfake.Remediator{},
-						Applier:    fakeApplier,
+						Scope:          declared.RootScope,
+						Resources:      &declared.Resources{},
+						Remediator:     &remediatorfake.Remediator{},
+						Applier:        fakeApplier,
+						SyncErrorCache: NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
 					},
 				},
 				RootOptions: &RootOptions{
@@ -944,10 +948,11 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 					DiscoveryInterface: tc.discoveryClient,
 					Converter:          converter,
 					Updater: Updater{
-						Scope:      declared.RootScope,
-						Resources:  &declared.Resources{},
-						Remediator: &remediatorfake.Remediator{},
-						Applier:    fakeApplier,
+						Scope:          declared.RootScope,
+						Resources:      &declared.Resources{},
+						Remediator:     &remediatorfake.Remediator{},
+						Applier:        fakeApplier,
+						SyncErrorCache: NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
 					},
 				},
 				RootOptions: &RootOptions{
@@ -1028,10 +1033,11 @@ func TestRoot_SourceReconcilerErrorsMetricValidation(t *testing.T) {
 					Client:             syncertest.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName)),
 					DiscoveryInterface: syncertest.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
 					Updater: Updater{
-						Scope:      declared.RootScope,
-						Resources:  &declared.Resources{},
-						Remediator: &remediatorfake.Remediator{},
-						Applier:    fakeApplier,
+						Scope:          declared.RootScope,
+						Resources:      &declared.Resources{},
+						Remediator:     &remediatorfake.Remediator{},
+						Applier:        fakeApplier,
+						SyncErrorCache: NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
 					},
 				},
 				RootOptions: &RootOptions{
@@ -1109,10 +1115,11 @@ func TestRoot_SourceAndSyncReconcilerErrorsMetricValidation(t *testing.T) {
 				Options: &Options{
 					Parser: fakeConfigParser,
 					Updater: Updater{
-						Scope:      declared.RootScope,
-						Resources:  &declared.Resources{},
-						Remediator: &remediatorfake.Remediator{},
-						Applier:    fakeApplier,
+						Scope:          declared.RootScope,
+						Resources:      &declared.Resources{},
+						Remediator:     &remediatorfake.Remediator{},
+						Applier:        fakeApplier,
+						SyncErrorCache: NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
 					},
 					SyncName:           rootSyncName,
 					ReconcilerName:     rootReconcilerName,

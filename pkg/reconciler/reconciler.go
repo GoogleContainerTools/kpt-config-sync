@@ -252,11 +252,12 @@ func Run(opts Options) {
 		Files:              parse.Files{FileSource: fs},
 		WebhookEnabled:     opts.WebhookEnabled,
 		Updater: parse.Updater{
-			Scope:          opts.ReconcilerScope,
-			Resources:      decls,
-			Applier:        supervisor,
-			Remediator:     rem,
-			SyncErrorCache: parse.NewSyncErrorCache(conflictHandler, fightHandler),
+			Scope:              opts.ReconcilerScope,
+			Resources:          decls,
+			Applier:            supervisor,
+			Remediator:         rem,
+			SyncErrorCache:     parse.NewSyncErrorCache(conflictHandler, fightHandler),
+			StatusUpdatePeriod: opts.StatusUpdatePeriod,
 		},
 	}
 	// Only instantiate the converter when the webhook is enabled because the
@@ -285,9 +286,6 @@ func Run(opts Options) {
 		parser = parse.NewRootRunner(parseOpts, rootOpts)
 	} else {
 		parser = parse.NewNamespaceRunner(parseOpts)
-		if err != nil {
-			klog.Fatalf("Instantiating Namespace Repository Parser: %v", err)
-		}
 	}
 
 	// Start listening to signals

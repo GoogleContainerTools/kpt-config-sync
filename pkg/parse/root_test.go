@@ -480,11 +480,12 @@ func TestRoot_Parse(t *testing.T) {
 					DiscoveryInterface: syncertest.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
 					Converter:          converter,
 					Updater: Updater{
-						Scope:          declared.RootScope,
-						Resources:      &declared.Resources{},
-						Remediator:     &remediatorfake.Remediator{},
-						Applier:        fakeApplier,
-						SyncErrorCache: NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
+						Scope:              declared.RootScope,
+						Resources:          &declared.Resources{},
+						Remediator:         &remediatorfake.Remediator{},
+						Applier:            fakeApplier,
+						StatusUpdatePeriod: configsync.DefaultReconcilerSyncStatusUpdatePeriod,
+						SyncErrorCache:     NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
 					},
 				},
 				RootOptions: &RootOptions{
@@ -695,11 +696,12 @@ func TestRoot_DeclaredFields(t *testing.T) {
 					Converter:          converter,
 					WebhookEnabled:     tc.webhookEnabled,
 					Updater: Updater{
-						Scope:          declared.RootScope,
-						Resources:      &declared.Resources{},
-						Remediator:     &remediatorfake.Remediator{},
-						Applier:        fakeApplier,
-						SyncErrorCache: NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
+						Scope:              declared.RootScope,
+						Resources:          &declared.Resources{},
+						Remediator:         &remediatorfake.Remediator{},
+						Applier:            fakeApplier,
+						StatusUpdatePeriod: configsync.DefaultReconcilerSyncStatusUpdatePeriod,
+						SyncErrorCache:     NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
 					},
 				},
 				RootOptions: &RootOptions{
@@ -948,11 +950,12 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 					DiscoveryInterface: tc.discoveryClient,
 					Converter:          converter,
 					Updater: Updater{
-						Scope:          declared.RootScope,
-						Resources:      &declared.Resources{},
-						Remediator:     &remediatorfake.Remediator{},
-						Applier:        fakeApplier,
-						SyncErrorCache: NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
+						Scope:              declared.RootScope,
+						Resources:          &declared.Resources{},
+						Remediator:         &remediatorfake.Remediator{},
+						Applier:            fakeApplier,
+						StatusUpdatePeriod: configsync.DefaultReconcilerSyncStatusUpdatePeriod,
+						SyncErrorCache:     NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
 					},
 				},
 				RootOptions: &RootOptions{
@@ -1033,11 +1036,12 @@ func TestRoot_SourceReconcilerErrorsMetricValidation(t *testing.T) {
 					Client:             syncertest.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName)),
 					DiscoveryInterface: syncertest.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
 					Updater: Updater{
-						Scope:          declared.RootScope,
-						Resources:      &declared.Resources{},
-						Remediator:     &remediatorfake.Remediator{},
-						Applier:        fakeApplier,
-						SyncErrorCache: NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
+						Scope:              declared.RootScope,
+						Resources:          &declared.Resources{},
+						Remediator:         &remediatorfake.Remediator{},
+						Applier:            fakeApplier,
+						StatusUpdatePeriod: configsync.DefaultReconcilerSyncStatusUpdatePeriod,
+						SyncErrorCache:     NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
 					},
 				},
 				RootOptions: &RootOptions{
@@ -1108,18 +1112,19 @@ func TestRoot_SourceAndSyncReconcilerErrorsMetricValidation(t *testing.T) {
 			}
 			fakeApplier := &applierfake.Applier{
 				ApplyOutputs: []applierfake.ApplierOutputs{
-					{Errors: tc.applyErrors}, // One Apply call, optional errors
+					{Errors: tc.applyErrors}, // One Apply call, with optional errors
 				},
 			}
 			parser := &root{
 				Options: &Options{
 					Parser: fakeConfigParser,
 					Updater: Updater{
-						Scope:          declared.RootScope,
-						Resources:      &declared.Resources{},
-						Remediator:     &remediatorfake.Remediator{},
-						Applier:        fakeApplier,
-						SyncErrorCache: NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
+						Scope:              declared.RootScope,
+						Resources:          &declared.Resources{},
+						Remediator:         &remediatorfake.Remediator{},
+						Applier:            fakeApplier,
+						StatusUpdatePeriod: configsync.DefaultReconcilerSyncStatusUpdatePeriod,
+						SyncErrorCache:     NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
 					},
 					SyncName:           rootSyncName,
 					ReconcilerName:     rootReconcilerName,

@@ -85,7 +85,8 @@ func newParser(t *testing.T, fs FileSource, renderingEnabled bool, retryPeriod t
 					{}, // One Apply call, no errors
 				},
 			},
-			SyncErrorCache: NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
+			StatusUpdatePeriod: configsync.DefaultReconcilerSyncStatusUpdatePeriod,
+			SyncErrorCache:     NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
 		},
 		RenderingEnabled: renderingEnabled,
 		RetryPeriod:      retryPeriod,
@@ -192,7 +193,6 @@ func TestRun(t *testing.T) {
 		needRetry                  bool
 		expectedMsg                string
 		expectedErrorSourceRefs    []v1beta1.ErrorSource
-		expectedErrors             status.MultiError
 		expectedStateSourceErrs    status.MultiError
 		expectedStateRenderingErrs status.MultiError
 	}{
@@ -204,11 +204,6 @@ func TestRun(t *testing.T) {
 			needRetry:               true,
 			expectedMsg:             "Source",
 			expectedErrorSourceRefs: []v1beta1.ErrorSource{v1beta1.SourceError},
-			expectedErrors: status.SourceError.Wrap(
-				util.NewRetriableError(
-					fmt.Errorf("failed to check the status of the source root directory %q: %w", sourceDir0,
-						&fs.PathError{Op: "stat", Path: sourceDir0, Err: syscall.Errno(2)}))).
-				Build(),
 			expectedStateSourceErrs: status.SourceError.Wrap(
 				util.NewRetriableError(
 					fmt.Errorf("failed to check the status of the source root directory %q: %w", sourceDir0,
@@ -228,10 +223,6 @@ func TestRun(t *testing.T) {
 			name:        "source error",
 			sourceError: "git sync permission issue",
 			needRetry:   true,
-			expectedErrors: status.SourceError.Wrap(
-				fmt.Errorf("error in the git-sync container: %w",
-					fmt.Errorf("git sync permission issue"))).
-				Build(),
 			expectedStateSourceErrs: status.SourceError.Wrap(
 				util.NewRetriableError(
 					fmt.Errorf("error in the git-sync container: %w",
@@ -259,7 +250,6 @@ func TestRun(t *testing.T) {
 			hydratedError:              `{"code": "1068", "error": "rendering error"}`,
 			needRetry:                  true,
 			expectedMsg:                "Rendering failed",
-			expectedErrors:             status.HydrationError(status.ActionableHydrationErrorCode, fmt.Errorf("rendering error")),
 			expectedStateRenderingErrs: status.HydrationError(status.ActionableHydrationErrorCode, fmt.Errorf("rendering error")),
 			// rendering error is exposed to the RootSync status
 			expectedErrorSourceRefs: []v1beta1.ErrorSource{v1beta1.RenderingError},
@@ -292,7 +282,6 @@ func TestRun(t *testing.T) {
 			needRetry:                  true,
 			expectedMsg:                "Rendering not required but is currently enabled",
 			expectedErrorSourceRefs:    []v1beta1.ErrorSource{v1beta1.RenderingError},
-			expectedErrors:             status.HydrationError(status.TransientErrorCode, fmt.Errorf("sync source contains only wet configs and hydration-controller is running")),
 			expectedStateRenderingErrs: status.HydrationError(status.TransientErrorCode, fmt.Errorf("sync source contains only wet configs and hydration-controller is running")),
 		},
 		{
@@ -305,7 +294,6 @@ func TestRun(t *testing.T) {
 			needRetry:                  true,
 			expectedMsg:                "Rendering required but is currently disabled",
 			expectedErrorSourceRefs:    []v1beta1.ErrorSource{v1beta1.RenderingError},
-			expectedErrors:             status.HydrationError(status.TransientErrorCode, fmt.Errorf("sync source contains dry configs and hydration-controller is not running")),
 			expectedStateRenderingErrs: status.HydrationError(status.TransientErrorCode, fmt.Errorf("sync source contains dry configs and hydration-controller is not running")),
 		},
 	}
@@ -403,7 +391,6 @@ func TestRun(t *testing.T) {
 			run(context.Background(), parser, triggerReimport, state)
 
 			assert.Equal(t, tc.needRetry, state.cache.needToRetry)
-			testerrors.AssertEqual(t, tc.expectedErrors, state.cache.errs, "[%s] unexpected state.cache.errs return", tc.name)
 			testerrors.AssertEqual(t, tc.expectedStateSourceErrs, state.sourceStatus.errs, "[%s] unexpected state.sourceStatus.errs return", tc.name)
 			testerrors.AssertEqual(t, tc.expectedStateRenderingErrs, state.renderingStatus.errs, "[%s] unexpected state.renderingStatus.errs return", tc.name)
 

@@ -24,6 +24,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
@@ -373,6 +374,41 @@ func setRenderingStatusFields(rendering *v1beta1.RenderingStatus, p Parser, newS
 	rendering.LastUpdate = newStatus.lastUpdate
 }
 
+// SyncStatus implements the Parser interface
+// SyncStatus gets the RootSync sync status.
+func (p *root) SyncStatus(ctx context.Context) (syncStatus, error) {
+	p.mux.Lock()
+	defer p.mux.Unlock()
+
+	rs := &v1beta1.RootSync{}
+	if err := p.Client.Get(ctx, rootsync.ObjectKey(p.SyncName), rs); err != nil {
+		if apierrors.IsNotFound(err) || meta.IsNoMatchError(err) {
+			return syncStatus{}, nil
+		}
+		return syncStatus{}, status.APIServerError(err, "failed to get RootSync")
+	}
+
+	syncing := false
+	for _, condition := range rs.Status.Conditions {
+		if condition.Type == v1beta1.RootSyncSyncing {
+			if condition.Status == metav1.ConditionTrue {
+				syncing = true
+			}
+			break
+		}
+	}
+
+	return syncStatus{
+		syncing: syncing,
+		commit:  rs.Status.Sync.Commit,
+		// Errors are unparsable.
+		// Even if they were, we don't know what stage of the pipeline caused them.
+		// So we're forced to just drop the errors when the controller is restarted/rescheduled.
+		// errs:       errs,
+		lastUpdate: rs.Status.Sync.LastUpdate,
+	}, nil
+}
+
 // SetSyncStatus implements the Parser interface
 // SetSyncStatus sets the RootSync sync status.
 // `errs` includes the errors encountered during the apply step;
@@ -547,71 +583,9 @@ func (p *root) addImplicitNamespaces(objs []ast.FileObject) ([]ast.FileObject, s
 	return objs, errs
 }
 
-// SyncErrors returns all the sync errors, including remediator errors,
-// validation errors, applier errors, and watch update errors.
-// SyncErrors implements the Parser interface
-func (p *root) SyncErrors() status.MultiError {
-	return p.SyncErrorCache.Errors()
-}
-
-// Syncing returns true if the updater is running.
-// SyncErrors implements the Parser interface
-func (p *root) Syncing() bool {
-	return p.Updating()
-}
-
 // K8sClient implements the Parser interface
 func (p *root) K8sClient() client.Client {
 	return p.Client
-}
-
-// prependRootSyncRemediatorStatus adds the conflict error detected by the remediator to the front of the sync errors.
-func prependRootSyncRemediatorStatus(ctx context.Context, c client.Client, syncName string, conflictErrs []status.ManagementConflictError, denominator int) error {
-	if denominator <= 0 {
-		return fmt.Errorf("The denominator must be a positive number")
-	}
-
-	var rs v1beta1.RootSync
-	if err := c.Get(ctx, rootsync.ObjectKey(syncName), &rs); err != nil {
-		return status.APIServerError(err, "failed to get RootSync: "+syncName)
-	}
-
-	var errs []v1beta1.ConfigSyncError
-	for _, conflictErr := range conflictErrs {
-		conflictCSEError := conflictErr.ToCSE()
-		conflictPairCSEError := conflictErr.CurrentManagerError().ToCSE()
-		errorFound := false
-		for _, e := range rs.Status.Sync.Errors {
-			// Dedup the same remediator conflict error.
-			if e.Code == status.ManagementConflictErrorCode && (e.ErrorMessage == conflictCSEError.ErrorMessage || e.ErrorMessage == conflictPairCSEError.ErrorMessage) {
-				errorFound = true
-				break
-			}
-		}
-		if !errorFound {
-			errs = append(errs, conflictCSEError)
-		}
-	}
-
-	// No new errors, so no update
-	if len(errs) == 0 {
-		return nil
-	}
-
-	// Add the remeditor conflict errors before other sync errors for more visibility.
-	errs = append(errs, rs.Status.Sync.Errors...)
-	setSyncStatusErrors(&rs.Status.Status, errs, denominator)
-	rs.Status.Sync.LastUpdate = metav1.Now()
-
-	if err := c.Status().Update(ctx, &rs, client.FieldOwner(configsync.FieldManager)); err != nil {
-		// If the update failure was caused by the size of the RootSync object, we would truncate the errors and retry.
-		if isRequestTooLargeError(err) {
-			klog.Infof("Failed to update RootSync sync status (total error count: %d, denominator: %d): %s.", rs.Status.Sync.ErrorSummary.TotalCount, denominator, err)
-			return prependRootSyncRemediatorStatus(ctx, c, syncName, conflictErrs, denominator*2)
-		}
-		return status.APIServerError(err, "failed to update RootSync sync status")
-	}
-	return nil
 }
 
 // sourceRev will display the source version,

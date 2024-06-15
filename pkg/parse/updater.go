@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/applier"
@@ -49,9 +50,17 @@ type Updater struct {
 	// sub-components running in parallel. This allows batching updates and
 	// pushing them asynchronously.
 	SyncErrorCache *SyncErrorCache
+	// StatusUpdatePeriod is how often to update the sync status of the RSync
+	// while Update is running.
+	StatusUpdatePeriod time.Duration
 
-	updateMux sync.RWMutex
+	statusMux sync.RWMutex
 	updating  bool
+	commit    string
+
+	// updateMux prevents Update() from running in parallel
+	updateMux   sync.RWMutex
+	initialized bool
 }
 
 func (u *Updater) needToUpdateWatch() bool {
@@ -64,7 +73,28 @@ func (u *Updater) managementConflict() bool {
 
 // Updating returns true if the Update method is running.
 func (u *Updater) Updating() bool {
+	u.statusMux.RLock()
+	defer u.statusMux.RUnlock()
 	return u.updating
+}
+
+func (u *Updater) setUpdating(updating bool) {
+	u.statusMux.Lock()
+	defer u.statusMux.Unlock()
+	u.updating = updating
+}
+
+// Commit returns the last commit used to Update()
+func (u *Updater) Commit() string {
+	u.statusMux.RLock()
+	defer u.statusMux.RUnlock()
+	return u.commit
+}
+
+func (u *Updater) setCommit(commit string) {
+	u.statusMux.Lock()
+	defer u.statusMux.Unlock()
+	u.commit = commit
 }
 
 // declaredCRDs returns the list of CRDs which are present in the updater's
@@ -96,15 +126,114 @@ func (u *Updater) declaredCRDs() ([]*v1beta1.CustomResourceDefinition, status.Mu
 // Any errors returned will be prepended with any known conflict errors from the
 // remediator. This is required to preserve errors that have been reported by
 // another reconciler.
-func (u *Updater) Update(ctx context.Context, cache *cacheForCommit) status.MultiError {
+func (u *Updater) Update(ctx context.Context, state *reconcilerState, syncStatusUpdater SyncStatusUpdater) status.MultiError {
 	u.updateMux.Lock()
-	u.updating = true
+	u.setUpdating(true)
 	defer func() {
-		u.updating = false
+		u.setUpdating(false)
 		u.updateMux.Unlock()
 	}()
 
-	return u.update(ctx, cache)
+	// When the reconciler restarts/reschedules, the Updater state is reset.
+	// So restore the Updater state from the RSync status.
+	if !u.initialized {
+		syncStatus, err := syncStatusUpdater.SyncStatus(ctx)
+		if err != nil {
+			return status.Append(nil, err)
+		}
+		u.setCommit(syncStatus.commit)
+		// TODO: Figure out how to categorizes errors into the different kinds of errors
+		// For now, the errors aren't even being parsed, so we can skip categorizing them.
+		// This means the errors will always be reset when a new sync starts for
+		// the first time after the reconciler was restart/rescheduled.
+		u.initialized = true
+	}
+
+	// Sync the latest commit from source
+	if u.Commit() != state.cache.source.commit {
+		u.setCommit(state.cache.source.commit)
+		// TODO: Should we just reset ALL the errors here? Or should we mix new apply errors with old remediator errors?
+	}
+
+	klog.V(3).Info("Updating sync status (before sync)")
+	if err := u.SetSyncStatus(ctx, state, syncStatusUpdater); err != nil {
+		return status.Append(nil, err)
+	}
+
+	// Start periodic sync status updates.
+	// This allows reporting errors received from applier events while applying.
+	ctxForUpdateSyncStatus, cancel := context.WithCancel(ctx)
+	doneCh := u.startPeriodicSyncStatusUpdates(ctxForUpdateSyncStatus, state, syncStatusUpdater)
+
+	klog.V(3).Info("Updater starting...")
+	updateErrs := u.update(ctx, &state.cache)
+	klog.V(3).Info("Updater stopped")
+
+	// Stop periodic sync status updates and wait for completion, to avoid update conflicts.
+	cancel()
+	<-doneCh
+
+	u.setUpdating(false)
+
+	klog.V(3).Info("Updating sync status (after sync)")
+	if err := u.SetSyncStatus(ctx, state, syncStatusUpdater); err != nil {
+		updateErrs = status.Append(updateErrs, err)
+	}
+
+	return updateErrs
+}
+
+// SetSyncStatus updates `.status.sync` and the Syncing condition, if needed,
+// as well as `state.syncStatus` and `state.syncingConditionLastUpdate` if
+// the update is successful.
+func (u *Updater) SetSyncStatus(ctx context.Context, state *reconcilerState, syncStatusUpdater SyncStatusUpdater) error {
+	// Update the RSync status, if necessary
+	newSyncStatus := syncStatus{
+		syncing:    u.Updating(),
+		commit:     u.Commit(),
+		errs:       u.SyncErrorCache.Errors(),
+		lastUpdate: metav1.Now(),
+	}
+	if state.needToSetSyncStatus(newSyncStatus) {
+		if err := syncStatusUpdater.SetSyncStatus(ctx, newSyncStatus); err != nil {
+			return err
+		}
+		state.syncStatus = newSyncStatus
+		state.syncingConditionLastUpdate = newSyncStatus.lastUpdate
+	}
+	return nil
+}
+
+// startPeriodicSyncStatusUpdates updates the sync status periodically until the
+// cancellation function of the context is called.
+// The returned done channel will be closed after the background goroutine has
+// stopped running.
+func (u *Updater) startPeriodicSyncStatusUpdates(ctx context.Context, state *reconcilerState, syncStatusUpdater SyncStatusUpdater) chan struct{} {
+	klog.V(3).Info("Periodic sync status updates starting...")
+	doneCh := make(chan struct{})
+	go func() {
+		defer close(doneCh)
+		updatePeriod := u.StatusUpdatePeriod
+		updateTimer := time.NewTimer(updatePeriod)
+		defer updateTimer.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				// ctx.Done() is closed when the cancellation function of the context is called.
+				klog.V(3).Info("Periodic sync status updates stopped")
+				return
+
+			case <-updateTimer.C:
+				klog.V(3).Info("Updating sync status (periodic while syncing)")
+				if err := u.SetSyncStatus(ctx, state, syncStatusUpdater); err != nil {
+					klog.Warningf("failed to update sync status: %v", err)
+				}
+				// Schedule next status update
+				updateTimer.Reset(updatePeriod)
+			}
+		}
+	}()
+	return doneCh
 }
 
 // update performs most of the work for `Update`, making it easier to
@@ -200,6 +329,7 @@ func (u *Updater) apply(ctx context.Context, objs []client.Object, commit string
 	}
 	klog.V(1).Info("Applier starting...")
 	start := time.Now()
+	// TODO: Do we need to reset conflict errors too???
 	u.SyncErrorCache.ResetApplyErrors()
 	objStatusMap, syncStats := u.Applier.Apply(ctx, eventHandler, objs)
 	if syncStats.Empty() {

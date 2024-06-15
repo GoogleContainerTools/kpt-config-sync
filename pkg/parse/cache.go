@@ -64,9 +64,6 @@ type cacheForCommit struct {
 
 	// needToRetry indicates whether a retry is needed.
 	needToRetry bool
-
-	// errs tracks all the errors encountered during the reconciliation.
-	errs status.MultiError
 }
 
 func (c *cacheForCommit) setParserResult(objs []ast.FileObject, parserErrs status.MultiError) {

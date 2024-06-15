@@ -26,7 +26,6 @@ import (
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/hydrate"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/metadata"
@@ -183,14 +182,18 @@ func Run(ctx context.Context, p Parser, nsControllerState *namespacecontroller.S
 
 		// Update the sync status to report management conflicts (from the remediator).
 		case <-statusUpdateTimer.C:
+			// Skip sync status update if state.cache has been reset and not yet
+			// re-parsed. This avoids removing the last known sync status while
+			// waiting to parse a new source commit.
 			// Skip sync status update if the .status.sync.commit is out of date.
 			// This avoids overwriting a newer Syncing condition with the status
 			// from an older commit.
-			if state.syncStatus.commit == state.sourceStatus.commit &&
+			if state.cache.source.commit != "" &&
+				state.syncStatus.commit == state.sourceStatus.commit &&
 				state.syncStatus.commit == state.renderingStatus.commit {
 
 				klog.V(3).Info("Updating sync status (periodic while not syncing)")
-				if err := setSyncStatus(ctx, p, state, p.Syncing(), p.SyncErrors()); err != nil {
+				if err := p.options().Updater.SetSyncStatus(ctx, state, p); err != nil {
 					klog.Warningf("failed to update sync status: %v", err)
 				}
 			}
@@ -534,119 +537,12 @@ func parseAndUpdate(ctx context.Context, p Parser, trigger string, state *reconc
 		return sourceErrs
 	}
 
-	// Create a new context with its cancellation function.
-	ctxForUpdateSyncStatus, cancel := context.WithCancel(context.Background())
-
-	go updateSyncStatusPeriodically(ctxForUpdateSyncStatus, p, state)
-
-	klog.V(3).Info("Updater starting...")
 	start := time.Now()
-	updateErrs := p.options().Update(ctx, &state.cache)
+	updateErrs := p.options().Update(ctx, state, p)
 	metrics.RecordParserDuration(ctx, trigger, "update", metrics.StatusTagKey(updateErrs), start)
-	klog.V(3).Info("Updater stopped")
 
-	// This is to terminate `updateSyncStatusPeriodically`.
-	cancel()
-
-	// SyncErrors include errors from both the Updater and Remediator
-	klog.V(3).Info("Updating sync status (after sync)")
-	syncErrs := p.SyncErrors()
-	if err := setSyncStatus(ctx, p, state, false, syncErrs); err != nil {
-		syncErrs = status.Append(syncErrs, err)
-	}
-
-	// Return all the errors from the Parser, Updater, and Remediator
-	return status.Append(sourceErrs, syncErrs)
-}
-
-// setSyncStatus updates `.status.sync` and the Syncing condition, if needed,
-// as well as `state.syncStatus` and `state.syncingConditionLastUpdate` if
-// the update is successful.
-func setSyncStatus(ctx context.Context, p Parser, state *reconcilerState, syncing bool, syncErrs status.MultiError) error {
-	// Update the RSync status, if necessary
-	newSyncStatus := syncStatus{
-		syncing:    syncing,
-		commit:     state.cache.source.commit,
-		errs:       syncErrs,
-		lastUpdate: metav1.Now(),
-	}
-	if state.needToSetSyncStatus(newSyncStatus) {
-		if err := p.SetSyncStatus(ctx, newSyncStatus); err != nil {
-			return err
-		}
-		state.syncStatus = newSyncStatus
-		state.syncingConditionLastUpdate = newSyncStatus.lastUpdate
-	}
-
-	// Extract conflict errors from sync errors.
-	var conflictErrs []status.ManagementConflictError
-	if syncErrs != nil {
-		for _, err := range syncErrs.Errors() {
-			if conflictErr, ok := err.(status.ManagementConflictError); ok {
-				conflictErrs = append(conflictErrs, conflictErr)
-			}
-		}
-	}
-	// Report conflict errors to the remote manager, if it's a RootSync.
-	if err := reportRootSyncConflicts(ctx, p.K8sClient(), conflictErrs); err != nil {
-		return fmt.Errorf("failed to report remote conflicts: %w", err)
-	}
-	return nil
-}
-
-// updateSyncStatusPeriodically update the sync status periodically until the
-// cancellation function of the context is called.
-func updateSyncStatusPeriodically(ctx context.Context, p Parser, state *reconcilerState) {
-	klog.V(3).Info("Periodic sync status updates starting...")
-	updatePeriod := p.options().StatusUpdatePeriod
-	updateTimer := time.NewTimer(updatePeriod)
-	defer updateTimer.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			// ctx.Done() is closed when the cancellation function of the context is called.
-			klog.V(3).Info("Periodic sync status updates stopped")
-			return
-
-		case <-updateTimer.C:
-			klog.V(3).Info("Updating sync status (periodic while syncing)")
-			if err := setSyncStatus(ctx, p, state, true, p.SyncErrors()); err != nil {
-				klog.Warningf("failed to update sync status: %v", err)
-			}
-
-			updateTimer.Reset(updatePeriod) // Schedule status update attempt
-		}
-	}
-}
-
-// reportRootSyncConflicts reports conflicts to the RootSync that manages the
-// conflicting resources.
-func reportRootSyncConflicts(ctx context.Context, k8sClient client.Client, conflictErrs []status.ManagementConflictError) error {
-	if len(conflictErrs) == 0 {
-		return nil
-	}
-	conflictingManagerErrors := map[string][]status.ManagementConflictError{}
-	for _, conflictError := range conflictErrs {
-		conflictingManager := conflictError.ConflictingManager()
-		err := conflictError.ConflictingManagerError()
-		conflictingManagerErrors[conflictingManager] = append(conflictingManagerErrors[conflictingManager], err)
-	}
-
-	for conflictingManager, conflictErrors := range conflictingManagerErrors {
-		scope, name := declared.ManagerScopeAndName(conflictingManager)
-		if scope == declared.RootScope {
-			// RootSync applier uses PolicyAdoptAll.
-			// So it may fight, if the webhook is disabled.
-			// Report the conflict to the other RootSync to make it easier to detect.
-			klog.Infof("Detected conflict with RootSync manager %q", conflictingManager)
-			if err := prependRootSyncRemediatorStatus(ctx, k8sClient, name, conflictErrors, defaultDenominator); err != nil {
-				return fmt.Errorf("failed to update RootSync %q to prepend remediator conflicts: %w", name, err)
-			}
-		} else {
-			// RepoSync applier uses PolicyAdoptIfNoInventory.
-			// So it won't fight, even if the webhook is disabled.
-			klog.Infof("Detected conflict with RepoSync manager %q", conflictingManager)
-		}
-	}
-	return nil
+	// Return all the errors from the Parser & Updater, but not the Remediator.
+	// Remediation errors should not cause sync failure, cache invalidation, or
+	// retry, even though they show up as sync errors in the RSync spec.
+	return status.Append(sourceErrs, updateErrs)
 }

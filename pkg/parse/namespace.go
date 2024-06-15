@@ -20,6 +20,7 @@ import (
 	"strconv"
 
 	"github.com/google/go-cmp/cmp"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -248,6 +249,38 @@ func (p *namespace) setRenderingStatusWithRetires(ctx context.Context, newStatus
 	return nil
 }
 
+// SyncStatus implements the Parser interface
+// SyncStatus gets the RootSync sync status.
+func (p *namespace) SyncStatus(ctx context.Context) (syncStatus, error) {
+	p.mux.Lock()
+	defer p.mux.Unlock()
+
+	rs := &v1beta1.RepoSync{}
+	if err := p.Client.Get(ctx, reposync.ObjectKey(p.Scope, p.SyncName), rs); err != nil {
+		return syncStatus{}, status.APIServerError(err, fmt.Sprintf("failed to get the RepoSync object for the %v namespace", p.Scope))
+	}
+
+	syncing := false
+	for _, condition := range rs.Status.Conditions {
+		if condition.Type == v1beta1.RepoSyncSyncing {
+			if condition.Status == metav1.ConditionTrue {
+				syncing = true
+			}
+			break
+		}
+	}
+
+	return syncStatus{
+		syncing: syncing,
+		commit:  rs.Status.Sync.Commit,
+		// Errors are unparsable.
+		// Even if they were, we don't know what stage of the pipeline caused them.
+		// So we're forced to just drop the errors when the controller is restarted/rescheduled.
+		// errs:       errs,
+		lastUpdate: rs.Status.Sync.LastUpdate,
+	}, nil
+}
+
 // SetSyncStatus implements the Parser interface
 // SetSyncStatus sets the RepoSync sync status.
 // `errs` includes the errors encountered during the apply step;
@@ -312,19 +345,6 @@ func (p *namespace) setSyncStatusWithRetries(ctx context.Context, newStatus sync
 		return status.APIServerError(err, fmt.Sprintf("failed to update the RepoSync sync status for the %v namespace", p.Scope))
 	}
 	return nil
-}
-
-// SyncErrors returns all the sync errors, including remediator errors,
-// validation errors, applier errors, and watch update errors.
-// SyncErrors implements the Parser interface
-func (p *namespace) SyncErrors() status.MultiError {
-	return p.SyncErrorCache.Errors()
-}
-
-// Syncing returns true if the updater is running.
-// SyncErrors implements the Parser interface
-func (p *namespace) Syncing() bool {
-	return p.Updating()
 }
 
 // K8sClient implements the Parser interface

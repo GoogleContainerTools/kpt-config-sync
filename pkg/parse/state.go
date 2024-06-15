@@ -112,10 +112,8 @@ func (s *reconcilerState) checkpoint() {
 		return
 	}
 	klog.Infof("Reconciler checkpoint updated to %s", applied)
-	s.cache.errs = nil
 	s.lastApplied = applied
 	s.cache.needToRetry = false
-	s.cache.errs = nil
 }
 
 // reset sets the reconciler to retry in the next second because the rendering
@@ -131,7 +129,6 @@ func (s *reconcilerState) reset() {
 // invalidate does not clean up the `s.cache`.
 func (s *reconcilerState) invalidate(errs status.MultiError) {
 	klog.Errorf("Invalidating reconciler checkpoint: %v", status.FormatSingleLine(errs))
-	s.cache.errs = errs
 	// Invalidate state on error since this could be the result of switching
 	// branches or some other operation where inverting the operation would
 	// result in repeating a previous state that was checkpointed.

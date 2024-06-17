@@ -142,6 +142,8 @@ build-manifests-oss: "$(ADDLICENSE)" "$(KUSTOMIZE)" $(OUTPUT_DIR)
 			-e "s|RECONCILER_MANAGER_IMAGE_NAME|$(call gen_image_tag,$(RECONCILER_MANAGER_IMAGE))|g" \
 			-e "s|ASKPASS_IMAGE_NAME|$(call gen_image_tag,$(ASKPASS_IMAGE))|g" \
 			-e "s|RESOURCE_GROUP_CONTROLLER_IMAGE_NAME|$(call gen_image_tag,$(RESOURCE_GROUP_IMAGE))|g" \
+			-e "s|GIT_SYNC_IMAGE_NAME|$(GIT_SYNC_IMAGE_NAME)|g" \
+			-e "s|OTELCONTRIBCOL_IMAGE_NAME|$(OTELCONTRIBCOL_IMAGE_NAME)|g" \
 		> $(OSS_MANIFEST_STAGING_DIR)/config-sync-manifest.yaml
 	@ "$(ADDLICENSE)" $(OSS_MANIFEST_STAGING_DIR)/config-sync-manifest.yaml
 
@@ -168,6 +170,8 @@ build-manifests-operator: "$(ADDLICENSE)" "$(KUSTOMIZE)" $(OUTPUT_DIR)
 			-e "s|WEBHOOK_IMAGE_NAME|$(call gen_image_tag,$(ADMISSION_WEBHOOK_IMAGE))|g" \
 			-e "s|ASKPASS_IMAGE_NAME|$(call gen_image_tag,$(ASKPASS_IMAGE))|g" \
 			-e "s|RESOURCE_GROUP_CONTROLLER_IMAGE_NAME|$(call gen_image_tag,$(RESOURCE_GROUP_IMAGE))|g" \
+			-e "s|GIT_SYNC_IMAGE_NAME|$(GIT_SYNC_IMAGE_NAME)|g" \
+			-e "s|OTELCONTRIBCOL_IMAGE_NAME|$(OTELCONTRIBCOL_IMAGE_NAME)|g" \
 		> $(NOMOS_MANIFEST_STAGING_DIR)/config-sync-manifest.yaml
 	@ "$(ADDLICENSE)" $(NOMOS_MANIFEST_STAGING_DIR)/config-sync-manifest.yaml
 

@@ -20,6 +20,9 @@ import (
 	"strconv"
 
 	"github.com/google/go-cmp/cmp"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -54,7 +57,7 @@ func (p *namespace) options() *Options {
 }
 
 // parseSource implements the Parser interface
-func (p *namespace) parseSource(ctx context.Context, state sourceState) ([]ast.FileObject, status.MultiError) {
+func (p *namespace) parseSource(ctx context.Context, state *sourceState) ([]ast.FileObject, status.MultiError) {
 	p.mux.Lock()
 	defer p.mux.Unlock()
 
@@ -132,7 +135,7 @@ func (p *namespace) setSourceStatusWithRetries(ctx context.Context, newStatus *S
 
 	currentRS := rs.DeepCopy()
 
-	setSourceStatusFields(&rs.Status.Source, p, newStatus, denominator)
+	setSourceStatusFields(&rs.Status.Source, newStatus, denominator)
 
 	continueSyncing := (rs.Status.Source.ErrorSummary.TotalCount == 0)
 	var errorSource []v1beta1.ErrorSource
@@ -156,8 +159,8 @@ func (p *namespace) setSourceStatusWithRetries(ctx context.Context, newStatus *S
 	}
 
 	if klog.V(5).Enabled() {
-		klog.Infof("Updating source status for RepoSync %s/%s:\nDiff (- Expected, + Actual):\n%s",
-			rs.Namespace, rs.Name, cmp.Diff(currentRS.Status, rs.Status))
+		klog.V(5).Infof("Updating source status:\nDiff (- Removed, + Added):\n%s",
+			cmp.Diff(currentRS.Status, rs.Status))
 	}
 
 	if err := p.Client.Status().Update(ctx, &rs, client.FieldOwner(configsync.FieldManager)); err != nil {
@@ -209,7 +212,7 @@ func (p *namespace) setRenderingStatusWithRetires(ctx context.Context, newStatus
 
 	currentRS := rs.DeepCopy()
 
-	setRenderingStatusFields(&rs.Status.Rendering, p, newStatus, denominator)
+	setRenderingStatusFields(&rs.Status.Rendering, newStatus, denominator)
 
 	continueSyncing := (rs.Status.Rendering.ErrorSummary.TotalCount == 0)
 	var errorSource []v1beta1.ErrorSource
@@ -233,8 +236,8 @@ func (p *namespace) setRenderingStatusWithRetires(ctx context.Context, newStatus
 	}
 
 	if klog.V(5).Enabled() {
-		klog.Infof("Updating rendering status for RepoSync %s/%s:\nDiff (- Expected, + Actual):\n%s",
-			rs.Namespace, rs.Name, cmp.Diff(currentRS.Status, rs.Status))
+		klog.V(5).Infof("Updating rendering status:\nDiff (- Removed, + Added):\n%s",
+			cmp.Diff(currentRS.Status, rs.Status))
 	}
 
 	if err := p.Client.Status().Update(ctx, &rs, client.FieldOwner(configsync.FieldManager)); err != nil {
@@ -246,6 +249,32 @@ func (p *namespace) setRenderingStatusWithRetires(ctx context.Context, newStatus
 		return status.APIServerError(err, "failed to update RepoSync rendering status from parser")
 	}
 	return nil
+}
+
+// ReconcilerStatusFromCluster gets the RepoSync sync status from the cluster.
+func (p *namespace) ReconcilerStatusFromCluster(ctx context.Context) (*ReconcilerStatus, error) {
+	rs := &v1beta1.RepoSync{}
+	if err := p.Client.Get(ctx, reposync.ObjectKey(p.Scope, p.SyncName), rs); err != nil {
+		if apierrors.IsNotFound(err) || meta.IsNoMatchError(err) {
+			return nil, nil
+		}
+		return nil, status.APIServerError(err, fmt.Sprintf("failed to get the RepoSync object for the %v namespace", p.Scope))
+	}
+
+	// Read Syncing condition
+	syncing := false
+	var syncingConditionLastUpdate metav1.Time
+	for _, condition := range rs.Status.Conditions {
+		if condition.Type == v1beta1.RepoSyncSyncing {
+			if condition.Status == metav1.ConditionTrue {
+				syncing = true
+			}
+			syncingConditionLastUpdate = condition.LastUpdateTime
+			break
+		}
+	}
+
+	return reconcilerStatusFromRSyncStatus(rs.Status.Status, p.options().SourceType, syncing, syncingConditionLastUpdate), nil
 }
 
 // SetSyncStatus implements the Parser interface
@@ -308,8 +337,8 @@ func (p *namespace) setSyncStatusWithRetries(ctx context.Context, newStatus *Syn
 	}
 
 	if klog.V(5).Enabled() {
-		klog.Infof("Updating status for RepoSync %s/%s:\nDiff (- Expected, + Actual):\n%s",
-			rs.Namespace, rs.Name, cmp.Diff(currentRS.Status, rs.Status))
+		klog.V(5).Infof("Updating sync status:\nDiff (- Removed, + Added):\n%s",
+			cmp.Diff(currentRS.Status, rs.Status))
 	}
 
 	if err := p.Client.Status().Update(ctx, rs, client.FieldOwner(configsync.FieldManager)); err != nil {

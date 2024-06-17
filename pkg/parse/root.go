@@ -18,12 +18,12 @@ import (
 	"context"
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/elliotchance/orderedmap/v2"
 	"github.com/google/go-cmp/cmp"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
@@ -96,7 +96,7 @@ func (p *root) options() *Options {
 }
 
 // parseSource implements the Parser interface
-func (p *root) parseSource(ctx context.Context, state sourceState) ([]ast.FileObject, status.MultiError) {
+func (p *root) parseSource(ctx context.Context, state *sourceState) ([]ast.FileObject, status.MultiError) {
 	wantFiles := state.files
 	if p.SourceFormat == configsync.SourceFormatHierarchy {
 		// We're using hierarchical mode for the root repository, so ignore files
@@ -179,7 +179,7 @@ func (p *root) setSourceStatusWithRetries(ctx context.Context, newStatus *Source
 
 	currentRS := rs.DeepCopy()
 
-	setSourceStatusFields(&rs.Status.Source, p, newStatus, denominator)
+	setSourceStatusFields(&rs.Status.Source, newStatus, denominator)
 
 	continueSyncing := (rs.Status.Source.ErrorSummary.TotalCount == 0)
 	var errorSource []v1beta1.ErrorSource
@@ -203,8 +203,8 @@ func (p *root) setSourceStatusWithRetries(ctx context.Context, newStatus *Source
 	}
 
 	if klog.V(5).Enabled() {
-		klog.Infof("Updating source status for RootSync %s/%s:\nDiff (- Expected, + Actual):\n%s",
-			rs.Namespace, rs.Name, cmp.Diff(currentRS.Status, rs.Status))
+		klog.V(5).Infof("Updating source status:\nDiff (- Removed, + Added):\n%s",
+			cmp.Diff(currentRS.Status, rs.Status))
 	}
 
 	if err := p.Client.Status().Update(ctx, &rs, client.FieldOwner(configsync.FieldManager)); err != nil {
@@ -218,31 +218,31 @@ func (p *root) setSourceStatusWithRetries(ctx context.Context, newStatus *Source
 	return nil
 }
 
-func setSourceStatusFields(source *v1beta1.SourceStatus, p Parser, newStatus *SourceStatus, denominator int) {
+func setSourceStatusFields(source *v1beta1.SourceStatus, newStatus *SourceStatus, denominator int) {
 	cse := status.ToCSE(newStatus.Errs)
 	source.Commit = newStatus.Commit
-	switch p.options().SourceType {
-	case configsync.GitSource:
+	switch newSourceSpec := newStatus.Spec.(type) {
+	case GitSourceSpec:
 		source.Git = &v1beta1.GitStatus{
-			Repo:     p.options().SourceRepo,
-			Revision: p.options().SourceRev,
-			Branch:   p.options().SourceBranch,
-			Dir:      p.options().SyncDir.SlashPath(),
+			Repo:     newSourceSpec.Repo,
+			Revision: newSourceSpec.Revision,
+			Branch:   newSourceSpec.Branch,
+			Dir:      newSourceSpec.Dir,
 		}
 		source.Oci = nil
 		source.Helm = nil
-	case configsync.OciSource:
+	case OCISourceSpec:
 		source.Oci = &v1beta1.OciStatus{
-			Image: p.options().SourceRepo,
-			Dir:   p.options().SyncDir.SlashPath(),
+			Image: newSourceSpec.Image,
+			Dir:   newSourceSpec.Dir,
 		}
 		source.Git = nil
 		source.Helm = nil
-	case configsync.HelmSource:
+	case HelmSourceSpec:
 		source.Helm = &v1beta1.HelmStatus{
-			Repo:    p.options().SourceRepo,
-			Chart:   p.options().SyncDir.SlashPath(),
-			Version: getChartVersionFromCommit(p.options().SourceRev, source.Commit),
+			Repo:    newSourceSpec.Repo,
+			Chart:   newSourceSpec.Chart,
+			Version: newSourceSpec.Version,
 		}
 		source.Git = nil
 		source.Oci = nil
@@ -299,7 +299,7 @@ func (p *root) setRenderingStatusWithRetires(ctx context.Context, newStatus *Ren
 
 	currentRS := rs.DeepCopy()
 
-	setRenderingStatusFields(&rs.Status.Rendering, p, newStatus, denominator)
+	setRenderingStatusFields(&rs.Status.Rendering, newStatus, denominator)
 
 	continueSyncing := (rs.Status.Rendering.ErrorSummary.TotalCount == 0)
 	var errorSource []v1beta1.ErrorSource
@@ -323,8 +323,8 @@ func (p *root) setRenderingStatusWithRetires(ctx context.Context, newStatus *Ren
 	}
 
 	if klog.V(5).Enabled() {
-		klog.Infof("Updating rendering status for RootSync %s/%s:\nDiff (- Expected, + Actual):\n%s",
-			rs.Namespace, rs.Name, cmp.Diff(currentRS.Status, rs.Status))
+		klog.V(5).Infof("Updating rendering status:\nDiff (- Removed, + Added):\n%s",
+			cmp.Diff(currentRS.Status, rs.Status))
 	}
 
 	if err := p.Client.Status().Update(ctx, &rs, client.FieldOwner(configsync.FieldManager)); err != nil {
@@ -338,31 +338,31 @@ func (p *root) setRenderingStatusWithRetires(ctx context.Context, newStatus *Ren
 	return nil
 }
 
-func setRenderingStatusFields(rendering *v1beta1.RenderingStatus, p Parser, newStatus *RenderingStatus, denominator int) {
+func setRenderingStatusFields(rendering *v1beta1.RenderingStatus, newStatus *RenderingStatus, denominator int) {
 	cse := status.ToCSE(newStatus.Errs)
 	rendering.Commit = newStatus.Commit
-	switch p.options().SourceType {
-	case configsync.GitSource:
+	switch newSourceSpec := newStatus.Spec.(type) {
+	case GitSourceSpec:
 		rendering.Git = &v1beta1.GitStatus{
-			Repo:     p.options().SourceRepo,
-			Revision: p.options().SourceRev,
-			Branch:   p.options().SourceBranch,
-			Dir:      p.options().SyncDir.SlashPath(),
+			Repo:     newSourceSpec.Repo,
+			Revision: newSourceSpec.Revision,
+			Branch:   newSourceSpec.Branch,
+			Dir:      newSourceSpec.Dir,
 		}
 		rendering.Oci = nil
 		rendering.Helm = nil
-	case configsync.OciSource:
+	case OCISourceSpec:
 		rendering.Oci = &v1beta1.OciStatus{
-			Image: p.options().SourceRepo,
-			Dir:   p.options().SyncDir.SlashPath(),
+			Image: newSourceSpec.Image,
+			Dir:   newSourceSpec.Dir,
 		}
 		rendering.Git = nil
 		rendering.Helm = nil
-	case configsync.HelmSource:
+	case HelmSourceSpec:
 		rendering.Helm = &v1beta1.HelmStatus{
-			Repo:    p.options().SourceRepo,
-			Chart:   p.options().SyncDir.SlashPath(),
-			Version: getChartVersionFromCommit(p.options().SourceRev, rendering.Commit),
+			Repo:    newSourceSpec.Repo,
+			Chart:   newSourceSpec.Chart,
+			Version: newSourceSpec.Version,
 		}
 		rendering.Git = nil
 		rendering.Oci = nil
@@ -379,6 +379,136 @@ func setRenderingStatusFields(rendering *v1beta1.RenderingStatus, p Parser, newS
 	rendering.Errors = cse[0 : len(cse)/denominator]
 	rendering.ErrorSummary = errorSummary
 	rendering.LastUpdate = newStatus.LastUpdate
+}
+
+// ReconcilerStatusFromCluster gets the RootSync sync status from the cluster.
+func (p *root) ReconcilerStatusFromCluster(ctx context.Context) (*ReconcilerStatus, error) {
+	rs := &v1beta1.RootSync{}
+	if err := p.Client.Get(ctx, rootsync.ObjectKey(p.SyncName), rs); err != nil {
+		if apierrors.IsNotFound(err) || meta.IsNoMatchError(err) {
+			return nil, nil
+		}
+		return nil, status.APIServerError(err, "failed to get RootSync")
+	}
+
+	syncing := false
+	var syncingConditionLastUpdate metav1.Time
+	for _, condition := range rs.Status.Conditions {
+		if condition.Type == v1beta1.RootSyncSyncing {
+			if condition.Status == metav1.ConditionTrue {
+				syncing = true
+			}
+			syncingConditionLastUpdate = condition.LastUpdateTime
+			break
+		}
+	}
+
+	return reconcilerStatusFromRSyncStatus(rs.Status.Status, p.options().SourceType, syncing, syncingConditionLastUpdate), nil
+}
+
+func reconcilerStatusFromRSyncStatus(rsyncStatus v1beta1.Status, sourceType configsync.SourceType, syncing bool, syncingConditionLastUpdate metav1.Time) *ReconcilerStatus {
+	var sourceSpec, renderSpec, syncSpec SourceSpec
+	switch sourceType {
+	case configsync.GitSource:
+		if rsyncStatus.Source.Git != nil {
+			sourceSpec = GitSourceSpec{
+				Repo:     rsyncStatus.Source.Git.Repo,
+				Revision: rsyncStatus.Source.Git.Revision,
+				Branch:   rsyncStatus.Source.Git.Branch,
+				Dir:      rsyncStatus.Source.Git.Dir,
+			}
+		}
+		if rsyncStatus.Rendering.Git != nil {
+			renderSpec = GitSourceSpec{
+				Repo:     rsyncStatus.Rendering.Git.Repo,
+				Revision: rsyncStatus.Rendering.Git.Revision,
+				Branch:   rsyncStatus.Rendering.Git.Branch,
+				Dir:      rsyncStatus.Rendering.Git.Dir,
+			}
+		}
+		if rsyncStatus.Sync.Git != nil {
+			syncSpec = GitSourceSpec{
+				Repo:     rsyncStatus.Sync.Git.Repo,
+				Revision: rsyncStatus.Sync.Git.Revision,
+				Branch:   rsyncStatus.Sync.Git.Branch,
+				Dir:      rsyncStatus.Sync.Git.Dir,
+			}
+		}
+	case configsync.OciSource:
+		if rsyncStatus.Source.Oci != nil {
+			sourceSpec = OCISourceSpec{
+				Image: rsyncStatus.Source.Oci.Image,
+				Dir:   rsyncStatus.Source.Oci.Dir,
+			}
+		}
+		if rsyncStatus.Rendering.Oci != nil {
+			renderSpec = OCISourceSpec{
+				Image: rsyncStatus.Rendering.Oci.Image,
+				Dir:   rsyncStatus.Rendering.Oci.Dir,
+			}
+		}
+		if rsyncStatus.Sync.Oci != nil {
+			syncSpec = OCISourceSpec{
+				Image: rsyncStatus.Sync.Oci.Image,
+				Dir:   rsyncStatus.Sync.Oci.Dir,
+			}
+		}
+	case configsync.HelmSource:
+		if rsyncStatus.Source.Helm != nil {
+			sourceSpec = HelmSourceSpec{
+				Repo:    rsyncStatus.Source.Helm.Repo,
+				Chart:   rsyncStatus.Source.Helm.Chart,
+				Version: rsyncStatus.Source.Helm.Version,
+			}
+		}
+		if rsyncStatus.Rendering.Helm != nil {
+			renderSpec = HelmSourceSpec{
+				Repo:    rsyncStatus.Rendering.Helm.Repo,
+				Chart:   rsyncStatus.Rendering.Helm.Chart,
+				Version: rsyncStatus.Rendering.Helm.Version,
+			}
+		}
+		if rsyncStatus.Sync.Helm != nil {
+			syncSpec = HelmSourceSpec{
+				Repo:    rsyncStatus.Sync.Helm.Repo,
+				Chart:   rsyncStatus.Sync.Helm.Chart,
+				Version: rsyncStatus.Sync.Helm.Version,
+			}
+		}
+	}
+
+	return &ReconcilerStatus{
+		SourceStatus: &SourceStatus{
+			Spec:   sourceSpec,
+			Commit: rsyncStatus.Source.Commit,
+			// Can't parse errors.
+			// Errors will be reset the next time the reconciler updates the status.
+			Errs:       nil,
+			LastUpdate: rsyncStatus.Source.LastUpdate,
+		},
+		RenderingStatus: &RenderingStatus{
+			Spec:    renderSpec,
+			Commit:  rsyncStatus.Rendering.Commit,
+			Message: rsyncStatus.Rendering.Message,
+			// Can't parse errors.
+			// Errors will be reset the next time the reconciler updates the status.
+			Errs:       nil,
+			LastUpdate: rsyncStatus.Rendering.LastUpdate,
+			// Whether there exists a kustomize.yaml in the source is not persisted in the RSync status.
+			// TODO: Move requiresRendering out of reconcilerStatus.
+			RequiresRendering: false,
+		},
+		SyncStatus: &SyncStatus{
+			Spec:    syncSpec,
+			Syncing: syncing,
+			Commit:  rsyncStatus.Sync.Commit,
+			// Can't parse errors.
+			// Errors will be reset the next time the reconciler updates the status.
+			Errs:       nil,
+			LastUpdate: rsyncStatus.Sync.LastUpdate,
+		},
+		SyncingConditionLastUpdate: syncingConditionLastUpdate,
+	}
 }
 
 // SetSyncStatus implements the Parser interface
@@ -441,8 +571,8 @@ func (p *root) setSyncStatusWithRetries(ctx context.Context, newStatus *SyncStat
 	}
 
 	if klog.V(5).Enabled() {
-		klog.Infof("Updating sync status for RootSync %s/%s:\nDiff (- Expected, + Actual):\n%s",
-			rs.Namespace, rs.Name, cmp.Diff(currentRS.Status, rs.Status))
+		klog.V(5).Infof("Updating sync status:\nDiff (- Removed, + Added):\n%s",
+			cmp.Diff(currentRS.Status, rs.Status))
 	}
 
 	if err := p.Client.Status().Update(ctx, rs, client.FieldOwner(configsync.FieldManager)); err != nil {
@@ -635,18 +765,4 @@ func prependRootSyncRemediatorStatus(ctx context.Context, c client.Client, syncN
 		return status.APIServerError(err, "failed to update RootSync sync status")
 	}
 	return nil
-}
-
-// sourceRev will display the source version,
-// but that could potentially be provided to use as a range of
-// versions from which we pick the latest. We should display the
-// version that was actually pulled down if we can.
-// commit is expected to be of the format `chart:version`,
-// so we parse it to grab the version.
-func getChartVersionFromCommit(sourceRev, commit string) string {
-	split := strings.Split(commit, ":")
-	if len(split) == 2 {
-		return split[1]
-	}
-	return sourceRev
 }

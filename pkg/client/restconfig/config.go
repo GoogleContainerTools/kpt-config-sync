@@ -48,11 +48,11 @@ func KubeConfigPath() (string, error) {
 	if envPath != "" {
 		return envPath, nil
 	}
-	curentUser, err := userCurrentTestHook()
+	currentUser, err := userCurrentTestHook()
 	if err != nil {
 		return "", fmt.Errorf("failed to get current user: %w", err)
 	}
-	path := filepath.Join(curentUser.HomeDir, kubectlConfigPath)
+	path := filepath.Join(currentUser.HomeDir, kubectlConfigPath)
 	return path, nil
 }
 

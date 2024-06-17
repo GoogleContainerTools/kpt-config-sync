@@ -15,7 +15,10 @@
 package parse
 
 import (
+	"strings"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/status"
 )
 
@@ -83,8 +86,123 @@ func (s *ReconcilerStatus) needToSetSyncStatus(newStatus *SyncStatus) bool {
 	return !s.SyncStatus.Equals(newStatus)
 }
 
+// SourceSpec is a representation of the source specification that is
+// cached and stored in the RSync status for each stage in the pipeline.
+//
+// For the purposes of deciding when to skip updates, the SourceSpec is
+// comparable for equality. If not equal, an update is necessary.
+type SourceSpec interface {
+	// Equals returns true if the specified SourceSpec equals this
+	// SourceSpec, including type and all field values.
+	Equals(SourceSpec) bool
+}
+
+// SourceSpecFromFileSource builds a SourceSpec from the FileSource.
+// The type of SourceSpec depends on the SourceType.
+// Commit is only necessary for Helm sources, because the chart Version is
+// parsed from the "commit" string (`chart:version`).
+func SourceSpecFromFileSource(source FileSource, sourceType configsync.SourceType, commit string) SourceSpec {
+	var ss SourceSpec
+	switch sourceType {
+	case configsync.GitSource:
+		ss = GitSourceSpec{
+			Repo:     source.SourceRepo,
+			Revision: source.SourceRev,
+			Branch:   source.SourceBranch,
+			Dir:      source.SyncDir.SlashPath(),
+		}
+	case configsync.OciSource:
+		ss = OCISourceSpec{
+			Image: source.SourceRepo,
+			Dir:   source.SyncDir.SlashPath(),
+		}
+	case configsync.HelmSource:
+		ss = HelmSourceSpec{
+			Repo:    source.SourceRepo,
+			Chart:   source.SyncDir.SlashPath(),
+			Version: getChartVersionFromCommit(source.SourceRev, commit),
+		}
+	}
+	return ss
+}
+
+// sourceRev will display the source version,
+// but that could potentially be provided to use as a range of
+// versions from which we pick the latest. We should display the
+// version that was actually pulled down if we can.
+// commit is expected to be of the format `chart:version`,
+// so we parse it to grab the version.
+func getChartVersionFromCommit(sourceRev, commit string) string {
+	split := strings.Split(commit, ":")
+	if len(split) == 2 {
+		return split[1]
+	}
+	return sourceRev
+}
+
+// GitSourceSpec is a SourceSpec for the Git SourceType
+type GitSourceSpec struct {
+	Repo     string
+	Revision string
+	Branch   string
+	Dir      string
+}
+
+// Equals returns true if the specified SourceSpec equals this
+// GitSourceSpec, including type and all field values.
+func (g GitSourceSpec) Equals(other SourceSpec) bool {
+	t, ok := other.(GitSourceSpec)
+	if !ok {
+		return false
+	}
+	return t.Repo == g.Repo &&
+		t.Revision == g.Revision &&
+		t.Branch == g.Branch &&
+		t.Dir == g.Dir
+}
+
+// OCISourceSpec is a SourceSpec for the OCI SourceType
+type OCISourceSpec struct {
+	Image string
+	Dir   string
+}
+
+// Equals returns true if the specified SourceSpec equals this
+// OCISourceSpec, including type and all field values.
+func (o OCISourceSpec) Equals(other SourceSpec) bool {
+	t, ok := other.(OCISourceSpec)
+	if !ok {
+		return false
+	}
+	return t.Image == o.Image &&
+		t.Dir == o.Dir
+}
+
+// HelmSourceSpec is a SourceSpec for the Helm SourceType
+type HelmSourceSpec struct {
+	Repo    string
+	Version string
+	Chart   string
+}
+
+// Equals returns true if the specified SourceSpec equals this
+// HelmSourceSpec, including type and all field values.
+func (h HelmSourceSpec) Equals(other SourceSpec) bool {
+	t, ok := other.(HelmSourceSpec)
+	if !ok {
+		return false
+	}
+	return t.Repo == h.Repo &&
+		t.Version == h.Version &&
+		t.Chart == h.Chart
+}
+
 // SourceStatus represents the status of the source stage of the pipeline.
 type SourceStatus struct {
+	// Spec represents the source specification that this status corresponds to.
+	// The spec is stored in the status so we can distinguish if the status
+	// reflects the latest spec or not.
+	Spec       SourceSpec
 	Commit     string
 	Errs       status.MultiError
 	LastUpdate metav1.Time
@@ -110,11 +228,16 @@ func (gs *SourceStatus) Equals(other *SourceStatus) bool {
 		return other == nil
 	}
 	return gs.Commit == other.Commit &&
-		status.DeepEqual(gs.Errs, other.Errs)
+		status.DeepEqual(gs.Errs, other.Errs) &&
+		isSourceSpecEqual(gs.Spec, other.Spec)
 }
 
 // RenderingStatus represents the status of the rendering stage of the pipeline.
 type RenderingStatus struct {
+	// Spec represents the source specification that this status corresponds to.
+	// The spec is stored in the status so we can distinguish if the status
+	// reflects the latest spec or not.
+	Spec       SourceSpec
 	Commit     string
 	Message    string
 	Errs       status.MultiError
@@ -147,11 +270,16 @@ func (rs *RenderingStatus) Equals(other *RenderingStatus) bool {
 	}
 	return rs.Commit == other.Commit &&
 		rs.Message == other.Message &&
-		status.DeepEqual(rs.Errs, other.Errs)
+		status.DeepEqual(rs.Errs, other.Errs) &&
+		isSourceSpecEqual(rs.Spec, other.Spec)
 }
 
 // SyncStatus represents the status of the sync stage of the pipeline.
 type SyncStatus struct {
+	// Spec represents the source specification that this status corresponds to.
+	// The spec is stored in the status so we can distinguish if the status
+	// reflects the latest spec or not.
+	Spec       SourceSpec
 	Syncing    bool
 	Commit     string
 	Errs       status.MultiError
@@ -180,5 +308,19 @@ func (ss *SyncStatus) Equals(other *SyncStatus) bool {
 	}
 	return ss.Syncing == other.Syncing &&
 		ss.Commit == other.Commit &&
-		status.DeepEqual(ss.Errs, other.Errs)
+		status.DeepEqual(ss.Errs, other.Errs) &&
+		isSourceSpecEqual(ss.Spec, other.Spec)
+}
+
+// isSourceSpecEqual returns true if a & b are Equal, handling nil cases.
+// None of the SourceSpec impls are nillable, but the interface itself is.
+func isSourceSpecEqual(a, b SourceSpec) bool {
+	switch {
+	case a == nil:
+		return b == nil
+	case b == nil:
+		return false
+	default:
+		return a.Equals(b)
+	}
 }

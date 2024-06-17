@@ -137,7 +137,7 @@ func TestRoot_Parse(t *testing.T) {
 					Commit:       testGitCommit,
 					LastUpdate:   fakeMetaTime,
 					ErrorSummary: &v1beta1.ErrorSummary{},
-					Git:          sourceStatusOutput,
+					Git:          sourceStatusOutput.DeepCopy(),
 				},
 				// Read updates the rendering status.
 				// TODO: Test different rendering status inputs
@@ -146,7 +146,7 @@ func TestRoot_Parse(t *testing.T) {
 					Commit:       testGitCommit,
 					LastUpdate:   fakeMetaTime,
 					ErrorSummary: &v1beta1.ErrorSummary{},
-					Git:          sourceStatusOutput,
+					Git:          sourceStatusOutput.DeepCopy(),
 				},
 				// Sync is normally empty on the first call to parseAndUpdate.
 				// TODO: Test different sync status inputs, like retries
@@ -178,21 +178,23 @@ func TestRoot_Parse(t *testing.T) {
 			Name:      rootSyncName,
 			Namespace: configmanagement.ControllerNamespace,
 			// FakeClient populates a few meta values
-			UID:             "1",
-			ResourceVersion: "2", // Create + Sync Update
-			Generation:      1,   // Spec is never updated after creation
+			UID: "1",
+			// Create + Update (source status + syncing condition) + Update (sync status + syncing condition)
+			ResourceVersion: "3",
+			Generation:      1, // Spec is never updated after creation
 		},
 		// parseAndUpdate doesn't update the RSync spec.
 		Status: v1beta1.RootSyncStatus{
 			Status: v1beta1.Status{
 				LastSyncedCommit: testGitCommit,
-				// Parse updates the Source status (Skipped, because no change)
+				// Fetch updates the Source status (skipped, because no change)
+				// Parse updates the Source status (only Syncing condition changed)
 				// TODO: Test parse errors
 				Source: v1beta1.SourceStatus{
 					Commit:       testGitCommit,
 					LastUpdate:   fakeMetaTime,
 					ErrorSummary: &v1beta1.ErrorSummary{},
-					Git:          sourceStatusOutput,
+					Git:          sourceStatusOutput.DeepCopy(),
 				},
 				// Rendering shouldn't change
 				Rendering: *rootSyncInput.Status.Rendering.DeepCopy(),
@@ -202,7 +204,7 @@ func TestRoot_Parse(t *testing.T) {
 					Commit:       testGitCommit,
 					LastUpdate:   fakeMetaTime,
 					ErrorSummary: &v1beta1.ErrorSummary{},
-					Git:          sourceStatusOutput,
+					Git:          sourceStatusOutput.DeepCopy(),
 				},
 			},
 			// Both parsing and updating should update the Syncing condition,
@@ -678,7 +680,13 @@ func TestRoot_Parse(t *testing.T) {
 			state := &reconcilerState{
 				status: reconcilerStatus.DeepCopy(),
 				cache: cacheForCommit{
-					source: sourceState{
+					source: &sourceState{
+						spec: GitSourceSpec{
+							Repo:     fileSource.SourceRepo,
+							Revision: fileSource.SourceRev,
+							Branch:   fileSource.SourceBranch,
+							Dir:      fileSource.SourceDir.SlashPath(),
+						},
 						commit:  testGitCommit,
 						syncDir: "/",
 						files:   files,
@@ -896,6 +904,9 @@ func TestRoot_DeclaredFields(t *testing.T) {
 			}
 			state := &reconcilerState{
 				status: &ReconcilerStatus{},
+				cache: cacheForCommit{
+					source: &sourceState{},
+				},
 			}
 			if err := parseAndUpdate(context.Background(), parser, triggerReimport, state); err != nil {
 				t.Fatal(err)
@@ -1152,6 +1163,9 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 			}
 			state := &reconcilerState{
 				status: &ReconcilerStatus{},
+				cache: cacheForCommit{
+					source: &sourceState{},
+				},
 			}
 			err := parseAndUpdate(context.Background(), parser, triggerReimport, state)
 			testerrors.AssertEqual(t, tc.expectedError, err, "expected error to match")
@@ -1239,6 +1253,9 @@ func TestRoot_SourceReconcilerErrorsMetricValidation(t *testing.T) {
 			}
 			state := &reconcilerState{
 				status: &ReconcilerStatus{},
+				cache: cacheForCommit{
+					source: &sourceState{},
+				},
 			}
 			err := parseAndUpdate(context.Background(), parser, triggerReimport, state)
 			testerrors.AssertEqual(t, tc.expectedError, err, "expected error to match")
@@ -1328,6 +1345,9 @@ func TestRoot_SourceAndSyncReconcilerErrorsMetricValidation(t *testing.T) {
 			}
 			state := &reconcilerState{
 				status: &ReconcilerStatus{},
+				cache: cacheForCommit{
+					source: &sourceState{},
+				},
 			}
 			err := parseAndUpdate(context.Background(), parser, triggerReimport, state)
 			testerrors.AssertEqual(t, tc.expectedError, err, "expected error to match")

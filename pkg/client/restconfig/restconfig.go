@@ -36,20 +36,39 @@ const DefaultTimeout = 15 * time.Second
 // is enabled or not. If server-side flow control is enabled, then client-side
 // throttling is disabled, vice versa.
 func NewRestConfig(timeout time.Duration) (*rest.Config, error) {
+	builder := restConfigBuilder{
+		newFromConfigFileFn:      NewFromConfigFile,
+		newFromInClusterConfigFn: NewFromInClusterConfig,
+	}
+	return builder.newRestConfig(timeout)
+}
+
+type restConfigBuilder struct {
+	newFromConfigFileFn      func(string) (*rest.Config, error)
+	newFromInClusterConfigFn func() (*rest.Config, error)
+}
+
+func (b *restConfigBuilder) newRestConfig(timeout time.Duration) (*rest.Config, error) {
 	var cfg *rest.Config
 	// Detect kubectl config file
 	path, err := KubeConfigPath()
-	if err != nil {
-		// Build from k8s downward API
-		cfg, err = NewFromInClusterConfig()
-		if err != nil {
-			return nil, fmt.Errorf("failed to build rest config: kubeconfig not found: reading in-cluster config: %w", err)
+	kubeConfigExists := false
+	if err == nil {
+		if _, err := os.Stat(path); err == nil {
+			kubeConfigExists = true
 		}
-	} else {
+	}
+	if kubeConfigExists {
 		// Build from local config file
-		cfg, err = NewFromConfigFile(path)
+		cfg, err = b.newFromConfigFileFn(path)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build rest config: reading local kubeconfig: %w", err)
+		}
+	} else {
+		// Build from k8s downward API
+		cfg, err = b.newFromInClusterConfigFn()
+		if err != nil {
+			return nil, fmt.Errorf("failed to build rest config: kubeconfig not found: reading in-cluster config: %w", err)
 		}
 	}
 	// Set timeout, if specified.

@@ -1297,6 +1297,37 @@ func TestNomosMigrate(t *testing.T) {
 		}
 	})
 	nt.T.Cleanup(func() {
+		cmObj := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "configmanagement.gke.io/v1",
+				"kind":       "ConfigManagement",
+				"metadata": map[string]interface{}{
+					"name": "config-management",
+				},
+			},
+		}
+
+		if err := nt.KubeClient.MergePatch(cmObj, `{"metadata":{"finalizers":[]}}`); err != nil {
+			if apierrors.IsNotFound(err) {
+				return // object already deleted, exit early to prevent watch error (GVK not found)
+			}
+			nt.T.Error(err)
+		}
+		// Delete the ConfigManagement CR, in case the test failed early.
+		if err := nt.KubeClient.Delete(cmObj); err != nil {
+			if apierrors.IsNotFound(err) {
+				return // object already deleted, exit early to prevent watch error (GVK not found)
+			}
+			nt.T.Fatal(err)
+		}
+		if err := nt.Watcher.WatchForNotFound(kinds.ConfigManagement(), cmObj.GetName(), "", testwatcher.WatchUnstructured()); err != nil {
+			nt.T.Fatal(err)
+		}
+	})
+	nt.T.Cleanup(func() {
+		if t.Failed() {
+			nt.PodLogs(configsync.ControllerNamespace, "config-management", "", false)
+		}
 		// Delete the ConfigManagement operator in case the test failed early.
 		// If this lingers around it could cause issues for subsequent tests.
 		cmDeployment := fake.DeploymentObject(
@@ -1407,6 +1438,37 @@ func TestNomosMigrateMonoRepo(t *testing.T) {
 		}
 	})
 	nt.T.Cleanup(func() {
+		cmObj := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "configmanagement.gke.io/v1",
+				"kind":       "ConfigManagement",
+				"metadata": map[string]interface{}{
+					"name": "config-management",
+				},
+			},
+		}
+
+		if err := nt.KubeClient.MergePatch(cmObj, `{"metadata":{"finalizers":[]}}`); err != nil {
+			if apierrors.IsNotFound(err) {
+				return // object already deleted, exit early to prevent watch error (GVK not found)
+			}
+			nt.T.Error(err)
+		}
+		// Delete the ConfigManagement CR, in case the test failed early.
+		if err := nt.KubeClient.Delete(cmObj); err != nil {
+			if apierrors.IsNotFound(err) {
+				return // object already deleted, exit early to prevent watch error (GVK not found)
+			}
+			nt.T.Fatal(err)
+		}
+		if err := nt.Watcher.WatchForNotFound(kinds.ConfigManagement(), cmObj.GetName(), "", testwatcher.WatchUnstructured()); err != nil {
+			nt.T.Fatal(err)
+		}
+	})
+	nt.T.Cleanup(func() {
+		if t.Failed() {
+			nt.PodLogs(configsync.ControllerNamespace, "config-management", "", false)
+		}
 		// Delete the ConfigManagement operator in case the test failed early.
 		// If this lingers around it could cause issues for subsequent tests.
 		cmDeployment := fake.DeploymentObject(

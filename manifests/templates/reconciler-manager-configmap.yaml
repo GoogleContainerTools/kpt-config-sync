@@ -101,7 +101,7 @@ data:
                - ALL
            imagePullPolicy: IfNotPresent
          - name: git-sync
-           image: gcr.io/config-management-release/git-sync:v4.2.1-gke.10__linux_amd64
+           image: GIT_SYNC_IMAGE_NAME
            args: ["--root=/repo/source", "--link=rev", "--max-failures=30", "--error-file=error.json"]
            volumeMounts:
            - name: repo
@@ -161,7 +161,7 @@ data:
                - ALL
              runAsUser: 65533
          - name: otel-agent
-           image: gcr.io/config-management-release/otelcontribcol:v0.102.0-gke.4
+           image: OTELCONTRIBCOL_IMAGE_NAME
            command:
            - /otelcontribcol
            args:

@@ -51,7 +51,6 @@ type Updater struct {
 	SyncErrorCache *SyncErrorCache
 
 	updateMux sync.RWMutex
-	updating  bool
 }
 
 func (u *Updater) needToUpdateWatch() bool {
@@ -62,9 +61,9 @@ func (u *Updater) managementConflict() bool {
 	return u.Remediator.ManagementConflict()
 }
 
-// Updating returns true if the Update method is running.
-func (u *Updater) Updating() bool {
-	return u.updating
+// Remediating returns true if the Remediator is remediating.
+func (u *Updater) Remediating() bool {
+	return u.Remediator.Remediating()
 }
 
 // declaredCRDs returns the list of CRDs which are present in the updater's
@@ -98,11 +97,7 @@ func (u *Updater) declaredCRDs() ([]*v1beta1.CustomResourceDefinition, status.Mu
 // another reconciler.
 func (u *Updater) Update(ctx context.Context, cache *cacheForCommit) status.MultiError {
 	u.updateMux.Lock()
-	u.updating = true
-	defer func() {
-		u.updating = false
-		u.updateMux.Unlock()
-	}()
+	defer u.updateMux.Unlock()
 
 	return u.update(ctx, cache)
 }

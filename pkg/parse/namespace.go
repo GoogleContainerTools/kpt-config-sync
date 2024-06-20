@@ -321,12 +321,6 @@ func (p *namespace) SyncErrors() status.MultiError {
 	return p.SyncErrorCache.Errors()
 }
 
-// Syncing returns true if the updater is running.
-// SyncErrors implements the Parser interface
-func (p *namespace) Syncing() bool {
-	return p.Updating()
-}
-
 // K8sClient implements the Parser interface
 func (p *namespace) K8sClient() client.Client {
 	return p.Client

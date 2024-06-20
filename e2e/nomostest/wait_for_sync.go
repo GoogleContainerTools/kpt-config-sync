@@ -275,26 +275,6 @@ func (nt *NT) WaitForRootSyncSourceError(rsName, code string, message string, op
 	)
 }
 
-// WaitForRootSyncRenderingError waits until the given error (code and message) is present on the RootSync resource
-func (nt *NT) WaitForRootSyncRenderingError(rsName, code string, message string, opts ...WaitOption) {
-	Wait(nt.T, fmt.Sprintf("RootSync %s rendering error code %s", rsName, code), nt.DefaultWaitTimeout,
-		func() error {
-			nt.T.Helper()
-			rs := fake.RootSyncObjectV1Beta1(rsName)
-			err := nt.KubeClient.Get(rs.GetName(), rs.GetNamespace(), rs)
-			if err != nil {
-				return err
-			}
-			// Only validate the rendering status, not the Syncing condition
-			// TODO: Revert this hack once async sync status updates are fixed to include rendering errors
-			return testpredicates.ValidateError(rs.Status.Rendering.Errors, code, message, nil)
-			// syncingCondition := rootsync.GetCondition(rs.Status.Conditions, v1beta1.RootSyncSyncing)
-			// return validateRootSyncError(rs.Status.Rendering.Errors, syncingCondition, code, message, []v1beta1.ErrorSource{v1beta1.RenderingError})
-		},
-		opts...,
-	)
-}
-
 // WaitForRootSyncSyncError waits until the given error (code and message) is present on the RootSync resource
 func (nt *NT) WaitForRootSyncSyncError(rsName, code string, message string, resources []v1beta1.ResourceRef, opts ...WaitOption) {
 	Wait(nt.T, fmt.Sprintf("RootSync %s rendering error code %s", rsName, code), nt.DefaultWaitTimeout,

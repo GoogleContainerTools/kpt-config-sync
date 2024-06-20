@@ -35,6 +35,7 @@ import (
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/status"
@@ -115,7 +116,7 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 	latestCommit := nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 	expectedStatus := "SYNCED"
 	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 
 	kustomizecomponents.ValidateAllTenants(nt, string(declared.RootScope), "base", "tenant-a", "tenant-b", "tenant-c")
@@ -123,14 +124,17 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 	nt.T.Log("Remove kustomization.yaml to make the sync fail")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("./kustomize-components/kustomization.yml"))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove the Kustomize configuration to make the sync fail"))
-	nt.WaitForRootSyncRenderingError(configsync.RootSyncName, status.ActionableHydrationErrorCode, "")
+	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
+		[]testpredicates.Predicate{
+			testpredicates.RootSyncHasRenderingError(status.ActionableHydrationErrorCode, ""),
+		}))
 
 	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
 	rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
 	latestCommit = nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 	expectedStatus = "ERROR"
 	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
-		nt.T.Errorf("%v\nExpected error: Kustomization should be missing.\n", err)
+		nt.T.Fatalf("%v\nExpected error: Kustomization should be missing.\n", err)
 	}
 
 	nt.T.Log("Add kustomization.yaml back")
@@ -146,20 +150,23 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 	latestCommit = nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 	expectedStatus = "SYNCED"
 	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 
 	nt.T.Log("Make kustomization.yaml invalid")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/invalid-kustomization.yaml", "./kustomize-components/kustomization.yml"))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("update kustomization.yaml to make it invalid"))
-	nt.WaitForRootSyncRenderingError(configsync.RootSyncName, status.ActionableHydrationErrorCode, "")
+	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
+		[]testpredicates.Predicate{
+			testpredicates.RootSyncHasRenderingError(status.ActionableHydrationErrorCode, ""),
+		}))
 
 	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
 	rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
 	latestCommit = nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 	expectedStatus = "ERROR"
 	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
-		nt.T.Errorf("%v\nExpected error: Should fail to run kustomize build.\n", err)
+		nt.T.Fatalf("%v\nExpected error: Should fail to run kustomize build.\n", err)
 	}
 
 	// one final validation to ensure hydration-controller can be re-disabled
@@ -224,7 +231,7 @@ func TestHydrateHelmComponents(t *testing.T) {
 	latestCommit := nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 	expectedStatus := "SYNCED"
 	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 
 	validateHelmComponents(nt, string(declared.RootScope))
@@ -248,7 +255,7 @@ func TestHydrateHelmComponents(t *testing.T) {
 	latestCommit = nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 	expectedStatus = "SYNCED"
 	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 }
 
@@ -291,34 +298,40 @@ func TestHydrateHelmOverlay(t *testing.T) {
 	latestCommit := nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 	expectedStatus := "SYNCED"
 	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
-		nt.T.Error(err)
+		nt.T.Fatal(err)
 	}
 
 	nt.T.Log("Make the hydration fail by checking in an invalid kustomization.yaml")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/resource-duplicate/kustomization.yaml", "./helm-overlay/kustomization.yaml"))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/resource-duplicate/namespace_tenant-a.yaml", "./helm-overlay/namespace_tenant-a.yaml"))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update kustomization.yaml with duplicated resources"))
-	nt.WaitForRootSyncRenderingError(configsync.RootSyncName, status.ActionableHydrationErrorCode, "")
+	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
+		[]testpredicates.Predicate{
+			testpredicates.RootSyncHasRenderingError(status.ActionableHydrationErrorCode, ""),
+		}))
 
 	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
 	rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
 	latestCommit = nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 	expectedStatus = "ERROR"
 	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
-		nt.T.Errorf("%v\nExpected errors: kustomization should be invalid.\n", err)
+		nt.T.Fatalf("%v\nExpected errors: kustomization should be invalid.\n", err)
 	}
 
 	nt.T.Log("Make the parsing fail by checking in a deprecated group and kind")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/deprecated-GK/kustomization.yaml", "./helm-overlay/kustomization.yaml"))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update kustomization.yaml to render a deprecated group and kind"))
-	nt.WaitForRootSyncSourceError(configsync.RootSyncName, nonhierarchical.DeprecatedGroupKindErrorCode, "")
+	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
+		[]testpredicates.Predicate{
+			testpredicates.RootSyncHasSourceError(nonhierarchical.DeprecatedGroupKindErrorCode, ""),
+		}))
 
 	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
 	rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
 	latestCommit = nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 	expectedStatus = "ERROR"
 	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
-		nt.T.Errorf("%v\nExpected errors: group and kind should be deprecated.\n", err)
+		nt.T.Fatalf("%v\nExpected errors: group and kind should be deprecated.\n", err)
 	}
 }
 
@@ -334,7 +347,10 @@ func TestHydrateRemoteResources(t *testing.T) {
 	nt.T.Log("Update RootSync to sync from the remote-base directory without enable shell in hydration controller")
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "remote-base"}}}`)
-	nt.WaitForRootSyncRenderingError(configsync.RootSyncName, status.ActionableHydrationErrorCode, "")
+	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
+		[]testpredicates.Predicate{
+			testpredicates.RootSyncHasRenderingError(status.ActionableHydrationErrorCode, ""),
+		}))
 
 	// hydration-controller disabled by default, check for existing of container
 	// after sync source contains DRY configs
@@ -397,7 +413,10 @@ func TestHydrateRemoteResources(t *testing.T) {
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add DRY configs to the repository"))
 	nt.T.Log("Update RootSync to sync from the remote-base directory when disable shell in hydration controller")
 	nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "remote-base"}}}`)
-	nt.WaitForRootSyncRenderingError(configsync.RootSyncName, status.ActionableHydrationErrorCode, "")
+	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
+		[]testpredicates.Predicate{
+			testpredicates.RootSyncHasRenderingError(status.ActionableHydrationErrorCode, ""),
+		}))
 	err = nt.Validate(nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace, &appsv1.Deployment{},
 		testpredicates.HasExactlyImage(reconcilermanager.HydrationController, reconcilermanager.HydrationController, "", ""))
 	if err != nil {
@@ -487,5 +506,8 @@ func validateHelmComponents(nt *nomostest.NT, reconcilerScope string) {
 		testpredicates.HasAnnotation(metadata.KustomizeOrigin, expectedBuiltinOrigin),
 		testpredicates.HasAnnotation(metadata.ResourceManagerKey, reconcilerScope)); err != nil {
 		nt.T.Error(err)
+	}
+	if nt.T.Failed() {
+		nt.T.FailNow()
 	}
 }

@@ -79,10 +79,6 @@ type Interface interface {
 	UpdateWatches(context.Context, map[schema.GroupVersionKind]struct{}) status.MultiError
 	// ManagementConflict returns true if one of the watchers noticed a management conflict.
 	ManagementConflict() bool
-	// ConflictErrors returns the errors the remediator encounters.
-	ConflictErrors() []status.ManagementConflictError
-	// FightErrors returns the fight errors (KNV2005) the remediator encounters.
-	FightErrors() []status.Error
 }
 
 var _ Interface = &Remediator{}
@@ -210,14 +206,4 @@ func (r *Remediator) UpdateWatches(ctx context.Context, gvks map[schema.GroupVer
 // ManagementConflict implements Interface.
 func (r *Remediator) ManagementConflict() bool {
 	return r.watchMgr.ManagementConflict()
-}
-
-// ConflictErrors implements Interface.
-func (r *Remediator) ConflictErrors() []status.ManagementConflictError {
-	return r.conflictHandler.ConflictErrors()
-}
-
-// FightErrors implements Interface.
-func (r *Remediator) FightErrors() []status.Error {
-	return r.fightHandler.FightErrors()
 }

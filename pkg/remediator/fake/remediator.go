@@ -27,24 +27,12 @@ import (
 // This is not in kpt.dev/configsync/pkg/testing/fake because that would cause
 // a import loop (remediator -> fake -> remediator).
 type Remediator struct {
-	ConflictErrorsOutput     []status.ManagementConflictError
-	FightErrorsOutput        []status.Error
 	ManagementConflictOutput bool
 	Watches                  map[schema.GroupVersionKind]struct{}
 	UpdateWatchesError       status.MultiError
 	Paused                   bool
 
 	needsUpdate bool
-}
-
-// ConflictErrors fakes remediator.Remediator.ConflictErrors
-func (r *Remediator) ConflictErrors() []status.ManagementConflictError {
-	return r.ConflictErrorsOutput
-}
-
-// FightErrors fakes remediator.Remediator.FightErrors
-func (r *Remediator) FightErrors() []status.Error {
-	return r.FightErrorsOutput
 }
 
 // ManagementConflict fakes remediator.Remediator.ManagementConflict

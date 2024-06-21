@@ -43,7 +43,7 @@ type Remediator struct {
 
 	// lifecycleMux guards start/stop/add/remove of the workers, as well as
 	// updates to queue, parentContext, doneCh, and stopFn.
-	lifecycleMux sync.Mutex
+	lifecycleMux sync.RWMutex
 	// workers pull objects from the queue and remediate them
 	workers []*reconcile.Worker
 	// objectQueue is a queue of objects that have received watch events and
@@ -57,6 +57,9 @@ type Remediator struct {
 	doneCh chan struct{}
 	// stopFn cancels the internal context, stopping the workers.
 	stopFn context.CancelFunc
+	// running is true if Start has been called and the remediator is not
+	// currently paused.
+	running bool
 
 	conflictHandler conflict.Handler
 	fightHandler    fight.Handler
@@ -67,6 +70,8 @@ type Remediator struct {
 //
 // Placed here to make discovering the production implementation (above) easier.
 type Interface interface {
+	// Remediating returns true if workers are running and watchers are watching.
+	Remediating() bool
 	// Pause the Remediator by stopping the workers and waiting for them to be done.
 	Pause()
 	// Resume the Remediator by starting the workers.
@@ -151,6 +156,10 @@ func (r *Remediator) Start(ctx context.Context) <-chan struct{} {
 // startWorkers starts the workers and sets doneCh & stopFn.
 // This should always be called while lifecycleMux is locked.
 func (r *Remediator) startWorkers() {
+	if r.running {
+		return
+	}
+
 	ctx, cancel := context.WithCancel(r.parentContext)
 
 	doneCh := make(chan struct{})
@@ -170,6 +179,26 @@ func (r *Remediator) startWorkers() {
 
 	r.doneCh = doneCh
 	r.stopFn = cancel
+	r.running = true
+}
+
+// stopWorkers stops the workers and waits for them to exit.
+// This should always be called while lifecycleMux is locked.
+func (r *Remediator) stopWorkers() {
+	if !r.running {
+		return
+	}
+
+	r.stopFn() // tell the workers to stop
+	<-r.doneCh // wait until workers are done (if running)
+	r.running = false
+}
+
+// Remediating returns true if workers are running and watchers are watching.
+func (r *Remediator) Remediating() bool {
+	r.lifecycleMux.RLock()
+	defer r.lifecycleMux.RUnlock()
+	return r.running && r.watchMgr.Watching()
 }
 
 // Pause the Remediator by stopping the workers and waiting for them to be done.
@@ -178,8 +207,7 @@ func (r *Remediator) Pause() {
 	defer r.lifecycleMux.Unlock()
 
 	klog.V(1).Info("Remediator pausing...")
-	r.stopFn() // tell the workers to stop
-	<-r.doneCh // wait until workers are done (if running)
+	r.stopWorkers()
 	klog.V(3).Info("Remediator paused")
 }
 

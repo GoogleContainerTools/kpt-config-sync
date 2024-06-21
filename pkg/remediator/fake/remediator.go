@@ -30,7 +30,6 @@ type Remediator struct {
 	ManagementConflictOutput bool
 	Watches                  map[schema.GroupVersionKind]struct{}
 	UpdateWatchesError       status.MultiError
-	Watching                 bool
 	Paused                   bool
 
 	needsUpdate bool
@@ -46,11 +45,6 @@ func (r *Remediator) NeedsUpdate() bool {
 	return r.needsUpdate
 }
 
-// Remediating returns true if not paused
-func (r *Remediator) Remediating() bool {
-	return r.Watching && !r.Paused
-}
-
 // Pause fakes remediator.Remediator.Pause
 func (r *Remediator) Pause() {
 	r.Paused = true
@@ -63,7 +57,6 @@ func (r *Remediator) Resume() {
 
 // UpdateWatches fakes remediator.Remediator.UpdateWatches
 func (r *Remediator) UpdateWatches(_ context.Context, watches map[schema.GroupVersionKind]struct{}) status.MultiError {
-	r.Watching = true
 	r.Watches = watches
 	r.needsUpdate = false
 	return r.UpdateWatchesError

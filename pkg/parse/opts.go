@@ -96,6 +96,8 @@ type Parser interface {
 	// SyncErrors returns all the sync errors, including remediator errors,
 	// validation errors, applier errors, and watch update errors.
 	SyncErrors() status.MultiError
+	// Syncing returns true if the updater is running.
+	Syncing() bool
 	// K8sClient returns the Kubernetes client that talks to the API server.
 	K8sClient() client.Client
 	// setRequiresRendering sets the requires-rendering annotation on the RSync

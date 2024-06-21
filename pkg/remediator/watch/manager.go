@@ -50,9 +50,7 @@ type Manager struct {
 	watcherFactory watcherFactory
 
 	// The following fields are guarded by the mutex.
-	mux sync.RWMutex
-	// watching is true if UpdateWatches has been called
-	watching bool
+	mux sync.Mutex
 	// watcherMap maps GVKs to their associated watchers
 	watcherMap map[schema.GroupVersionKind]Runnable
 	// needsUpdate indicates if the Manager's watches need to be updated.
@@ -101,17 +99,10 @@ func NewManager(scope declared.Scope, syncName string, cfg *rest.Config,
 	}, nil
 }
 
-// Watching returns true if UpdateWatches has been called, starting the watchers. This function is threadsafe.
-func (m *Manager) Watching() bool {
-	m.mux.RLock()
-	defer m.mux.RUnlock()
-	return m.watching
-}
-
 // NeedsUpdate returns true if the Manager's watches need to be updated. This function is threadsafe.
 func (m *Manager) NeedsUpdate() bool {
-	m.mux.RLock()
-	defer m.mux.RUnlock()
+	m.mux.Lock()
+	defer m.mux.Unlock()
 	return m.needsUpdate
 }
 
@@ -144,7 +135,6 @@ func (m *Manager) ManagementConflict() bool {
 func (m *Manager) UpdateWatches(ctx context.Context, gvkMap map[schema.GroupVersionKind]struct{}) status.MultiError {
 	m.mux.Lock()
 	defer m.mux.Unlock()
-	m.watching = true
 
 	klog.V(3).Infof("UpdateWatches(%v)", gvkMap)
 

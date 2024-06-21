@@ -183,13 +183,14 @@ func Run(ctx context.Context, p Parser, nsControllerState *namespacecontroller.S
 
 		// Update the sync status to report management conflicts (from the remediator).
 		case <-statusUpdateTimer.C:
-			// Publish the sync status periodically to update remediator errors.
-			// Skip updates if the remediator is not running yet, paused, or watches haven't been updated yet.
-			// This implies that this reconciler has successfully parsed, rendered, validated, and synced.
-			if p.options().Remediating() {
+			// Skip sync status update if the .status.sync.commit is out of date.
+			// This avoids overwriting a newer Syncing condition with the status
+			// from an older commit.
+			if state.syncStatus.commit == state.sourceStatus.commit &&
+				state.syncStatus.commit == state.renderingStatus.commit {
+
 				klog.V(3).Info("Updating sync status (periodic while not syncing)")
-				// Don't update the sync spec or commit.
-				if err := setSyncStatus(ctx, p, state, false, state.syncStatus.commit, p.SyncErrors()); err != nil {
+				if err := setSyncStatus(ctx, p, state, p.Syncing(), p.SyncErrors()); err != nil {
 					klog.Warningf("failed to update sync status: %v", err)
 				}
 			}
@@ -550,7 +551,7 @@ func parseAndUpdate(ctx context.Context, p Parser, trigger string, state *reconc
 	// SyncErrors include errors from both the Updater and Remediator
 	klog.V(3).Info("Updating sync status (after sync)")
 	syncErrs := p.SyncErrors()
-	if err := setSyncStatus(ctx, p, state, false, state.cache.source.commit, syncErrs); err != nil {
+	if err := setSyncStatus(ctx, p, state, false, syncErrs); err != nil {
 		syncErrs = status.Append(syncErrs, err)
 	}
 
@@ -561,11 +562,11 @@ func parseAndUpdate(ctx context.Context, p Parser, trigger string, state *reconc
 // setSyncStatus updates `.status.sync` and the Syncing condition, if needed,
 // as well as `state.syncStatus` and `state.syncingConditionLastUpdate` if
 // the update is successful.
-func setSyncStatus(ctx context.Context, p Parser, state *reconcilerState, syncing bool, commit string, syncErrs status.MultiError) error {
+func setSyncStatus(ctx context.Context, p Parser, state *reconcilerState, syncing bool, syncErrs status.MultiError) error {
 	// Update the RSync status, if necessary
 	newSyncStatus := syncStatus{
 		syncing:    syncing,
-		commit:     commit,
+		commit:     state.cache.source.commit,
 		errs:       syncErrs,
 		lastUpdate: metav1.Now(),
 	}
@@ -609,7 +610,7 @@ func updateSyncStatusPeriodically(ctx context.Context, p Parser, state *reconcil
 
 		case <-updateTimer.C:
 			klog.V(3).Info("Updating sync status (periodic while syncing)")
-			if err := setSyncStatus(ctx, p, state, true, state.cache.source.commit, p.SyncErrors()); err != nil {
+			if err := setSyncStatus(ctx, p, state, true, p.SyncErrors()); err != nil {
 				klog.Warningf("failed to update sync status: %v", err)
 			}
 

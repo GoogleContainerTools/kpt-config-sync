@@ -15,15 +15,12 @@
 package e2e
 
 import (
-	"fmt"
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
-	nomosstatus "kpt.dev/configsync/cmd/nomos/status"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/kustomizecomponents"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
@@ -73,9 +70,7 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 			testpredicates.DeploymentHasEnvVar(reconcilermanager.Reconciler, reconcilermanager.RenderingEnabled, "false"),
 		)
 	})
-	if err := tg.Wait(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(tg.Wait())
 
 	nt.T.Log("Add the kustomize components root directory")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/kustomize-components", "."))
@@ -84,9 +79,7 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 	nt.T.Log("Update RootSync to sync from the kustomize-components directory")
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "kustomize-components"}}}`)
-	if err := nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(syncDirMap)); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(syncDirMap)))
 
 	// Dry configs added to repo, assert that hydration is enabled
 	tg = taskgroup.New()
@@ -107,76 +100,53 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 			testpredicates.DeploymentHasEnvVar(reconcilermanager.Reconciler, reconcilermanager.RenderingEnabled, "true"),
 		)
 	})
-	if err := tg.Wait(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(tg.Wait())
 
-	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
-	rsCommit, rsStatus, rsErrorSummary := getRootSyncCommitStatusErrorSummary(rs, nil, false)
+	// Validate nomos status
 	latestCommit := nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
-	expectedStatus := "SYNCED"
-	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(configsync.RootSyncName, configsync.ControllerNamespace, &v1beta1.RootSync{},
+		testpredicates.RootSyncHasNomosStatus(latestCommit, "SYNCED")))
 
 	kustomizecomponents.ValidateAllTenants(nt, string(declared.RootScope), "base", "tenant-a", "tenant-b", "tenant-c")
 
 	nt.T.Log("Remove kustomization.yaml to make the sync fail")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("./kustomize-components/kustomization.yml"))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove the Kustomize configuration to make the sync fail"))
+	latestCommit = nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
 		[]testpredicates.Predicate{
-			testpredicates.RootSyncHasRenderingError(status.ActionableHydrationErrorCode, ""),
+			testpredicates.RootSyncHasRenderingError(status.ActionableHydrationErrorCode, "Kustomization config file is missing from the sync directory"),
+			testpredicates.RootSyncHasNomosStatus(latestCommit, "ERROR"),
 		}))
-
-	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
-	rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
-	latestCommit = nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
-	expectedStatus = "ERROR"
-	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
-		nt.T.Fatalf("%v\nExpected error: Kustomization should be missing.\n", err)
-	}
 
 	nt.T.Log("Add kustomization.yaml back")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/kustomize-components/kustomization.yml", "./kustomize-components/kustomization.yml"))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add kustomization.yml back"))
 
-	if err := nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(syncDirMap)); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(syncDirMap)))
 
-	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
-	rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
+	// Validate nomos status
 	latestCommit = nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
-	expectedStatus = "SYNCED"
-	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(configsync.RootSyncName, configsync.ControllerNamespace, &v1beta1.RootSync{},
+		testpredicates.RootSyncHasNomosStatus(latestCommit, "SYNCED")))
 
 	nt.T.Log("Make kustomization.yaml invalid")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/invalid-kustomization.yaml", "./kustomize-components/kustomization.yml"))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("update kustomization.yaml to make it invalid"))
+	latestCommit = nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
 		[]testpredicates.Predicate{
-			testpredicates.RootSyncHasRenderingError(status.ActionableHydrationErrorCode, ""),
+			testpredicates.RootSyncHasRenderingError(status.ActionableHydrationErrorCode, "failed to run kustomize build"),
+			testpredicates.RootSyncHasNomosStatus(latestCommit, "ERROR"),
 		}))
-
-	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
-	rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
-	latestCommit = nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
-	expectedStatus = "ERROR"
-	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
-		nt.T.Fatalf("%v\nExpected error: Should fail to run kustomize build.\n", err)
-	}
 
 	// one final validation to ensure hydration-controller can be re-disabled
 	nt.T.Log("Remove all dry configs")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("./kustomize-components"))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/compiled/kustomize-components", "."))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Replace dry configs with wet configs"))
-	if err := nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(syncDirMap)); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(syncDirMap)))
+
 	nt.T.Log("Verify the hydration-controller is omitted after dry configs were removed")
 	// Dry configs removed from repo, assert that hydration is disabled again
 	tg = taskgroup.New()
@@ -197,9 +167,7 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 			testpredicates.DeploymentHasEnvVar(reconcilermanager.Reconciler, reconcilermanager.RenderingEnabled, "false"),
 		)
 	})
-	if err := tg.Wait(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(tg.Wait())
 }
 
 func TestHydrateHelmComponents(t *testing.T) {
@@ -221,42 +189,45 @@ func TestHydrateHelmComponents(t *testing.T) {
 		nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "helm-components"}}}`)
 	}
 
-	err := nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "helm-components"}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "helm-components"})))
 
-	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
-	rsCommit, rsStatus, rsErrorSummary := getRootSyncCommitStatusErrorSummary(rs, nil, false)
+	// Validate nomos status
 	latestCommit := nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
-	expectedStatus := "SYNCED"
-	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(configsync.RootSyncName, configsync.ControllerNamespace, &v1beta1.RootSync{},
+		testpredicates.RootSyncHasNomosStatus(latestCommit, "SYNCED")))
 
-	validateHelmComponents(nt, string(declared.RootScope))
+	nt.T.Log("Validate resources are synced")
+	tg := taskgroup.New()
+	tg.Go(func() error {
+		return nt.Validate("my-coredns-coredns", "coredns", &appsv1.Deployment{},
+			testpredicates.DeploymentContainerPullPolicyEquals("coredns", "IfNotPresent"),
+			testpredicates.HasAnnotation(metadata.KustomizeOrigin, expectedBuiltinOrigin),
+			testpredicates.HasAnnotation(metadata.ResourceManagerKey, string(declared.RootScope)))
+	})
+	tg.Go(func() error {
+		return nt.Validate("my-wordpress", "wordpress",
+			&appsv1.Deployment{},
+			testpredicates.DeploymentContainerPullPolicyEquals("wordpress", "IfNotPresent"),
+			testpredicates.HasAnnotation(metadata.KustomizeOrigin, expectedBuiltinOrigin),
+			testpredicates.HasAnnotation(metadata.ResourceManagerKey, string(declared.RootScope)))
+	})
+	nt.Must(tg.Wait())
 
 	nt.T.Log("Use a remote values.yaml file from a public repo")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/helm-components-remote-values-kustomization.yaml", "./helm-components/kustomization.yaml"))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Render with a remote values.yaml file from a public repo"))
-	err = nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "helm-components"}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-	if err := nt.Validate("my-coredns-coredns", "coredns", &appsv1.Deployment{},
+
+	nt.Must(nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "helm-components"})))
+
+	nt.Must(nt.Validate("my-coredns-coredns", "coredns", &appsv1.Deployment{},
 		testpredicates.DeploymentContainerPullPolicyEquals("coredns", "Always"),
 		testpredicates.DeploymentContainerImageEquals("coredns", "coredns/coredns:1.8.4"),
-		testpredicates.HasAnnotation(metadata.KustomizeOrigin, expectedBuiltinOrigin)); err != nil {
-		nt.T.Fatal(err)
-	}
+		testpredicates.HasAnnotation(metadata.KustomizeOrigin, expectedBuiltinOrigin)))
 
-	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
-	rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
+	// Validate nomos status
 	latestCommit = nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
-	expectedStatus = "SYNCED"
-	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(configsync.RootSyncName, configsync.ControllerNamespace, &v1beta1.RootSync{},
+		testpredicates.RootSyncHasNomosStatus(latestCommit, "SYNCED")))
 }
 
 func TestHydrateHelmOverlay(t *testing.T) {
@@ -278,61 +249,41 @@ func TestHydrateHelmOverlay(t *testing.T) {
 		nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "helm-overlay"}}}`)
 	}
 
-	err := nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "helm-overlay"}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "helm-overlay"})))
 
 	nt.T.Log("Validate resources are synced")
-	if err := nt.Validate("my-coredns-coredns", "coredns", &appsv1.Deployment{},
+	nt.Must(nt.Validate("my-coredns-coredns", "coredns", &appsv1.Deployment{},
 		testpredicates.HasAnnotation("hydration-tool", "kustomize"),
 		testpredicates.HasLabel("team", "coredns"),
 		testpredicates.HasAnnotation("client.lifecycle.config.k8s.io/mutation", "ignore"),
 		testpredicates.HasAnnotation(metadata.KustomizeOrigin, "configuredIn: base/kustomization.yaml\nconfiguredBy:\n  apiVersion: builtin\n  kind: HelmChartInflationGenerator\n"),
-		testpredicates.HasLabel("test-case", "hydration")); err != nil {
-		nt.T.Fatal(err)
-	}
+		testpredicates.HasLabel("test-case", "hydration")))
 
-	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
-	rsCommit, rsStatus, rsErrorSummary := getRootSyncCommitStatusErrorSummary(rs, nil, false)
+	// Validate nomos status
 	latestCommit := nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
-	expectedStatus := "SYNCED"
-	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(configsync.RootSyncName, configsync.ControllerNamespace, &v1beta1.RootSync{},
+		testpredicates.RootSyncHasNomosStatus(latestCommit, "SYNCED")))
 
 	nt.T.Log("Make the hydration fail by checking in an invalid kustomization.yaml")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/resource-duplicate/kustomization.yaml", "./helm-overlay/kustomization.yaml"))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/resource-duplicate/namespace_tenant-a.yaml", "./helm-overlay/namespace_tenant-a.yaml"))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update kustomization.yaml with duplicated resources"))
+	latestCommit = nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
 		[]testpredicates.Predicate{
-			testpredicates.RootSyncHasRenderingError(status.ActionableHydrationErrorCode, ""),
+			testpredicates.RootSyncHasRenderingError(status.ActionableHydrationErrorCode, "failed to run kustomize build"),
+			testpredicates.RootSyncHasNomosStatus(latestCommit, "ERROR"),
 		}))
-
-	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
-	rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
-	latestCommit = nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
-	expectedStatus = "ERROR"
-	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
-		nt.T.Fatalf("%v\nExpected errors: kustomization should be invalid.\n", err)
-	}
 
 	nt.T.Log("Make the parsing fail by checking in a deprecated group and kind")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/deprecated-GK/kustomization.yaml", "./helm-overlay/kustomization.yaml"))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update kustomization.yaml to render a deprecated group and kind"))
+	latestCommit = nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
 		[]testpredicates.Predicate{
-			testpredicates.RootSyncHasSourceError(nonhierarchical.DeprecatedGroupKindErrorCode, ""),
+			testpredicates.RootSyncHasSourceError(nonhierarchical.DeprecatedGroupKindErrorCode, "The config is using a deprecated Group and Kind"),
+			testpredicates.RootSyncHasNomosStatus(latestCommit, "ERROR"),
 		}))
-
-	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
-	rsCommit, rsStatus, rsErrorSummary = getRootSyncCommitStatusErrorSummary(rs, nil, false)
-	latestCommit = nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
-	expectedStatus = "ERROR"
-	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
-		nt.T.Fatalf("%v\nExpected errors: group and kind should be deprecated.\n", err)
-	}
 }
 
 func TestHydrateRemoteResources(t *testing.T) {
@@ -355,23 +306,15 @@ func TestHydrateRemoteResources(t *testing.T) {
 	// hydration-controller disabled by default, check for existing of container
 	// after sync source contains DRY configs
 	nt.T.Log("Check hydration controller default image name")
-	err := nt.Validate(nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace, &appsv1.Deployment{},
-		testpredicates.HasExactlyImage(reconcilermanager.HydrationController, reconcilermanager.HydrationController, "", ""))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace, &appsv1.Deployment{},
+		testpredicates.HasExactlyImage(reconcilermanager.HydrationController, reconcilermanager.HydrationController, "", "")))
 
 	nt.T.Log("Enable shell in hydration controller")
 	nt.MustMergePatch(rs, `{"spec": {"override": {"enableShellInRendering": true}}}`)
-	err = nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "remote-base"}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-	err = nt.Validate(nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace, &appsv1.Deployment{},
-		testpredicates.HasExactlyImage(reconcilermanager.HydrationController, reconcilermanager.HydrationControllerWithShell, "", ""))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+
+	nt.Must(nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "remote-base"})))
+	nt.Must(nt.Validate(nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace, &appsv1.Deployment{},
+		testpredicates.HasExactlyImage(reconcilermanager.HydrationController, reconcilermanager.HydrationControllerWithShell, "", "")))
 	expectedOrigin := "path: base/namespace.yaml\nrepo: https://github.com/config-sync-examples/kustomize-components\nref: main\n"
 	nt.T.Log("Validate resources are synced")
 	var expectedNamespaces = []string{"tenant-a"}
@@ -380,10 +323,8 @@ func TestHydrateRemoteResources(t *testing.T) {
 	nt.T.Log("Update kustomization.yaml to use a remote overlay")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/remote-overlay-kustomization.yaml", "./remote-base/kustomization.yaml"))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update kustomization.yaml to use a remote overlay"))
-	err = nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "remote-base"}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+
+	nt.Must(nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "remote-base"})))
 
 	nt.T.Log("Validate resources are synced")
 	expectedNamespaces = []string{"tenant-b"}
@@ -392,10 +333,7 @@ func TestHydrateRemoteResources(t *testing.T) {
 	// Update kustomization.yaml to use remote resources
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/remote-resources-kustomization.yaml", "./remote-base/kustomization.yaml"))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update kustomization.yaml to use remote resources"))
-	err = nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "remote-base"}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "remote-base"})))
 
 	nt.T.Log("Validate resources are synced")
 	expectedNamespaces = []string{"tenant-a", "tenant-b", "tenant-c"}
@@ -406,9 +344,8 @@ func TestHydrateRemoteResources(t *testing.T) {
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove remote-base repository"))
 	nt.T.Log("Disable shell in hydration controller")
 	nt.MustMergePatch(rs, `{"spec": {"override": {"enableShellInRendering": false}, "git": {"dir": "acme"}}}`)
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
+
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/remote-base", "."))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add DRY configs to the repository"))
 	nt.T.Log("Update RootSync to sync from the remote-base directory when disable shell in hydration controller")
@@ -417,11 +354,8 @@ func TestHydrateRemoteResources(t *testing.T) {
 		[]testpredicates.Predicate{
 			testpredicates.RootSyncHasRenderingError(status.ActionableHydrationErrorCode, ""),
 		}))
-	err = nt.Validate(nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace, &appsv1.Deployment{},
-		testpredicates.HasExactlyImage(reconcilermanager.HydrationController, reconcilermanager.HydrationController, "", ""))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace, &appsv1.Deployment{},
+		testpredicates.HasExactlyImage(reconcilermanager.HydrationController, reconcilermanager.HydrationController, "", "")))
 }
 
 func TestHydrateResourcesInRelativePath(t *testing.T) {
@@ -438,76 +372,30 @@ func TestHydrateResourcesInRelativePath(t *testing.T) {
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "relative-path/overlays/dev"}}}`)
 
-	err := nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "relative-path/overlays/dev"}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "relative-path/overlays/dev"})))
 
-	rs = getUpdatedRootSync(nt, configsync.RootSyncName, configsync.ControllerNamespace)
-	rsCommit, rsStatus, rsErrorSummary := getRootSyncCommitStatusErrorSummary(rs, nil, false)
+	// Validate nomos status
 	latestCommit := nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
-	expectedStatus := "SYNCED"
-	if err := validateRootSyncRepoState(latestCommit, rsCommit, expectedStatus, rsStatus, rsErrorSummary); err != nil {
-		nt.T.Error(err)
-	}
+	nt.Must(nt.Validate(configsync.RootSyncName, configsync.ControllerNamespace, &v1beta1.RootSync{},
+		testpredicates.RootSyncHasNomosStatus(latestCommit, "SYNCED")))
 
 	nt.T.Log("Validating resources are synced")
-	if err := nt.Validate("foo", "", &corev1.Namespace{}, testpredicates.HasAnnotation(metadata.KustomizeOrigin, "path: ../../base/foo/namespace.yaml\n")); err != nil {
-		nt.T.Error(err)
-	}
-	if err := nt.Validate("pod-creators", "foo", &rbacv1.RoleBinding{}, testpredicates.HasAnnotation(metadata.KustomizeOrigin, "path: ../../base/foo/pod-creator-rolebinding.yaml\n")); err != nil {
-		nt.T.Error(err)
-	}
-	if err := nt.Validate("foo-ksa-dev", "foo", &corev1.ServiceAccount{}, testpredicates.HasAnnotation(metadata.KustomizeOrigin, "path: ../../base/foo/serviceaccount.yaml\n")); err != nil {
-		nt.T.Error(err)
-	}
-	if err := nt.Validate("pod-creator", "", &rbacv1.ClusterRole{}, testpredicates.HasAnnotation(metadata.KustomizeOrigin, "path: ../../base/pod-creator-clusterrole.yaml\n")); err != nil {
-		nt.T.Error(err)
-	}
-}
-
-// getRootSyncCommitStatusErrorSummary converts the given rootSync into a RepoState, then into a string
-func getRootSyncCommitStatusErrorSummary(rootSync *v1beta1.RootSync, rg *unstructured.Unstructured, syncingConditionSupported bool) (string, string, string) {
-	rs := nomosstatus.RootRepoStatus(rootSync, rg, syncingConditionSupported)
-
-	return rs.GetCommit(), rs.GetStatus(), fmt.Sprintf("%v", rs.GetErrorSummary())
-}
-
-// getUpdatedRootSync gets the most recent RootSync from Client
-func getUpdatedRootSync(nt *nomostest.NT, name string, namespace string) *v1beta1.RootSync {
-	rs := &v1beta1.RootSync{}
-	if err := nt.KubeClient.Get(name, namespace, rs); err != nil {
-		nt.T.Fatal(err)
-	}
-	return rs
-}
-
-// validateRootSyncRepoState verifies the output from getRootSyncCommitStatusErrorSummary is as expected.
-func validateRootSyncRepoState(expectedCommit string, commit string, expectedStatus string, status string, errorSummary string) error {
-	if expectedCommit != commit || expectedStatus != status {
-		return fmt.Errorf("Error: rootSync does not match expected. Got: commit: %v, status: %v\nError Summary: %v\nExpected: commit: %v, status: %v\n",
-			commit, status, errorSummary, expectedCommit, expectedStatus)
-	}
-	return nil
-}
-
-// validateHelmComponents validates if all resources are rendered, created and managed by the reconciler.
-func validateHelmComponents(nt *nomostest.NT, reconcilerScope string) {
-	nt.T.Log("Validate resources are synced")
-	if err := nt.Validate("my-coredns-coredns", "coredns", &appsv1.Deployment{},
-		testpredicates.DeploymentContainerPullPolicyEquals("coredns", "IfNotPresent"),
-		testpredicates.HasAnnotation(metadata.KustomizeOrigin, expectedBuiltinOrigin),
-		testpredicates.HasAnnotation(metadata.ResourceManagerKey, reconcilerScope)); err != nil {
-		nt.T.Error(err)
-	}
-	if err := nt.Validate("my-wordpress", "wordpress",
-		&appsv1.Deployment{},
-		testpredicates.DeploymentContainerPullPolicyEquals("wordpress", "IfNotPresent"),
-		testpredicates.HasAnnotation(metadata.KustomizeOrigin, expectedBuiltinOrigin),
-		testpredicates.HasAnnotation(metadata.ResourceManagerKey, reconcilerScope)); err != nil {
-		nt.T.Error(err)
-	}
-	if nt.T.Failed() {
-		nt.T.FailNow()
-	}
+	tg := taskgroup.New()
+	tg.Go(func() error {
+		return nt.Validate("foo", "", &corev1.Namespace{},
+			testpredicates.HasAnnotation(metadata.KustomizeOrigin, "path: ../../base/foo/namespace.yaml\n"))
+	})
+	tg.Go(func() error {
+		return nt.Validate("pod-creators", "foo", &rbacv1.RoleBinding{},
+			testpredicates.HasAnnotation(metadata.KustomizeOrigin, "path: ../../base/foo/pod-creator-rolebinding.yaml\n"))
+	})
+	tg.Go(func() error {
+		return nt.Validate("foo-ksa-dev", "foo", &corev1.ServiceAccount{},
+			testpredicates.HasAnnotation(metadata.KustomizeOrigin, "path: ../../base/foo/serviceaccount.yaml\n"))
+	})
+	tg.Go(func() error {
+		return nt.Validate("pod-creator", "", &rbacv1.ClusterRole{},
+			testpredicates.HasAnnotation(metadata.KustomizeOrigin, "path: ../../base/pod-creator-clusterrole.yaml\n"))
+	})
+	nt.Must(tg.Wait())
 }

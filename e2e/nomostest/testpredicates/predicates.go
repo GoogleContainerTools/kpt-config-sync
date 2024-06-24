@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	nomosstatus "kpt.dev/configsync/cmd/nomos/status"
 	"kpt.dev/configsync/e2e/nomostest/retry"
 	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
 	"kpt.dev/configsync/e2e/nomostest/testlogger"
@@ -1456,4 +1457,26 @@ func ValidateError(errs []v1beta1.ConfigSyncError, code, message string, resourc
 	}
 
 	return fmt.Errorf("error %s not present: %s", code, log.AsJSON(errs))
+}
+
+// RootSyncHasNomosStatus returns an error if the RootSync does not have the
+// specified commit or status according to `nomos status` (RootRepoStatus).
+func RootSyncHasNomosStatus(expectedCommit, expectedStatus string) Predicate {
+	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
+		rs, ok := o.(*v1beta1.RootSync)
+		if !ok {
+			return WrongTypeErr(o, &v1beta1.RootSync{})
+		}
+		repoStatus := nomosstatus.RootRepoStatus(rs, nil, false)
+		commit := repoStatus.GetCommit()
+		status := repoStatus.GetStatus()
+		if commit != expectedCommit || status != expectedStatus {
+			return fmt.Errorf("expected RepoStatus commit %q and status %q, but found %q and %q: error summary: %v",
+				expectedCommit, expectedStatus, commit, status, repoStatus.GetErrorSummary())
+		}
+		return nil
+	}
 }

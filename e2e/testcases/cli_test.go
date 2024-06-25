@@ -1326,18 +1326,18 @@ func TestNomosMigrate(t *testing.T) {
 	})
 	nt.T.Cleanup(func() {
 		if t.Failed() {
-			nt.PodLogs(configsync.ControllerNamespace, "config-management", "", false)
+			nt.PodLogs(configsync.ControllerNamespace, util.ACMOperatorDeployment, "", false)
 		}
 		// Delete the ConfigManagement operator in case the test failed early.
 		// If this lingers around it could cause issues for subsequent tests.
 		cmDeployment := fake.DeploymentObject(
 			core.Namespace(configsync.ControllerNamespace),
-			core.Name("config-management"),
+			core.Name(util.ACMOperatorDeployment),
 		)
 		if err := nt.KubeClient.Delete(cmDeployment, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil && !apierrors.IsNotFound(err) {
 			nt.T.Fatal(err)
 		}
-		if err := nt.Watcher.WatchForNotFound(kinds.Deployment(), "config-management", configsync.ControllerNamespace); err != nil {
+		if err := nt.Watcher.WatchForNotFound(kinds.Deployment(), util.ACMOperatorDeployment, configsync.ControllerNamespace); err != nil {
 			nt.T.Error(err)
 		}
 	})
@@ -1345,9 +1345,14 @@ func TestNomosMigrate(t *testing.T) {
 	nt.T.Log("Installing ConfigManagement")
 	nt.MustKubectl("apply", "-f", "../testdata/configmanagement/1.18.0/config-management-operator.yaml")
 
-	if err := nt.Watcher.WatchForCurrentStatus(kinds.CustomResourceDefinitionV1(), "configmanagements.configmanagement.gke.io", ""); err != nil {
-		nt.T.Fatal(err)
-	}
+	tg := taskgroup.New()
+	tg.Go(func() error {
+		return nt.Watcher.WatchForCurrentStatus(kinds.CustomResourceDefinitionV1(), util.ConfigManagementCRDName, "")
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), util.ACMOperatorDeployment, configsync.ControllerNamespace)
+	})
+	nt.Must(tg.Wait())
 
 	cmObj := &unstructured.Unstructured{
 		Object: map[string]interface{}{
@@ -1387,7 +1392,7 @@ func TestNomosMigrate(t *testing.T) {
 	}
 
 	nt.T.Log("Wait for legacy resources to be NotFound...")
-	tg := taskgroup.New()
+	tg = taskgroup.New()
 	tg.Go(func() error {
 		return nt.Watcher.WatchForNotFound(kinds.Deployment(),
 			util.ACMOperatorDeployment, configsync.ControllerNamespace)
@@ -1467,18 +1472,18 @@ func TestNomosMigrateMonoRepo(t *testing.T) {
 	})
 	nt.T.Cleanup(func() {
 		if t.Failed() {
-			nt.PodLogs(configsync.ControllerNamespace, "config-management", "", false)
+			nt.PodLogs(configsync.ControllerNamespace, util.ACMOperatorDeployment, "", false)
 		}
 		// Delete the ConfigManagement operator in case the test failed early.
 		// If this lingers around it could cause issues for subsequent tests.
 		cmDeployment := fake.DeploymentObject(
 			core.Namespace(configsync.ControllerNamespace),
-			core.Name("config-management"),
+			core.Name(util.ACMOperatorDeployment),
 		)
 		if err := nt.KubeClient.Delete(cmDeployment, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil && !apierrors.IsNotFound(err) {
 			nt.T.Error(err)
 		}
-		if err := nt.Watcher.WatchForNotFound(kinds.Deployment(), "config-management", configsync.ControllerNamespace); err != nil {
+		if err := nt.Watcher.WatchForNotFound(kinds.Deployment(), util.ACMOperatorDeployment, configsync.ControllerNamespace); err != nil {
 			nt.T.Error(err)
 		}
 		// Ensure the RootSync is deleted since it's not registered with nt
@@ -1494,9 +1499,14 @@ func TestNomosMigrateMonoRepo(t *testing.T) {
 	nt.T.Log("Installing ConfigManagement")
 	nt.MustKubectl("apply", "-f", "../testdata/configmanagement/1.18.0/config-management-operator.yaml")
 
-	if err := nt.Watcher.WatchForCurrentStatus(kinds.CustomResourceDefinitionV1(), util.ConfigManagementCRDName, ""); err != nil {
-		nt.T.Fatal(err)
-	}
+	tg := taskgroup.New()
+	tg.Go(func() error {
+		return nt.Watcher.WatchForCurrentStatus(kinds.CustomResourceDefinitionV1(), util.ConfigManagementCRDName, "")
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), util.ACMOperatorDeployment, configsync.ControllerNamespace)
+	})
+	nt.Must(tg.Wait())
 
 	cmObj := &unstructured.Unstructured{
 		Object: map[string]interface{}{
@@ -1567,7 +1577,7 @@ func TestNomosMigrateMonoRepo(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	tg := taskgroup.New()
+	tg = taskgroup.New()
 	tg.Go(func() error {
 		return nt.Watcher.WatchForCurrentStatus(kinds.Deployment(),
 			util.ACMOperatorDeployment, configsync.ControllerNamespace)

@@ -728,7 +728,7 @@ func TestHelmARTokenAuth(t *testing.T) {
 	nt.T.Log("Update RootSync to sync from a private Artifact Registry")
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "git": null, "helm": {"repo": "%s", "chart": "%s", "auth": "token", "version": "%s", "releaseName": "my-coredns", "namespace": "coredns", "secretRef": {"name" : "foo"}}}}`,
-		v1beta1.HelmSource, chartRepoURL, chart.Name, chart.Version))
+		configsync.HelmSource, chartRepoURL, chart.Name, chart.Version))
 	err = nt.WatchForAllSyncs(
 		nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn(chart.Version)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: chart.Name}))

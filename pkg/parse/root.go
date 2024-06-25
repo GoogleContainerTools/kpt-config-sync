@@ -222,7 +222,7 @@ func setSourceStatusFields(source *v1beta1.SourceStatus, p Parser, newStatus sou
 	cse := status.ToCSE(newStatus.errs)
 	source.Commit = newStatus.commit
 	switch p.options().SourceType {
-	case v1beta1.GitSource:
+	case configsync.GitSource:
 		source.Git = &v1beta1.GitStatus{
 			Repo:     p.options().SourceRepo,
 			Revision: p.options().SourceRev,
@@ -231,14 +231,14 @@ func setSourceStatusFields(source *v1beta1.SourceStatus, p Parser, newStatus sou
 		}
 		source.Oci = nil
 		source.Helm = nil
-	case v1beta1.OciSource:
+	case configsync.OciSource:
 		source.Oci = &v1beta1.OciStatus{
 			Image: p.options().SourceRepo,
 			Dir:   p.options().SyncDir.SlashPath(),
 		}
 		source.Git = nil
 		source.Helm = nil
-	case v1beta1.HelmSource:
+	case configsync.HelmSource:
 		source.Helm = &v1beta1.HelmStatus{
 			Repo:    p.options().SourceRepo,
 			Chart:   p.options().SyncDir.SlashPath(),
@@ -338,7 +338,7 @@ func setRenderingStatusFields(rendering *v1beta1.RenderingStatus, p Parser, newS
 	cse := status.ToCSE(newStatus.errs)
 	rendering.Commit = newStatus.commit
 	switch p.options().SourceType {
-	case v1beta1.GitSource:
+	case configsync.GitSource:
 		rendering.Git = &v1beta1.GitStatus{
 			Repo:     p.options().SourceRepo,
 			Revision: p.options().SourceRev,
@@ -347,14 +347,14 @@ func setRenderingStatusFields(rendering *v1beta1.RenderingStatus, p Parser, newS
 		}
 		rendering.Oci = nil
 		rendering.Helm = nil
-	case v1beta1.OciSource:
+	case configsync.OciSource:
 		rendering.Oci = &v1beta1.OciStatus{
 			Image: p.options().SourceRepo,
 			Dir:   p.options().SyncDir.SlashPath(),
 		}
 		rendering.Git = nil
 		rendering.Helm = nil
-	case v1beta1.HelmSource:
+	case configsync.HelmSource:
 		rendering.Helm = &v1beta1.HelmStatus{
 			Repo:    p.options().SourceRepo,
 			Chart:   p.options().SyncDir.SlashPath(),

@@ -45,18 +45,18 @@ func isUpsertedSecret(rs *v1beta1.RepoSync, secretName string) bool {
 }
 
 func getCACertName(rs *v1beta1.RepoSync) (string, bool) {
-	switch v1beta1.SourceType(rs.Spec.SourceType) {
-	case v1beta1.GitSource:
+	switch rs.Spec.SourceType {
+	case configsync.GitSource:
 		if rs.Spec.Git == nil || rs.Spec.Git.CACertSecretRef == nil {
 			return "", false
 		}
 		return v1beta1.GetSecretName(rs.Spec.Git.CACertSecretRef), true
-	case v1beta1.OciSource:
+	case configsync.OciSource:
 		if rs.Spec.Oci == nil || rs.Spec.Oci.CACertSecretRef == nil {
 			return "", false
 		}
 		return v1beta1.GetSecretName(rs.Spec.Oci.CACertSecretRef), true
-	case v1beta1.HelmSource:
+	case configsync.HelmSource:
 		if rs.Spec.Helm == nil || rs.Spec.Helm.CACertSecretRef == nil {
 			return "", false
 		}
@@ -67,11 +67,11 @@ func getCACertName(rs *v1beta1.RepoSync) (string, bool) {
 }
 
 func shouldUpsertGitSecret(rs *v1beta1.RepoSync) bool {
-	return v1beta1.SourceType(rs.Spec.SourceType) == v1beta1.GitSource && rs.Spec.Git != nil && rs.Spec.Git.SecretRef != nil && !SkipForAuth(rs.Spec.Auth)
+	return rs.Spec.SourceType == configsync.GitSource && rs.Spec.Git != nil && rs.Spec.Git.SecretRef != nil && !SkipForAuth(rs.Spec.Auth)
 }
 
 func shouldUpsertHelmSecret(rs *v1beta1.RepoSync) bool {
-	return v1beta1.SourceType(rs.Spec.SourceType) == v1beta1.HelmSource && rs.Spec.Helm != nil && rs.Spec.Helm.SecretRef != nil && !SkipForAuth(rs.Spec.Helm.Auth)
+	return rs.Spec.SourceType == configsync.HelmSource && rs.Spec.Helm != nil && rs.Spec.Helm.SecretRef != nil && !SkipForAuth(rs.Spec.Helm.Auth)
 }
 
 // upsertAuthSecret creates or updates the auth secret in the

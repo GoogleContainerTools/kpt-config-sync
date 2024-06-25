@@ -884,7 +884,7 @@ func Convert_v1beta1_RepoSyncOverrideSpec_To_v1alpha1_RepoSyncOverrideSpec(in *v
 
 func autoConvert_v1alpha1_RepoSyncSpec_To_v1beta1_RepoSyncSpec(in *RepoSyncSpec, out *v1beta1.RepoSyncSpec, s conversion.Scope) error {
 	out.SourceFormat = in.SourceFormat
-	out.SourceType = in.SourceType
+	out.SourceType = configsync.SourceType(in.SourceType)
 	out.Git = (*v1beta1.Git)(unsafe.Pointer(in.Git))
 	out.Oci = (*v1beta1.Oci)(unsafe.Pointer(in.Oci))
 	if in.Helm != nil {
@@ -907,7 +907,7 @@ func Convert_v1alpha1_RepoSyncSpec_To_v1beta1_RepoSyncSpec(in *RepoSyncSpec, out
 
 func autoConvert_v1beta1_RepoSyncSpec_To_v1alpha1_RepoSyncSpec(in *v1beta1.RepoSyncSpec, out *RepoSyncSpec, s conversion.Scope) error {
 	out.SourceFormat = in.SourceFormat
-	out.SourceType = in.SourceType
+	out.SourceType = configsync.SourceType(in.SourceType)
 	out.Git = (*Git)(unsafe.Pointer(in.Git))
 	out.Oci = (*Oci)(unsafe.Pointer(in.Oci))
 	if in.Helm != nil {
@@ -1146,7 +1146,7 @@ func Convert_v1beta1_RootSyncRoleRef_To_v1alpha1_RootSyncRoleRef(in *v1beta1.Roo
 
 func autoConvert_v1alpha1_RootSyncSpec_To_v1beta1_RootSyncSpec(in *RootSyncSpec, out *v1beta1.RootSyncSpec, s conversion.Scope) error {
 	out.SourceFormat = in.SourceFormat
-	out.SourceType = in.SourceType
+	out.SourceType = configsync.SourceType(in.SourceType)
 	out.Git = (*v1beta1.Git)(unsafe.Pointer(in.Git))
 	out.Oci = (*v1beta1.Oci)(unsafe.Pointer(in.Oci))
 	if in.Helm != nil {
@@ -1169,7 +1169,7 @@ func Convert_v1alpha1_RootSyncSpec_To_v1beta1_RootSyncSpec(in *RootSyncSpec, out
 
 func autoConvert_v1beta1_RootSyncSpec_To_v1alpha1_RootSyncSpec(in *v1beta1.RootSyncSpec, out *RootSyncSpec, s conversion.Scope) error {
 	out.SourceFormat = in.SourceFormat
-	out.SourceType = in.SourceType
+	out.SourceType = configsync.SourceType(in.SourceType)
 	out.Git = (*Git)(unsafe.Pointer(in.Git))
 	out.Oci = (*Oci)(unsafe.Pointer(in.Oci))
 	if in.Helm != nil {

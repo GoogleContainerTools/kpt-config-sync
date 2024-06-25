@@ -1548,7 +1548,7 @@ func TestNomosMigrateMonoRepo(t *testing.T) {
 		},
 	}
 	expectedRootSyncSpec := v1beta1.RootSyncSpec{
-		SourceType:   string(v1beta1.GitSource),
+		SourceType:   configsync.GitSource,
 		SourceFormat: string(filesystem.SourceFormatUnstructured),
 		Override:     &v1beta1.RootSyncOverrideSpec{},
 		Git: &v1beta1.Git{

@@ -24,7 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	ft "kpt.dev/configsync/pkg/importer/filesystem/filesystemtest"
 	"kpt.dev/configsync/pkg/testing/testerrors"
@@ -175,7 +175,7 @@ func TestSourceCommitAndDirWithRetry(t *testing.T) {
 			}()
 
 			t.Logf("start calling SourceCommitAndDirWithRetry at %v", time.Now())
-			srcCommit, srcSyncDir, err := SourceCommitAndDirWithRetry(backoff, v1beta1.GitSource, cmpath.Absolute(commitDir), cmpath.RelativeOS(tc.syncDir), "root-reconciler")
+			srcCommit, srcSyncDir, err := SourceCommitAndDirWithRetry(backoff, configsync.GitSource, cmpath.Absolute(commitDir), cmpath.RelativeOS(tc.syncDir), "root-reconciler")
 			if tc.expectedErrMsg == "" {
 				assert.Nil(t, err, "got unexpected error %v", err)
 				assert.Equal(t, tc.expectedSourceCommit, srcCommit)
@@ -250,7 +250,7 @@ func TestRunHydrate(t *testing.T) {
 
 			hydrator := &Hydrator{
 				DonePath:        "",
-				SourceType:      v1beta1.HelmSource,
+				SourceType:      configsync.HelmSource,
 				SourceRoot:      cmpath.Absolute(commitDir),
 				HydratedRoot:    cmpath.Absolute(commitDir),
 				SourceLink:      "",

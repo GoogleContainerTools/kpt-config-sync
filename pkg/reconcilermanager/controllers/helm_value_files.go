@@ -93,7 +93,7 @@ func (r *RepoSyncReconciler) getReconcilerHelmConfigMapRefs(rs *v1beta1.RepoSync
 func (r *RepoSyncReconciler) upsertHelmConfigMaps(ctx context.Context, rs *v1beta1.RepoSync, labelMap map[string]string) error {
 	rsRef := client.ObjectKeyFromObject(rs)
 	var cmNamesToKeep map[string]struct{}
-	if rs.Spec.SourceType == string(v1beta1.HelmSource) && rs.Spec.Helm != nil {
+	if rs.Spec.SourceType == configsync.HelmSource && rs.Spec.Helm != nil {
 		cmNamesToKeep = make(map[string]struct{}, len(rs.Spec.Helm.ValuesFileRefs))
 		for _, vfRef := range rs.Spec.Helm.ValuesFileRefs {
 			userCMRef := types.NamespacedName{

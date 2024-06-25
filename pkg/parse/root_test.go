@@ -269,13 +269,13 @@ func TestRoot_Parse(t *testing.T) {
 			parseOutputs: []fsfake.ParserOutputs{
 				{
 					FileObjects: []ast.FileObject{
-						fake.RootSyncV1Beta1("test", fake.WithRootSyncSourceType(v1beta1.GitSource), gitSpec("https://github.com/test/test.git", configsync.AuthNone)),
+						fake.RootSyncV1Beta1("test", fake.WithRootSyncSourceType(configsync.GitSource), gitSpec("https://github.com/test/test.git", configsync.AuthNone)),
 					},
 				},
 			},
 			expectedObjsToApply: []ast.FileObject{
 				fake.RootSyncV1Beta1("test", gitSpec("https://github.com/test/test.git", configsync.AuthNone),
-					fake.WithRootSyncSourceType(v1beta1.GitSource),
+					fake.WithRootSyncSourceType(configsync.GitSource),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1beta1"),
 					core.Annotation(metadata.SourcePathAnnotationKey, fmt.Sprintf("namespaces/%s/test.yaml", configsync.ControllerNamespace)),

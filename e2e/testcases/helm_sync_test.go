@@ -28,6 +28,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -45,6 +46,7 @@ import (
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/kinds"
+	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/testing/fake"
 )
 
@@ -62,10 +64,66 @@ func TestPublicHelm(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured)
 
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rs.Spec = v1beta1.RootSyncSpec{
+		SourceFormat: configsync.SourceFormatUnstructured,
+		SourceType:   configsync.HelmSource,
+		Helm: &v1beta1.HelmRootSync{
+			Namespace: "wordpress",
+			HelmBase: v1beta1.HelmBase{
+				Repo:        "https://charts.bitnami.com/bitnami",
+				Chart:       "wordpress",
+				Version:     "15.2.35",
+				ReleaseName: "my-wordpress",
+				Auth:        configsync.AuthNone,
+				Values: &apiextensionsv1.JSON{
+					Raw: []byte(`{
+  "image": {
+    "digest": "sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e",
+    "pullPolicy": "Always"
+  },
+  "wordpressUsername": "test-user",
+  "wordpressEmail": "test-user@example.com",
+  "extraEnvVars": [
+    {"name": "TEST_1", "value": "val1"},
+    {"name": "TEST_2", "value": "val2"}
+  ],
+  "resources": {
+    "requests": {
+      "cpu": "150m",
+      "memory": "250Mi"
+    },
+    "limits": {
+      "cpu": "1",
+      "memory": "300Mi"
+    }
+  },
+  "mariadb": {
+    "primary": {
+      "persistence": {
+        "enabled": false
+      }
+    }
+  },
+  "service": {
+    "type": "ClusterIP"
+  }
+}`),
+				},
+			},
+		},
+	}
+	if nt.IsGKEAutopilot {
+		nt.T.Log("Increasing memory request/limit for helm-sync on Autopilot")
+		rs.Spec.SafeOverride().Resources = []v1beta1.ContainerResourcesSpec{
+			{ // This chart sometimes causes OOMKill on Autopilot with default limit
+				ContainerName: reconcilermanager.HelmSync,
+				MemoryRequest: resource.MustParse("512Mi"),
+				MemoryLimit:   resource.MustParse("512Mi"),
+			},
+		}
+	}
 	nt.T.Log("Update RootSync to sync from a public Helm Chart with specified release namespace and multiple inline values")
-	rootSyncFilePath := "../testdata/root-sync-helm-chart-cr.yaml"
-	nt.T.Logf("Apply the RootSync object defined in %s", rootSyncFilePath)
-	nt.MustKubectl("apply", "-f", rootSyncFilePath)
+	nt.Must(nt.KubeClient.Apply(rs))
 	err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn("15.2.35")),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "wordpress"}))
 	if err != nil {

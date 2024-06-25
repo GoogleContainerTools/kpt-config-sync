@@ -15,6 +15,7 @@
 package validate
 
 import (
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1alpha1"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
@@ -43,7 +44,7 @@ func RepoSync(obj ast.FileObject) status.Error {
 		rs = s.(*v1beta1.RepoSync)
 	}
 	if rs.Spec.SourceType == "" {
-		rs.Spec.SourceType = string(v1beta1.GitSource)
+		rs.Spec.SourceType = configsync.GitSource
 	}
 	return RepoSyncSpec(rs.Spec.SourceType, rs.Spec.Git, rs.Spec.Oci, rs.Spec.Helm, rs)
 }

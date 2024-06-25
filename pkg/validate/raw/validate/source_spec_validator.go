@@ -46,13 +46,13 @@ func HelmValuesFileDataKeyOrDefault(key string) string {
 }
 
 // RepoSyncSpec validates the Repo Sync source specification for any obvious problems.
-func RepoSyncSpec(sourceType string, git *v1beta1.Git, oci *v1beta1.Oci, helm *v1beta1.HelmRepoSync, rs client.Object) status.Error {
-	switch v1beta1.SourceType(sourceType) {
-	case v1beta1.GitSource:
+func RepoSyncSpec(sourceType configsync.SourceType, git *v1beta1.Git, oci *v1beta1.Oci, helm *v1beta1.HelmRepoSync, rs client.Object) status.Error {
+	switch sourceType {
+	case configsync.GitSource:
 		return GitSpec(git, rs)
-	case v1beta1.OciSource:
+	case configsync.OciSource:
 		return OciSpec(oci, rs)
-	case v1beta1.HelmSource:
+	case configsync.HelmSource:
 		return HelmSpec(reposync.GetHelmBase(helm), rs)
 	default:
 		return InvalidSourceType(rs)
@@ -60,13 +60,13 @@ func RepoSyncSpec(sourceType string, git *v1beta1.Git, oci *v1beta1.Oci, helm *v
 }
 
 // RootSyncSpec validates the Root Sync source specification for any obvious problems.
-func RootSyncSpec(sourceType string, git *v1beta1.Git, oci *v1beta1.Oci, helm *v1beta1.HelmRootSync, rs client.Object) status.Error {
-	switch v1beta1.SourceType(sourceType) {
-	case v1beta1.GitSource:
+func RootSyncSpec(sourceType configsync.SourceType, git *v1beta1.Git, oci *v1beta1.Oci, helm *v1beta1.HelmRootSync, rs client.Object) status.Error {
+	switch sourceType {
+	case configsync.GitSource:
 		return GitSpec(git, rs)
-	case v1beta1.OciSource:
+	case configsync.OciSource:
 		return OciSpec(oci, rs)
-	case v1beta1.HelmSource:
+	case configsync.HelmSource:
 		if err := HelmSpec(rootsync.GetHelmBase(helm), rs); err != nil {
 			return err
 		}
@@ -97,10 +97,10 @@ func GitSpec(git *v1beta1.Git, rs client.Object) status.Error {
 	case configsync.AuthSSH, configsync.AuthCookieFile, configsync.AuthGCENode, configsync.AuthToken, configsync.AuthNone:
 	case configsync.AuthGCPServiceAccount:
 		if git.GCPServiceAccountEmail == "" {
-			return MissingGCPSAEmail(v1beta1.GitSource, rs)
+			return MissingGCPSAEmail(configsync.GitSource, rs)
 		}
 		if !validGCPServiceAccountEmail(git.GCPServiceAccountEmail) {
-			return InvalidGCPSAEmail(v1beta1.GitSource, rs)
+			return InvalidGCPSAEmail(configsync.GitSource, rs)
 		}
 	default:
 		return InvalidGitAuthType(rs)
@@ -115,11 +115,11 @@ func GitSpec(git *v1beta1.Git, rs client.Object) status.Error {
 	switch git.Auth {
 	case configsync.AuthNone, configsync.AuthGCENode, configsync.AuthGCPServiceAccount:
 		if git.SecretRef != nil && git.SecretRef.Name != "" {
-			return IllegalSecretRef(v1beta1.GitSource, rs)
+			return IllegalSecretRef(configsync.GitSource, rs)
 		}
 	default:
 		if git.SecretRef == nil || git.SecretRef.Name == "" {
-			return MissingSecretRef(v1beta1.GitSource, rs)
+			return MissingSecretRef(configsync.GitSource, rs)
 		}
 	}
 
@@ -144,10 +144,10 @@ func OciSpec(oci *v1beta1.Oci, rs client.Object) status.Error {
 	case configsync.AuthGCENode, configsync.AuthK8sServiceAccount, configsync.AuthNone:
 	case configsync.AuthGCPServiceAccount:
 		if oci.GCPServiceAccountEmail == "" {
-			return MissingGCPSAEmail(v1beta1.OciSource, rs)
+			return MissingGCPSAEmail(configsync.OciSource, rs)
 		}
 		if !validGCPServiceAccountEmail(oci.GCPServiceAccountEmail) {
-			return InvalidGCPSAEmail(v1beta1.OciSource, rs)
+			return InvalidGCPSAEmail(configsync.OciSource, rs)
 		}
 	default:
 		return InvalidOciAuthType(rs)
@@ -177,21 +177,21 @@ func HelmSpec(helm *v1beta1.HelmBase, rs client.Object) status.Error {
 	switch helm.Auth {
 	case configsync.AuthGCENode, configsync.AuthK8sServiceAccount, configsync.AuthNone:
 		if helm.SecretRef != nil && helm.SecretRef.Name != "" {
-			return IllegalSecretRef(v1beta1.HelmSource, rs)
+			return IllegalSecretRef(configsync.HelmSource, rs)
 		}
 	case configsync.AuthToken:
 		if helm.SecretRef == nil || helm.SecretRef.Name == "" {
-			return MissingSecretRef(v1beta1.HelmSource, rs)
+			return MissingSecretRef(configsync.HelmSource, rs)
 		}
 	case configsync.AuthGCPServiceAccount:
 		if helm.SecretRef != nil && helm.SecretRef.Name != "" {
-			return IllegalSecretRef(v1beta1.HelmSource, rs)
+			return IllegalSecretRef(configsync.HelmSource, rs)
 		}
 		if helm.GCPServiceAccountEmail == "" {
-			return MissingGCPSAEmail(v1beta1.HelmSource, rs)
+			return MissingGCPSAEmail(configsync.HelmSource, rs)
 		}
 		if !validGCPServiceAccountEmail(helm.GCPServiceAccountEmail) {
-			return InvalidGCPSAEmail(v1beta1.HelmSource, rs)
+			return InvalidGCPSAEmail(configsync.HelmSource, rs)
 		}
 	default:
 		return InvalidHelmAuthType(rs)
@@ -238,7 +238,7 @@ var invalidSyncBuilder = status.NewErrorBuilder(InvalidSyncCode)
 func MissingGitSpec(o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must specify spec.git when spec.sourceType is %q", kind, v1beta1.GitSource).
+		Sprintf("%ss must specify spec.git when spec.sourceType is %q", kind, configsync.GitSource).
 		BuildWithResources(o)
 }
 
@@ -247,7 +247,7 @@ func MissingGitSpec(o client.Object) status.Error {
 func MissingGitRepo(o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must specify spec.git.repo when spec.sourceType is %q", kind, v1beta1.GitSource).
+		Sprintf("%ss must specify spec.git.repo when spec.sourceType is %q", kind, configsync.GitSource).
 		BuildWithResources(o)
 }
 
@@ -274,7 +274,7 @@ func NoOpProxy(o client.Object) status.Error {
 
 // IllegalSecretRef reports that a RootSync/RepoSync declares an auth mode that doesn't
 // allow SecretRefs does declare a SecretRef.
-func IllegalSecretRef(sourceType v1beta1.SourceType, o client.Object) status.Error {
+func IllegalSecretRef(sourceType configsync.SourceType, o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
 		Sprintf("%ss which specify spec.%s.auth as one of %q, %q, or %q must not specify spec.%s.secretRef",
@@ -284,7 +284,7 @@ func IllegalSecretRef(sourceType v1beta1.SourceType, o client.Object) status.Err
 
 // MissingSecretRef reports that a RootSync/RepoSync declares an auth mode that requires
 // a SecretRef, but does not do so.
-func MissingSecretRef(sourceType v1beta1.SourceType, o client.Object) status.Error {
+func MissingSecretRef(sourceType configsync.SourceType, o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
 		Sprintf("%ss which specify spec.%s.auth as one of %q, %q or %q must also specify spec.%s.secretRef",
@@ -295,7 +295,7 @@ func MissingSecretRef(sourceType v1beta1.SourceType, o client.Object) status.Err
 // InvalidGCPSAEmail reports that a RepoSync/RootSync Resource doesn't have the
 //
 //	correct gcp service account suffix.
-func InvalidGCPSAEmail(sourceType v1beta1.SourceType, o client.Object) status.Error {
+func InvalidGCPSAEmail(sourceType configsync.SourceType, o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
 		Sprintf("%ss which specify spec.%s.auth as %q must use suffix <gcp_serviceaccount_name>.[%s]",
@@ -305,7 +305,7 @@ func InvalidGCPSAEmail(sourceType v1beta1.SourceType, o client.Object) status.Er
 
 // MissingGCPSAEmail reports that a RepoSync/RootSync resource declares an auth
 // mode that requires a GCPServiceAccountEmail, but does not do so.
-func MissingGCPSAEmail(sourceType v1beta1.SourceType, o client.Object) status.Error {
+func MissingGCPSAEmail(sourceType configsync.SourceType, o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
 		Sprintf("%ss which specify spec.%s.auth as %q must also specify spec.%s.gcpServiceAccountEmail",
@@ -335,7 +335,7 @@ func validGCPServiceAccountEmail(email string) bool {
 func InvalidSourceType(o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must specify spec.sourceType to be one of %q, %q, %q", kind, v1beta1.GitSource, v1beta1.OciSource, v1beta1.HelmSource).
+		Sprintf("%ss must specify spec.sourceType to be one of %q, %q, %q", kind, configsync.GitSource, configsync.OciSource, configsync.HelmSource).
 		BuildWithResources(o)
 }
 
@@ -344,7 +344,7 @@ func InvalidSourceType(o client.Object) status.Error {
 func MissingOciSpec(o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must specify spec.oci when spec.sourceType is %q", kind, v1beta1.OciSource).
+		Sprintf("%ss must specify spec.oci when spec.sourceType is %q", kind, configsync.OciSource).
 		BuildWithResources(o)
 }
 
@@ -353,7 +353,7 @@ func MissingOciSpec(o client.Object) status.Error {
 func MissingOciImage(o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must specify spec.oci.image when spec.sourceType is %q", kind, v1beta1.OciSource).
+		Sprintf("%ss must specify spec.oci.image when spec.sourceType is %q", kind, configsync.OciSource).
 		BuildWithResources(o)
 }
 
@@ -373,7 +373,7 @@ func InvalidOciAuthType(o client.Object) status.Error {
 func MissingHelmSpec(o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must specify spec.helm when spec.sourceType is %q", kind, v1beta1.HelmSource).
+		Sprintf("%ss must specify spec.helm when spec.sourceType is %q", kind, configsync.HelmSource).
 		BuildWithResources(o)
 }
 
@@ -382,7 +382,7 @@ func MissingHelmSpec(o client.Object) status.Error {
 func MissingHelmRepo(o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must specify spec.helm.repo when spec.sourceType is %q", kind, v1beta1.HelmSource).
+		Sprintf("%ss must specify spec.helm.repo when spec.sourceType is %q", kind, configsync.HelmSource).
 		BuildWithResources(o)
 }
 
@@ -391,7 +391,7 @@ func MissingHelmRepo(o client.Object) status.Error {
 func MissingHelmChart(o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must specify spec.helm.chart when spec.sourceType is %q", kind, v1beta1.HelmSource).
+		Sprintf("%ss must specify spec.helm.chart when spec.sourceType is %q", kind, configsync.HelmSource).
 		BuildWithResources(o)
 }
 

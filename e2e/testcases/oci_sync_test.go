@@ -78,7 +78,7 @@ func TestPublicOCI(t *testing.T) {
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.T.Log("Update RootSync to sync from a public OCI image in AR")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"image": "%s", "auth": "none"}, "git": null}}`,
-		v1beta1.OciSource, publicARImage))
+		configsync.OciSource, publicARImage))
 	err := nt.WatchForAllSyncs(
 		nomostest.WithRootSha1Func(imageDigestFuncByName(publicARImage)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
@@ -156,7 +156,7 @@ func TestSwitchFromGitToOciCentralized(t *testing.T) {
 		})); err != nil {
 		nt.T.Fatal(err)
 	}
-	if err := nt.Validate(configsync.RepoSyncName, namespace, &v1beta1.RepoSync{}, isSourceType(v1beta1.OciSource)); err != nil {
+	if err := nt.Validate(configsync.RepoSyncName, namespace, &v1beta1.RepoSync{}, isSourceType(configsync.OciSource)); err != nil {
 		nt.T.Error(err)
 	}
 	if err := nt.Validate(bookinfoRole.Name, namespace, &rbacv1.Role{},
@@ -214,7 +214,7 @@ func TestSwitchFromGitToOciDelegated(t *testing.T) {
 	if err := nt.KubeClient.Apply(repoSyncOCI); err != nil {
 		nt.T.Fatal(err)
 	}
-	if err := nt.Validate(configsync.RepoSyncName, namespace, &v1beta1.RepoSync{}, isSourceType(v1beta1.OciSource)); err != nil {
+	if err := nt.Validate(configsync.RepoSyncName, namespace, &v1beta1.RepoSync{}, isSourceType(configsync.OciSource)); err != nil {
 		nt.T.Fatal(err)
 	}
 	nt.T.Log("Verify the namespace objects are synced")
@@ -242,7 +242,7 @@ func TestSwitchFromGitToOciDelegated(t *testing.T) {
 }
 
 // resourceQuotaHasHardPods validates if the RepoSync has the expected sourceType.
-func isSourceType(sourceType v1beta1.SourceType) testpredicates.Predicate {
+func isSourceType(sourceType configsync.SourceType) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
 			return testpredicates.ErrObjectNotFound
@@ -252,7 +252,7 @@ func isSourceType(sourceType v1beta1.SourceType) testpredicates.Predicate {
 			return testpredicates.WrongTypeErr(rs, &v1beta1.RepoSync{})
 		}
 		actual := rs.Spec.SourceType
-		if string(sourceType) != actual {
+		if sourceType != actual {
 			return fmt.Errorf("RepoSync sourceType %q is not equal to the expected %q", actual, sourceType)
 		}
 		return nil

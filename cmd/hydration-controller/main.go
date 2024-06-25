@@ -23,7 +23,6 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/textlogger"
 	"kpt.dev/configsync/pkg/api/configsync"
-	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/hydrate"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/kmetrics"
@@ -111,7 +110,7 @@ func main() {
 
 	hydrator := &hydrate.Hydrator{
 		DonePath:        absDonePath,
-		SourceType:      v1beta1.SourceType(*sourceType),
+		SourceType:      configsync.SourceType(*sourceType),
 		SourceRoot:      absSourceRootDir,
 		HydratedRoot:    absHydratedRootDir,
 		SourceLink:      *sourceLinkDir,

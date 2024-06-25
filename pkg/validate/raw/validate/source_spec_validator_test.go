@@ -86,7 +86,7 @@ func missingHelmChart(rs *v1beta1.RepoSync) {
 
 func repoSyncWithGit(opts ...func(*v1beta1.RepoSync)) *v1beta1.RepoSync {
 	rs := fake.RepoSyncObjectV1Beta1("test-ns", configsync.RepoSyncName)
-	rs.Spec.SourceType = string(v1beta1.GitSource)
+	rs.Spec.SourceType = configsync.GitSource
 	rs.Spec.Git = &v1beta1.Git{
 		Repo: "fake repo",
 	}
@@ -98,7 +98,7 @@ func repoSyncWithGit(opts ...func(*v1beta1.RepoSync)) *v1beta1.RepoSync {
 
 func repoSyncWithOci(opts ...func(*v1beta1.RepoSync)) *v1beta1.RepoSync {
 	rs := fake.RepoSyncObjectV1Beta1("test-ns", configsync.RepoSyncName)
-	rs.Spec.SourceType = string(v1beta1.OciSource)
+	rs.Spec.SourceType = configsync.OciSource
 	rs.Spec.Oci = &v1beta1.Oci{
 		Image: "fake image",
 	}
@@ -110,7 +110,7 @@ func repoSyncWithOci(opts ...func(*v1beta1.RepoSync)) *v1beta1.RepoSync {
 
 func repoSyncWithHelm(opts ...func(*v1beta1.RepoSync)) *v1beta1.RepoSync {
 	rs := fake.RepoSyncObjectV1Beta1("test-ns", configsync.RepoSyncName)
-	rs.Spec.SourceType = string(v1beta1.HelmSource)
+	rs.Spec.SourceType = configsync.HelmSource
 	rs.Spec.Helm = &v1beta1.HelmRepoSync{HelmBase: v1beta1.HelmBase{
 		Repo:  "fake repo",
 		Chart: "fake chart",
@@ -141,7 +141,7 @@ func withHelm() func(*v1beta1.RepoSync) {
 
 func rootSyncWithHelm(opts ...func(*v1beta1.RootSync)) *v1beta1.RootSync {
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
-	rs.Spec.SourceType = string(v1beta1.HelmSource)
+	rs.Spec.SourceType = configsync.HelmSource
 	rs.Spec.Helm = &v1beta1.HelmRootSync{HelmBase: v1beta1.HelmBase{
 		Repo:  "fake repo",
 		Chart: "fake chart",

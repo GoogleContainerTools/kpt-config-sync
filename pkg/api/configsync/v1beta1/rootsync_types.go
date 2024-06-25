@@ -16,6 +16,7 @@ package v1beta1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"kpt.dev/configsync/pkg/api/configsync"
 )
 
 // +kubebuilder:object:root=true
@@ -58,8 +59,9 @@ type RootSyncSpec struct {
 	// Must be one of git, oci, helm. Optional. Set to git if not specified.
 	// +kubebuilder:validation:Pattern=^(git|oci|helm)$
 	// +kubebuilder:default:=git
+	// +kubebuilder:validation:Type:=string
 	// +optional
-	SourceType string `json:"sourceType,omitempty"`
+	SourceType configsync.SourceType `json:"sourceType,omitempty"`
 
 	// git contains configuration specific to importing resources from a Git repo.
 	// +optional

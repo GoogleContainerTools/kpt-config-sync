@@ -53,9 +53,9 @@ func RootSyncObjectV1Beta1(name string, opts ...core.MetaMutator) *v1beta1.RootS
 }
 
 // WithRootSyncSourceType sets the sourceType of the RootSync object.
-func WithRootSyncSourceType(sourceType v1beta1.SourceType) core.MetaMutator {
+func WithRootSyncSourceType(sourceType configsync.SourceType) core.MetaMutator {
 	return func(o client.Object) {
 		rs := o.(*v1beta1.RootSync)
-		rs.Spec.SourceType = string(sourceType)
+		rs.Spec.SourceType = sourceType
 	}
 }

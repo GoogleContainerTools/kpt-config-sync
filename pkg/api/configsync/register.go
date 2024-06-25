@@ -92,6 +92,20 @@ const (
 	DefaultHelmReleaseNamespace = "default"
 )
 
+// SourceType specifies the type of the source of truth.
+type SourceType string
+
+const (
+	// GitSource represents the source type is Git repository.
+	GitSource SourceType = "git"
+
+	// OciSource represents the source type is OCI package.
+	OciSource SourceType = "oci"
+
+	// HelmSource represents the source type is Helm repository.
+	HelmSource SourceType = "helm"
+)
+
 // AuthType specifies the type to authenticate to a repository.
 type AuthType string
 

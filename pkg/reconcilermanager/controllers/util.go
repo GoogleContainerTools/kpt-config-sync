@@ -42,7 +42,7 @@ func updateHydrationControllerImage(image string, overrides v1beta1.OverrideSpec
 }
 
 type hydrationOptions struct {
-	sourceType     string
+	sourceType     configsync.SourceType
 	gitConfig      *v1beta1.Git
 	ociConfig      *v1beta1.Oci
 	scope          declared.Scope
@@ -54,19 +54,19 @@ type hydrationOptions struct {
 func hydrationEnvs(opts hydrationOptions) []corev1.EnvVar {
 	var result []corev1.EnvVar
 	var syncDir string
-	switch v1beta1.SourceType(opts.sourceType) {
-	case v1beta1.OciSource:
+	switch opts.sourceType {
+	case configsync.OciSource:
 		syncDir = opts.ociConfig.Dir
-	case v1beta1.GitSource:
+	case configsync.GitSource:
 		syncDir = opts.gitConfig.Dir
-	case v1beta1.HelmSource:
+	case configsync.HelmSource:
 		syncDir = "."
 	}
 
 	result = append(result,
 		corev1.EnvVar{
 			Name:  reconcilermanager.SourceTypeKey,
-			Value: opts.sourceType,
+			Value: string(opts.sourceType),
 		},
 		corev1.EnvVar{
 			Name:  reconcilermanager.ScopeKey,
@@ -98,7 +98,7 @@ type reconcilerOptions struct {
 	syncGeneration           int64
 	reconcilerName           string
 	reconcilerScope          declared.Scope
-	sourceType               string
+	sourceType               configsync.SourceType
 	gitConfig                *v1beta1.Git
 	ociConfig                *v1beta1.Oci
 	helmConfig               *v1beta1.HelmBase
@@ -122,11 +122,11 @@ func reconcilerEnvs(opts reconcilerOptions) []corev1.EnvVar {
 	var syncBranch string
 	var syncRevision string
 	var syncDir string
-	switch v1beta1.SourceType(opts.sourceType) {
-	case v1beta1.OciSource:
+	switch opts.sourceType {
+	case configsync.OciSource:
 		syncRepo = opts.ociConfig.Image
 		syncDir = opts.ociConfig.Dir
-	case v1beta1.HelmSource:
+	case configsync.HelmSource:
 		syncRepo = opts.helmConfig.Repo
 		syncDir = opts.helmConfig.Chart
 		if opts.helmConfig.Version != "" {
@@ -134,7 +134,7 @@ func reconcilerEnvs(opts reconcilerOptions) []corev1.EnvVar {
 		} else {
 			syncRevision = "latest"
 		}
-	case v1beta1.GitSource:
+	case configsync.GitSource:
 		syncRepo = opts.gitConfig.Repo
 		syncDir = opts.gitConfig.Dir
 		if opts.gitConfig.Branch != "" {
@@ -184,7 +184,7 @@ func reconcilerEnvs(opts reconcilerOptions) []corev1.EnvVar {
 		},
 		corev1.EnvVar{
 			Name:  reconcilermanager.SourceTypeKey,
-			Value: opts.sourceType,
+			Value: string(opts.sourceType),
 		},
 		corev1.EnvVar{
 			Name:  reconcilermanager.StatusMode,

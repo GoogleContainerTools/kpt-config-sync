@@ -69,7 +69,7 @@ func TestWorkloadIdentity(t *testing.T) {
 		crossProject     bool
 		rootSrcCfg       sourceConfig
 		nsSrcCfg         sourceConfig
-		sourceType       v1beta1.SourceType
+		sourceType       configsync.SourceType
 		gsaEmail         string
 		requireHelmGAR   bool
 		requireOCIGAR    bool
@@ -84,7 +84,7 @@ func TestWorkloadIdentity(t *testing.T) {
 			crossProject: false,
 			rootSrcCfg:   sourceConfig{pkg: "hydration/kustomize-components", dir: "kustomize-components", commitFn: nomostest.RemoteRootRepoSha1Fn},
 			nsSrcCfg:     sourceConfig{pkg: "hydration/namespace-repo", dir: "namespace-repo", commitFn: nomostest.RemoteNsRepoSha1Fn},
-			sourceType:   v1beta1.GitSource,
+			sourceType:   configsync.GitSource,
 			gsaEmail:     gitproviders.CSRReaderEmail(),
 			requireCSR:   true,
 		},
@@ -94,7 +94,7 @@ func TestWorkloadIdentity(t *testing.T) {
 			crossProject: false,
 			rootSrcCfg:   sourceConfig{pkg: "hydration/kustomize-components", dir: "kustomize-components", commitFn: nomostest.RemoteRootRepoSha1Fn},
 			nsSrcCfg:     sourceConfig{pkg: "hydration/namespace-repo", dir: "namespace-repo", commitFn: nomostest.RemoteNsRepoSha1Fn},
-			sourceType:   v1beta1.GitSource,
+			sourceType:   configsync.GitSource,
 			gsaEmail:     gitproviders.CSRReaderEmail(),
 			requireCSR:   true,
 		},
@@ -104,7 +104,7 @@ func TestWorkloadIdentity(t *testing.T) {
 			crossProject: true,
 			rootSrcCfg:   sourceConfig{pkg: "hydration/kustomize-components", dir: "kustomize-components", commitFn: nomostest.RemoteRootRepoSha1Fn},
 			nsSrcCfg:     sourceConfig{pkg: "hydration/namespace-repo", dir: "namespace-repo", commitFn: nomostest.RemoteNsRepoSha1Fn},
-			sourceType:   v1beta1.GitSource,
+			sourceType:   configsync.GitSource,
 			gsaEmail:     gitproviders.CSRReaderEmail(),
 			requireCSR:   true,
 		},
@@ -116,7 +116,7 @@ func TestWorkloadIdentity(t *testing.T) {
 			nsSrcCfg:         sourceConfig{pkg: "hydration/namespace-repo", dir: ".", version: "v1"},
 			newRootSrcCfg:    sourceConfig{pkg: "hydration/kustomize-components", dir: "tenant-a", version: "v1"},
 			newNSSrcCfg:      sourceConfig{pkg: "hydration/namespace-repo", dir: "test-ns", version: "v1"},
-			sourceType:       v1beta1.OciSource,
+			sourceType:       configsync.OciSource,
 			gsaEmail:         gsaARReaderEmail(),
 			testKSAMigration: true,
 			requireOCIGAR:    true,
@@ -133,7 +133,7 @@ func TestWorkloadIdentity(t *testing.T) {
 				repo:     privateGCRImage("namespace-repo"),
 				dir:      ".",
 				commitFn: imageDigestFuncByName(privateGCRImage("namespace-repo"))},
-			sourceType: v1beta1.OciSource,
+			sourceType: configsync.OciSource,
 			gsaEmail:   gsaGCRReaderEmail(),
 		},
 		{
@@ -144,7 +144,7 @@ func TestWorkloadIdentity(t *testing.T) {
 			nsSrcCfg:         sourceConfig{pkg: "hydration/namespace-repo", dir: ".", version: "v1"},
 			newRootSrcCfg:    sourceConfig{pkg: "hydration/kustomize-components", dir: "tenant-a", version: "v1"},
 			newNSSrcCfg:      sourceConfig{pkg: "hydration/namespace-repo", dir: "test-ns", version: "v1"},
-			sourceType:       v1beta1.OciSource,
+			sourceType:       configsync.OciSource,
 			gsaEmail:         gsaARReaderEmail(),
 			testKSAMigration: true,
 			requireOCIGAR:    true,
@@ -161,7 +161,7 @@ func TestWorkloadIdentity(t *testing.T) {
 				repo:     privateGCRImage("namespace-repo"),
 				dir:      ".",
 				commitFn: imageDigestFuncByName(privateGCRImage("namespace-repo"))},
-			sourceType: v1beta1.OciSource,
+			sourceType: configsync.OciSource,
 			gsaEmail:   gsaGCRReaderEmail(),
 		},
 		{
@@ -172,7 +172,7 @@ func TestWorkloadIdentity(t *testing.T) {
 			nsSrcCfg:         sourceConfig{pkg: "hydration/namespace-repo", dir: ".", version: "v1"},
 			newRootSrcCfg:    sourceConfig{pkg: "hydration/kustomize-components", dir: "tenant-a", version: "v1"},
 			newNSSrcCfg:      sourceConfig{pkg: "hydration/namespace-repo", dir: "test-ns", version: "v1"},
-			sourceType:       v1beta1.OciSource,
+			sourceType:       configsync.OciSource,
 			gsaEmail:         gsaARReaderEmail(),
 			testKSAMigration: true,
 			requireOCIGAR:    true,
@@ -189,7 +189,7 @@ func TestWorkloadIdentity(t *testing.T) {
 				repo:     privateGCRImage("namespace-repo"),
 				dir:      ".",
 				commitFn: imageDigestFuncByName(privateGCRImage("namespace-repo"))},
-			sourceType: v1beta1.OciSource,
+			sourceType: configsync.OciSource,
 			gsaEmail:   gsaGCRReaderEmail(),
 		},
 		{
@@ -212,7 +212,7 @@ func TestWorkloadIdentity(t *testing.T) {
 				chart:    "simple-ns-chart",
 				version:  "1.0.0",
 				commitFn: nomostest.HelmChartVersionShaFn("1.0.0")},
-			sourceType:       v1beta1.HelmSource,
+			sourceType:       configsync.HelmSource,
 			gsaEmail:         gsaARReaderEmail(),
 			testKSAMigration: true,
 			requireHelmGAR:   true,
@@ -237,7 +237,7 @@ func TestWorkloadIdentity(t *testing.T) {
 				chart:    "simple-ns-chart",
 				version:  "1.0.0",
 				commitFn: nomostest.HelmChartVersionShaFn("1.0.0")},
-			sourceType:       v1beta1.HelmSource,
+			sourceType:       configsync.HelmSource,
 			gsaEmail:         gsaARReaderEmail(),
 			testKSAMigration: true,
 			requireHelmGAR:   true,
@@ -262,7 +262,7 @@ func TestWorkloadIdentity(t *testing.T) {
 				chart:    "simple-ns-chart",
 				version:  "1.0.0",
 				commitFn: nomostest.HelmChartVersionShaFn("1.0.0")},
-			sourceType:       v1beta1.HelmSource,
+			sourceType:       configsync.HelmSource,
 			gsaEmail:         gsaARReaderEmail(),
 			testKSAMigration: true,
 			requireHelmGAR:   true,
@@ -349,10 +349,10 @@ func TestWorkloadIdentity(t *testing.T) {
 			var rootChart, nsChart *registryproviders.HelmPackage
 			nt.T.Logf("Update RootSync and RepoSync to sync from %s", tc.sourceType)
 			switch tc.sourceType {
-			case v1beta1.GitSource:
+			case configsync.GitSource:
 				rootMeta = updateRSyncWithGitSourceConfig(nt, rootSync, nt.RootRepos[configsync.RootSyncName], tc.rootSrcCfg)
 				nsMeta = updateRSyncWithGitSourceConfig(nt, repoSync, nt.NonRootRepos[nsRef], tc.nsSrcCfg)
-			case v1beta1.HelmSource:
+			case configsync.HelmSource:
 				rootChart, err = updateRootSyncWithHelmSourceConfig(nt, rsRef, tc.rootSrcCfg)
 				if err != nil {
 					nt.T.Fatal(err)
@@ -362,7 +362,7 @@ func TestWorkloadIdentity(t *testing.T) {
 					nt.T.Fatal(err)
 				}
 
-			case v1beta1.OciSource:
+			case configsync.OciSource:
 				if tc.requireOCIGAR { // OCI provider is AR
 					rootMeta, err = updateRootSyncWithOCISourceConfig(nt, rsRef, tc.rootSrcCfg)
 					if err != nil {
@@ -383,7 +383,7 @@ func TestWorkloadIdentity(t *testing.T) {
 								"gcpServiceAccountEmail": "%s"
 							}
 						}
-					}`, v1beta1.OciSource, tc.rootSrcCfg.repo, tc.rootSrcCfg.dir, tc.gsaEmail))
+					}`, configsync.OciSource, tc.rootSrcCfg.repo, tc.rootSrcCfg.dir, tc.gsaEmail))
 					rootMeta = rsyncValidateMeta{
 						rsRef:    rsRef,
 						sha1Func: tc.rootSrcCfg.commitFn,
@@ -399,7 +399,7 @@ func TestWorkloadIdentity(t *testing.T) {
 								"gcpServiceAccountEmail": "%s"
 							}
 						}
-					}`, v1beta1.OciSource, tc.nsSrcCfg.repo, tc.nsSrcCfg.dir, tc.gsaEmail))
+					}`, configsync.OciSource, tc.nsSrcCfg.repo, tc.nsSrcCfg.dir, tc.gsaEmail))
 					nsMeta = rsyncValidateMeta{
 						rsRef:    nsRef,
 						sha1Func: tc.nsSrcCfg.commitFn,
@@ -449,7 +449,7 @@ func TestWorkloadIdentity(t *testing.T) {
 			}
 
 			switch tc.sourceType {
-			case v1beta1.GitSource, v1beta1.OciSource:
+			case configsync.GitSource, configsync.OciSource:
 				if err = nt.WatchForAllSyncs(
 					nomostest.WithRootSha1Func(rootMeta.sha1Func),
 					nomostest.WithRepoSha1Func(nsMeta.sha1Func),
@@ -461,7 +461,7 @@ func TestWorkloadIdentity(t *testing.T) {
 				kustomizecomponents.ValidateAllTenants(nt, string(declared.RootScope), "base", "tenant-a", "tenant-b", "tenant-c")
 				kustomizecomponents.ValidateTenant(nt, nsMeta.rsRef.Namespace, "test-ns", "base")
 
-			case v1beta1.HelmSource:
+			case configsync.HelmSource:
 				if err = nt.WatchForAllSyncs(
 					nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn(rootChart.Version)),
 					nomostest.WithRepoSha1Func(nomostest.HelmChartVersionShaFn(nsChart.Version)),
@@ -604,14 +604,14 @@ func truncateStringByLength(s string, l int) string {
 
 // migrateFromGSAtoKSA tests the scenario of migrating from impersonating a GSA
 // to leveraging KSA+WI (a.k.a, BYOID/Ubermint).
-func migrateFromGSAtoKSA(nt *nomostest.NT, fleetWITest bool, sourceType v1beta1.SourceType, rsRef, nsRef types.NamespacedName, rootSC, nsSC sourceConfig) error {
+func migrateFromGSAtoKSA(nt *nomostest.NT, fleetWITest bool, sourceType configsync.SourceType, rsRef, nsRef types.NamespacedName, rootSC, nsSC sourceConfig) error {
 	nt.T.Log("Update RootSync auth type from gcpserviceaccount to k8sserviceaccount")
 	var err error
 	var rootMeta, nsMeta rsyncValidateMeta
 	var rootChart, nsChart *registryproviders.HelmPackage
 	// Change the source config to guarantee new resources can be reconciled with k8sserviceaccount
 	switch sourceType {
-	case v1beta1.HelmSource:
+	case configsync.HelmSource:
 		rootChart, err = updateRootSyncWithHelmSourceConfig(nt, rsRef, rootSC, func(rs *v1beta1.RootSync) {
 			rs.Spec.Helm.Auth = configsync.AuthK8sServiceAccount
 		})
@@ -624,7 +624,7 @@ func migrateFromGSAtoKSA(nt *nomostest.NT, fleetWITest bool, sourceType v1beta1.
 		if err != nil {
 			nt.T.Fatal(err)
 		}
-	case v1beta1.OciSource:
+	case configsync.OciSource:
 		rootMeta, err = updateRootSyncWithOCISourceConfig(nt, rsRef, rootSC, func(rs *v1beta1.RootSync) {
 			rs.Spec.Oci.Auth = configsync.AuthK8sServiceAccount
 		})
@@ -682,7 +682,7 @@ func migrateFromGSAtoKSA(nt *nomostest.NT, fleetWITest bool, sourceType v1beta1.
 	}
 
 	switch sourceType {
-	case v1beta1.GitSource, v1beta1.OciSource:
+	case configsync.GitSource, configsync.OciSource:
 		if err = nt.WatchForAllSyncs(
 			nomostest.WithRootSha1Func(rootMeta.sha1Func),
 			nomostest.WithRepoSha1Func(nsMeta.sha1Func),
@@ -700,7 +700,7 @@ func migrateFromGSAtoKSA(nt *nomostest.NT, fleetWITest bool, sourceType v1beta1.
 		}
 		kustomizecomponents.ValidateTenant(nt, nsMeta.rsRef.Namespace, "test-ns", "../base")
 
-	case v1beta1.HelmSource:
+	case configsync.HelmSource:
 		if err = nt.WatchForAllSyncs(
 			nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn(rootChart.Version)),
 			nomostest.WithRepoSha1Func(nomostest.HelmChartVersionShaFn(nsChart.Version)),

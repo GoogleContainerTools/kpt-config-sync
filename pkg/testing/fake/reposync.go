@@ -16,6 +16,7 @@ package fake
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1alpha1"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
@@ -52,9 +53,9 @@ func RepoSyncObjectV1Beta1(ns, name string, opts ...core.MetaMutator) *v1beta1.R
 }
 
 // WithRepoSyncSourceType sets the sourceType of the RepoSync object.
-func WithRepoSyncSourceType(sourceType v1beta1.SourceType) core.MetaMutator {
+func WithRepoSyncSourceType(sourceType configsync.SourceType) core.MetaMutator {
 	return func(o client.Object) {
 		rs := o.(*v1beta1.RepoSync)
-		rs.Spec.SourceType = string(sourceType)
+		rs.Spec.SourceType = sourceType
 	}
 }

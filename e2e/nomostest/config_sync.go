@@ -651,7 +651,7 @@ func setupDelegatedControl(nt *NT) {
 func RootSyncObjectV1Alpha1(name, repoURL string, sourceFormat filesystem.SourceFormat) *v1alpha1.RootSync {
 	rs := fake.RootSyncObjectV1Alpha1(name)
 	rs.Spec.SourceFormat = string(sourceFormat)
-	rs.Spec.SourceType = string(v1beta1.GitSource)
+	rs.Spec.SourceType = configsync.GitSource
 	rs.Spec.Git = &v1alpha1.Git{
 		Repo:   repoURL,
 		Branch: gitproviders.MainBranch,
@@ -700,7 +700,7 @@ func RootSyncObjectV1Alpha1FromRootRepo(nt *NT, name string) *v1alpha1.RootSync 
 func RootSyncObjectV1Beta1(name, repoURL string, sourceFormat filesystem.SourceFormat) *v1beta1.RootSync {
 	rs := fake.RootSyncObjectV1Beta1(name)
 	rs.Spec.SourceFormat = string(sourceFormat)
-	rs.Spec.SourceType = string(v1beta1.GitSource)
+	rs.Spec.SourceType = configsync.GitSource
 	rs.Spec.Git = &v1beta1.Git{
 		Repo:   repoURL,
 		Branch: gitproviders.MainBranch,
@@ -772,7 +772,7 @@ func StructuredNSPath(namespace, resourceName string) string {
 // SourceFormat for RepoSync must be Unstructured (default), so it's left unspecified.
 func RepoSyncObjectV1Alpha1(nn types.NamespacedName, repoURL string) *v1alpha1.RepoSync {
 	rs := fake.RepoSyncObjectV1Alpha1(nn.Namespace, nn.Name)
-	rs.Spec.SourceType = string(v1beta1.GitSource)
+	rs.Spec.SourceType = configsync.GitSource
 	rs.Spec.Git = &v1alpha1.Git{
 		Repo:   repoURL,
 		Branch: gitproviders.MainBranch,
@@ -829,7 +829,7 @@ func RepoSyncObjectV1Alpha1FromNonRootRepo(nt *NT, nn types.NamespacedName) *v1a
 func RepoSyncObjectV1Beta1(nn types.NamespacedName, repoURL string, sourceFormat filesystem.SourceFormat) *v1beta1.RepoSync {
 	rs := fake.RepoSyncObjectV1Beta1(nn.Namespace, nn.Name)
 	rs.Spec.SourceFormat = string(sourceFormat)
-	rs.Spec.SourceType = string(v1beta1.GitSource)
+	rs.Spec.SourceType = configsync.GitSource
 	rs.Spec.Git = &v1beta1.Git{
 		Repo:   repoURL,
 		Branch: gitproviders.MainBranch,
@@ -864,7 +864,7 @@ func (nt *NT) RootSyncObjectOCI(name string, image *registryproviders.OCIImage) 
 	}
 
 	rs := RootSyncObjectV1Beta1FromRootRepo(nt, name)
-	rs.Spec.SourceType = string(v1beta1.OciSource)
+	rs.Spec.SourceType = configsync.OciSource
 	rs.Spec.Oci = &v1beta1.Oci{
 		Image: imageURL,
 		Auth:  configsync.AuthNone,
@@ -893,7 +893,7 @@ func (nt *NT) RepoSyncObjectOCI(nn types.NamespacedName, image *registryprovider
 	}
 
 	rs := RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)
-	rs.Spec.SourceType = string(v1beta1.OciSource)
+	rs.Spec.SourceType = configsync.OciSource
 	rs.Spec.Oci = &v1beta1.Oci{
 		Image: imageURL,
 		Auth:  configsync.AuthNone,
@@ -921,7 +921,7 @@ func (nt *NT) RootSyncObjectHelm(name string, chart *registryproviders.HelmPacka
 		nt.T.Fatalf("HelmProvider.RepositoryRemoteURL: %v", err)
 	}
 	rs := RootSyncObjectV1Beta1FromRootRepo(nt, name)
-	rs.Spec.SourceType = string(v1beta1.HelmSource)
+	rs.Spec.SourceType = configsync.HelmSource
 	rs.Spec.Helm = &v1beta1.HelmRootSync{
 		HelmBase: v1beta1.HelmBase{
 			Repo:    chartRepoURL,
@@ -954,7 +954,7 @@ func (nt *NT) RepoSyncObjectHelm(nn types.NamespacedName, chart *registryprovide
 	}
 	rs := RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)
 	rs.Spec.Git = nil
-	rs.Spec.SourceType = string(v1beta1.HelmSource)
+	rs.Spec.SourceType = configsync.HelmSource
 	rs.Spec.Helm = &v1beta1.HelmRepoSync{
 		HelmBase: v1beta1.HelmBase{
 			Repo:    chartRepoURL,

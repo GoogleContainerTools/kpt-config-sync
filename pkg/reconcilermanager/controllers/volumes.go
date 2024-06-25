@@ -21,7 +21,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
-	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	hubv1 "kpt.dev/configsync/pkg/api/hub/v1"
 	"kpt.dev/configsync/pkg/metadata"
 )
@@ -52,18 +51,18 @@ var expirationSeconds = int64((48 * time.Hour).Seconds())
 // filterVolumes returns the volumes depending on different auth types.
 // If authType is `none`, `gcenode`, or `gcpserviceaccount`, it won't mount the `git-creds` volume.
 // If authType is `gcpserviceaccount` with fleet membership available, it also mounts a `gcp-ksa` volume.
-func filterVolumes(existing []corev1.Volume, authType configsync.AuthType, secretName, caCertSecretName, sourceType string, membership *hubv1.Membership) []corev1.Volume {
+func filterVolumes(existing []corev1.Volume, authType configsync.AuthType, secretName, caCertSecretName string, sourceType configsync.SourceType, membership *hubv1.Membership) []corev1.Volume {
 	var updatedVolumes []corev1.Volume
 
 	for _, volume := range existing {
 		if volume.Name == GitCredentialVolume {
 			// Don't mount git-creds volume if auth is 'none', 'gcenode', or 'gcpserviceaccount'
-			if SkipForAuth(authType) || sourceType != string(v1beta1.GitSource) {
+			if SkipForAuth(authType) || sourceType != configsync.GitSource {
 				continue
 			}
 			volume.Secret.SecretName = secretName
 		} else if volume.Name == HelmCredentialVolume {
-			if SkipForAuth(authType) || sourceType != string(v1beta1.HelmSource) {
+			if SkipForAuth(authType) || sourceType != configsync.HelmSource {
 				continue
 			}
 			volume.Secret.SecretName = secretName
@@ -125,7 +124,7 @@ func filterVolumes(existing []corev1.Volume, authType configsync.AuthType, secre
 
 // volumeMounts returns a sorted list of VolumeMounts by filtering out git-creds
 // VolumeMount when secret is 'none' or 'gcenode'.
-func volumeMounts(auth configsync.AuthType, caCertSecretRef, sourceType string, vm []corev1.VolumeMount) []corev1.VolumeMount {
+func volumeMounts(auth configsync.AuthType, caCertSecretRef string, sourceType configsync.SourceType, vm []corev1.VolumeMount) []corev1.VolumeMount {
 	var volumeMount []corev1.VolumeMount
 	if useCACert(caCertSecretRef) {
 		volumeMount = append(volumeMount, corev1.VolumeMount{
@@ -135,10 +134,10 @@ func volumeMounts(auth configsync.AuthType, caCertSecretRef, sourceType string, 
 		})
 	}
 	for _, volume := range vm {
-		if volume.Name == GitCredentialVolume && (SkipForAuth(auth) || sourceType != string(v1beta1.GitSource)) {
+		if volume.Name == GitCredentialVolume && (SkipForAuth(auth) || sourceType != configsync.GitSource) {
 			continue
 		}
-		if volume.Name == HelmCredentialVolume && (SkipForAuth(auth) || sourceType != string(v1beta1.HelmSource)) {
+		if volume.Name == HelmCredentialVolume && (SkipForAuth(auth) || sourceType != configsync.HelmSource) {
 			continue
 		}
 		volumeMount = append(volumeMount, volume)

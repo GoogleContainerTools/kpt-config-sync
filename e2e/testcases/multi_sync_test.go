@@ -40,7 +40,6 @@ import (
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
-	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
@@ -119,12 +118,12 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	if nt.GitProvider.Type() == e2e.Local {
 		nomostest.InitGitRepos(nt, newRepos...)
 	}
-	nt.RootRepos[rr2] = nomostest.ResetRepository(nt, gitproviders.RootRepo, nomostest.RootSyncNN(rr2), filesystem.SourceFormatUnstructured)
-	nt.RootRepos[rr3] = nomostest.ResetRepository(nt, gitproviders.RootRepo, nomostest.RootSyncNN(rr3), filesystem.SourceFormatUnstructured)
-	nt.NonRootRepos[nn2] = nomostest.ResetRepository(nt, gitproviders.NamespaceRepo, nn2, filesystem.SourceFormatUnstructured)
-	nt.NonRootRepos[nn3] = nomostest.ResetRepository(nt, gitproviders.NamespaceRepo, nn3, filesystem.SourceFormatUnstructured)
-	nt.NonRootRepos[nn4] = nomostest.ResetRepository(nt, gitproviders.NamespaceRepo, nn4, filesystem.SourceFormatUnstructured)
-	nt.NonRootRepos[nn5] = nomostest.ResetRepository(nt, gitproviders.NamespaceRepo, nn5, filesystem.SourceFormatUnstructured)
+	nt.RootRepos[rr2] = nomostest.ResetRepository(nt, gitproviders.RootRepo, nomostest.RootSyncNN(rr2), configsync.SourceFormatUnstructured)
+	nt.RootRepos[rr3] = nomostest.ResetRepository(nt, gitproviders.RootRepo, nomostest.RootSyncNN(rr3), configsync.SourceFormatUnstructured)
+	nt.NonRootRepos[nn2] = nomostest.ResetRepository(nt, gitproviders.NamespaceRepo, nn2, configsync.SourceFormatUnstructured)
+	nt.NonRootRepos[nn3] = nomostest.ResetRepository(nt, gitproviders.NamespaceRepo, nn3, configsync.SourceFormatUnstructured)
+	nt.NonRootRepos[nn4] = nomostest.ResetRepository(nt, gitproviders.NamespaceRepo, nn4, configsync.SourceFormatUnstructured)
+	nt.NonRootRepos[nn5] = nomostest.ResetRepository(nt, gitproviders.NamespaceRepo, nn5, configsync.SourceFormatUnstructured)
 
 	nrb2 := nomostest.RepoSyncRoleBinding(nn2)
 	nrb3 := nomostest.RepoSyncRoleBinding(nn3)
@@ -809,7 +808,7 @@ func TestControllerValidationErrors(t *testing.T) {
 
 	nt.T.Logf("Validate RepoSync is not allowed in the config-management-system namespace")
 	nnControllerNamespace := nomostest.RepoSyncNN(configsync.ControllerNamespace, configsync.RepoSyncName)
-	rs := nomostest.RepoSyncObjectV1Beta1(nnControllerNamespace, "", filesystem.SourceFormatUnstructured)
+	rs := nomostest.RepoSyncObjectV1Beta1(nnControllerNamespace, "", configsync.SourceFormatUnstructured)
 	if err := nt.KubeClient.Create(rs); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -825,7 +824,7 @@ func TestControllerValidationErrors(t *testing.T) {
 	}
 	veryLongName := string(longBytes)
 	nnTooLong := nomostest.RepoSyncNN(testNs, veryLongName)
-	rs = nomostest.RepoSyncObjectV1Beta1(nnTooLong, "https://github.com/test/test", filesystem.SourceFormatUnstructured)
+	rs = nomostest.RepoSyncObjectV1Beta1(nnTooLong, "https://github.com/test/test", configsync.SourceFormatUnstructured)
 	if err := nt.KubeClient.Create(rs); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -840,7 +839,7 @@ func TestControllerValidationErrors(t *testing.T) {
 
 	nt.T.Logf("Validate an invalid config with a long RepoSync Secret name")
 	nnInvalidSecretRef := nomostest.RepoSyncNN(testNs, "repo-test")
-	rsInvalidSecretRef := nomostest.RepoSyncObjectV1Beta1(nnInvalidSecretRef, "https://github.com/test/test", filesystem.SourceFormatUnstructured)
+	rsInvalidSecretRef := nomostest.RepoSyncObjectV1Beta1(nnInvalidSecretRef, "https://github.com/test/test", configsync.SourceFormatUnstructured)
 	rsInvalidSecretRef.Spec.Auth = configsync.AuthSSH
 	rsInvalidSecretRef.Spec.SecretRef = &v1beta1.SecretReference{Name: veryLongName}
 	if err := nt.KubeClient.Create(rsInvalidSecretRef); err != nil {

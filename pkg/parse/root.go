@@ -63,7 +63,7 @@ type RootOptions struct {
 	// SourceFormat defines the structure of the Root repository. Only the Root
 	// repository may be SourceFormatHierarchy; all others are implicitly
 	// SourceFormatUnstructured.
-	SourceFormat filesystem.SourceFormat
+	SourceFormat configsync.SourceFormat
 
 	// NamespaceStrategy indicates the NamespaceStrategy to be used by this
 	// reconciler.
@@ -98,7 +98,7 @@ func (p *root) options() *Options {
 // parseSource implements the Parser interface
 func (p *root) parseSource(ctx context.Context, state sourceState) ([]ast.FileObject, status.MultiError) {
 	wantFiles := state.files
-	if p.SourceFormat == filesystem.SourceFormatHierarchy {
+	if p.SourceFormat == configsync.SourceFormatHierarchy {
 		// We're using hierarchical mode for the root repository, so ignore files
 		// outside of the allowed directories.
 		wantFiles = filesystem.FilterHierarchyFiles(state.syncDir, wantFiles)
@@ -138,7 +138,7 @@ func (p *root) parseSource(ctx context.Context, state sourceState) ([]ast.FileOb
 	}
 	options = OptionsForScope(options, p.Scope)
 
-	if p.SourceFormat == filesystem.SourceFormatUnstructured {
+	if p.SourceFormat == configsync.SourceFormatUnstructured {
 		if p.NamespaceStrategy == configsync.NamespaceStrategyImplicit {
 			options.Visitors = append(options.Visitors, p.addImplicitNamespaces)
 		}

@@ -394,7 +394,7 @@ func createRootSync(ctx context.Context, cm *util.ConfigManagementClient) (*v1be
 			Namespace: configmanagement.ControllerNamespace,
 		},
 		Spec: v1beta1.RootSyncSpec{
-			SourceFormat: sourceFormat,
+			SourceFormat: configsync.SourceFormat(sourceFormat),
 			Git: &v1beta1.Git{
 				Repo:                   syncRepo,
 				Revision:               syncRev,

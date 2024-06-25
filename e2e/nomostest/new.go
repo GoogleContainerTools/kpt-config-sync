@@ -37,7 +37,6 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testshell"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
-	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -68,7 +67,7 @@ func newOptStruct(testName, tmpDir string, ntOptions ...ntopts.Opt) *ntopts.New 
 			// Default to 1m to keep tests fast.
 			// To override, use WithReconcileTimeout.
 			ReconcileTimeout: ptr.To(1 * time.Minute),
-			SourceFormat:     filesystem.SourceFormatHierarchy,
+			SourceFormat:     configsync.SourceFormatHierarchy,
 		},
 	}
 	for _, opt := range ntOptions {
@@ -425,7 +424,7 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 		nt.RootRepos[name] = initRepository(nt, gitproviders.RootRepo, RootSyncNN(name), opts.SourceFormat)
 	}
 	for nsr := range opts.NamespaceRepos {
-		nt.NonRootRepos[nsr] = initRepository(nt, gitproviders.NamespaceRepo, nsr, filesystem.SourceFormatUnstructured)
+		nt.NonRootRepos[nsr] = initRepository(nt, gitproviders.NamespaceRepo, nsr, configsync.SourceFormatUnstructured)
 	}
 	// set up port forward if using in-cluster git server
 	if *e2e.GitProvider == e2e.Local {
@@ -443,7 +442,7 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 		initialCommit(nt, gitproviders.RootRepo, RootSyncNN(name), opts.SourceFormat)
 	}
 	for nsr := range opts.NamespaceRepos {
-		initialCommit(nt, gitproviders.NamespaceRepo, nsr, filesystem.SourceFormatUnstructured)
+		initialCommit(nt, gitproviders.NamespaceRepo, nsr, configsync.SourceFormatUnstructured)
 	}
 
 	if opts.InitialCommit != nil {

@@ -15,6 +15,7 @@
 package filesystem
 
 import (
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/reader"
 	"kpt.dev/configsync/pkg/status"
@@ -27,7 +28,7 @@ type ConfigParser interface {
 	Parse(filePaths reader.FilePaths) ([]ast.FileObject, status.MultiError)
 
 	// ReadClusterRegistryResources returns the list of Clusters contained in the repo.
-	ReadClusterRegistryResources(filePaths reader.FilePaths, sourceFormat SourceFormat) ([]ast.FileObject, status.MultiError)
+	ReadClusterRegistryResources(filePaths reader.FilePaths, sourceFormat configsync.SourceFormat) ([]ast.FileObject, status.MultiError)
 
 	// ReadClusterNamesFromSelector returns the list of cluster names specified in
 	// the `cluster-name-selector` annotation.

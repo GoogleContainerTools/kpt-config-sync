@@ -243,10 +243,10 @@ func reconcilerEnvs(opts reconcilerOptions) []corev1.EnvVar {
 }
 
 // sourceFormatEnv returns the environment variable for SOURCE_FORMAT in the reconciler container.
-func sourceFormatEnv(format string) corev1.EnvVar {
+func sourceFormatEnv(format configsync.SourceFormat) corev1.EnvVar {
 	return corev1.EnvVar{
 		Name:  filesystem.SourceFormatKey,
-		Value: format,
+		Value: string(format),
 	}
 }
 

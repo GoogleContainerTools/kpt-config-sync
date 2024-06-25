@@ -19,8 +19,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/client/restconfig"
-	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 )
 
@@ -110,7 +110,7 @@ func AllClusters() bool {
 func AddSourceFormat(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&SourceFormat, reconcilermanager.SourceFormat, "",
 		fmt.Sprintf("Source format of the Git repository. Defaults to %s if not set. Use %s for unstructured repos.",
-			filesystem.SourceFormatHierarchy, filesystem.SourceFormatUnstructured))
+			configsync.SourceFormatHierarchy, configsync.SourceFormatUnstructured))
 }
 
 // AddOutputFormat adds the --format flag.

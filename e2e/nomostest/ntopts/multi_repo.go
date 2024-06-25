@@ -19,7 +19,7 @@ import (
 
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"kpt.dev/configsync/pkg/importer/filesystem"
+	"kpt.dev/configsync/pkg/api/configsync"
 )
 
 // RepoOpts defines options for a Repository.
@@ -30,7 +30,7 @@ type RepoOpts struct{}
 // If NonRootRepos is non-empty, the test is assumed to be running in
 // multi-repo mode.
 type MultiRepo struct {
-	filesystem.SourceFormat
+	configsync.SourceFormat
 	// NamespaceRepos is a set representing the Namespace repos to create.
 	//
 	// We don't support referencing the Root repository in this map; while we do
@@ -162,5 +162,5 @@ func RepoSyncPermissions(policy ...rbacv1.PolicyRule) Opt {
 
 // Unstructured will set the option for unstructured repo.
 func Unstructured(opts *New) {
-	opts.SourceFormat = filesystem.SourceFormatUnstructured
+	opts.SourceFormat = configsync.SourceFormatUnstructured
 }

@@ -19,7 +19,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"kpt.dev/configsync/cmd/nomos/flags"
-	"kpt.dev/configsync/pkg/importer/filesystem"
+	"kpt.dev/configsync/pkg/api/configsync"
 )
 
 var (
@@ -38,7 +38,7 @@ func init() {
 	Cmd.Flags().StringVar(&namespaceValue, "namespace", "",
 		fmt.Sprintf(
 			"If set, validate the repository as a Namespace Repo with the provided name. Automatically sets --source-format=%s",
-			filesystem.SourceFormatUnstructured))
+			configsync.SourceFormatUnstructured))
 
 	Cmd.Flags().BoolVar(&keepOutput, "keep-output", false,
 		`If enabled, keep the hydrated output`)
@@ -64,6 +64,6 @@ returns a non-zero error code if any issues are found.
 		// Don't show usage on error, as argument validation passed.
 		cmd.SilenceUsage = true
 
-		return runVet(cmd.Context(), namespaceValue, filesystem.SourceFormat(flags.SourceFormat), flags.APIServerTimeout)
+		return runVet(cmd.Context(), namespaceValue, configsync.SourceFormat(flags.SourceFormat), flags.APIServerTimeout)
 	},
 }

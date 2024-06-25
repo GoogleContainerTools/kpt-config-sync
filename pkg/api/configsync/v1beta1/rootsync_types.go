@@ -51,8 +51,9 @@ type RootSyncSpec struct {
 	//
 	// The validation of this is case-sensitive.
 	// +kubebuilder:validation:Pattern=^(hierarchy|unstructured|)$
+	// +kubebuilder:validation:Type:=string
 	// +optional
-	SourceFormat string `json:"sourceFormat,omitempty"`
+	SourceFormat configsync.SourceFormat `json:"sourceFormat,omitempty"`
 
 	// sourceType specifies the type of the source of truth.
 	//

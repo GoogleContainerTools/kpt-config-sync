@@ -25,6 +25,7 @@ import (
 	"kpt.dev/configsync/cmd/nomos/flags"
 	nomosparse "kpt.dev/configsync/cmd/nomos/parse"
 	"kpt.dev/configsync/cmd/nomos/util"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/hydrate"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
@@ -51,14 +52,14 @@ import (
 // clusters is the set of clusters we are checking.
 //
 // Only used if allClusters is false.
-func runVet(ctx context.Context, namespace string, sourceFormat filesystem.SourceFormat, apiServerTimeout time.Duration) error {
+func runVet(ctx context.Context, namespace string, sourceFormat configsync.SourceFormat, apiServerTimeout time.Duration) error {
 	if sourceFormat == "" {
 		if namespace == "" {
 			// Default to hierarchical if --namespace is not provided.
-			sourceFormat = filesystem.SourceFormatHierarchy
+			sourceFormat = configsync.SourceFormatHierarchy
 		} else {
 			// Default to unstructured if --namespace is provided.
-			sourceFormat = filesystem.SourceFormatUnstructured
+			sourceFormat = configsync.SourceFormatUnstructured
 		}
 	}
 
@@ -92,16 +93,16 @@ func runVet(ctx context.Context, namespace string, sourceFormat filesystem.Sourc
 	validateOpts.FieldManager = util.FieldManager
 
 	switch sourceFormat {
-	case filesystem.SourceFormatHierarchy:
+	case configsync.SourceFormatHierarchy:
 		if namespace != "" {
 			// The user could technically provide --source-format=unstructured.
 			// This nuance isn't necessary to communicate nor confusing to omit.
 			return fmt.Errorf("if --namespace is provided, --%s must be omitted or set to %s",
-				reconcilermanager.SourceFormat, filesystem.SourceFormatUnstructured)
+				reconcilermanager.SourceFormat, configsync.SourceFormatUnstructured)
 		}
 
 		files = filesystem.FilterHierarchyFiles(rootDir, files)
-	case filesystem.SourceFormatUnstructured:
+	case configsync.SourceFormatUnstructured:
 		if namespace == "" {
 			validateOpts = parse.OptionsForScope(validateOpts, declared.RootScope)
 		} else {

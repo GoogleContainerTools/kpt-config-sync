@@ -51,7 +51,6 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/hydrate"
-	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
@@ -217,7 +216,7 @@ func TestNomosHydrateWithInvalidNamespaceSelectorsUnstructured(t *testing.T) {
 		"vet",
 		"--no-api-server-check",
 		"--path", configPath,
-		"--source-format", string(filesystem.SourceFormatUnstructured),
+		"--source-format", string(configsync.SourceFormatUnstructured),
 	}
 
 	out, err := nt.Shell.Command("nomos", args...).CombinedOutput()
@@ -230,7 +229,7 @@ func TestNomosHydrateWithInvalidNamespaceSelectorsUnstructured(t *testing.T) {
 		"hydrate",
 		"--no-api-server-check",
 		"--path", configPath,
-		"--source-format", string(filesystem.SourceFormatUnstructured),
+		"--source-format", string(configsync.SourceFormatUnstructured),
 		"--output", nt.TmpDir,
 	}
 	out, err = nt.Shell.Command("nomos", args...).CombinedOutput()
@@ -242,7 +241,7 @@ func TestNomosHydrateWithInvalidNamespaceSelectorsUnstructured(t *testing.T) {
 
 func TestNomosHydrateWithClusterSelectorsHierarchical(t *testing.T) {
 	configPath := "../../examples/hierarchy-repo-with-cluster-selectors"
-	testNomosHydrateWithClusterSelectors(t, configPath, filesystem.SourceFormatHierarchy)
+	testNomosHydrateWithClusterSelectors(t, configPath, configsync.SourceFormatHierarchy)
 }
 
 func TestNomosHydrateWithClusterSelectorsDefaultSourceFormat(t *testing.T) {
@@ -252,10 +251,10 @@ func TestNomosHydrateWithClusterSelectorsDefaultSourceFormat(t *testing.T) {
 
 func TestNomosHydrateWithClusterSelectorsUnstructured(t *testing.T) {
 	configPath := "../../examples/unstructured-repo-with-cluster-selectors"
-	testNomosHydrateWithClusterSelectors(t, configPath, filesystem.SourceFormatUnstructured)
+	testNomosHydrateWithClusterSelectors(t, configPath, configsync.SourceFormatUnstructured)
 }
 
-func testNomosHydrateWithClusterSelectors(t *testing.T, configPath string, sourceFormat filesystem.SourceFormat) {
+func testNomosHydrateWithClusterSelectors(t *testing.T, configPath string, sourceFormat configsync.SourceFormat) {
 	nt := nomostest.New(t, nomostesting.NomosCLI, ntopts.SkipConfigSyncInstall)
 
 	expectedCompiledDir := "../../examples/repo-with-cluster-selectors-compiled"
@@ -351,7 +350,7 @@ func testNomosHydrateWithClusterSelectors(t *testing.T, configPath string, sourc
 		"--output", compiledWithAPIServerCheckDir,
 	}
 
-	if sourceFormat == filesystem.SourceFormatUnstructured {
+	if sourceFormat == configsync.SourceFormatUnstructured {
 		args = append(args, "--source-format", string(sourceFormat))
 	}
 	out, err = nt.Shell.Command("nomos", args...).CombinedOutput()
@@ -555,7 +554,7 @@ func TestSyncFromNomosHydrateOutputJSONDir(t *testing.T) {
 	testSyncFromNomosHydrateOutput(nt, "../../examples/repo-with-cluster-selectors-compiled-json/cluster-dev/.")
 }
 
-func testSyncFromNomosHydrateOutputFlat(t *testing.T, sourceFormat filesystem.SourceFormat, outputFormat string) {
+func testSyncFromNomosHydrateOutputFlat(t *testing.T, sourceFormat configsync.SourceFormat, outputFormat string) {
 	nt := nomostest.New(t, nomostesting.NomosCLI, ntopts.Unstructured)
 
 	configPath := fmt.Sprintf("../../examples/%s-repo-with-cluster-selectors", sourceFormat)
@@ -571,7 +570,7 @@ func testSyncFromNomosHydrateOutputFlat(t *testing.T, sourceFormat filesystem.So
 		"--output", compiledConfigFile,
 	}
 
-	if sourceFormat == filesystem.SourceFormatUnstructured {
+	if sourceFormat == configsync.SourceFormatUnstructured {
 		args = append(args, "--source-format", string(sourceFormat))
 	}
 
@@ -585,19 +584,19 @@ func testSyncFromNomosHydrateOutputFlat(t *testing.T, sourceFormat filesystem.So
 }
 
 func TestSyncFromNomosHydrateHierarchicalOutputWithClusterSelectorJSONFlat(t *testing.T) {
-	testSyncFromNomosHydrateOutputFlat(t, filesystem.SourceFormatHierarchy, "json")
+	testSyncFromNomosHydrateOutputFlat(t, configsync.SourceFormatHierarchy, "json")
 }
 
 func TestSyncFromNomosHydrateUnstructuredOutputWithClusterSelectorJSONFlat(t *testing.T) {
-	testSyncFromNomosHydrateOutputFlat(t, filesystem.SourceFormatUnstructured, "json")
+	testSyncFromNomosHydrateOutputFlat(t, configsync.SourceFormatUnstructured, "json")
 }
 
 func TestSyncFromNomosHydrateHierarchicalOutputWithClusterSelectorYAMLFlat(t *testing.T) {
-	testSyncFromNomosHydrateOutputFlat(t, filesystem.SourceFormatHierarchy, "yaml")
+	testSyncFromNomosHydrateOutputFlat(t, configsync.SourceFormatHierarchy, "yaml")
 }
 
 func TestSyncFromNomosHydrateUnstructuredOutputWithClusterSelectorYAMLFlat(t *testing.T) {
-	testSyncFromNomosHydrateOutputFlat(t, filesystem.SourceFormatUnstructured, "yaml")
+	testSyncFromNomosHydrateOutputFlat(t, configsync.SourceFormatUnstructured, "yaml")
 }
 
 func TestNomosHydrateWithUnknownScopedObject(t *testing.T) {
@@ -696,67 +695,67 @@ func TestNomosHydrateAndVetDryRepos(t *testing.T) {
 		{
 			name:           "must use 'unstructured' format for DRY repos",
 			path:           "../testdata/hydration/helm-components",
-			sourceFormat:   string(filesystem.SourceFormatHierarchy),
-			expectedErrMsg: fmt.Sprintf("%s must be %s when Kustomization is needed", reconcilermanager.SourceFormat, filesystem.SourceFormatUnstructured),
+			sourceFormat:   string(configsync.SourceFormatHierarchy),
+			expectedErrMsg: fmt.Sprintf("%s must be %s when Kustomization is needed", reconcilermanager.SourceFormat, configsync.SourceFormatUnstructured),
 		},
 		{
 			name:           "hydrate error: a DRY repo without kustomization.yaml",
 			path:           "../testdata/hydration/dry-repo-without-kustomization",
-			sourceFormat:   string(filesystem.SourceFormatUnstructured),
+			sourceFormat:   string(configsync.SourceFormatUnstructured),
 			expectedErrMsg: `Object 'Kind' is missing in`,
 		},
 		{
 			name:           "hydrate error: deprecated Group and Kind",
 			path:           "../testdata/hydration/deprecated-GK",
-			sourceFormat:   string(filesystem.SourceFormatUnstructured),
+			sourceFormat:   string(configsync.SourceFormatUnstructured),
 			expectedErrMsg: "The config is using a deprecated Group and Kind. To fix, set the Group and Kind to \"Deployment.apps\"",
 		},
 		{
 			name:           "hydrate error: duplicate resources",
 			path:           "../testdata/hydration/resource-duplicate",
-			sourceFormat:   string(filesystem.SourceFormatUnstructured),
+			sourceFormat:   string(configsync.SourceFormatUnstructured),
 			expectedErrMsg: "may not add resource with an already registered id",
 		},
 		{
 			name:            "hydrate a DRY repo with helm components",
 			path:            "../testdata/hydration/helm-components",
 			outPath:         "helm-components/compiled",
-			sourceFormat:    string(filesystem.SourceFormatUnstructured),
+			sourceFormat:    string(configsync.SourceFormatUnstructured),
 			expectedOutPath: "../testdata/hydration/compiled/helm-components",
 		},
 		{
 			name:            "hydrate a DRY repo with kustomize components",
 			path:            "../testdata/hydration/kustomize-components",
 			outPath:         "kustomize-components/compiled",
-			sourceFormat:    string(filesystem.SourceFormatUnstructured),
+			sourceFormat:    string(configsync.SourceFormatUnstructured),
 			expectedOutPath: "../testdata/hydration/compiled/kustomize-components",
 		},
 		{
 			name:            "hydrate a DRY repo with helm overlay",
 			path:            "../testdata/hydration/helm-overlay",
 			outPath:         "helm-overlay/compiled",
-			sourceFormat:    string(filesystem.SourceFormatUnstructured),
+			sourceFormat:    string(configsync.SourceFormatUnstructured),
 			expectedOutPath: "../testdata/hydration/compiled/helm-overlay",
 		},
 		{
 			name:            "hydrate a DRY repo with remote base",
 			path:            "../testdata/hydration/remote-base",
 			outPath:         "remote-base/compiled",
-			sourceFormat:    string(filesystem.SourceFormatUnstructured),
+			sourceFormat:    string(configsync.SourceFormatUnstructured),
 			expectedOutPath: "../testdata/hydration/compiled/remote-base",
 		},
 		{
 			name:            "hydrate a DRY repo with relative path",
 			path:            "../testdata/hydration/relative-path/overlays/dev",
 			outPath:         "relative-path/compiled",
-			sourceFormat:    string(filesystem.SourceFormatUnstructured),
+			sourceFormat:    string(configsync.SourceFormatUnstructured),
 			expectedOutPath: "../testdata/hydration/compiled/relative-path",
 		},
 		{
 			name:            "hydrate a WET repo",
 			path:            "../testdata/hydration/wet-repo",
 			outPath:         "wet-repo/compiled",
-			sourceFormat:    string(filesystem.SourceFormatUnstructured),
+			sourceFormat:    string(configsync.SourceFormatUnstructured),
 			expectedOutPath: "../testdata/hydration/wet-repo",
 		},
 	}
@@ -868,7 +867,7 @@ func TestNomosVetNamespaceRepo(t *testing.T) {
 		{
 			name:           "nomos vet a namespace repo should fail when source-format is set to hierarchy",
 			namespace:      "tenant-a",
-			sourceFormat:   string(filesystem.SourceFormatHierarchy),
+			sourceFormat:   string(configsync.SourceFormatHierarchy),
 			expectedErrMsg: "Error: if --namespace is provided, --source-format must be omitted or set to unstructured",
 		},
 		{
@@ -880,7 +879,7 @@ func TestNomosVetNamespaceRepo(t *testing.T) {
 			name:         "nomos vet should automatically validate a namespace repo with the unstructured mode if source-format is set to unstructured",
 			namespace:    "tenant-a",
 			path:         "../testdata/hydration/compiled/remote-base/tenant-a",
-			sourceFormat: string(filesystem.SourceFormatUnstructured),
+			sourceFormat: string(configsync.SourceFormatUnstructured),
 		},
 		{
 			name:      "nomos vet should validate a DRY namespace repo",
@@ -1549,7 +1548,7 @@ func TestNomosMigrateMonoRepo(t *testing.T) {
 	}
 	expectedRootSyncSpec := v1beta1.RootSyncSpec{
 		SourceType:   configsync.GitSource,
-		SourceFormat: string(filesystem.SourceFormatUnstructured),
+		SourceFormat: configsync.SourceFormatUnstructured,
 		Override:     &v1beta1.RootSyncOverrideSpec{},
 		Git: &v1beta1.Git{
 			Repo:      "https://github.com/config-sync-examples/namespace-repo-bookinfo",

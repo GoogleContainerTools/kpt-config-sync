@@ -92,6 +92,20 @@ const (
 	DefaultHelmReleaseNamespace = "default"
 )
 
+// SourceFormat specifies how the Importer should parse the repository.
+type SourceFormat string
+
+const (
+	// SourceFormatUnstructured says to parse all YAMLs in the config directory and
+	// ignore directory structure.
+	SourceFormatUnstructured SourceFormat = "unstructured"
+
+	// SourceFormatHierarchy says to use hierarchical namespace inheritance based on
+	// directory structure and requires that manifests be declared in specific
+	// subdirectories.
+	SourceFormatHierarchy SourceFormat = "hierarchy"
+)
+
 // SourceType specifies the type of the source of truth.
 type SourceType string
 

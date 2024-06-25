@@ -30,10 +30,10 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/cmd/nomos/flags"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/client/restconfig"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
-	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/kmetrics"
 	"kpt.dev/configsync/pkg/reconcilermanager"
@@ -257,7 +257,7 @@ func ValidateAndRunKustomize(sourcePath string) (cmpath.Absolute, error) {
 
 // ValidateHydrateFlags validates the hydrate and vet flags.
 // It returns the absolute path of the source directory, if hydration is needed, and errors.
-func ValidateHydrateFlags(sourceFormat filesystem.SourceFormat) (cmpath.Absolute, bool, error) {
+func ValidateHydrateFlags(sourceFormat configsync.SourceFormat) (cmpath.Absolute, bool, error) {
 	abs, err := filepath.Abs(flags.Path)
 	if err != nil {
 		return "", false, err
@@ -282,8 +282,8 @@ func ValidateHydrateFlags(sourceFormat filesystem.SourceFormat) (cmpath.Absolute
 		return "", false, fmt.Errorf("unable to check if Kustomize is needed for the source directory: %s: %w", abs, err)
 	}
 
-	if needsKustomize && sourceFormat == filesystem.SourceFormatHierarchy {
-		return "", false, fmt.Errorf("%s must be %s when Kustomization is needed", reconcilermanager.SourceFormat, filesystem.SourceFormatUnstructured)
+	if needsKustomize && sourceFormat == configsync.SourceFormatHierarchy {
+		return "", false, fmt.Errorf("%s must be %s when Kustomization is needed", reconcilermanager.SourceFormat, configsync.SourceFormatUnstructured)
 	}
 
 	return rootDir, needsKustomize, nil

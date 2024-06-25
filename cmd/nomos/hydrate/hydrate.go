@@ -22,6 +22,7 @@ import (
 	"kpt.dev/configsync/cmd/nomos/flags"
 	nomosparse "kpt.dev/configsync/cmd/nomos/parse"
 	"kpt.dev/configsync/cmd/nomos/util"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/hydrate"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
@@ -72,9 +73,9 @@ which you could kubectl apply -fR to the cluster, or have Config Sync sync to th
 		// Don't show usage on error, as argument validation passed.
 		cmd.SilenceUsage = true
 
-		sourceFormat := filesystem.SourceFormat(flags.SourceFormat)
+		sourceFormat := configsync.SourceFormat(flags.SourceFormat)
 		if sourceFormat == "" {
-			sourceFormat = filesystem.SourceFormatHierarchy
+			sourceFormat = configsync.SourceFormatHierarchy
 		}
 		rootDir, needsHydrate, err := hydrate.ValidateHydrateFlags(sourceFormat)
 		if err != nil {
@@ -105,7 +106,7 @@ which you could kubectl apply -fR to the cluster, or have Config Sync sync to th
 		}
 		validateOpts.FieldManager = util.FieldManager
 
-		if sourceFormat == filesystem.SourceFormatHierarchy {
+		if sourceFormat == configsync.SourceFormatHierarchy {
 			files = filesystem.FilterHierarchyFiles(rootDir, files)
 		} else {
 			// hydrate as a root repository to preview all the hydrated configs

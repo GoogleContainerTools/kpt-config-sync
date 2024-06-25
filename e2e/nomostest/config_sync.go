@@ -46,7 +46,6 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/importer/reader"
 	"kpt.dev/configsync/pkg/kinds"
@@ -648,9 +647,9 @@ func setupDelegatedControl(nt *NT) {
 }
 
 // RootSyncObjectV1Alpha1 returns the default RootSync object.
-func RootSyncObjectV1Alpha1(name, repoURL string, sourceFormat filesystem.SourceFormat) *v1alpha1.RootSync {
+func RootSyncObjectV1Alpha1(name, repoURL string, sourceFormat configsync.SourceFormat) *v1alpha1.RootSync {
 	rs := fake.RootSyncObjectV1Alpha1(name)
-	rs.Spec.SourceFormat = string(sourceFormat)
+	rs.Spec.SourceFormat = sourceFormat
 	rs.Spec.SourceType = configsync.GitSource
 	rs.Spec.Git = &v1alpha1.Git{
 		Repo:   repoURL,
@@ -697,9 +696,9 @@ func RootSyncObjectV1Alpha1FromRootRepo(nt *NT, name string) *v1alpha1.RootSync 
 }
 
 // RootSyncObjectV1Beta1 returns the default RootSync object with version v1beta1.
-func RootSyncObjectV1Beta1(name, repoURL string, sourceFormat filesystem.SourceFormat) *v1beta1.RootSync {
+func RootSyncObjectV1Beta1(name, repoURL string, sourceFormat configsync.SourceFormat) *v1beta1.RootSync {
 	rs := fake.RootSyncObjectV1Beta1(name)
-	rs.Spec.SourceFormat = string(sourceFormat)
+	rs.Spec.SourceFormat = sourceFormat
 	rs.Spec.SourceType = configsync.GitSource
 	rs.Spec.Git = &v1beta1.Git{
 		Repo:   repoURL,
@@ -826,9 +825,9 @@ func RepoSyncObjectV1Alpha1FromNonRootRepo(nt *NT, nn types.NamespacedName) *v1a
 
 // RepoSyncObjectV1Beta1 returns the default RepoSync object
 // with version v1beta1 in the given namespace.
-func RepoSyncObjectV1Beta1(nn types.NamespacedName, repoURL string, sourceFormat filesystem.SourceFormat) *v1beta1.RepoSync {
+func RepoSyncObjectV1Beta1(nn types.NamespacedName, repoURL string, sourceFormat configsync.SourceFormat) *v1beta1.RepoSync {
 	rs := fake.RepoSyncObjectV1Beta1(nn.Namespace, nn.Name)
-	rs.Spec.SourceFormat = string(sourceFormat)
+	rs.Spec.SourceFormat = sourceFormat
 	rs.Spec.SourceType = configsync.GitSource
 	rs.Spec.Git = &v1beta1.Git{
 		Repo:   repoURL,

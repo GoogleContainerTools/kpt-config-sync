@@ -203,9 +203,9 @@ func main() {
 
 	if scope == declared.RootScope {
 		// Default to "hierarchy" if unset.
-		format := filesystem.SourceFormat(*sourceFormat)
+		format := configsync.SourceFormat(*sourceFormat)
 		if format == "" {
-			format = filesystem.SourceFormatHierarchy
+			format = configsync.SourceFormatHierarchy
 		}
 		// Default to "implicit" if unset.
 		nsStrat := configsync.NamespaceStrategy(*namespaceStrategy)

@@ -31,8 +31,8 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
 	"kpt.dev/configsync/e2e/nomostest/testlogger"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
@@ -85,7 +85,7 @@ type Repository struct {
 	Root string
 	// Format is the source format for parsing the repository (hierarchy or
 	// unstructured).
-	Format filesystem.SourceFormat
+	Format configsync.SourceFormat
 	// PrivateKeyPath is the local path to the private key on disk to use to
 	// authenticate with the git server.
 	PrivateKeyPath string
@@ -121,7 +121,7 @@ type Repository struct {
 func NewRepository(
 	repoType RepoType,
 	syncNN types.NamespacedName,
-	sourceFormat filesystem.SourceFormat,
+	sourceFormat configsync.SourceFormat,
 	scheme *runtime.Scheme,
 	logger *testlogger.TestLogger,
 	provider GitProvider,
@@ -192,7 +192,7 @@ func (g *Repository) BulkGit(cmds ...[]string) error {
 }
 
 // InitialCommit initializes the Nomos repo with the Repo object.
-func (g *Repository) InitialCommit(sourceFormat filesystem.SourceFormat) error {
+func (g *Repository) InitialCommit(sourceFormat configsync.SourceFormat) error {
 	// Add .gitkeep to retain dir when empty, otherwise configsync will error.
 	if err := g.AddEmptyDir(DefaultSyncDir); err != nil {
 		return err
@@ -208,13 +208,13 @@ func (g *Repository) InitialCommit(sourceFormat filesystem.SourceFormat) error {
 		}
 	}
 	switch sourceFormat {
-	case filesystem.SourceFormatHierarchy:
+	case configsync.SourceFormatHierarchy:
 		// Hierarchy format requires a Repo object.
 		g.Logger.Infof("[repo %s] Setting repo format to %s", path.Base(g.Root), sourceFormat)
 		if err := g.AddRepoObject(DefaultSyncDir); err != nil {
 			return err
 		}
-	case filesystem.SourceFormatUnstructured:
+	case configsync.SourceFormatUnstructured:
 		// It is an error for unstructured repos to include the Repo object.
 		g.Logger.Infof("[repo %s] Setting repo format to %s", path.Base(g.Root), sourceFormat)
 	default:

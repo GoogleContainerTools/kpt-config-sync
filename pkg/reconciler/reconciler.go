@@ -129,7 +129,7 @@ type Options struct {
 // RootOptions are the options specific to parsing Root repositories.
 type RootOptions struct {
 	// SourceFormat is how the Root repository is structured.
-	SourceFormat filesystem.SourceFormat
+	SourceFormat configsync.SourceFormat
 	// NamespaceStrategy indicates the NamespaceStrategy used by this reconciler.
 	NamespaceStrategy configsync.NamespaceStrategy
 }

@@ -24,10 +24,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/hydrate"
-	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	ft "kpt.dev/configsync/pkg/importer/filesystem/filesystemtest"
 	"kpt.dev/configsync/pkg/kinds"
@@ -116,7 +116,7 @@ func TestReadConfigFiles(t *testing.T) {
 					},
 				},
 				RootOptions: &RootOptions{
-					SourceFormat: filesystem.SourceFormatUnstructured,
+					SourceFormat: configsync.SourceFormatUnstructured,
 				},
 			}
 

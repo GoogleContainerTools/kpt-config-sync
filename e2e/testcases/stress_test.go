@@ -48,7 +48,6 @@ import (
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
@@ -238,7 +237,7 @@ func TestStressLargeRequest(t *testing.T) {
 		reconcilerOverride.MemoryRequest = resource.MustParse("1500Mi")
 	}
 	rootSync.Spec = v1beta1.RootSyncSpec{
-		SourceFormat: string(filesystem.SourceFormatUnstructured),
+		SourceFormat: configsync.SourceFormatUnstructured,
 		Git: &v1beta1.Git{
 			Repo:      "https://github.com/config-sync-examples/crontab-crs",
 			Branch:    "main",

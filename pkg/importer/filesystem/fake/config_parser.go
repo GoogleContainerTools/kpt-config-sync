@@ -17,6 +17,7 @@ package fake
 import (
 	"fmt"
 
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/importer/reader"
@@ -58,7 +59,7 @@ func (p *ConfigParser) Parse(filePaths reader.FilePaths) ([]ast.FileObject, stat
 }
 
 // ReadClusterRegistryResources fakes filesystem.ConfigParser.ReadClusterRegistryResources
-func (p *ConfigParser) ReadClusterRegistryResources(_ reader.FilePaths, _ filesystem.SourceFormat) ([]ast.FileObject, status.MultiError) {
+func (p *ConfigParser) ReadClusterRegistryResources(_ reader.FilePaths, _ configsync.SourceFormat) ([]ast.FileObject, status.MultiError) {
 	return nil, nil
 }
 

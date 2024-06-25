@@ -16,7 +16,7 @@ package selectors
 
 import (
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
-	"kpt.dev/configsync/pkg/importer/filesystem"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -59,7 +59,7 @@ func ListNamespaceError(err error) status.Error {
 func UnsupportedNamespaceSelectorModeError(nsSelector client.Object) status.Error {
 	return invalidSelectorError.Sprintf("NamespaceSelector MUST NOT use the %s mode with the %s source format."+
 		" To fix, either switch to the %s source format, or remove `spec.mode` from the NamespaceSelector.",
-		v1.NSSelectorDynamicMode, filesystem.SourceFormatHierarchy, filesystem.SourceFormatUnstructured).
+		v1.NSSelectorDynamicMode, configsync.SourceFormatHierarchy, configsync.SourceFormatUnstructured).
 		BuildWithResources(nsSelector)
 }
 

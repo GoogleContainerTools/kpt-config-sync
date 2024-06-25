@@ -20,7 +20,7 @@ import (
 	"testing"
 
 	"kpt.dev/configsync/cmd/nomos/flags"
-	"kpt.dev/configsync/pkg/importer/filesystem"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	ft "kpt.dev/configsync/pkg/importer/filesystem/filesystemtest"
 )
@@ -33,7 +33,7 @@ func resetFlags() {
 	flags.Clusters = nil
 	flags.Path = flags.PathDefault
 	flags.SkipAPIServer = true
-	flags.SourceFormat = string(filesystem.SourceFormatHierarchy)
+	flags.SourceFormat = string(configsync.SourceFormatHierarchy)
 	namespaceValue = ""
 	keepOutput = false
 	outPath = flags.DefaultHydrationOutput

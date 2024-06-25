@@ -17,6 +17,7 @@ package hydrate
 import (
 	"context"
 
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/transform/selectors"
 	"kpt.dev/configsync/pkg/importer/filesystem"
@@ -36,7 +37,7 @@ type ParseOptions struct {
 	// Parser is an interface to read configs from a filesystem.
 	Parser filesystem.ConfigParser
 	// SourceFormat specifies how the Parser should parse the source configs.
-	SourceFormat filesystem.SourceFormat
+	SourceFormat configsync.SourceFormat
 	// FilePaths encapsulates the list of absolute file paths to read and the
 	// absolute and relative path of the root directory.
 	FilePaths reader.FilePaths
@@ -77,7 +78,7 @@ func ForEachCluster(ctx context.Context, parseOpts ParseOptions, validateOpts va
 	defaultFileObjects, err := parseOpts.Parser.Parse(parseOpts.FilePaths)
 	errs = status.Append(errs, err)
 
-	if parseOpts.SourceFormat == filesystem.SourceFormatHierarchy {
+	if parseOpts.SourceFormat == configsync.SourceFormatHierarchy {
 		defaultFileObjects, err = validate.Hierarchical(defaultFileObjects, validateOpts)
 	} else {
 		defaultFileObjects, err = validate.Unstructured(ctx, nil, defaultFileObjects, validateOpts)
@@ -104,7 +105,7 @@ func ForEachCluster(ctx context.Context, parseOpts ParseOptions, validateOpts va
 		fileObjects, err := parseOpts.Parser.Parse(parseOpts.FilePaths)
 		errs = status.Append(errs, err)
 
-		if parseOpts.SourceFormat == filesystem.SourceFormatHierarchy {
+		if parseOpts.SourceFormat == configsync.SourceFormatHierarchy {
 			fileObjects, err = validate.Hierarchical(fileObjects, validateOpts)
 		} else {
 			fileObjects, err = validate.Unstructured(ctx, nil, fileObjects, validateOpts)

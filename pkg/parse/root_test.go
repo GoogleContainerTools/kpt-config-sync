@@ -81,7 +81,7 @@ func gitSpec(repo string, auth configsync.AuthType) core.MetaMutator {
 func TestRoot_Parse(t *testing.T) {
 	testCases := []struct {
 		name                string
-		format              filesystem.SourceFormat
+		format              configsync.SourceFormat
 		namespaceStrategy   configsync.NamespaceStrategy
 		existingObjects     []client.Object
 		parseOutputs        []fsfake.ParserOutputs
@@ -89,14 +89,14 @@ func TestRoot_Parse(t *testing.T) {
 	}{
 		{
 			name:   "no objects",
-			format: filesystem.SourceFormatUnstructured,
+			format: configsync.SourceFormatUnstructured,
 			parseOutputs: []fsfake.ParserOutputs{
 				{}, // One Parse call, no results or errors
 			},
 		},
 		{
 			name:              "implicit namespace if unstructured and not present",
-			format:            filesystem.SourceFormatUnstructured,
+			format:            configsync.SourceFormatUnstructured,
 			namespaceStrategy: configsync.NamespaceStrategyImplicit,
 			parseOutputs: []fsfake.ParserOutputs{
 				{
@@ -133,7 +133,7 @@ func TestRoot_Parse(t *testing.T) {
 		},
 		{
 			name:              "no implicit namespace if namespaceStrategy is explicit",
-			format:            filesystem.SourceFormatUnstructured,
+			format:            configsync.SourceFormatUnstructured,
 			namespaceStrategy: configsync.NamespaceStrategyExplicit,
 			parseOutputs: []fsfake.ParserOutputs{
 				{
@@ -158,7 +158,7 @@ func TestRoot_Parse(t *testing.T) {
 		},
 		{
 			name:              "implicit namespace if unstructured, present and self-managed",
-			format:            filesystem.SourceFormatUnstructured,
+			format:            configsync.SourceFormatUnstructured,
 			namespaceStrategy: configsync.NamespaceStrategyImplicit,
 			existingObjects: []client.Object{fake.NamespaceObject("foo",
 				core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
@@ -204,7 +204,7 @@ func TestRoot_Parse(t *testing.T) {
 		},
 		{
 			name:              "no implicit namespace if unstructured, present, but managed by others",
-			format:            filesystem.SourceFormatUnstructured,
+			format:            configsync.SourceFormatUnstructured,
 			namespaceStrategy: configsync.NamespaceStrategyImplicit,
 			existingObjects: []client.Object{fake.NamespaceObject("foo",
 				core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
@@ -238,7 +238,7 @@ func TestRoot_Parse(t *testing.T) {
 		},
 		{
 			name:              "no implicit namespace if unstructured, present, but unmanaged",
-			format:            filesystem.SourceFormatUnstructured,
+			format:            configsync.SourceFormatUnstructured,
 			namespaceStrategy: configsync.NamespaceStrategyImplicit,
 			existingObjects:   []client.Object{fake.NamespaceObject("foo")},
 			parseOutputs: []fsfake.ParserOutputs{
@@ -264,7 +264,7 @@ func TestRoot_Parse(t *testing.T) {
 		},
 		{
 			name:              "no implicit namespace if unstructured and namespace is config-management-system",
-			format:            filesystem.SourceFormatUnstructured,
+			format:            configsync.SourceFormatUnstructured,
 			namespaceStrategy: configsync.NamespaceStrategyImplicit,
 			parseOutputs: []fsfake.ParserOutputs{
 				{
@@ -290,7 +290,7 @@ func TestRoot_Parse(t *testing.T) {
 		},
 		{
 			name:              "multiple objects share a single implicit namespace",
-			format:            filesystem.SourceFormatUnstructured,
+			format:            configsync.SourceFormatUnstructured,
 			namespaceStrategy: configsync.NamespaceStrategyImplicit,
 			parseOutputs: []fsfake.ParserOutputs{
 				{
@@ -339,7 +339,7 @@ func TestRoot_Parse(t *testing.T) {
 		},
 		{
 			name:              "multiple implicit namespaces",
-			format:            filesystem.SourceFormatUnstructured,
+			format:            configsync.SourceFormatUnstructured,
 			namespaceStrategy: configsync.NamespaceStrategyImplicit,
 			existingObjects: []client.Object{
 				fake.NamespaceObject("foo"), // foo exists but not managed, should NOT be added as an implicit namespace
@@ -703,7 +703,7 @@ func TestRoot_DeclaredFields(t *testing.T) {
 					},
 				},
 				RootOptions: &RootOptions{
-					SourceFormat:      filesystem.SourceFormatUnstructured,
+					SourceFormat:      configsync.SourceFormatUnstructured,
 					NamespaceStrategy: configsync.NamespaceStrategyExplicit,
 				},
 			}
@@ -956,7 +956,7 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 					},
 				},
 				RootOptions: &RootOptions{
-					SourceFormat:      filesystem.SourceFormatUnstructured,
+					SourceFormat:      configsync.SourceFormatUnstructured,
 					NamespaceStrategy: configsync.NamespaceStrategyImplicit,
 				},
 			}
@@ -1041,7 +1041,7 @@ func TestRoot_SourceReconcilerErrorsMetricValidation(t *testing.T) {
 					},
 				},
 				RootOptions: &RootOptions{
-					SourceFormat: filesystem.SourceFormatUnstructured,
+					SourceFormat: configsync.SourceFormatUnstructured,
 				},
 			}
 			state := &reconcilerState{}
@@ -1127,7 +1127,7 @@ func TestRoot_SourceAndSyncReconcilerErrorsMetricValidation(t *testing.T) {
 					DiscoveryInterface: syncertest.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
 				},
 				RootOptions: &RootOptions{
-					SourceFormat: filesystem.SourceFormatUnstructured,
+					SourceFormat: configsync.SourceFormatUnstructured,
 				},
 			}
 			state := &reconcilerState{}

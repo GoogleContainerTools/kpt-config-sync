@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"kpt.dev/configsync/pkg/api/configmanagement/v1/repo"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/importer/reader"
@@ -79,8 +80,8 @@ func filterTopDir(filePaths reader.FilePaths, topDir string) reader.FilePaths {
 
 // ReadClusterRegistryResources reads the manifests declared in clusterregistry/ for hierarchical format.
 // For unstructured format, it reads all files.
-func (p *Parser) ReadClusterRegistryResources(filePaths reader.FilePaths, format SourceFormat) ([]ast.FileObject, status.MultiError) {
-	if format == SourceFormatHierarchy {
+func (p *Parser) ReadClusterRegistryResources(filePaths reader.FilePaths, format configsync.SourceFormat) ([]ast.FileObject, status.MultiError) {
+	if format == configsync.SourceFormatHierarchy {
 		return p.reader.Read(filterTopDir(filePaths, repo.ClusterRegistryDir))
 	}
 	return p.reader.Read(filePaths)

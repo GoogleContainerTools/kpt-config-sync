@@ -32,7 +32,6 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
@@ -416,14 +415,14 @@ func stringSliceContains(list []string, value string) bool {
 }
 
 // ResetRepository creates or re-initializes a remote repository.
-func ResetRepository(nt *NT, repoType gitproviders.RepoType, nn types.NamespacedName, sourceFormat filesystem.SourceFormat) *gitproviders.Repository {
+func ResetRepository(nt *NT, repoType gitproviders.RepoType, nn types.NamespacedName, sourceFormat configsync.SourceFormat) *gitproviders.Repository {
 	repo := initRepository(nt, repoType, nn, sourceFormat)
 	initialCommit(nt, repoType, nn, sourceFormat)
 	return repo
 }
 
 // initRepository inits a local repository and ensures its remote exists
-func initRepository(nt *NT, repoType gitproviders.RepoType, nn types.NamespacedName, sourceFormat filesystem.SourceFormat) *gitproviders.Repository {
+func initRepository(nt *NT, repoType gitproviders.RepoType, nn types.NamespacedName, sourceFormat configsync.SourceFormat) *gitproviders.Repository {
 	repo, found := nt.RemoteRepositories[nn]
 	if !found {
 		repo = gitproviders.NewRepository(repoType, nn, sourceFormat, nt.Scheme,
@@ -441,7 +440,7 @@ func initRepository(nt *NT, repoType gitproviders.RepoType, nn types.NamespacedN
 }
 
 // initialCommit creates an initial commit and pushes it to the remote
-func initialCommit(nt *NT, repoType gitproviders.RepoType, nn types.NamespacedName, sourceFormat filesystem.SourceFormat) {
+func initialCommit(nt *NT, repoType gitproviders.RepoType, nn types.NamespacedName, sourceFormat configsync.SourceFormat) {
 	repo, found := nt.RemoteRepositories[nn]
 	if !found {
 		nt.T.Fatal("repo %s not found", nn.String())

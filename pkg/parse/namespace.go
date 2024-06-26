@@ -271,14 +271,22 @@ func (p *namespace) setSyncStatusWithRetries(ctx context.Context, newStatus sync
 
 	setSyncStatusFields(&rs.Status.Status, newStatus, denominator)
 
-	errorSources, errorSummary := summarizeErrors(rs.Status.Source, rs.Status.Sync)
-	if newStatus.syncing {
-		reposync.SetSyncing(rs, true, "Sync", "Syncing", rs.Status.Sync.Commit, errorSources, errorSummary, rs.Status.Sync.LastUpdate)
-	} else {
-		if errorSummary.TotalCount == 0 {
-			rs.Status.LastSyncedCommit = rs.Status.Sync.Commit
+	// The Syncing condition should only represent the status and errors for the latest commit.
+	// So only update the Syncing condition here if we haven't fetched a new commit.
+	// Ideally, checking the source commit would be enough, but because fetching and parsing share the source status,
+	// we also have to check the rendering commit, which may be updated first.
+	var lastSyncStatus string
+	if rs.Status.Source.Commit == rs.Status.Sync.Commit && rs.Status.Rendering.Commit == rs.Status.Sync.Commit {
+		errorSources, errorSummary := summarizeErrorsForCommit(rs.Status.Source, rs.Status.Rendering, rs.Status.Sync, rs.Status.Sync.Commit)
+		if newStatus.syncing {
+			reposync.SetSyncing(rs, true, "Sync", "Syncing", rs.Status.Sync.Commit, errorSources, errorSummary, rs.Status.Sync.LastUpdate)
+		} else {
+			if errorSummary.TotalCount == 0 {
+				rs.Status.LastSyncedCommit = rs.Status.Sync.Commit
+			}
+			reposync.SetSyncing(rs, false, "Sync", "Sync Completed", rs.Status.Sync.Commit, errorSources, errorSummary, rs.Status.Sync.LastUpdate)
 		}
-		reposync.SetSyncing(rs, false, "Sync", "Sync Completed", rs.Status.Sync.Commit, errorSources, errorSummary, rs.Status.Sync.LastUpdate)
+		lastSyncStatus = metrics.StatusTagValueFromSummary(errorSummary)
 	}
 
 	// Avoid unnecessary status updates.
@@ -294,8 +302,9 @@ func (p *namespace) setSyncStatusWithRetries(ctx context.Context, newStatus sync
 		klog.Infof("New sync errors for RepoSync %s/%s: %+v",
 			rs.Namespace, rs.Name, csErrs)
 	}
-	if !newStatus.syncing && rs.Status.Sync.Commit != "" {
-		metrics.RecordLastSync(ctx, metrics.StatusTagValueFromSummary(errorSummary), rs.Status.Sync.Commit, rs.Status.Sync.LastUpdate.Time)
+	// Only update the LastSyncTimestamp metric immediately after a sync attempt
+	if !newStatus.syncing && rs.Status.Sync.Commit != "" && lastSyncStatus != "" {
+		metrics.RecordLastSync(ctx, lastSyncStatus, rs.Status.Sync.Commit, rs.Status.Sync.LastUpdate.Time)
 	}
 
 	if klog.V(5).Enabled() {
@@ -319,12 +328,6 @@ func (p *namespace) setSyncStatusWithRetries(ctx context.Context, newStatus sync
 // SyncErrors implements the Parser interface
 func (p *namespace) SyncErrors() status.MultiError {
 	return p.SyncErrorCache.Errors()
-}
-
-// Syncing returns true if the updater is running.
-// SyncErrors implements the Parser interface
-func (p *namespace) Syncing() bool {
-	return p.Updating()
 }
 
 // K8sClient implements the Parser interface

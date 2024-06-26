@@ -396,14 +396,22 @@ func (p *root) setSyncStatusWithRetries(ctx context.Context, newStatus syncStatu
 
 	setSyncStatusFields(&rs.Status.Status, newStatus, denominator)
 
-	errorSources, errorSummary := summarizeErrors(rs.Status.Source, rs.Status.Sync)
-	if newStatus.syncing {
-		rootsync.SetSyncing(rs, true, "Sync", "Syncing", rs.Status.Sync.Commit, errorSources, errorSummary, rs.Status.Sync.LastUpdate)
-	} else {
-		if errorSummary.TotalCount == 0 {
-			rs.Status.LastSyncedCommit = rs.Status.Sync.Commit
+	// The Syncing condition should only represent the status and errors for the latest commit.
+	// So only update the Syncing condition here if we haven't fetched a new commit.
+	// Ideally, checking the source commit would be enough, but because fetching and parsing share the source status,
+	// we also have to check the rendering commit, which may be updated first.
+	var lastSyncStatus string
+	if rs.Status.Source.Commit == rs.Status.Sync.Commit && rs.Status.Rendering.Commit == rs.Status.Sync.Commit {
+		errorSources, errorSummary := summarizeErrorsForCommit(rs.Status.Source, rs.Status.Rendering, rs.Status.Sync, rs.Status.Sync.Commit)
+		if newStatus.syncing {
+			rootsync.SetSyncing(rs, true, "Sync", "Syncing", rs.Status.Sync.Commit, errorSources, errorSummary, rs.Status.Sync.LastUpdate)
+		} else {
+			if errorSummary.TotalCount == 0 {
+				rs.Status.LastSyncedCommit = rs.Status.Sync.Commit
+			}
+			rootsync.SetSyncing(rs, false, "Sync", "Sync Completed", rs.Status.Sync.Commit, errorSources, errorSummary, rs.Status.Sync.LastUpdate)
 		}
-		rootsync.SetSyncing(rs, false, "Sync", "Sync Completed", rs.Status.Sync.Commit, errorSources, errorSummary, rs.Status.Sync.LastUpdate)
+		lastSyncStatus = metrics.StatusTagValueFromSummary(errorSummary)
 	}
 
 	// Avoid unnecessary status updates.
@@ -419,8 +427,9 @@ func (p *root) setSyncStatusWithRetries(ctx context.Context, newStatus syncStatu
 		klog.Infof("New sync errors for RootSync %s/%s: %+v",
 			rs.Namespace, rs.Name, csErrs)
 	}
-	if !newStatus.syncing && rs.Status.Sync.Commit != "" {
-		metrics.RecordLastSync(ctx, metrics.StatusTagValueFromSummary(errorSummary), rs.Status.Sync.Commit, rs.Status.Sync.LastUpdate.Time)
+	// Only update the LastSyncTimestamp metric immediately after a sync attempt
+	if !newStatus.syncing && rs.Status.Sync.Commit != "" && lastSyncStatus != "" {
+		metrics.RecordLastSync(ctx, lastSyncStatus, rs.Status.Sync.Commit, rs.Status.Sync.LastUpdate.Time)
 	}
 
 	if klog.V(5).Enabled() {
@@ -457,18 +466,30 @@ func setSyncStatusErrors(syncStatus *v1beta1.Status, cse []v1beta1.ConfigSyncErr
 	syncStatus.Sync.Errors = cse[0 : len(cse)/denominator]
 }
 
-// summarizeErrors summarizes the errors from `sourceStatus` and `syncStatus`, and returns an ErrorSource slice and an ErrorSummary.
-func summarizeErrors(sourceStatus v1beta1.SourceStatus, syncStatus v1beta1.SyncStatus) ([]v1beta1.ErrorSource, *v1beta1.ErrorSummary) {
+// summarizeErrorsForCommit summarizes the source, rendering, and sync errors
+// for a specific commit.
+//
+// Since we don't keep errors for old commits after that stage has started
+// working on a new commit, this process is a little bit lossy.
+func summarizeErrorsForCommit(sourceStatus v1beta1.SourceStatus, renderingStatus v1beta1.RenderingStatus, syncStatus v1beta1.SyncStatus, commit string) ([]v1beta1.ErrorSource, *v1beta1.ErrorSummary) {
 	var errorSources []v1beta1.ErrorSource
-	if len(sourceStatus.Errors) > 0 {
+	var summaries []*v1beta1.ErrorSummary
+
+	if sourceStatus.Commit == commit && len(sourceStatus.Errors) > 0 {
 		errorSources = append(errorSources, v1beta1.SourceError)
+		summaries = append(summaries, sourceStatus.ErrorSummary)
 	}
-	if len(syncStatus.Errors) > 0 {
+	if renderingStatus.Commit == commit && len(renderingStatus.Errors) > 0 {
+		errorSources = append(errorSources, v1beta1.RenderingError)
+		summaries = append(summaries, renderingStatus.ErrorSummary)
+	}
+	if syncStatus.Commit == commit && len(syncStatus.Errors) > 0 {
 		errorSources = append(errorSources, v1beta1.SyncError)
+		summaries = append(summaries, syncStatus.ErrorSummary)
 	}
 
 	errorSummary := &v1beta1.ErrorSummary{}
-	for _, summary := range []*v1beta1.ErrorSummary{sourceStatus.ErrorSummary, syncStatus.ErrorSummary} {
+	for _, summary := range summaries {
 		if summary == nil {
 			continue
 		}
@@ -552,12 +573,6 @@ func (p *root) addImplicitNamespaces(objs []ast.FileObject) ([]ast.FileObject, s
 // SyncErrors implements the Parser interface
 func (p *root) SyncErrors() status.MultiError {
 	return p.SyncErrorCache.Errors()
-}
-
-// Syncing returns true if the updater is running.
-// SyncErrors implements the Parser interface
-func (p *root) Syncing() bool {
-	return p.Updating()
 }
 
 // K8sClient implements the Parser interface

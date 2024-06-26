@@ -23,10 +23,12 @@ import (
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	apiregistrationv1 "k8s.io/kube-aggregator/pkg/apis/apiregistration/v1"
@@ -42,6 +44,7 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
+	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/syncer/differ"
 	"kpt.dev/configsync/pkg/util"
 	"kpt.dev/configsync/pkg/webhook/configuration"
@@ -134,6 +137,10 @@ func Clean(nt *NT) error {
 	}
 	// Delete namespaces with the managed-by label
 	if err := deleteManagedNamespacesAndWait(nt); err != nil {
+		return err
+	}
+	// Delete ClusterRoleBindings managed by reconciler-manager
+	if err := deleteManagedClusterRoleBindingsAndWait(nt); err != nil {
 		return err
 	}
 	// Delete namespaces with the detach annotation
@@ -304,6 +311,39 @@ func deleteManagedNamespacesAndWait(nt *NT) error {
 			protectedNamespacesWithTestLabel)
 	}
 	return deleteNamespacesAndWait(nt, nsListItems)
+}
+
+// deleteManagedClusterRoleBindingsAndWait deletes all the ClusterRoleBindings
+// managed by reconciler-manager.
+// All other objects managed by reconciler-manager are namespace-scoped and
+// should get cleaned up by namespace deletion. A ClusterRoleBinding can be
+// orphaned if the RootSync finalizer is force removed before the finalizer
+// completes.
+func deleteManagedClusterRoleBindingsAndWait(nt *NT) error {
+	start := time.Now()
+	defer func() {
+		elapsed := time.Since(start)
+		nt.T.Logf("[CLEANUP] Deleting managed ClusterRoleBindings took %v", elapsed)
+	}()
+
+	// Delete all ClusterRoleBindings with the "managed by reconciler-manager" label
+	opts := &client.ListOptions{}
+	opts.LabelSelector = client.MatchingLabelsSelector{
+		Selector: labels.SelectorFromSet(controllers.ManagedByLabel()),
+	}
+	crbList := &rbacv1.ClusterRoleBindingList{}
+	if err := nt.KubeClient.List(crbList, opts); err != nil {
+		return err
+	}
+
+	if len(crbList.Items) == 0 {
+		return nil
+	}
+	var objs []client.Object
+	for i := range crbList.Items {
+		objs = append(objs, &crbList.Items[i])
+	}
+	return DeleteObjectsAndWait(nt, objs...)
 }
 
 // deleteImplicitNamespacesAndWait deletes the namespaces with the PreventDeletion annotation.

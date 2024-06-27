@@ -110,13 +110,13 @@ func (p *namespace) parseSource(ctx context.Context, state sourceState) ([]ast.F
 //
 // setSourceStatus sets the source status with a given source state and set of errors.  If errs is empty, all errors
 // will be removed from the status.
-func (p *namespace) setSourceStatus(ctx context.Context, newStatus sourceStatus) error {
+func (p *namespace) setSourceStatus(ctx context.Context, newStatus SourceStatus) error {
 	p.mux.Lock()
 	defer p.mux.Unlock()
 	return p.setSourceStatusWithRetries(ctx, newStatus, defaultDenominator)
 }
 
-func (p *namespace) setSourceStatusWithRetries(ctx context.Context, newStatus sourceStatus, denominator int) error {
+func (p *namespace) setSourceStatusWithRetries(ctx context.Context, newStatus SourceStatus, denominator int) error {
 	if denominator <= 0 {
 		return fmt.Errorf("The denominator must be a positive number")
 	}
@@ -139,7 +139,7 @@ func (p *namespace) setSourceStatusWithRetries(ctx context.Context, newStatus so
 	if len(rs.Status.Source.Errors) > 0 {
 		errorSource = []v1beta1.ErrorSource{v1beta1.SourceError}
 	}
-	reposync.SetSyncing(&rs, continueSyncing, "Source", "Source", newStatus.commit, errorSource, rs.Status.Source.ErrorSummary, newStatus.lastUpdate)
+	reposync.SetSyncing(&rs, continueSyncing, "Source", "Source", newStatus.Commit, errorSource, rs.Status.Source.ErrorSummary, newStatus.LastUpdate)
 
 	// Avoid unnecessary status updates.
 	if !currentRS.Status.Source.LastUpdate.IsZero() && cmp.Equal(currentRS.Status, rs.Status, compare.IgnoreTimestampUpdates) {
@@ -147,7 +147,7 @@ func (p *namespace) setSourceStatusWithRetries(ctx context.Context, newStatus so
 		return nil
 	}
 
-	csErrs := status.ToCSE(newStatus.errs)
+	csErrs := status.ToCSE(newStatus.Errs)
 	metrics.RecordReconcilerErrors(ctx, "source", csErrs)
 	metrics.RecordPipelineError(ctx, configsync.RepoSyncName, "source", len(csErrs))
 	if len(csErrs) > 0 {
@@ -187,8 +187,8 @@ func (p *namespace) setRequiresRendering(ctx context.Context, renderingRequired 
 }
 
 // setRenderingStatus implements the Parser interface
-func (p *namespace) setRenderingStatus(ctx context.Context, oldStatus, newStatus renderingStatus) error {
-	if oldStatus.equal(newStatus) {
+func (p *namespace) setRenderingStatus(ctx context.Context, oldStatus, newStatus RenderingStatus) error {
+	if oldStatus.Equals(newStatus) {
 		return nil
 	}
 
@@ -197,7 +197,7 @@ func (p *namespace) setRenderingStatus(ctx context.Context, oldStatus, newStatus
 	return p.setRenderingStatusWithRetires(ctx, newStatus, defaultDenominator)
 }
 
-func (p *namespace) setRenderingStatusWithRetires(ctx context.Context, newStatus renderingStatus, denominator int) error {
+func (p *namespace) setRenderingStatusWithRetires(ctx context.Context, newStatus RenderingStatus, denominator int) error {
 	if denominator <= 0 {
 		return fmt.Errorf("The denominator must be a positive number")
 	}
@@ -216,7 +216,7 @@ func (p *namespace) setRenderingStatusWithRetires(ctx context.Context, newStatus
 	if len(rs.Status.Rendering.Errors) > 0 {
 		errorSource = []v1beta1.ErrorSource{v1beta1.RenderingError}
 	}
-	reposync.SetSyncing(&rs, continueSyncing, "Rendering", newStatus.message, newStatus.commit, errorSource, rs.Status.Rendering.ErrorSummary, newStatus.lastUpdate)
+	reposync.SetSyncing(&rs, continueSyncing, "Rendering", newStatus.Message, newStatus.Commit, errorSource, rs.Status.Rendering.ErrorSummary, newStatus.LastUpdate)
 
 	// Avoid unnecessary status updates.
 	if !currentRS.Status.Rendering.LastUpdate.IsZero() && cmp.Equal(currentRS.Status, rs.Status, compare.IgnoreTimestampUpdates) {
@@ -224,7 +224,7 @@ func (p *namespace) setRenderingStatusWithRetires(ctx context.Context, newStatus
 		return nil
 	}
 
-	csErrs := status.ToCSE(newStatus.errs)
+	csErrs := status.ToCSE(newStatus.Errs)
 	metrics.RecordReconcilerErrors(ctx, "rendering", csErrs)
 	metrics.RecordPipelineError(ctx, configsync.RepoSyncName, "rendering", len(csErrs))
 	if len(csErrs) > 0 {
@@ -251,13 +251,13 @@ func (p *namespace) setRenderingStatusWithRetires(ctx context.Context, newStatus
 // SetSyncStatus implements the Parser interface
 // SetSyncStatus sets the RepoSync sync status.
 // `errs` includes the errors encountered during the apply step;
-func (p *namespace) SetSyncStatus(ctx context.Context, newStatus syncStatus) error {
+func (p *namespace) SetSyncStatus(ctx context.Context, newStatus SyncStatus) error {
 	p.mux.Lock()
 	defer p.mux.Unlock()
 	return p.setSyncStatusWithRetries(ctx, newStatus, defaultDenominator)
 }
 
-func (p *namespace) setSyncStatusWithRetries(ctx context.Context, newStatus syncStatus, denominator int) error {
+func (p *namespace) setSyncStatusWithRetries(ctx context.Context, newStatus SyncStatus, denominator int) error {
 	if denominator <= 0 {
 		return fmt.Errorf("The denominator must be a positive number")
 	}
@@ -278,7 +278,7 @@ func (p *namespace) setSyncStatusWithRetries(ctx context.Context, newStatus sync
 	var lastSyncStatus string
 	if rs.Status.Source.Commit == rs.Status.Sync.Commit && rs.Status.Rendering.Commit == rs.Status.Sync.Commit {
 		errorSources, errorSummary := summarizeErrorsForCommit(rs.Status.Source, rs.Status.Rendering, rs.Status.Sync, rs.Status.Sync.Commit)
-		if newStatus.syncing {
+		if newStatus.Syncing {
 			reposync.SetSyncing(rs, true, "Sync", "Syncing", rs.Status.Sync.Commit, errorSources, errorSummary, rs.Status.Sync.LastUpdate)
 		} else {
 			if errorSummary.TotalCount == 0 {
@@ -295,7 +295,7 @@ func (p *namespace) setSyncStatusWithRetries(ctx context.Context, newStatus sync
 		return nil
 	}
 
-	csErrs := status.ToCSE(newStatus.errs)
+	csErrs := status.ToCSE(newStatus.Errs)
 	metrics.RecordReconcilerErrors(ctx, "sync", csErrs)
 	metrics.RecordPipelineError(ctx, configsync.RepoSyncName, "sync", len(csErrs))
 	if len(csErrs) > 0 {
@@ -303,7 +303,7 @@ func (p *namespace) setSyncStatusWithRetries(ctx context.Context, newStatus sync
 			rs.Namespace, rs.Name, csErrs)
 	}
 	// Only update the LastSyncTimestamp metric immediately after a sync attempt
-	if !newStatus.syncing && rs.Status.Sync.Commit != "" && lastSyncStatus != "" {
+	if !newStatus.Syncing && rs.Status.Sync.Commit != "" && lastSyncStatus != "" {
 		metrics.RecordLastSync(ctx, lastSyncStatus, rs.Status.Sync.Commit, rs.Status.Sync.LastUpdate.Time)
 	}
 

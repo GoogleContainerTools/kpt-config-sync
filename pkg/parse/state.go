@@ -17,62 +17,17 @@ package parse
 import (
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/status"
 )
 
-type sourceStatus struct {
-	commit     string
-	errs       status.MultiError
-	lastUpdate metav1.Time
-}
-
-func (gs sourceStatus) equal(other sourceStatus) bool {
-	return gs.commit == other.commit && status.DeepEqual(gs.errs, other.errs)
-}
-
-type renderingStatus struct {
-	commit     string
-	message    string
-	errs       status.MultiError
-	lastUpdate metav1.Time
-	// requiresRendering indicates whether the sync source has dry configs
-	// only used internally (not surfaced on RSync status)
-	requiresRendering bool
-}
-
-func (rs renderingStatus) equal(other renderingStatus) bool {
-	return rs.commit == other.commit && rs.message == other.message && status.DeepEqual(rs.errs, other.errs)
-}
-
-type syncStatus struct {
-	syncing    bool
-	commit     string
-	errs       status.MultiError
-	lastUpdate metav1.Time
-}
-
-func (gs syncStatus) equal(other syncStatus) bool {
-	return gs.syncing == other.syncing && gs.commit == other.commit && status.DeepEqual(gs.errs, other.errs)
-}
-
 type reconcilerState struct {
 	// lastApplied keeps the state for the last successful-applied syncDir.
 	lastApplied string
 
-	// sourceStatus tracks info from the `Status.Source` field of a RepoSync/RootSync.
-	sourceStatus sourceStatus
-
-	// renderingStatus tracks info from the `Status.Rendering` field of a RepoSync/RootSync.
-	renderingStatus renderingStatus
-
-	// syncStatus tracks info from the `Status.Sync` field of a RepoSync/RootSync.
-	syncStatus syncStatus
-
-	// syncingConditionLastUpdate tracks when the `Syncing` condition was updated most recently.
-	syncingConditionLastUpdate metav1.Time
+	// status contains fields that map to RSync status fields.
+	status *ReconcilerStatus
 
 	// cache tracks the progress made by the reconciler for a source commit.
 	cache cacheForCommit
@@ -159,36 +114,4 @@ func (s *reconcilerState) resetPartialCache() {
 	s.cache = cacheForCommit{}
 	s.cache.source = source
 	s.cache.needToRetry = needToRetry
-}
-
-// needToSetSourceStatus returns true if `p.setSourceStatus` should be called.
-func (s *reconcilerState) needToSetSourceStatus(newStatus sourceStatus) bool {
-	// Update if not initialized
-	if s.sourceStatus.lastUpdate.IsZero() {
-		return true
-	}
-	// Update if source status was last updated before the rendering status
-	if s.sourceStatus.lastUpdate.Before(&s.renderingStatus.lastUpdate) {
-		return true
-	}
-	// Update if there's a diff
-	return !newStatus.equal(s.sourceStatus)
-}
-
-// needToSetSyncStatus returns true if `p.SetSyncStatus` should be called.
-func (s *reconcilerState) needToSetSyncStatus(newStatus syncStatus) bool {
-	// Update if not initialized
-	if s.syncStatus.lastUpdate.IsZero() {
-		return true
-	}
-	// Update if sync status was last updated before the rendering status
-	if s.syncStatus.lastUpdate.Before(&s.renderingStatus.lastUpdate) {
-		return true
-	}
-	// Update if sync status was last updated before the source status
-	if s.syncStatus.lastUpdate.Before(&s.sourceStatus.lastUpdate) {
-		return true
-	}
-	// Update if there's a diff
-	return !newStatus.equal(s.syncStatus)
 }

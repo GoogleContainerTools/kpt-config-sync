@@ -161,13 +161,13 @@ func (p *root) parseSource(ctx context.Context, state sourceState) ([]ast.FileOb
 }
 
 // setSourceStatus implements the Parser interface
-func (p *root) setSourceStatus(ctx context.Context, newStatus sourceStatus) error {
+func (p *root) setSourceStatus(ctx context.Context, newStatus SourceStatus) error {
 	p.mux.Lock()
 	defer p.mux.Unlock()
 	return p.setSourceStatusWithRetries(ctx, newStatus, defaultDenominator)
 }
 
-func (p *root) setSourceStatusWithRetries(ctx context.Context, newStatus sourceStatus, denominator int) error {
+func (p *root) setSourceStatusWithRetries(ctx context.Context, newStatus SourceStatus, denominator int) error {
 	if denominator <= 0 {
 		return fmt.Errorf("The denominator must be a positive number")
 	}
@@ -186,7 +186,7 @@ func (p *root) setSourceStatusWithRetries(ctx context.Context, newStatus sourceS
 	if len(rs.Status.Source.Errors) > 0 {
 		errorSource = []v1beta1.ErrorSource{v1beta1.SourceError}
 	}
-	rootsync.SetSyncing(&rs, continueSyncing, "Source", "Source", newStatus.commit, errorSource, rs.Status.Source.ErrorSummary, newStatus.lastUpdate)
+	rootsync.SetSyncing(&rs, continueSyncing, "Source", "Source", newStatus.Commit, errorSource, rs.Status.Source.ErrorSummary, newStatus.LastUpdate)
 
 	// Avoid unnecessary status updates.
 	if !currentRS.Status.Source.LastUpdate.IsZero() && cmp.Equal(currentRS.Status, rs.Status, compare.IgnoreTimestampUpdates) {
@@ -194,7 +194,7 @@ func (p *root) setSourceStatusWithRetries(ctx context.Context, newStatus sourceS
 		return nil
 	}
 
-	csErrs := status.ToCSE(newStatus.errs)
+	csErrs := status.ToCSE(newStatus.Errs)
 	metrics.RecordReconcilerErrors(ctx, "source", csErrs)
 	metrics.RecordPipelineError(ctx, configsync.RootSyncName, "source", len(csErrs))
 	if len(csErrs) > 0 {
@@ -218,9 +218,9 @@ func (p *root) setSourceStatusWithRetries(ctx context.Context, newStatus sourceS
 	return nil
 }
 
-func setSourceStatusFields(source *v1beta1.SourceStatus, p Parser, newStatus sourceStatus, denominator int) {
-	cse := status.ToCSE(newStatus.errs)
-	source.Commit = newStatus.commit
+func setSourceStatusFields(source *v1beta1.SourceStatus, p Parser, newStatus SourceStatus, denominator int) {
+	cse := status.ToCSE(newStatus.Errs)
+	source.Commit = newStatus.Commit
 	switch p.options().SourceType {
 	case configsync.GitSource:
 		source.Git = &v1beta1.GitStatus{
@@ -246,6 +246,10 @@ func setSourceStatusFields(source *v1beta1.SourceStatus, p Parser, newStatus sou
 		}
 		source.Git = nil
 		source.Oci = nil
+	default:
+		source.Helm = nil
+		source.Git = nil
+		source.Oci = nil
 	}
 	errorSummary := &v1beta1.ErrorSummary{
 		TotalCount:                len(cse),
@@ -254,7 +258,7 @@ func setSourceStatusFields(source *v1beta1.SourceStatus, p Parser, newStatus sou
 	}
 	source.Errors = cse[0 : len(cse)/denominator]
 	source.ErrorSummary = errorSummary
-	source.LastUpdate = newStatus.lastUpdate
+	source.LastUpdate = newStatus.LastUpdate
 }
 
 func (p *root) setRequiresRendering(ctx context.Context, renderingRequired bool) error {
@@ -273,8 +277,8 @@ func (p *root) setRequiresRendering(ctx context.Context, renderingRequired bool)
 }
 
 // setRenderingStatus implements the Parser interface
-func (p *root) setRenderingStatus(ctx context.Context, oldStatus, newStatus renderingStatus) error {
-	if oldStatus.equal(newStatus) {
+func (p *root) setRenderingStatus(ctx context.Context, oldStatus, newStatus RenderingStatus) error {
+	if oldStatus.Equals(newStatus) {
 		return nil
 	}
 
@@ -283,7 +287,7 @@ func (p *root) setRenderingStatus(ctx context.Context, oldStatus, newStatus rend
 	return p.setRenderingStatusWithRetires(ctx, newStatus, defaultDenominator)
 }
 
-func (p *root) setRenderingStatusWithRetires(ctx context.Context, newStatus renderingStatus, denominator int) error {
+func (p *root) setRenderingStatusWithRetires(ctx context.Context, newStatus RenderingStatus, denominator int) error {
 	if denominator <= 0 {
 		return fmt.Errorf("The denominator must be a positive number")
 	}
@@ -302,7 +306,7 @@ func (p *root) setRenderingStatusWithRetires(ctx context.Context, newStatus rend
 	if len(rs.Status.Rendering.Errors) > 0 {
 		errorSource = []v1beta1.ErrorSource{v1beta1.RenderingError}
 	}
-	rootsync.SetSyncing(&rs, continueSyncing, "Rendering", newStatus.message, newStatus.commit, errorSource, rs.Status.Rendering.ErrorSummary, newStatus.lastUpdate)
+	rootsync.SetSyncing(&rs, continueSyncing, "Rendering", newStatus.Message, newStatus.Commit, errorSource, rs.Status.Rendering.ErrorSummary, newStatus.LastUpdate)
 
 	// Avoid unnecessary status updates.
 	if !currentRS.Status.Rendering.LastUpdate.IsZero() && cmp.Equal(currentRS.Status, rs.Status, compare.IgnoreTimestampUpdates) {
@@ -310,7 +314,7 @@ func (p *root) setRenderingStatusWithRetires(ctx context.Context, newStatus rend
 		return nil
 	}
 
-	csErrs := status.ToCSE(newStatus.errs)
+	csErrs := status.ToCSE(newStatus.Errs)
 	metrics.RecordReconcilerErrors(ctx, "rendering", csErrs)
 	metrics.RecordPipelineError(ctx, configsync.RootSyncName, "rendering", len(csErrs))
 	if len(csErrs) > 0 {
@@ -334,9 +338,9 @@ func (p *root) setRenderingStatusWithRetires(ctx context.Context, newStatus rend
 	return nil
 }
 
-func setRenderingStatusFields(rendering *v1beta1.RenderingStatus, p Parser, newStatus renderingStatus, denominator int) {
-	cse := status.ToCSE(newStatus.errs)
-	rendering.Commit = newStatus.commit
+func setRenderingStatusFields(rendering *v1beta1.RenderingStatus, p Parser, newStatus RenderingStatus, denominator int) {
+	cse := status.ToCSE(newStatus.Errs)
+	rendering.Commit = newStatus.Commit
 	switch p.options().SourceType {
 	case configsync.GitSource:
 		rendering.Git = &v1beta1.GitStatus{
@@ -362,27 +366,31 @@ func setRenderingStatusFields(rendering *v1beta1.RenderingStatus, p Parser, newS
 		}
 		rendering.Git = nil
 		rendering.Oci = nil
+	default:
+		rendering.Helm = nil
+		rendering.Git = nil
+		rendering.Oci = nil
 	}
-	rendering.Message = newStatus.message
+	rendering.Message = newStatus.Message
 	errorSummary := &v1beta1.ErrorSummary{
 		TotalCount: len(cse),
 		Truncated:  denominator != 1,
 	}
 	rendering.Errors = cse[0 : len(cse)/denominator]
 	rendering.ErrorSummary = errorSummary
-	rendering.LastUpdate = newStatus.lastUpdate
+	rendering.LastUpdate = newStatus.LastUpdate
 }
 
 // SetSyncStatus implements the Parser interface
 // SetSyncStatus sets the RootSync sync status.
 // `errs` includes the errors encountered during the apply step;
-func (p *root) SetSyncStatus(ctx context.Context, newStatus syncStatus) error {
+func (p *root) SetSyncStatus(ctx context.Context, newStatus SyncStatus) error {
 	p.mux.Lock()
 	defer p.mux.Unlock()
 	return p.setSyncStatusWithRetries(ctx, newStatus, defaultDenominator)
 }
 
-func (p *root) setSyncStatusWithRetries(ctx context.Context, newStatus syncStatus, denominator int) error {
+func (p *root) setSyncStatusWithRetries(ctx context.Context, newStatus SyncStatus, denominator int) error {
 	if denominator <= 0 {
 		return fmt.Errorf("The denominator must be a positive number")
 	}
@@ -403,7 +411,7 @@ func (p *root) setSyncStatusWithRetries(ctx context.Context, newStatus syncStatu
 	var lastSyncStatus string
 	if rs.Status.Source.Commit == rs.Status.Sync.Commit && rs.Status.Rendering.Commit == rs.Status.Sync.Commit {
 		errorSources, errorSummary := summarizeErrorsForCommit(rs.Status.Source, rs.Status.Rendering, rs.Status.Sync, rs.Status.Sync.Commit)
-		if newStatus.syncing {
+		if newStatus.Syncing {
 			rootsync.SetSyncing(rs, true, "Sync", "Syncing", rs.Status.Sync.Commit, errorSources, errorSummary, rs.Status.Sync.LastUpdate)
 		} else {
 			if errorSummary.TotalCount == 0 {
@@ -420,7 +428,7 @@ func (p *root) setSyncStatusWithRetries(ctx context.Context, newStatus syncStatu
 		return nil
 	}
 
-	csErrs := status.ToCSE(newStatus.errs)
+	csErrs := status.ToCSE(newStatus.Errs)
 	metrics.RecordReconcilerErrors(ctx, "sync", csErrs)
 	metrics.RecordPipelineError(ctx, configsync.RootSyncName, "sync", len(csErrs))
 	if len(csErrs) > 0 {
@@ -428,7 +436,7 @@ func (p *root) setSyncStatusWithRetries(ctx context.Context, newStatus syncStatu
 			rs.Namespace, rs.Name, csErrs)
 	}
 	// Only update the LastSyncTimestamp metric immediately after a sync attempt
-	if !newStatus.syncing && rs.Status.Sync.Commit != "" && lastSyncStatus != "" {
+	if !newStatus.Syncing && rs.Status.Sync.Commit != "" && lastSyncStatus != "" {
 		metrics.RecordLastSync(ctx, lastSyncStatus, rs.Status.Sync.Commit, rs.Status.Sync.LastUpdate.Time)
 	}
 
@@ -448,14 +456,14 @@ func (p *root) setSyncStatusWithRetries(ctx context.Context, newStatus syncStatu
 	return nil
 }
 
-func setSyncStatusFields(syncStatus *v1beta1.Status, newStatus syncStatus, denominator int) {
-	cse := status.ToCSE(newStatus.errs)
-	syncStatus.Sync.Commit = newStatus.commit
+func setSyncStatusFields(syncStatus *v1beta1.Status, newStatus SyncStatus, denominator int) {
+	cse := status.ToCSE(newStatus.Errs)
+	syncStatus.Sync.Commit = newStatus.Commit
 	syncStatus.Sync.Git = syncStatus.Source.Git
 	syncStatus.Sync.Oci = syncStatus.Source.Oci
 	syncStatus.Sync.Helm = syncStatus.Source.Helm
 	setSyncStatusErrors(syncStatus, cse, denominator)
-	syncStatus.Sync.LastUpdate = newStatus.lastUpdate
+	syncStatus.Sync.LastUpdate = newStatus.LastUpdate
 }
 
 func setSyncStatusErrors(syncStatus *v1beta1.Status, cse []v1beta1.ConfigSyncError, denominator int) {

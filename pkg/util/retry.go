@@ -24,9 +24,11 @@ import (
 
 var (
 	// SourceRetryBackoff sets retry timeout for `SourceCommitAndDirWithRetry`.
-	SourceRetryBackoff = BackoffWithDurationLimit(5 * time.Minute)
+	SourceRetryBackoff = BackoffWithDurationAndStepLimit(5*time.Minute, 10)
 	// HydratedRetryBackoff sets retry timeout for `readHydratedDirWithRetry`.
-	HydratedRetryBackoff = BackoffWithDurationLimit(time.Minute)
+	HydratedRetryBackoff = BackoffWithDurationAndStepLimit(time.Minute, 10)
+	// MinimumSyncContainerBackoffCap is the minimum backoff cap for oci-sync/helm-sync.
+	MinimumSyncContainerBackoffCap = time.Hour
 )
 
 // RetriableError represents a transient error that is retriable.
@@ -52,16 +54,16 @@ func IsErrorRetriable(err error) bool {
 	return ok
 }
 
-// BackoffWithDurationLimit returns backoff with a duration limit in 10 steps.
+// BackoffWithDurationAndStepLimit returns backoff with a duration limit.
 // Here is an example of the duration between steps:
 //
 //	1.055843837s, 2.085359785s, 4.229560375s, 8.324724174s, 16.295984061s,
 //	34.325711987s, 1m5.465642392s, 2m18.625713221s, 4m24.712222056s, 9m18.97652295s.
-func BackoffWithDurationLimit(duration time.Duration) wait.Backoff {
+func BackoffWithDurationAndStepLimit(duration time.Duration, steps int) wait.Backoff {
 	return wait.Backoff{
 		Duration: 1 * time.Second,
 		Factor:   2,
-		Steps:    10,
+		Steps:    steps,
 		Cap:      duration,
 		Jitter:   0.1,
 	}

@@ -20,6 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/status"
+	"kpt.dev/configsync/pkg/util"
 )
 
 type reconcilerState struct {
@@ -53,12 +54,7 @@ const retryLimit = 12
 //	16.295984061s, 34.325711987s, 1m5.465642392s, 2m18.625713221s,
 //	4m24.712222056s, 9m18.97652295s, 17m15.344384599s, 35m15.603237976s.
 func defaultBackoff() wait.Backoff {
-	return wait.Backoff{
-		Duration: 1 * time.Second,
-		Factor:   2,
-		Steps:    retryLimit,
-		Jitter:   0.1,
-	}
+	return util.BackoffWithDurationAndStepLimit(0, retryLimit)
 }
 
 func (s *reconcilerState) checkpoint() {

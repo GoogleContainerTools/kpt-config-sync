@@ -404,15 +404,15 @@ func TestRun(t *testing.T) {
 
 			assert.Equal(t, tc.needRetry, state.cache.needToRetry)
 			testerrors.AssertEqual(t, tc.expectedErrors, state.cache.errs, "[%s] unexpected state.cache.errs return", tc.name)
-			testerrors.AssertEqual(t, tc.expectedStateSourceErrs, state.sourceStatus.errs, "[%s] unexpected state.sourceStatus.errs return", tc.name)
-			testerrors.AssertEqual(t, tc.expectedStateRenderingErrs, state.renderingStatus.errs, "[%s] unexpected state.renderingStatus.errs return", tc.name)
+			testerrors.AssertEqual(t, tc.expectedStateSourceErrs, state.status.SourceStatus.Errs, "[%s] unexpected state.status.sourceStatus.errs return", tc.name)
+			testerrors.AssertEqual(t, tc.expectedStateRenderingErrs, state.status.RenderingStatus.Errs, "[%s] unexpected state.status.renderingStatus.errs return", tc.name)
 
 			rs := &v1beta1.RootSync{}
 			if err = parser.options().Client.Get(context.Background(), rootsync.ObjectKey(parser.options().SyncName), rs); err != nil {
 				t.Fatal(err)
 			}
-			expectedRSSourceErrs := status.ToCSE(state.sourceStatus.errs)
-			expectedRSRenderingErrs := status.ToCSE(state.renderingStatus.errs)
+			expectedRSSourceErrs := status.ToCSE(state.status.SourceStatus.Errs)
+			expectedRSRenderingErrs := status.ToCSE(state.status.RenderingStatus.Errs)
 			testutil.AssertEqual(t, expectedRSSourceErrs, rs.Status.Source.Errors, "[%s] unexpected source errors in RootSync return", tc.name)
 			testutil.AssertEqual(t, expectedRSRenderingErrs, rs.Status.Rendering.Errors, "[%s] unexpected rendering errors in RootSync return", tc.name)
 

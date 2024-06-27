@@ -496,6 +496,7 @@ func TestRoot_Parse(t *testing.T) {
 				"example.yaml",
 			}
 			state := &reconcilerState{
+				status: &ReconcilerStatus{},
 				cache: cacheForCommit{
 					source: sourceState{
 						commit:  testGitCommit,
@@ -707,7 +708,9 @@ func TestRoot_DeclaredFields(t *testing.T) {
 					NamespaceStrategy: configsync.NamespaceStrategyExplicit,
 				},
 			}
-			state := &reconcilerState{}
+			state := &reconcilerState{
+				status: &ReconcilerStatus{},
+			}
 			if err := parseAndUpdate(context.Background(), parser, triggerReimport, state); err != nil {
 				t.Fatal(err)
 			}
@@ -960,7 +963,9 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 					NamespaceStrategy: configsync.NamespaceStrategyImplicit,
 				},
 			}
-			state := &reconcilerState{}
+			state := &reconcilerState{
+				status: &ReconcilerStatus{},
+			}
 			err := parseAndUpdate(context.Background(), parser, triggerReimport, state)
 			testerrors.AssertEqual(t, tc.expectedError, err, "expected error to match")
 
@@ -1044,7 +1049,9 @@ func TestRoot_SourceReconcilerErrorsMetricValidation(t *testing.T) {
 					SourceFormat: configsync.SourceFormatUnstructured,
 				},
 			}
-			state := &reconcilerState{}
+			state := &reconcilerState{
+				status: &ReconcilerStatus{},
+			}
 			err := parseAndUpdate(context.Background(), parser, triggerReimport, state)
 			testerrors.AssertEqual(t, tc.expectedError, err, "expected error to match")
 
@@ -1130,7 +1137,9 @@ func TestRoot_SourceAndSyncReconcilerErrorsMetricValidation(t *testing.T) {
 					SourceFormat: configsync.SourceFormatUnstructured,
 				},
 			}
-			state := &reconcilerState{}
+			state := &reconcilerState{
+				status: &ReconcilerStatus{},
+			}
 			err := parseAndUpdate(context.Background(), parser, triggerReimport, state)
 			testerrors.AssertEqual(t, tc.expectedError, err, "expected error to match")
 

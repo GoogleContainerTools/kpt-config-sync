@@ -89,9 +89,9 @@ type Options struct {
 // Parser represents a parser that can be pointed at and continuously parse a source.
 type Parser interface {
 	parseSource(ctx context.Context, state sourceState) ([]ast.FileObject, status.MultiError)
-	setSourceStatus(ctx context.Context, newStatus sourceStatus) error
-	setRenderingStatus(ctx context.Context, oldStatus, newStatus renderingStatus) error
-	SetSyncStatus(ctx context.Context, newStatus syncStatus) error
+	setSourceStatus(ctx context.Context, newStatus SourceStatus) error
+	setRenderingStatus(ctx context.Context, oldStatus, newStatus RenderingStatus) error
+	SetSyncStatus(ctx context.Context, newStatus SyncStatus) error
 	options() *Options
 	// SyncErrors returns all the sync errors, including remediator errors,
 	// validation errors, applier errors, and watch update errors.

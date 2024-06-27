@@ -77,13 +77,8 @@ var (
 )
 
 func errorBackoff() wait.Backoff {
-	return wait.Backoff{
-		Duration: 1 * time.Second,
-		Factor:   2,
-		Steps:    math.MaxInt,
-		Jitter:   0.1,
-		Cap:      util.WaitTime(*flWait),
-	}
+	durationLimit := math.Max(*flWait, float64(util.MinimumSyncContainerBackoffCap))
+	return util.BackoffWithDurationAndStepLimit(util.WaitTime(durationLimit), math.MaxInt32)
 }
 
 func main() {

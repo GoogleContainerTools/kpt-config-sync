@@ -23,6 +23,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/textlogger"
+	"k8s.io/utils/clock"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/client/restconfig"
@@ -237,6 +238,7 @@ func Run(opts Options) {
 	}
 
 	parseOpts := &parse.Options{
+		Clock:              clock.RealClock{},
 		Parser:             filesystem.NewParser(&reader.File{}),
 		ClusterName:        opts.ClusterName,
 		Client:             cl,

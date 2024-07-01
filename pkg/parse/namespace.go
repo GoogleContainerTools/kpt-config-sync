@@ -110,13 +110,13 @@ func (p *namespace) parseSource(ctx context.Context, state sourceState) ([]ast.F
 //
 // setSourceStatus sets the source status with a given source state and set of errors.  If errs is empty, all errors
 // will be removed from the status.
-func (p *namespace) setSourceStatus(ctx context.Context, newStatus SourceStatus) error {
+func (p *namespace) setSourceStatus(ctx context.Context, newStatus *SourceStatus) error {
 	p.mux.Lock()
 	defer p.mux.Unlock()
 	return p.setSourceStatusWithRetries(ctx, newStatus, defaultDenominator)
 }
 
-func (p *namespace) setSourceStatusWithRetries(ctx context.Context, newStatus SourceStatus, denominator int) error {
+func (p *namespace) setSourceStatusWithRetries(ctx context.Context, newStatus *SourceStatus, denominator int) error {
 	if denominator <= 0 {
 		return fmt.Errorf("The denominator must be a positive number")
 	}
@@ -187,7 +187,7 @@ func (p *namespace) setRequiresRendering(ctx context.Context, renderingRequired 
 }
 
 // setRenderingStatus implements the Parser interface
-func (p *namespace) setRenderingStatus(ctx context.Context, oldStatus, newStatus RenderingStatus) error {
+func (p *namespace) setRenderingStatus(ctx context.Context, oldStatus, newStatus *RenderingStatus) error {
 	if oldStatus.Equals(newStatus) {
 		return nil
 	}
@@ -197,7 +197,7 @@ func (p *namespace) setRenderingStatus(ctx context.Context, oldStatus, newStatus
 	return p.setRenderingStatusWithRetires(ctx, newStatus, defaultDenominator)
 }
 
-func (p *namespace) setRenderingStatusWithRetires(ctx context.Context, newStatus RenderingStatus, denominator int) error {
+func (p *namespace) setRenderingStatusWithRetires(ctx context.Context, newStatus *RenderingStatus, denominator int) error {
 	if denominator <= 0 {
 		return fmt.Errorf("The denominator must be a positive number")
 	}
@@ -251,13 +251,13 @@ func (p *namespace) setRenderingStatusWithRetires(ctx context.Context, newStatus
 // SetSyncStatus implements the Parser interface
 // SetSyncStatus sets the RepoSync sync status.
 // `errs` includes the errors encountered during the apply step;
-func (p *namespace) SetSyncStatus(ctx context.Context, newStatus SyncStatus) error {
+func (p *namespace) SetSyncStatus(ctx context.Context, newStatus *SyncStatus) error {
 	p.mux.Lock()
 	defer p.mux.Unlock()
 	return p.setSyncStatusWithRetries(ctx, newStatus, defaultDenominator)
 }
 
-func (p *namespace) setSyncStatusWithRetries(ctx context.Context, newStatus SyncStatus, denominator int) error {
+func (p *namespace) setSyncStatusWithRetries(ctx context.Context, newStatus *SyncStatus, denominator int) error {
 	if denominator <= 0 {
 		return fmt.Errorf("The denominator must be a positive number")
 	}

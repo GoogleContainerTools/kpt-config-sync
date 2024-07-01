@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"k8s.io/utils/clock"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/filesystem"
@@ -29,6 +30,10 @@ import (
 
 // Options holds configuration and core functionality required by all parsers.
 type Options struct {
+	// Clock is used for time tracking, namely to simplify testing by allowing
+	// a fake clock, instead of a RealClock.
+	Clock clock.Clock
+
 	// Parser defines the minimum interface required for Reconciler to use a
 	// Parser to read configs from a filesystem.
 	Parser filesystem.ConfigParser
@@ -89,9 +94,9 @@ type Options struct {
 // Parser represents a parser that can be pointed at and continuously parse a source.
 type Parser interface {
 	parseSource(ctx context.Context, state sourceState) ([]ast.FileObject, status.MultiError)
-	setSourceStatus(ctx context.Context, newStatus SourceStatus) error
-	setRenderingStatus(ctx context.Context, oldStatus, newStatus RenderingStatus) error
-	SetSyncStatus(ctx context.Context, newStatus SyncStatus) error
+	setSourceStatus(ctx context.Context, newStatus *SourceStatus) error
+	setRenderingStatus(ctx context.Context, oldStatus, newStatus *RenderingStatus) error
+	SetSyncStatus(ctx context.Context, newStatus *SyncStatus) error
 	options() *Options
 	// SyncErrors returns all the sync errors, including remediator errors,
 	// validation errors, applier errors, and watch update errors.

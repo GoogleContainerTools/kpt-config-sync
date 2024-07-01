@@ -161,13 +161,13 @@ func (p *root) parseSource(ctx context.Context, state sourceState) ([]ast.FileOb
 }
 
 // setSourceStatus implements the Parser interface
-func (p *root) setSourceStatus(ctx context.Context, newStatus SourceStatus) error {
+func (p *root) setSourceStatus(ctx context.Context, newStatus *SourceStatus) error {
 	p.mux.Lock()
 	defer p.mux.Unlock()
 	return p.setSourceStatusWithRetries(ctx, newStatus, defaultDenominator)
 }
 
-func (p *root) setSourceStatusWithRetries(ctx context.Context, newStatus SourceStatus, denominator int) error {
+func (p *root) setSourceStatusWithRetries(ctx context.Context, newStatus *SourceStatus, denominator int) error {
 	if denominator <= 0 {
 		return fmt.Errorf("The denominator must be a positive number")
 	}
@@ -218,7 +218,7 @@ func (p *root) setSourceStatusWithRetries(ctx context.Context, newStatus SourceS
 	return nil
 }
 
-func setSourceStatusFields(source *v1beta1.SourceStatus, p Parser, newStatus SourceStatus, denominator int) {
+func setSourceStatusFields(source *v1beta1.SourceStatus, p Parser, newStatus *SourceStatus, denominator int) {
 	cse := status.ToCSE(newStatus.Errs)
 	source.Commit = newStatus.Commit
 	switch p.options().SourceType {
@@ -277,7 +277,7 @@ func (p *root) setRequiresRendering(ctx context.Context, renderingRequired bool)
 }
 
 // setRenderingStatus implements the Parser interface
-func (p *root) setRenderingStatus(ctx context.Context, oldStatus, newStatus RenderingStatus) error {
+func (p *root) setRenderingStatus(ctx context.Context, oldStatus, newStatus *RenderingStatus) error {
 	if oldStatus.Equals(newStatus) {
 		return nil
 	}
@@ -287,7 +287,7 @@ func (p *root) setRenderingStatus(ctx context.Context, oldStatus, newStatus Rend
 	return p.setRenderingStatusWithRetires(ctx, newStatus, defaultDenominator)
 }
 
-func (p *root) setRenderingStatusWithRetires(ctx context.Context, newStatus RenderingStatus, denominator int) error {
+func (p *root) setRenderingStatusWithRetires(ctx context.Context, newStatus *RenderingStatus, denominator int) error {
 	if denominator <= 0 {
 		return fmt.Errorf("The denominator must be a positive number")
 	}
@@ -338,7 +338,7 @@ func (p *root) setRenderingStatusWithRetires(ctx context.Context, newStatus Rend
 	return nil
 }
 
-func setRenderingStatusFields(rendering *v1beta1.RenderingStatus, p Parser, newStatus RenderingStatus, denominator int) {
+func setRenderingStatusFields(rendering *v1beta1.RenderingStatus, p Parser, newStatus *RenderingStatus, denominator int) {
 	cse := status.ToCSE(newStatus.Errs)
 	rendering.Commit = newStatus.Commit
 	switch p.options().SourceType {
@@ -384,13 +384,13 @@ func setRenderingStatusFields(rendering *v1beta1.RenderingStatus, p Parser, newS
 // SetSyncStatus implements the Parser interface
 // SetSyncStatus sets the RootSync sync status.
 // `errs` includes the errors encountered during the apply step;
-func (p *root) SetSyncStatus(ctx context.Context, newStatus SyncStatus) error {
+func (p *root) SetSyncStatus(ctx context.Context, newStatus *SyncStatus) error {
 	p.mux.Lock()
 	defer p.mux.Unlock()
 	return p.setSyncStatusWithRetries(ctx, newStatus, defaultDenominator)
 }
 
-func (p *root) setSyncStatusWithRetries(ctx context.Context, newStatus SyncStatus, denominator int) error {
+func (p *root) setSyncStatusWithRetries(ctx context.Context, newStatus *SyncStatus, denominator int) error {
 	if denominator <= 0 {
 		return fmt.Errorf("The denominator must be a positive number")
 	}
@@ -456,7 +456,7 @@ func (p *root) setSyncStatusWithRetries(ctx context.Context, newStatus SyncStatu
 	return nil
 }
 
-func setSyncStatusFields(syncStatus *v1beta1.Status, newStatus SyncStatus, denominator int) {
+func setSyncStatusFields(syncStatus *v1beta1.Status, newStatus *SyncStatus, denominator int) {
 	cse := status.ToCSE(newStatus.Errs)
 	syncStatus.Sync.Commit = newStatus.Commit
 	syncStatus.Sync.Git = syncStatus.Source.Git

@@ -24,6 +24,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/utils/clock"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
@@ -106,6 +107,7 @@ func TestReadConfigFiles(t *testing.T) {
 
 			parser := &root{
 				Options: &Options{
+					Clock:              clock.RealClock{}, // TODO: Test with fake clock
 					SyncName:           rootSyncName,
 					ReconcilerName:     rootReconcilerName,
 					Client:             syncertest.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName)),
@@ -265,6 +267,7 @@ func TestReadHydratedDirWithRetry(t *testing.T) {
 
 			parser := &root{
 				Options: &Options{
+					Clock: clock.RealClock{}, // TODO: Test with fake clock
 					Files: Files{
 						FileSource: FileSource{
 							HydratedRoot: hydratedRoot,

@@ -15,13 +15,8 @@
 package parse
 
 import (
-	"time"
-
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/clock"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/util"
 )
 
 type reconcilerState struct {
@@ -33,29 +28,6 @@ type reconcilerState struct {
 
 	// cache tracks the progress made by the reconciler for a source commit.
 	cache cacheForCommit
-
-	// backoff defines the duration to wait before retries
-	// backoff is initialized to `defaultBackoff()` when a reconcilerState struct is created.
-	// backoff is updated before a retry starts.
-	// backoff should only be reset back to `defaultBackoff()` when a new commit is detected.
-	backoff wait.Backoff
-
-	retryTimer clock.Timer
-
-	retryPeriod time.Duration
-}
-
-// retryLimit defines the maximal number of retries allowed on a given commit.
-const retryLimit = 12
-
-// The returned backoff includes 12 steps.
-// Here is an example of the duration between steps:
-//
-//	1.055843837s, 2.085359785s, 4.229560375s, 8.324724174s,
-//	16.295984061s, 34.325711987s, 1m5.465642392s, 2m18.625713221s,
-//	4m24.712222056s, 9m18.97652295s, 17m15.344384599s, 35m15.603237976s.
-func defaultBackoff() wait.Backoff {
-	return util.BackoffWithDurationAndStepLimit(0, retryLimit)
 }
 
 func (s *reconcilerState) checkpoint() {

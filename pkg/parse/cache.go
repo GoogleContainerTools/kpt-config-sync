@@ -34,7 +34,7 @@ import (
 type cacheForCommit struct {
 	// source tracks the state of the source repo.
 	// This field is only set after the reconciler successfully reads all the source files.
-	source sourceState
+	source *sourceState
 
 	// hasParserResult indicates whether the cache includes the parser result.
 	hasParserResult bool

@@ -189,7 +189,7 @@ func Run(ctx context.Context, p Parser, nsControllerState *namespacecontroller.S
 			if opts.Remediating() {
 				klog.V(3).Info("Updating sync status (periodic while not syncing)")
 				// Don't update the sync spec or commit.
-				if err := setSyncStatus(ctx, p, state, false, state.status.SyncStatus.Commit, p.SyncErrors()); err != nil {
+				if err := setSyncStatus(ctx, p, state, state.status.SyncStatus.Spec, false, state.status.SyncStatus.Commit, p.SyncErrors()); err != nil {
 					klog.Warningf("failed to update sync status: %v", err)
 				}
 			}
@@ -230,10 +230,14 @@ func DefaultRunOpts() RunOpts {
 }
 
 func run(ctx context.Context, p Parser, trigger string, state *reconcilerState) {
-	// Initialize status
-	// TODO: Populate status from RSync status
+	// Initialize state from RSync status.
 	if state.status == nil {
-		state.status = &ReconcilerStatus{}
+		reconcilerStatus, err := p.ReconcilerStatusFromCluster(ctx)
+		if err != nil {
+			state.invalidate(status.Append(nil, err))
+			return
+		}
+		state.status = reconcilerStatus
 	}
 
 	opts := p.options()
@@ -243,6 +247,9 @@ func run(ctx context.Context, p Parser, trigger string, state *reconcilerState) 
 	// pull the source commit and directory with retries within 5 minutes.
 	gs.Commit, syncDir, gs.Errs = hydrate.SourceCommitAndDirWithRetry(util.SourceRetryBackoff, opts.SourceType, opts.SourceDir, opts.SyncDir, opts.ReconcilerName)
 
+	// Generate source spec from Reconciler config
+	gs.Spec = SourceSpecFromFileSource(opts.FileSource, opts.SourceType, gs.Commit)
+
 	// Only update the source status if there are errors or the commit changed.
 	// Otherwise, parsing errors may be overwritten.
 	// TODO: Decouple fetch & parse stages to use different status fields
@@ -251,7 +258,7 @@ func run(ctx context.Context, p Parser, trigger string, state *reconcilerState) 
 		var setSourceStatusErr error
 		// Only update the source status if it changed
 		if state.status.needToSetSourceStatus(gs) {
-			klog.V(3).Infof("Updating source status (before read): %#v", gs)
+			klog.V(3).Info("Updating source status (after fetch)")
 			setSourceStatusErr = p.setSourceStatus(ctx, gs)
 			// If there were errors publishing the source status, stop, log them, and retry later
 			if setSourceStatusErr != nil {
@@ -271,6 +278,7 @@ func run(ctx context.Context, p Parser, trigger string, state *reconcilerState) 
 	}
 
 	rs := &RenderingStatus{
+		Spec:   gs.Spec,
 		Commit: gs.Commit,
 	}
 	if state.status.RenderingStatus != nil {
@@ -284,7 +292,7 @@ func run(ctx context.Context, p Parser, trigger string, state *reconcilerState) 
 		if os.IsNotExist(err) || (err == nil && hydrate.DoneCommit(doneFilePath) != gs.Commit) {
 			rs.Message = RenderingInProgress
 			rs.LastUpdate = metav1.Time{Time: opts.Clock.Now()}
-			klog.V(3).Infof("Updating rendering status (before read): %#v", rs)
+			klog.V(3).Info("Updating rendering status (before parse)")
 			setRenderingStatusErr := p.setRenderingStatus(ctx, state.status.RenderingStatus, rs)
 			if setRenderingStatusErr == nil {
 				state.reset()
@@ -300,7 +308,7 @@ func run(ctx context.Context, p Parser, trigger string, state *reconcilerState) 
 			rs.Message = RenderingFailed
 			rs.LastUpdate = metav1.Time{Time: opts.Clock.Now()}
 			rs.Errs = status.InternalHydrationError(err, "unable to read the done file: %s", doneFilePath)
-			klog.V(3).Infof("Updating rendering status (before read): %#v", rs)
+			klog.V(3).Info("Updating rendering status (before parse)")
 			setRenderingStatusErr := p.setRenderingStatus(ctx, state.status.RenderingStatus, rs)
 			if setRenderingStatusErr == nil {
 				state.status.RenderingStatus = rs
@@ -311,10 +319,16 @@ func run(ctx context.Context, p Parser, trigger string, state *reconcilerState) 
 		}
 	}
 
+	// Init cached source
+	if state.cache.source == nil {
+		state.cache.source = &sourceState{}
+	}
+
 	// rendering is done, starts to read the source or hydrated configs.
 	oldSyncDir := state.cache.source.syncDir
 	// `read` is called no matter what the trigger is.
-	ps := sourceState{
+	ps := &sourceState{
+		spec:    gs.Spec,
 		commit:  gs.Commit,
 		syncDir: syncDir,
 	}
@@ -351,7 +365,7 @@ func run(ctx context.Context, p Parser, trigger string, state *reconcilerState) 
 
 // read reads config files from source if no rendering is needed, or from hydrated output if rendering is done.
 // It also updates the .status.rendering and .status.source fields.
-func read(ctx context.Context, p Parser, trigger string, state *reconcilerState, sourceState sourceState) status.MultiError {
+func read(ctx context.Context, p Parser, trigger string, state *reconcilerState, sourceState *sourceState) status.MultiError {
 	opts := p.options()
 	hydrationStatus, sourceStatus := readFromSource(ctx, p, trigger, state, sourceState)
 	if opts.RenderingEnabled != hydrationStatus.RequiresRendering {
@@ -365,7 +379,7 @@ func read(ctx context.Context, p Parser, trigger string, state *reconcilerState,
 	hydrationStatus.LastUpdate = metav1.Time{Time: opts.Clock.Now()}
 	// update the rendering status before source status because the parser needs to
 	// read and parse the configs after rendering is done and there might have errors.
-	klog.V(3).Infof("Updating rendering status (after read): %#v", hydrationStatus)
+	klog.V(3).Info("Updating rendering status (after parse)")
 	setRenderingStatusErr := p.setRenderingStatus(ctx, state.status.RenderingStatus, hydrationStatus)
 	if setRenderingStatusErr == nil {
 		state.status.RenderingStatus = hydrationStatus
@@ -385,7 +399,7 @@ func read(ctx context.Context, p Parser, trigger string, state *reconcilerState,
 	sourceStatus.LastUpdate = metav1.Time{Time: opts.Clock.Now()}
 	var setSourceStatusErr error
 	if state.status.needToSetSourceStatus(sourceStatus) {
-		klog.V(3).Infof("Updating source status (after read): %#v", sourceStatus)
+		klog.V(3).Info("Updating source status (after parse)")
 		setSourceStatusErr := p.setSourceStatus(ctx, sourceStatus)
 		if setSourceStatusErr == nil {
 			state.status.SourceStatus = sourceStatus
@@ -399,7 +413,7 @@ func read(ctx context.Context, p Parser, trigger string, state *reconcilerState,
 // parseHydrationState reads from the file path which the hydration-controller
 // container writes to. It checks if the hydrated files are ready and returns
 // a renderingStatus.
-func parseHydrationState(p Parser, srcState sourceState, hydrationStatus *RenderingStatus) (sourceState, *RenderingStatus) {
+func parseHydrationState(p Parser, srcState *sourceState, hydrationStatus *RenderingStatus) (*sourceState, *RenderingStatus) {
 	opts := p.options()
 	if !opts.RenderingEnabled {
 		hydrationStatus.Message = RenderingSkipped
@@ -442,15 +456,17 @@ func parseHydrationState(p Parser, srcState sourceState, hydrationStatus *Render
 // readFromSource reads the source or hydrated configs, checks whether the sourceState in
 // the cache is up-to-date. If the cache is not up-to-date, reads all the source or hydrated files.
 // readFromSource returns the rendering status and source status.
-func readFromSource(ctx context.Context, p Parser, trigger string, recState *reconcilerState, srcState sourceState) (*RenderingStatus, *SourceStatus) {
+func readFromSource(ctx context.Context, p Parser, trigger string, recState *reconcilerState, srcState *sourceState) (*RenderingStatus, *SourceStatus) {
 	opts := p.options()
 	start := opts.Clock.Now()
 
 	hydrationStatus := &RenderingStatus{
+		Spec:              srcState.spec,
 		Commit:            srcState.commit,
 		RequiresRendering: opts.RenderingEnabled,
 	}
 	srcStatus := &SourceStatus{
+		Spec:   srcState.spec,
 		Commit: srcState.commit,
 	}
 
@@ -464,7 +480,7 @@ func readFromSource(ctx context.Context, p Parser, trigger string, recState *rec
 	}
 
 	// Read all the files under srcState.syncDir
-	srcStatus.Errs = opts.readConfigFiles(&srcState)
+	srcStatus.Errs = opts.readConfigFiles(srcState)
 
 	if !opts.RenderingEnabled {
 		// Check if any kustomization Files exist
@@ -535,12 +551,13 @@ func parseAndUpdate(ctx context.Context, p Parser, trigger string, state *reconc
 	sourceErrs := parseSource(ctx, p, trigger, state)
 	klog.V(3).Info("Parser stopped")
 	newSourceStatus := &SourceStatus{
+		Spec:       state.cache.source.spec,
 		Commit:     state.cache.source.commit,
 		Errs:       sourceErrs,
 		LastUpdate: metav1.Time{Time: opts.Clock.Now()},
 	}
 	if state.status.needToSetSourceStatus(newSourceStatus) {
-		klog.V(3).Infof("Updating source status (after parse): %#v", newSourceStatus)
+		klog.V(3).Info("Updating source status (after parse)")
 		if err := p.setSourceStatus(ctx, newSourceStatus); err != nil {
 			// If `p.setSourceStatus` fails, we terminate the reconciliation.
 			// If we call `update` in this case and `update` succeeds, `Status.Source.Commit` would end up be older
@@ -573,7 +590,7 @@ func parseAndUpdate(ctx context.Context, p Parser, trigger string, state *reconc
 	// SyncErrors include errors from both the Updater and Remediator
 	klog.V(3).Info("Updating sync status (after sync)")
 	syncErrs := p.SyncErrors()
-	if err := setSyncStatus(ctx, p, state, false, state.cache.source.commit, syncErrs); err != nil {
+	if err := setSyncStatus(ctx, p, state, state.status.SourceStatus.Spec, false, state.cache.source.commit, syncErrs); err != nil {
 		syncErrs = status.Append(syncErrs, err)
 	}
 
@@ -584,10 +601,11 @@ func parseAndUpdate(ctx context.Context, p Parser, trigger string, state *reconc
 // setSyncStatus updates `.status.sync` and the Syncing condition, if needed,
 // as well as `state.syncStatus` and `state.syncingConditionLastUpdate` if
 // the update is successful.
-func setSyncStatus(ctx context.Context, p Parser, state *reconcilerState, syncing bool, commit string, syncErrs status.MultiError) error {
+func setSyncStatus(ctx context.Context, p Parser, state *reconcilerState, spec SourceSpec, syncing bool, commit string, syncErrs status.MultiError) error {
 	options := p.options()
 	// Update the RSync status, if necessary
 	newSyncStatus := &SyncStatus{
+		Spec:       spec,
 		Syncing:    syncing,
 		Commit:     commit,
 		Errs:       syncErrs,
@@ -634,7 +652,7 @@ func updateSyncStatusPeriodically(ctx context.Context, p Parser, state *reconcil
 
 		case <-updateTimer.C():
 			klog.V(3).Info("Updating sync status (periodic while syncing)")
-			if err := setSyncStatus(ctx, p, state, true, state.cache.source.commit, p.SyncErrors()); err != nil {
+			if err := setSyncStatus(ctx, p, state, state.status.SourceStatus.Spec, true, state.cache.source.commit, p.SyncErrors()); err != nil {
 				klog.Warningf("failed to update sync status: %v", err)
 			}
 

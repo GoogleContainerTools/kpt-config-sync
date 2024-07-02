@@ -66,6 +66,9 @@ type Files struct {
 
 // sourceState contains all state read from the mounted source repo.
 type sourceState struct {
+	// spec is the source specification as read from the FileSource.
+	// This cache avoids re-generating the spec every time the status is updated.
+	spec SourceSpec
 	// commit is the commit read from the source of truth.
 	commit string
 	// syncDir is the absolute path to the sync directory that includes the configurations.
@@ -117,8 +120,10 @@ func (o *Files) sourceContext() sourceContext {
 }
 
 // readHydratedDirWithRetry returns a sourceState object whose `commit` and `syncDir` fields are set if succeeded with retries.
-func (o *Files) readHydratedDirWithRetry(backoff wait.Backoff, hydratedRoot cmpath.Absolute, reconciler string, srcState sourceState) (sourceState, hydrate.HydrationError) {
-	result := sourceState{}
+func (o *Files) readHydratedDirWithRetry(backoff wait.Backoff, hydratedRoot cmpath.Absolute, reconciler string, srcState *sourceState) (*sourceState, hydrate.HydrationError) {
+	result := &sourceState{
+		spec: srcState.spec,
+	}
 	err := util.RetryWithBackoff(backoff, func() error {
 		var err error
 		result, err = o.readHydratedDir(hydratedRoot, reconciler, srcState)
@@ -135,8 +140,10 @@ func (o *Files) readHydratedDirWithRetry(backoff wait.Backoff, hydratedRoot cmpa
 }
 
 // readHydratedDir returns a sourceState object whose `commit` and `syncDir` fields are set if succeeded.
-func (o *Files) readHydratedDir(hydratedRoot cmpath.Absolute, reconciler string, srcState sourceState) (sourceState, error) {
-	result := sourceState{}
+func (o *Files) readHydratedDir(hydratedRoot cmpath.Absolute, reconciler string, srcState *sourceState) (*sourceState, error) {
+	result := &sourceState{
+		spec: srcState.spec,
+	}
 	errorFile := hydratedRoot.Join(cmpath.RelativeSlash(hydrate.ErrorFile))
 	_, err := os.Stat(errorFile.OSPath())
 	switch {

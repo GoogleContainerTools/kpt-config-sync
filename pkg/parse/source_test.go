@@ -100,6 +100,7 @@ func TestReadConfigFiles(t *testing.T) {
 			}()
 
 			srcState := &sourceState{
+				spec:    nil, // TODO: Add tests for behavior when spec is non-nil
 				commit:  originCommit,
 				syncDir: cmpath.Absolute(sourceCommitDir),
 				files:   nil,
@@ -262,6 +263,7 @@ func TestReadHydratedDirWithRetry(t *testing.T) {
 			}()
 
 			srcState := &sourceState{
+				spec:   nil, // TODO: Add tests for behavior when spec is non-nil
 				commit: originCommit,
 			}
 
@@ -278,14 +280,14 @@ func TestReadHydratedDirWithRetry(t *testing.T) {
 				},
 			}
 
-			wantState := sourceState{
+			wantState := &sourceState{
 				commit:  tc.commit,
 				syncDir: cmpath.Absolute(filepath.Join(parserCommitDir, syncDir)),
 			}
 
 			t.Logf("start calling readHydratedDirWithRetry at %v", time.Now())
 			hydrationState, hydrationErr := parser.readHydratedDirWithRetry(backoff,
-				cmpath.Absolute(hydratedRoot), parser.ReconcilerName, *srcState)
+				cmpath.Absolute(hydratedRoot), parser.ReconcilerName, srcState)
 
 			if tc.expectedErrMsg == "" {
 				assert.Nil(t, hydrationErr)

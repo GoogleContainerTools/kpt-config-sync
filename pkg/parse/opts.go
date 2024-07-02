@@ -93,7 +93,8 @@ type Options struct {
 
 // Parser represents a parser that can be pointed at and continuously parse a source.
 type Parser interface {
-	parseSource(ctx context.Context, state sourceState) ([]ast.FileObject, status.MultiError)
+	parseSource(ctx context.Context, state *sourceState) ([]ast.FileObject, status.MultiError)
+	ReconcilerStatusFromCluster(ctx context.Context) (*ReconcilerStatus, error)
 	setSourceStatus(ctx context.Context, newStatus *SourceStatus) error
 	setRenderingStatus(ctx context.Context, oldStatus, newStatus *RenderingStatus) error
 	SetSyncStatus(ctx context.Context, newStatus *SyncStatus) error

@@ -275,7 +275,14 @@ include Makefile.reconcilermanager
 -include Makefile.release
 
 .PHONY: all
-all: test deps configsync-crds
+# Run tests, cleanup dependencies, and generate CRDs in the buildenv container
+all: buildenv-dirs
+	@docker run $(DOCKER_RUN_ARGS) \
+		make all-local
+
+.PHONY: all-local
+# Run tests, cleanup dependencies, and generate CRDs locally
+all-local: test deps configsync-crds
 
 # Cleans all artifacts.
 .PHONY: clean
@@ -289,7 +296,6 @@ build-status:
 
 .PHONY: test-unit
 test-unit: buildenv-dirs "$(KUSTOMIZE)"
-	@echo "+++ Running unit tests in a docker container"
 	@./scripts/test-unit.sh $(NOMOS_GO_PKG)
 
 # Runs unit tests and linter.
@@ -300,7 +306,7 @@ test: test-unit lint
 # validation suspect (as the repository they are validating is different
 # than what is checked in).  Run `test` but verify that repository is clean.
 .PHONY: __test-presubmit
-__test-presubmit: all
+__test-presubmit: all-local
 	@./scripts/fail-if-dirty-repo.sh
 
 # This is the entrypoint used by the ProwJob - runs using docker-in-docker.

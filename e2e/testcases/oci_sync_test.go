@@ -259,6 +259,37 @@ func isSourceType(sourceType configsync.SourceType) testpredicates.Predicate {
 	}
 }
 
+func TestOCIFloatingTag(t *testing.T) {
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
+		ntopts.RequireOCIProvider,
+	)
+	rsNN := nomostest.RootSyncNN(configsync.RootSyncName)
+
+	nt.T.Log("create a Namespace with an invalid name")
+	invalidNamespace := fake.NamespaceObject("bob-%")
+	// OCI image will only contain the namespace with invalid name
+	image, err := nt.BuildAndPushOCIImage(rsNN, registryproviders.ImageInputObjects(nt.Scheme, invalidNamespace))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	rootSyncOCI := nt.RootSyncObjectOCI(rsNN.Name, image)
+	nt.Must(nt.KubeClient.Apply(rootSyncOCI))
+
+	nt.WaitForRootSyncSourceError(rsNN.Name, "1036", "consists of lower case alphanumeric characters", nil)
+
+	// Push a new image with the same tag which contains a valid Namespace
+	validNamespace := fake.NamespaceObject("bobby")
+	image, err = nt.BuildAndPushOCIImage(rsNN, registryproviders.ImageInputObjects(nt.Scheme, validNamespace))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.T.Log("Verify the namespace objects are synced")
+	nt.Must(nt.WatchForSync(kinds.RootSyncV1Beta1(), rsNN.Name, rsNN.Namespace,
+		imageDigestFuncByDigest(image.Digest), nomostest.RootSyncHasStatusSyncCommit, nil))
+	nt.Must(nt.Validate(validNamespace.Name, "", &corev1.Namespace{}))
+}
+
 /*
 // TestDigestUpdateInAR tests if the oci-sync container can pull new digests with the same tag.
 // The test requires permission to push new image to `config-sync-test-public` in the Artifact Registry,

@@ -16,7 +16,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.13.0
+    controller-gen.kubebuilder.io/version: v0.15.0
   labels:
     configmanagement.gke.io/system: "true"
   name: namespaceselectors.configmanagement.gke.io
@@ -33,18 +33,24 @@ spec:
   - name: v1
     schema:
       openAPIV3Schema:
-        description: NamespaceSelector specifies a LabelSelector applied to namespaces
-          that exist within a NamespaceConfig hierarchy.
+        description: |-
+          NamespaceSelector specifies a LabelSelector applied to namespaces that exist within a
+          NamespaceConfig hierarchy.
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
             type: string
           metadata:
             type: object
@@ -53,42 +59,41 @@ spec:
             properties:
               mode:
                 default: static
-                description: mode specifies the selection mode of the NamespaceSelector.
-                  It must be set to either "static" or "dynamic" and is optional.
-                  If not specified, it defaults to "static." In static mode, only
-                  resources with labels matching Namespaces statically declared in
-                  the source of truth are selected. In dynamic mode, selection includes
-                  both statically declared Namespaces and Namespaces present on the
-                  cluster.
+                description: |-
+                  mode specifies the selection mode of the NamespaceSelector.
+                  It must be set to either "static" or "dynamic" and is optional. If not specified, it defaults to "static."
+                  In static mode, only resources with labels matching Namespaces statically declared in the source of truth are selected.
+                  In dynamic mode, selection includes both statically declared Namespaces and Namespaces present on the cluster.
                 pattern: ^(static|dynamic)$
                 type: string
               selector:
-                description: Selects namespaces. This field is NOT optional and follows
-                  standard label selector semantics. An empty selector matches all
-                  namespaces.
+                description: |-
+                  Selects namespaces.
+                  This field is NOT optional and follows standard label selector semantics. An empty selector
+                  matches all namespaces.
                 properties:
                   matchExpressions:
                     description: matchExpressions is a list of label selector requirements.
                       The requirements are ANDed.
                     items:
-                      description: A label selector requirement is a selector that
-                        contains values, a key, and an operator that relates the key
-                        and values.
+                      description: |-
+                        A label selector requirement is a selector that contains values, a key, and an operator that
+                        relates the key and values.
                       properties:
                         key:
                           description: key is the label key that the selector applies
                             to.
                           type: string
                         operator:
-                          description: operator represents a key's relationship to
-                            a set of values. Valid operators are In, NotIn, Exists
-                            and DoesNotExist.
+                          description: |-
+                            operator represents a key's relationship to a set of values.
+                            Valid operators are In, NotIn, Exists and DoesNotExist.
                           type: string
                         values:
-                          description: values is an array of string values. If the
-                            operator is In or NotIn, the values array must be non-empty.
-                            If the operator is Exists or DoesNotExist, the values
-                            array must be empty. This array is replaced during a strategic
+                          description: |-
+                            values is an array of string values. If the operator is In or NotIn,
+                            the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                            the values array must be empty. This array is replaced during a strategic
                             merge patch.
                           items:
                             type: string
@@ -101,11 +106,10 @@ spec:
                   matchLabels:
                     additionalProperties:
                       type: string
-                    description: matchLabels is a map of {key,value} pairs. A single
-                      {key,value} in the matchLabels map is equivalent to an element
-                      of matchExpressions, whose key field is "key", the operator
-                      is "In", and the values array contains only "value". The requirements
-                      are ANDed.
+                    description: |-
+                      matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                      map is equivalent to an element of matchExpressions, whose key field is "key", the
+                      operator is "In", and the values array contains only "value". The requirements are ANDed.
                     type: object
                 type: object
                 x-kubernetes-map-type: atomic

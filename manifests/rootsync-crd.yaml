@@ -16,7 +16,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.13.0
+    controller-gen.kubebuilder.io/version: v0.15.0
   labels:
     configmanagement.gke.io/arch: csmr
     configmanagement.gke.io/system: "true"
@@ -56,14 +56,19 @@ spec:
         description: RootSync is the Schema for the rootsyncs API
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
             type: string
           metadata:
             type: object
@@ -75,9 +80,10 @@ spec:
                   from a Git repo.
                 properties:
                   auth:
-                    description: auth is the type of secret configured for access
-                      to the Git repo. Must be one of ssh, cookiefile, gcenode, token,
-                      or none. The validation of this is case-sensitive. Required.
+                    description: |-
+                      auth is the type of secret configured for access to the Git repo.
+                      Must be one of ssh, cookiefile, gcenode, token, or none.
+                      The validation of this is case-sensitive. Required.
                     enum:
                     - ssh
                     - cookiefile
@@ -87,18 +93,18 @@ spec:
                     - none
                     type: string
                   branch:
-                    description: branch is the git branch to sync from. Branch defaults
-                      to 'master', but if 'revision' is set and is not 'HEAD', 'revision'
-                      takes precedence over 'branch'.
+                    description: |-
+                      branch is the git branch to sync from.
+                      Branch defaults to 'master', but if 'revision' is set and is not 'HEAD',
+                      'revision' takes precedence over 'branch'.
                     type: string
                   caCertSecretRef:
-                    description: caCertSecretRef specifies the name of the secret
-                      where the CA certificate is stored. The creation of the secret
-                      should be done out of band by the user and should store the
-                      certificate in a key named "cert". For RepoSync resources, the
-                      secret must be created in the same namespace as the RepoSync.
-                      For RootSync resource, the secret must be created in the config-management-system
-                      namespace.
+                    description: |-
+                      caCertSecretRef specifies the name of the secret where the CA certificate is stored.
+                      The creation of the secret should be done out of band by the user and should store the
+                      certificate in a key named "cert". For RepoSync resources, the secret must be
+                      created in the same namespace as the RepoSync. For RootSync resource, the secret
+                      must be created in the config-management-system namespace.
                     nullable: true
                     properties:
                       name:
@@ -106,51 +112,50 @@ spec:
                         type: string
                     type: object
                   dir:
-                    description: 'dir is the absolute path of the directory that contains
-                      the local resources.  Default: the root directory of the repo.'
+                    description: |-
+                      dir is the absolute path of the directory that contains
+                      the local resources.  Default: the root directory of the repo.
                     type: string
                   gcpServiceAccountEmail:
-                    description: 'gcpServiceAccountEmail specifies the GCP service
-                      account used to annotate the RootSync/RepoSync controller Kubernetes
-                      Service Account. Note: The field is used when spec.git.auth:
-                      gcpserviceaccount.'
+                    description: |-
+                      gcpServiceAccountEmail specifies the GCP service account used to annotate
+                      the RootSync/RepoSync controller Kubernetes Service Account.
+                      Note: The field is used when spec.git.auth: gcpserviceaccount.
                     type: string
                   noSSLVerify:
-                    description: 'noSSLVerify specifies whether to enable or disable
-                      the SSL certificate verification. Default: false. If noSSLVerify
-                      is set to true, it tells Git to skip the SSL certificate verification.
-                      This should either be false or unset when caCertSecretRef is
-                      provided.'
+                    description: |-
+                      noSSLVerify specifies whether to enable or disable the SSL certificate verification. Default: false.
+                      If noSSLVerify is set to true, it tells Git to skip the SSL certificate verification.
+                      This should either be false or unset when caCertSecretRef is provided.
                     type: boolean
                   period:
-                    description: 'period is the time duration between consecutive
-                      syncs. Default: 15s. Note to developers that customers specify
-                      this value using string (https://golang.org/pkg/time/#Duration.String)
-                      like "3s" in their Custom Resource YAML. However, time.Duration
-                      is at a nanosecond granularity, and it is easy to introduce
-                      a bug where it looks like the code is dealing with seconds but
-                      its actually nanoseconds (or vice versa).'
+                    description: |-
+                      period is the time duration between consecutive syncs. Default: 15s.
+                      Note to developers that customers specify this value using
+                      string (https://golang.org/pkg/time/#Duration.String) like "3s"
+                      in their Custom Resource YAML. However, time.Duration is at a nanosecond
+                      granularity, and it is easy to introduce a bug where it looks like the
+                      code is dealing with seconds but its actually nanoseconds (or vice versa).
                     type: string
                   proxy:
-                    description: proxy specifies an HTTPS proxy for accessing the
-                      Git repo. Only has an effect when secretType is one of ("cookiefile",
-                      "none", "token"). When secretType is "cookiefile" or "token",
-                      if your HTTPS proxy URL contains sensitive information such
-                      as a username or password and you need to hide the sensitive
-                      information, you can leave this field empty and add the URL
-                      for the HTTPS proxy into the same Secret used for the Git credential
-                      via `kubectl create secret ... --from-literal=https_proxy=HTTPS_PROXY_URL`.
-                      Optional.
+                    description: |-
+                      proxy specifies an HTTPS proxy for accessing the Git repo.
+                      Only has an effect when secretType is one of ("cookiefile", "none", "token").
+                      When secretType is "cookiefile" or "token", if your HTTPS proxy URL contains sensitive information
+                      such as a username or password and you need to hide the sensitive information,
+                      you can leave this field empty and add the URL for the HTTPS proxy into the same Secret
+                      used for the Git credential via `kubectl create secret ... --from-literal=https_proxy=HTTPS_PROXY_URL`. Optional.
                     type: string
                   repo:
                     description: repo is the git repository URL to sync from. Required.
                     type: string
                   revision:
-                    description: revision is the git revision (branch, tag, ref or
-                      commit) to fetch. If 'revision' is not specified, it defaults
-                      to the HEAD of the branch that is specified in the 'branch'
-                      field. If neither 'revision' nor 'branch' is specified, it defaults
-                      to the HEAD of the 'master' branch.
+                    description: |-
+                      revision is the git revision (branch, tag, ref or commit) to fetch.
+                      If 'revision' is not specified, it defaults to the HEAD of the branch that
+                      is specified in the 'branch' field.
+                      If neither 'revision' nor 'branch' is specified, it defaults to the HEAD of
+                      the 'master' branch.
                     type: string
                   secretRef:
                     description: secretRef is the secret used to connect to the Git
@@ -170,9 +175,10 @@ spec:
                   from a Helm repo.
                 properties:
                   auth:
-                    description: auth specifies the type to authenticate to the Helm
-                      repository. Must be one of token, gcpserviceaccount, k8sserviceaccount,
-                      gcenode or none. The validation of this is case-sensitive. Required.
+                    description: |-
+                      auth specifies the type to authenticate to the Helm repository.
+                      Must be one of token, gcpserviceaccount, k8sserviceaccount, gcenode or none.
+                      The validation of this is case-sensitive. Required.
                     enum:
                     - none
                     - gcpserviceaccount
@@ -181,13 +187,12 @@ spec:
                     - gcenode
                     type: string
                   caCertSecretRef:
-                    description: caCertSecretRef specifies the name of the secret
-                      where the CA certificate is stored. The creation of the secret
-                      should be done out of band by the user and should store the
-                      certificate in a key named "cert". For RepoSync resources, the
-                      secret must be created in the same namespace as the RepoSync.
-                      For RootSync resource, the secret must be created in the config-management-system
-                      namespace.
+                    description: |-
+                      caCertSecretRef specifies the name of the secret where the CA certificate is stored.
+                      The creation of the secret should be done out of band by the user and should store the
+                      certificate in a key named "cert". For RepoSync resources, the secret must be
+                      created in the same namespace as the RepoSync. For RootSync resource, the secret
+                      must be created in the config-management-system namespace.
                     nullable: true
                     properties:
                       name:
@@ -198,37 +203,38 @@ spec:
                     description: chart is a Helm chart name. Required.
                     type: string
                   deployNamespace:
-                    description: deployNamespace specifies the namespace in which
-                      to deploy the chart. This is a mutually exclusive setting with
-                      "namespace". If neither namespace nor deployNamespace are set,
-                      the chart will be deployed into the default namespace.
+                    description: |-
+                      deployNamespace specifies the namespace in which to deploy the chart.
+                      This is a mutually exclusive setting with "namespace".
+                      If neither namespace nor deployNamespace are set, the chart will be
+                      deployed into the default namespace.
                     type: string
                   gcpServiceAccountEmail:
-                    description: 'gcpServiceAccountEmail specifies the GCP service
-                      account used to annotate the RootSync/RepoSync controller Kubernetes
-                      Service Account. Note: The field is used when spec.helm.auth:
-                      gcpserviceaccount.'
+                    description: |-
+                      gcpServiceAccountEmail specifies the GCP service account used to annotate
+                      the RootSync/RepoSync controller Kubernetes Service Account.
+                      Note: The field is used when spec.helm.auth: gcpserviceaccount.
                     type: string
                   includeCRDs:
-                    description: 'includeCRDs specifies if Helm template should also
-                      generate CustomResourceDefinitions. If IncludeCRDs is set to
-                      false, no CustomeResourceDefinition will be generated. Default:
-                      false.'
+                    description: |-
+                      includeCRDs specifies if Helm template should also generate CustomResourceDefinitions.
+                      If IncludeCRDs is set to false, no CustomeResourceDefinition will be generated.
+                      Default: false.
                     type: boolean
                   namespace:
-                    description: 'namespace sets the target namespace for a release.
-                      Default: "default".'
+                    description: |-
+                      namespace sets the target namespace for a release.
+                      Default: "default".
                     type: string
                   period:
-                    description: 'period is the time duration that Config Sync waits
-                      before refetching the chart. Default: 1 hour. Use string to
-                      specify this field value, like "30s", "5m". More details about
-                      valid inputs: https://pkg.go.dev/time#ParseDuration. If the
-                      chart version is a range, the literal tag "latest", or left
-                      empty to indicate that Config Sync should fetch the latest version,
-                      the chart will be re-fetched according to spec.helm.period.
-                      If the chart version is specified as a single static version,
-                      the chart will not be re-fetched.'
+                    description: |-
+                      period is the time duration that Config Sync waits before refetching the chart.
+                      Default: 1 hour.
+                      Use string to specify this field value, like "30s", "5m".
+                      More details about valid inputs: https://pkg.go.dev/time#ParseDuration.
+                      If the chart version is a range, the literal tag "latest", or left empty to indicate that Config Sync
+                      should fetch the latest version, the chart will be re-fetched according to spec.helm.period.
+                      If the chart version is specified as a single static version, the chart will not be re-fetched.
                     type: string
                   releaseName:
                     description: releaseName is the name of the Helm release.
@@ -237,7 +243,8 @@ spec:
                     description: repo is the helm repository URL to sync from. Required.
                     type: string
                   secretRef:
-                    description: secretRef holds the authentication secret for accessing
+                    description: |-
+                      secretRef holds the authentication secret for accessing
                       the Helm repository.
                     nullable: true
                     properties:
@@ -246,25 +253,24 @@ spec:
                         type: string
                     type: object
                   values:
-                    description: values to use instead of default values that accompany
-                      the chart. Format values the same as default values.yaml. If
-                      `valuesFileRefs` is also specified, fields from `values` will
-                      override fields from `valuesFileRefs`.
+                    description: |-
+                      values to use instead of default values that accompany the chart. Format
+                      values the same as default values.yaml. If `valuesFileRefs` is also specified,
+                      fields from `values` will override fields from `valuesFileRefs`.
                     x-kubernetes-preserve-unknown-fields: true
                   valuesFileRefs:
-                    description: valuesFileRefs holds references to objects in the
-                      cluster that represent values to use instead of default values
-                      that accompany the chart. Currently, only ConfigMaps are supported.
-                      The ConfigMaps must be immutable and in the same namespace as
-                      the RootSync/RepoSync. When multiple values files are specified,
-                      duplicated keys in later files will override the value from
-                      earlier files. This is equivalent to passing in multiple values
-                      files to Helm CLI. If `values` is also specified, fields from
-                      `values` will override fields from `valuesFileRefs`.
+                    description: |-
+                      valuesFileRefs holds references to objects in the cluster that represent
+                      values to use instead of default values that accompany the chart. Currently,
+                      only ConfigMaps are supported. The ConfigMaps must be immutable and in the same
+                      namespace as the RootSync/RepoSync. When multiple values files are specified, duplicated
+                      keys in later files will override the value from earlier files. This is equivalent
+                      to passing in multiple values files to Helm CLI. If `values` is also specified,
+                      fields from `values` will override fields from `valuesFileRefs`.
                     items:
-                      description: ValuesFileRef references a ConfigMap object that
-                        contains a values file to use for helm rendering. The ConfigMap
-                        must be in the same namespace as the RootSync/RepoSync.
+                      description: |-
+                        ValuesFileRef references a ConfigMap object that contains a values file to use for
+                        helm rendering. The ConfigMap must be in the same namespace as the RootSync/RepoSync.
                       properties:
                         dataKey:
                           description: 'dataKey represents the object data key to
@@ -276,15 +282,14 @@ spec:
                       type: object
                     type: array
                   version:
-                    description: 'version is the chart version. This can be specified
-                      as a static version, or as a range of values from which Config
-                      Sync will fetch the latest. If left empty, Config Sync will
-                      fetch the latest version according to semver. The supported
-                      version range syntax is identical to the version range syntax
+                    description: |-
+                      version is the chart version.
+                      This can be specified as a static version, or as a range of values from which Config Sync
+                      will fetch the latest. If left empty, Config Sync will fetch the latest version according to semver.
+                      The supported version range syntax is identical to the version range syntax
                       supported by helm CLI, and is documented here: https://github.com/Masterminds/semver#hyphen-range-comparisons.
-                      Versions specified as a range, the literal tag "latest", or
-                      left empty to indicate that Config Sync should fetch the latest
-                      version, will be fetched every sync according to spec.helm.period.'
+                      Versions specified as a range, the literal tag "latest", or left empty to indicate that Config Sync should
+                      fetch the latest version, will be fetched every sync according to spec.helm.period.
                     type: string
                 required:
                 - auth
@@ -296,10 +301,10 @@ spec:
                   from an OCI package.
                 properties:
                   auth:
-                    description: auth is the type of secret configured for access
-                      to the OCI package. Must be one of gcenode, gcpserviceaccount,
-                      k8sserviceaccount, or none. The validation of this is case-sensitive.
-                      Required.
+                    description: |-
+                      auth is the type of secret configured for access to the OCI package.
+                      Must be one of gcenode, gcpserviceaccount, k8sserviceaccount, or none.
+                      The validation of this is case-sensitive. Required.
                     enum:
                     - gcenode
                     - gcpserviceaccount
@@ -307,13 +312,12 @@ spec:
                     - none
                     type: string
                   caCertSecretRef:
-                    description: caCertSecretRef specifies the name of the secret
-                      where the CA certificate is stored. The creation of the secret
-                      should be done out of band by the user and should store the
-                      certificate in a key named "cert". For RepoSync resources, the
-                      secret must be created in the same namespace as the RepoSync.
-                      For RootSync resource, the secret must be created in the config-management-system
-                      namespace.
+                    description: |-
+                      caCertSecretRef specifies the name of the secret where the CA certificate is stored.
+                      The creation of the secret should be done out of band by the user and should store the
+                      certificate in a key named "cert". For RepoSync resources, the secret must be
+                      created in the same namespace as the RepoSync. For RootSync resource, the secret
+                      must be created in the config-management-system namespace.
                     nullable: true
                     properties:
                       name:
@@ -321,31 +325,34 @@ spec:
                         type: string
                     type: object
                   dir:
-                    description: 'dir is the absolute path of the directory that contains
-                      the local resources.  Default: the root directory of the image.'
+                    description: |-
+                      dir is the absolute path of the directory that contains
+                      the local resources.  Default: the root directory of the image.
                     type: string
                   gcpServiceAccountEmail:
-                    description: 'gcpServiceAccountEmail specifies the GCP service
-                      account used to annotate the RootSync/RepoSync controller Kubernetes
-                      Service Account. Note: The field is used when secretType: gcpServiceAccount.'
+                    description: |-
+                      gcpServiceAccountEmail specifies the GCP service account used to annotate
+                      the RootSync/RepoSync controller Kubernetes Service Account.
+                      Note: The field is used when secretType: gcpServiceAccount.
                     type: string
                   image:
-                    description: 'image is the OCI image repository URL for the package
-                      to sync from. e.g. `LOCATION-docker.pkg.dev/PROJECT_ID/REPOSITORY_NAME/PACKAGE_NAME`.
-                      The image can be pulled by TAG or by DIGEST if it is specified
-                      in PACKAGE_NAME. - Pull by tag: `LOCATION-docker.pkg.dev/PROJECT_ID/REPOSITORY_NAME/PACKAGE_NAME:TAG`.
+                    description: |-
+                      image is the OCI image repository URL for the package to sync from.
+                      e.g. `LOCATION-docker.pkg.dev/PROJECT_ID/REPOSITORY_NAME/PACKAGE_NAME`.
+                      The image can be pulled by TAG or by DIGEST if it is specified in PACKAGE_NAME.
+                      - Pull by tag: `LOCATION-docker.pkg.dev/PROJECT_ID/REPOSITORY_NAME/PACKAGE_NAME:TAG`.
                       - Pull by digest: `LOCATION-docker.pkg.dev/PROJECT_ID/REPOSITORY_NAME/PACKAGE_NAME@sha256:DIGEST`.
-                      If neither TAG nor DIGEST is specified, it pulls with the `latest`
-                      tag by default. Required'
+                      If neither TAG nor DIGEST is specified, it pulls with the `latest` tag by default.
+                      Required
                     type: string
                   period:
-                    description: 'period is the time duration between consecutive
-                      syncs. Default: 15s. Note to developers that customers specify
-                      this value using string (https://golang.org/pkg/time/#Duration.String)
-                      like "3s" in their Custom Resource YAML. However, time.Duration
-                      is at a nanosecond granularity, and it is easy to introduce
-                      a bug where it looks like the code is dealing with seconds but
-                      its actually nanoseconds (or vice versa).'
+                    description: |-
+                      period is the time duration between consecutive syncs. Default: 15s.
+                      Note to developers that customers specify this value using
+                      string (https://golang.org/pkg/time/#Duration.String) like "3s"
+                      in their Custom Resource YAML. However, time.Duration is at a nanosecond
+                      granularity, and it is easy to introduce a bug where it looks like the
+                      code is dealing with seconds but its actually nanoseconds (or vice versa).
                     type: string
                 required:
                 - auth
@@ -356,51 +363,50 @@ spec:
                 nullable: true
                 properties:
                   apiServerTimeout:
-                    description: 'apiServerTimeout allows one to override the client-side
-                      timeout for requests to the API server. Default: 15s. Use string
-                      to specify this field value, like "30s", "1m". More details
-                      about valid inputs: https://pkg.go.dev/time#ParseDuration. Recommended
-                      apiServerTimeout range is from "3s" to "1m".'
+                    description: |-
+                      apiServerTimeout allows one to override the client-side timeout for requests to the API server.
+                      Default: 15s.
+                      Use string to specify this field value, like "30s", "1m".
+                      More details about valid inputs: https://pkg.go.dev/time#ParseDuration.
+                      Recommended apiServerTimeout range is from "3s" to "1m".
                     type: string
                   enableShellInRendering:
-                    description: 'enableShellInRendering specifies whether to enable
-                      or disable the shell access in rendering process. Default: false.
-                      Kustomize remote bases requires shell access. Setting this field
-                      to true will enable shell in the rendering process and support
-                      pulling remote bases from public repositories.'
+                    description: |-
+                      enableShellInRendering specifies whether to enable or disable the shell access in rendering process. Default: false.
+                      Kustomize remote bases requires shell access. Setting this field to true will enable shell in the rendering process and
+                      support pulling remote bases from public repositories.
                     type: boolean
                   gitSyncDepth:
-                    description: gitSyncDepth allows one to override the number of
-                      git commits to fetch. Must be no less than 0. Config Sync would
-                      do a full clone if this field is 0, and a shallow clone if this
-                      field is greater than 0. If this field is not provided, Config
-                      Sync would configure it automatically.
+                    description: |-
+                      gitSyncDepth allows one to override the number of git commits to fetch.
+                      Must be no less than 0.
+                      Config Sync would do a full clone if this field is 0, and a shallow
+                      clone if this field is greater than 0.
+                      If this field is not provided, Config Sync would configure it automatically.
                     format: int64
                     minimum: 0
                     type: integer
                   logLevels:
-                    description: logLevels specify the container name and log level
-                      override value for the reconciler deployment container. Each
-                      entry must contain the name of the reconciler deployment container
-                      and the desired log level.
+                    description: |-
+                      logLevels specify the container name and log level override value for the reconciler deployment container.
+                      Each entry must contain the name of the reconciler deployment container and the desired log level.
                     items:
                       description: ContainerLogLevelOverride specifies the container
                         name and log level override value
                       properties:
                         containerName:
-                          description: 'containerName specifies the name of the reconciler
-                            deployment container for which log level will be overridden.
-                            Must be one of the following: "reconciler", "git-sync",
-                            "hydration-controller", "oci-sync", or "helm-sync".'
+                          description: |-
+                            containerName specifies the name of the reconciler deployment container for which log level will be overridden.
+                            Must be one of the following: "reconciler", "git-sync", "hydration-controller", "oci-sync", or "helm-sync".
                           pattern: ^(reconciler|git-sync|hydration-controller|oci-sync|helm-sync|gcenode-askpass-sidecar|otel-agent)$
                           type: string
                         logLevel:
-                          description: logLevel specifies the verbosity level of the
-                            logging for a specific container. The "git-sync" and "otel-agent"
-                            containers default to 5, while all other containers default
-                            to 0. Increasing the value of logLevel increases the verbosity
-                            of the logs. Lower severity messages are logged at higher
-                            verbosity. Allowed values are from 0 to 10.
+                          description: |-
+                            logLevel specifies the verbosity level of the logging for a specific container.
+                            The "git-sync" and "otel-agent" containers default to 5, while all other containers default to 0.
+                            Increasing the value of logLevel increases the verbosity of the logs.
+                            Lower severity messages are logged at higher verbosity.
+                            Allowed values are from 0 to 10.
                           maximum: 10
                           minimum: 0
                           type: integer
@@ -413,24 +419,27 @@ spec:
                     - containerName
                     x-kubernetes-list-type: map
                   namespaceStrategy:
-                    description: 'namespaceStrategy controls how the reconciler handles
-                      Namespaces which are used by resources in the source but not
-                      declared. Only applies when using the unstructured sourceFormat.
-                      Must be "implicit" or "explicit". Default: "implicit". "implicit"
-                      means that the reconciler will implicitly create Namespaces
+                    description: |-
+                      namespaceStrategy controls how the reconciler handles Namespaces
+                      which are used by resources in the source but not declared. Only applies
+                      when using the unstructured sourceFormat.
+                      Must be "implicit" or "explicit". Default: "implicit".
+                      "implicit" means that the reconciler will implicitly create Namespaces
                       if they do not exist, even if they are not declared in the source.
-                      "explicit" means that the reconciler will not create Namespaces
-                      which are not declared in the source.'
+                      "explicit" means that the reconciler will not create Namespaces which
+                      are not declared in the source.
                     enum:
                     - implicit
                     - explicit
                     type: string
                   reconcileTimeout:
-                    description: 'reconcileTimeout allows one to override the threshold
-                      for how long to wait for all resources to reconcile before giving
-                      up. Default: 5m. Use string to specify this field value, like
-                      "30s", "5m". More details about valid inputs: https://pkg.go.dev/time#ParseDuration.
-                      Recommended reconcileTimeout range is from "10s" to "1h".'
+                    description: |-
+                      reconcileTimeout allows one to override the threshold for how long to wait for
+                      all resources to reconcile before giving up.
+                      Default: 5m.
+                      Use string to specify this field value, like "30s", "5m".
+                      More details about valid inputs: https://pkg.go.dev/time#ParseDuration.
+                      Recommended reconcileTimeout range is from "10s" to "1h".
                     type: string
                   resources:
                     description: resources allow one to override the resource requirements
@@ -440,10 +449,9 @@ spec:
                         requirements for a container
                       properties:
                         containerName:
-                          description: containerName specifies the name of a container
-                            whose resource requirements will be overridden. Must be
-                            "reconciler", "git-sync", "hydration-controller", "oci-sync",
-                            or "helm-sync".
+                          description: |-
+                            containerName specifies the name of a container whose resource requirements will be overridden.
+                            Must be "reconciler", "git-sync", "hydration-controller", "oci-sync", or "helm-sync".
                           pattern: ^(reconciler|git-sync|hydration-controller|oci-sync|helm-sync|gcenode-askpass-sidecar|otel-agent)$
                           type: string
                         cpuLimit:
@@ -481,16 +489,18 @@ spec:
                       type: object
                     type: array
                   roleRefs:
-                    description: roleRefs is a list of Roles or ClusterRoles to create
-                      bindings. If unset, a binding to cluster-admin will be created.
+                    description: |-
+                      roleRefs is a list of Roles or ClusterRoles to create bindings.
+                      If unset, a binding to cluster-admin will be created.
                     items:
-                      description: each item references a Role or ClusterRole to create
-                        a binding to for this reconciler. It supports a namespace
-                        field that can be used to create RoleBindings rather than
-                        ClusterRoleBindings.
+                      description: |-
+                        each item references a Role or ClusterRole to create
+                        a binding to for this reconciler. It supports a namespace field that can be used
+                        to create RoleBindings rather than ClusterRoleBindings.
                       properties:
                         kind:
-                          description: kind refers to the Kind of the RBAC resource.
+                          description: |-
+                            kind refers to the Kind of the RBAC resource.
                             Accepted values are Role and ClusterRole. Required.
                           enum:
                           - Role
@@ -501,11 +511,11 @@ spec:
                             resource. Required.
                           type: string
                         namespace:
-                          description: namespace indicates the Namespace in which
-                            a RoleBinding should be created. For ClusterRole objects,
-                            will determine whether a RoleBinding or ClusterRoleBinding
-                            is created. For Role objects, must be set to the same
-                            namespace as the Role.
+                          description: |-
+                            namespace indicates the Namespace in which a RoleBinding should be created.
+                            For ClusterRole objects, will determine whether a RoleBinding or ClusterRoleBinding
+                            is created.
+                            For Role objects, must be set to the same namespace as the Role.
                           type: string
                       required:
                       - kind
@@ -513,24 +523,34 @@ spec:
                       type: object
                     type: array
                   statusMode:
-                    description: statusMode controls whether the actuation status
-                      such as apply failed or not should be embedded into the ResourceGroup
-                      object. Must be "enabled" or "disabled". If set to "enabled",
-                      it increases the size of the ResourceGroup object.
+                    description: |-
+                      statusMode controls whether the actuation status
+                      such as apply failed or not should be embedded into the ResourceGroup object.
+                      Must be "enabled" or "disabled".
+                      If set to "enabled", it increases the size of the ResourceGroup object.
                     pattern: ^(enabled|disabled|)$
                     type: string
                 type: object
               sourceFormat:
-                description: "sourceFormat specifies how the repository is formatted.
-                  See documentation for specifics of what these options do. \n Must
-                  be one of hierarchy, unstructured. Optional. Set to hierarchy if
-                  not specified. \n The validation of this is case-sensitive."
+                description: |-
+                  sourceFormat specifies how the repository is formatted.
+                  See documentation for specifics of what these options do.
+
+
+                  Must be one of hierarchy, unstructured. Optional. Set to
+                  hierarchy if not specified.
+
+
+                  The validation of this is case-sensitive.
                 pattern: ^(hierarchy|unstructured|)$
                 type: string
               sourceType:
                 default: git
-                description: "sourceType specifies the type of the source of truth.
-                  \n Must be one of git, oci, helm. Optional. Set to git if not specified."
+                description: |-
+                  sourceType specifies the type of the source of truth.
+
+
+                  Must be one of git, oci, helm. Optional. Set to git if not specified.
                 pattern: ^(git|oci|helm)$
                 type: string
             type: object
@@ -538,8 +558,9 @@ spec:
             description: RootSyncStatus defines the observed state of RootSync
             properties:
               conditions:
-                description: conditions represents the latest available observations
-                  of the RootSync's current state.
+                description: |-
+                  conditions represents the latest available observations of the RootSync's
+                  current state.
                 items:
                   description: RootSyncCondition describes the state of a RootSync
                     at a certain point.
@@ -556,10 +577,9 @@ spec:
                         type: string
                       type: array
                     errorSummary:
-                      description: errorSummary summarizes the errors in the `errors`
-                        field when the condition type is Reconciling or Stalled, and
-                        summarizes the errors referred in the `errorsSourceRefs` field
-                        when the condition type is Syncing.
+                      description: |-
+                        errorSummary summarizes the errors in the `errors` field when the condition type is Reconciling or Stalled,
+                        and summarizes the errors referred in the `errorsSourceRefs` field when the condition type is Syncing.
                       properties:
                         errorCountAfterTruncation:
                           description: errorCountAfterTruncation tracks the number
@@ -569,27 +589,29 @@ spec:
                           description: totalCount tracks the total number of errors.
                           type: integer
                         truncated:
-                          description: truncated indicates whether the `Errors` field
-                            includes all the errors. If `true`, the `Errors` field
-                            does not includes all the errors. If `false`, the `Errors`
-                            field includes all the errors. The size limit of a RootSync/RepoSync
-                            object is 2MiB. The status update would fail with the
-                            `ResourceExhausted` rpc error if there are too many errors.
+                          description: |-
+                            truncated indicates whether the `Errors` field includes all the errors.
+                            If `true`, the `Errors` field does not includes all the errors.
+                            If `false`, the `Errors` field includes all the errors.
+                            The size limit of a RootSync/RepoSync object is 2MiB. The status update would
+                            fail with the `ResourceExhausted` rpc error if there are too many errors.
                           type: boolean
                       type: object
                     errors:
-                      description: errors is a list of errors that occurred in the
-                        process. This field is used to track errors when the condition
-                        type is Reconciling or Stalled. When the condition type is
-                        Syncing, the `errorSourceRefs` field is used instead to avoid
-                        duplicating errors between `status.conditions` and `status.rendering|source|sync`.
+                      description: |-
+                        errors is a list of errors that occurred in the process.
+                        This field is used to track errors when the condition type is Reconciling or Stalled.
+                        When the condition type is Syncing, the `errorSourceRefs` field is used instead to
+                        avoid duplicating errors between `status.conditions` and `status.rendering|source|sync`.
                       items:
-                        description: ConfigSyncError represents an error that occurs
-                          while parsing, applying, or remediating a resource.
+                        description: |-
+                          ConfigSyncError represents an error that occurs while parsing, applying, or
+                          remediating a resource.
                         properties:
                           code:
-                            description: code is the error code of this particular
-                              error.  Error codes are numeric strings, like "1012".
+                            description: |-
+                              code is the error code of this particular error.  Error codes are numeric strings,
+                              like "1012".
                             type: string
                           errorMessage:
                             description: errorMessage describes the error that occurred.
@@ -602,10 +624,9 @@ spec:
                                 bits of a single managed resource.
                               properties:
                                 gvk:
-                                  description: gvk is the GroupVersionKind of the
-                                    affected K8S resource. This field may be empty
-                                    for errors that are not associated with a specific
-                                    resource.
+                                  description: |-
+                                    gvk is the GroupVersionKind of the affected K8S resource. This field may be
+                                    empty for errors that are not associated with a specific resource.
                                   properties:
                                     group:
                                       type: string
@@ -619,21 +640,21 @@ spec:
                                   - version
                                   type: object
                                 name:
-                                  description: name is the name of the affected K8S
-                                    resource. This field may be empty for errors that
-                                    are not associated with a specific resource.
+                                  description: |-
+                                    name is the name of the affected K8S resource. This field may be empty for
+                                    errors that are not associated with a specific resource.
                                   type: string
                                 namespace:
-                                  description: namespace is the namespace of the affected
-                                    K8S resource. This field may be empty for errors
-                                    that are associated with a cluster-scoped resource
-                                    or not associated with a specific resource.
+                                  description: |-
+                                    namespace is the namespace of the affected K8S resource. This field may be
+                                    empty for errors that are associated with a cluster-scoped resource or not
+                                    associated with a specific resource.
                                   type: string
                                 sourcePath:
-                                  description: sourcePath is the repo-relative slash
-                                    path to where the config is defined. This field
-                                    may be empty for errors that are not associated
-                                    with a specific config file.
+                                  description: |-
+                                    sourcePath is the repo-relative slash path to where the config is defined.
+                                    This field may be empty for errors that are not associated with a specific
+                                    config file.
                                   type: string
                               type: object
                             type: array
@@ -672,28 +693,31 @@ spec:
                   type: object
                 type: array
               lastSyncedCommit:
-                description: lastSyncedCommit describes the most recent hash that
-                  is successfully synced. It can be a git commit hash, or an OCI image
-                  digest.
+                description: |-
+                  lastSyncedCommit describes the most recent hash that is successfully synced.
+                  It can be a git commit hash, or an OCI image digest.
                 type: string
               observedGeneration:
                 default: 0
-                description: observedGeneration is the most recent generation observed
-                  for the sync resource. It corresponds to the it's generation, which
-                  is updated on mutation by the API Server.
+                description: |-
+                  observedGeneration is the most recent generation observed for the sync resource.
+                  It corresponds to the it's generation, which is updated on mutation by the API Server.
                 format: int64
                 type: integer
               reconciler:
-                description: reconciler is the name of the reconciler process which
-                  corresponds to the sync resource.
+                description: |-
+                  reconciler is the name of the reconciler process which corresponds to the
+                  sync resource.
                 type: string
               rendering:
-                description: rendering contains fields describing the status of rendering
-                  resources from the source of truth.
+                description: |-
+                  rendering contains fields describing the status of rendering resources from
+                  the source of truth.
                 properties:
                   commit:
-                    description: hash of the source of truth that is rendered. It
-                      can be a git commit hash, or an OCI image digest.
+                    description: |-
+                      hash of the source of truth that is rendered.
+                      It can be a git commit hash, or an OCI image digest.
                     type: string
                   errorSummary:
                     description: errorSummary summarizes the errors encountered during
@@ -707,24 +731,26 @@ spec:
                         description: totalCount tracks the total number of errors.
                         type: integer
                       truncated:
-                        description: truncated indicates whether the `Errors` field
-                          includes all the errors. If `true`, the `Errors` field does
-                          not includes all the errors. If `false`, the `Errors` field
-                          includes all the errors. The size limit of a RootSync/RepoSync
-                          object is 2MiB. The status update would fail with the `ResourceExhausted`
-                          rpc error if there are too many errors.
+                        description: |-
+                          truncated indicates whether the `Errors` field includes all the errors.
+                          If `true`, the `Errors` field does not includes all the errors.
+                          If `false`, the `Errors` field includes all the errors.
+                          The size limit of a RootSync/RepoSync object is 2MiB. The status update would
+                          fail with the `ResourceExhausted` rpc error if there are too many errors.
                         type: boolean
                     type: object
                   errors:
                     description: errors is a list of any errors that occurred while
                       rendering the source of truth.
                     items:
-                      description: ConfigSyncError represents an error that occurs
-                        while parsing, applying, or remediating a resource.
+                      description: |-
+                        ConfigSyncError represents an error that occurs while parsing, applying, or
+                        remediating a resource.
                       properties:
                         code:
-                          description: code is the error code of this particular error.  Error
-                            codes are numeric strings, like "1012".
+                          description: |-
+                            code is the error code of this particular error.  Error codes are numeric strings,
+                            like "1012".
                           type: string
                         errorMessage:
                           description: errorMessage describes the error that occurred.
@@ -737,9 +763,9 @@ spec:
                               of a single managed resource.
                             properties:
                               gvk:
-                                description: gvk is the GroupVersionKind of the affected
-                                  K8S resource. This field may be empty for errors
-                                  that are not associated with a specific resource.
+                                description: |-
+                                  gvk is the GroupVersionKind of the affected K8S resource. This field may be
+                                  empty for errors that are not associated with a specific resource.
                                 properties:
                                   group:
                                     type: string
@@ -753,21 +779,21 @@ spec:
                                 - version
                                 type: object
                               name:
-                                description: name is the name of the affected K8S
-                                  resource. This field may be empty for errors that
-                                  are not associated with a specific resource.
+                                description: |-
+                                  name is the name of the affected K8S resource. This field may be empty for
+                                  errors that are not associated with a specific resource.
                                 type: string
                               namespace:
-                                description: namespace is the namespace of the affected
-                                  K8S resource. This field may be empty for errors
-                                  that are associated with a cluster-scoped resource
-                                  or not associated with a specific resource.
+                                description: |-
+                                  namespace is the namespace of the affected K8S resource. This field may be
+                                  empty for errors that are associated with a cluster-scoped resource or not
+                                  associated with a specific resource.
                                 type: string
                               sourcePath:
-                                description: sourcePath is the repo-relative slash
-                                  path to where the config is defined. This field
-                                  may be empty for errors that are not associated
-                                  with a specific config file.
+                                description: |-
+                                  sourcePath is the repo-relative slash path to where the config is defined.
+                                  This field may be empty for errors that are not associated with a specific
+                                  config file.
                                 type: string
                             type: object
                           type: array
@@ -784,9 +810,9 @@ spec:
                         description: branch is the git branch being fetched
                         type: string
                       dir:
-                        description: 'dir is the path within the Git repository that
-                          represents the top level of the repo to sync. Default: the
-                          root directory of the repository'
+                        description: |-
+                          dir is the path within the Git repository that represents the top level of the repo to sync.
+                          Default: the root directory of the repository
                         type: string
                       repo:
                         description: repo is the git repository URL being synced from.
@@ -821,8 +847,9 @@ spec:
                     - version
                     type: object
                   lastUpdate:
-                    description: lastUpdate is the timestamp of when this status was
-                      last updated by a reconciler.
+                    description: |-
+                      lastUpdate is the timestamp of when this status was last updated by a
+                      reconciler.
                     format: date-time
                     nullable: true
                     type: string
@@ -835,9 +862,9 @@ spec:
                       an OCI source of truth.
                     properties:
                       dir:
-                        description: 'dir is the absolute path of the directory that
-                          contains the local resources. Default: the root directory
-                          of the repository'
+                        description: |-
+                          dir is the absolute path of the directory that contains the local resources.
+                          Default: the root directory of the repository
                         type: string
                       image:
                         description: image is the OCI image repository URL for the
@@ -849,12 +876,14 @@ spec:
                     type: object
                 type: object
               source:
-                description: source contains fields describing the status of a *Sync's
-                  source of truth.
+                description: |-
+                  source contains fields describing the status of a *Sync's source of
+                  truth.
                 properties:
                   commit:
-                    description: hash of the source of truth that is rendered. It
-                      can be a git commit hash, or an OCI image digest.
+                    description: |-
+                      hash of the source of truth that is rendered.
+                      It can be a git commit hash, or an OCI image digest.
                     type: string
                   errorSummary:
                     description: errorSummary summarizes the errors encountered during
@@ -868,24 +897,26 @@ spec:
                         description: totalCount tracks the total number of errors.
                         type: integer
                       truncated:
-                        description: truncated indicates whether the `Errors` field
-                          includes all the errors. If `true`, the `Errors` field does
-                          not includes all the errors. If `false`, the `Errors` field
-                          includes all the errors. The size limit of a RootSync/RepoSync
-                          object is 2MiB. The status update would fail with the `ResourceExhausted`
-                          rpc error if there are too many errors.
+                        description: |-
+                          truncated indicates whether the `Errors` field includes all the errors.
+                          If `true`, the `Errors` field does not includes all the errors.
+                          If `false`, the `Errors` field includes all the errors.
+                          The size limit of a RootSync/RepoSync object is 2MiB. The status update would
+                          fail with the `ResourceExhausted` rpc error if there are too many errors.
                         type: boolean
                     type: object
                   errors:
                     description: errors is a list of any errors that occurred while
                       reading from the source of truth.
                     items:
-                      description: ConfigSyncError represents an error that occurs
-                        while parsing, applying, or remediating a resource.
+                      description: |-
+                        ConfigSyncError represents an error that occurs while parsing, applying, or
+                        remediating a resource.
                       properties:
                         code:
-                          description: code is the error code of this particular error.  Error
-                            codes are numeric strings, like "1012".
+                          description: |-
+                            code is the error code of this particular error.  Error codes are numeric strings,
+                            like "1012".
                           type: string
                         errorMessage:
                           description: errorMessage describes the error that occurred.
@@ -898,9 +929,9 @@ spec:
                               of a single managed resource.
                             properties:
                               gvk:
-                                description: gvk is the GroupVersionKind of the affected
-                                  K8S resource. This field may be empty for errors
-                                  that are not associated with a specific resource.
+                                description: |-
+                                  gvk is the GroupVersionKind of the affected K8S resource. This field may be
+                                  empty for errors that are not associated with a specific resource.
                                 properties:
                                   group:
                                     type: string
@@ -914,21 +945,21 @@ spec:
                                 - version
                                 type: object
                               name:
-                                description: name is the name of the affected K8S
-                                  resource. This field may be empty for errors that
-                                  are not associated with a specific resource.
+                                description: |-
+                                  name is the name of the affected K8S resource. This field may be empty for
+                                  errors that are not associated with a specific resource.
                                 type: string
                               namespace:
-                                description: namespace is the namespace of the affected
-                                  K8S resource. This field may be empty for errors
-                                  that are associated with a cluster-scoped resource
-                                  or not associated with a specific resource.
+                                description: |-
+                                  namespace is the namespace of the affected K8S resource. This field may be
+                                  empty for errors that are associated with a cluster-scoped resource or not
+                                  associated with a specific resource.
                                 type: string
                               sourcePath:
-                                description: sourcePath is the repo-relative slash
-                                  path to where the config is defined. This field
-                                  may be empty for errors that are not associated
-                                  with a specific config file.
+                                description: |-
+                                  sourcePath is the repo-relative slash path to where the config is defined.
+                                  This field may be empty for errors that are not associated with a specific
+                                  config file.
                                 type: string
                             type: object
                           type: array
@@ -945,9 +976,9 @@ spec:
                         description: branch is the git branch being fetched
                         type: string
                       dir:
-                        description: 'dir is the path within the Git repository that
-                          represents the top level of the repo to sync. Default: the
-                          root directory of the repository'
+                        description: |-
+                          dir is the path within the Git repository that represents the top level of the repo to sync.
+                          Default: the root directory of the repository
                         type: string
                       repo:
                         description: repo is the git repository URL being synced from.
@@ -982,8 +1013,9 @@ spec:
                     - version
                     type: object
                   lastUpdate:
-                    description: lastUpdate is the timestamp of when this status was
-                      last updated by a reconciler.
+                    description: |-
+                      lastUpdate is the timestamp of when this status was last updated by a
+                      reconciler.
                     format: date-time
                     nullable: true
                     type: string
@@ -992,9 +1024,9 @@ spec:
                       an OCI source of truth.
                     properties:
                       dir:
-                        description: 'dir is the absolute path of the directory that
-                          contains the local resources. Default: the root directory
-                          of the repository'
+                        description: |-
+                          dir is the absolute path of the directory that contains the local resources.
+                          Default: the root directory of the repository
                         type: string
                       image:
                         description: image is the OCI image repository URL for the
@@ -1006,12 +1038,14 @@ spec:
                     type: object
                 type: object
               sync:
-                description: sync contains fields describing the status of syncing
-                  resources from the source of truth to the cluster.
+                description: |-
+                  sync contains fields describing the status of syncing resources from the
+                  source of truth to the cluster.
                 properties:
                   commit:
-                    description: hash of the source of truth that is rendered. It
-                      can be a git commit hash, or an OCI image digest.
+                    description: |-
+                      hash of the source of truth that is rendered.
+                      It can be a git commit hash, or an OCI image digest.
                     type: string
                   errorSummary:
                     description: errorSummary summarizes the errors encountered during
@@ -1025,24 +1059,27 @@ spec:
                         description: totalCount tracks the total number of errors.
                         type: integer
                       truncated:
-                        description: truncated indicates whether the `Errors` field
-                          includes all the errors. If `true`, the `Errors` field does
-                          not includes all the errors. If `false`, the `Errors` field
-                          includes all the errors. The size limit of a RootSync/RepoSync
-                          object is 2MiB. The status update would fail with the `ResourceExhausted`
-                          rpc error if there are too many errors.
+                        description: |-
+                          truncated indicates whether the `Errors` field includes all the errors.
+                          If `true`, the `Errors` field does not includes all the errors.
+                          If `false`, the `Errors` field includes all the errors.
+                          The size limit of a RootSync/RepoSync object is 2MiB. The status update would
+                          fail with the `ResourceExhausted` rpc error if there are too many errors.
                         type: boolean
                     type: object
                   errors:
-                    description: errors is a list of any errors that occurred while
-                      applying the resources from the change indicated by Commit.
+                    description: |-
+                      errors is a list of any errors that occurred while applying the resources
+                      from the change indicated by Commit.
                     items:
-                      description: ConfigSyncError represents an error that occurs
-                        while parsing, applying, or remediating a resource.
+                      description: |-
+                        ConfigSyncError represents an error that occurs while parsing, applying, or
+                        remediating a resource.
                       properties:
                         code:
-                          description: code is the error code of this particular error.  Error
-                            codes are numeric strings, like "1012".
+                          description: |-
+                            code is the error code of this particular error.  Error codes are numeric strings,
+                            like "1012".
                           type: string
                         errorMessage:
                           description: errorMessage describes the error that occurred.
@@ -1055,9 +1092,9 @@ spec:
                               of a single managed resource.
                             properties:
                               gvk:
-                                description: gvk is the GroupVersionKind of the affected
-                                  K8S resource. This field may be empty for errors
-                                  that are not associated with a specific resource.
+                                description: |-
+                                  gvk is the GroupVersionKind of the affected K8S resource. This field may be
+                                  empty for errors that are not associated with a specific resource.
                                 properties:
                                   group:
                                     type: string
@@ -1071,21 +1108,21 @@ spec:
                                 - version
                                 type: object
                               name:
-                                description: name is the name of the affected K8S
-                                  resource. This field may be empty for errors that
-                                  are not associated with a specific resource.
+                                description: |-
+                                  name is the name of the affected K8S resource. This field may be empty for
+                                  errors that are not associated with a specific resource.
                                 type: string
                               namespace:
-                                description: namespace is the namespace of the affected
-                                  K8S resource. This field may be empty for errors
-                                  that are associated with a cluster-scoped resource
-                                  or not associated with a specific resource.
+                                description: |-
+                                  namespace is the namespace of the affected K8S resource. This field may be
+                                  empty for errors that are associated with a cluster-scoped resource or not
+                                  associated with a specific resource.
                                 type: string
                               sourcePath:
-                                description: sourcePath is the repo-relative slash
-                                  path to where the config is defined. This field
-                                  may be empty for errors that are not associated
-                                  with a specific config file.
+                                description: |-
+                                  sourcePath is the repo-relative slash path to where the config is defined.
+                                  This field may be empty for errors that are not associated with a specific
+                                  config file.
                                 type: string
                             type: object
                           type: array
@@ -1102,9 +1139,9 @@ spec:
                         description: branch is the git branch being fetched
                         type: string
                       dir:
-                        description: 'dir is the path within the Git repository that
-                          represents the top level of the repo to sync. Default: the
-                          root directory of the repository'
+                        description: |-
+                          dir is the path within the Git repository that represents the top level of the repo to sync.
+                          Default: the root directory of the repository
                         type: string
                       repo:
                         description: repo is the git repository URL being synced from.
@@ -1139,8 +1176,9 @@ spec:
                     - version
                     type: object
                   lastUpdate:
-                    description: lastUpdate is the timestamp of when this status was
-                      last updated by a reconciler.
+                    description: |-
+                      lastUpdate is the timestamp of when this status was last updated by a
+                      reconciler.
                     format: date-time
                     nullable: true
                     type: string
@@ -1149,9 +1187,9 @@ spec:
                       an OCI source of truth.
                     properties:
                       dir:
-                        description: 'dir is the absolute path of the directory that
-                          contains the local resources. Default: the root directory
-                          of the repository'
+                        description: |-
+                          dir is the absolute path of the directory that contains the local resources.
+                          Default: the root directory of the repository
                         type: string
                       image:
                         description: image is the OCI image repository URL for the
@@ -1193,14 +1231,19 @@ spec:
         description: RootSync is the Schema for the rootsyncs API
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
             type: string
           metadata:
             type: object
@@ -1212,9 +1255,10 @@ spec:
                   from a Git repo.
                 properties:
                   auth:
-                    description: auth is the type of secret configured for access
-                      to the Git repo. Must be one of ssh, cookiefile, gcenode, token,
-                      or none. The validation of this is case-sensitive. Required.
+                    description: |-
+                      auth is the type of secret configured for access to the Git repo.
+                      Must be one of ssh, cookiefile, gcenode, token, or none.
+                      The validation of this is case-sensitive. Required.
                     enum:
                     - ssh
                     - cookiefile
@@ -1224,18 +1268,18 @@ spec:
                     - none
                     type: string
                   branch:
-                    description: branch is the git branch to sync from. Branch defaults
-                      to 'master', but if 'revision' is set and is not 'HEAD', 'revision'
-                      takes precedence over 'branch'.
+                    description: |-
+                      branch is the git branch to sync from.
+                      Branch defaults to 'master', but if 'revision' is set and is not 'HEAD',
+                      'revision' takes precedence over 'branch'.
                     type: string
                   caCertSecretRef:
-                    description: caCertSecretRef specifies the name of the secret
-                      where the CA certificate is stored. The creation of the secret
-                      should be done out of band by the user and should store the
-                      certificate in a key named "cert". For RepoSync resources, the
-                      secret must be created in the same namespace as the RepoSync.
-                      For RootSync resource, the secret must be created in the config-management-system
-                      namespace.
+                    description: |-
+                      caCertSecretRef specifies the name of the secret where the CA certificate is stored.
+                      The creation of the secret should be done out of band by the user and should store the
+                      certificate in a key named "cert". For RepoSync resources, the secret must be
+                      created in the same namespace as the RepoSync. For RootSync resource, the secret
+                      must be created in the config-management-system namespace.
                     nullable: true
                     properties:
                       name:
@@ -1243,50 +1287,50 @@ spec:
                         type: string
                     type: object
                   dir:
-                    description: 'dir is the absolute path of the directory that contains
-                      the local resources.  Default: the root directory of the repo.'
+                    description: |-
+                      dir is the absolute path of the directory that contains
+                      the local resources.  Default: the root directory of the repo.
                     type: string
                   gcpServiceAccountEmail:
-                    description: 'gcpServiceAccountEmail specifies the GCP service
-                      account used to annotate the RootSync/RepoSync controller Kubernetes
-                      Service Account. Note: The field is used when secretType: gcpServiceAccount.'
+                    description: |-
+                      gcpServiceAccountEmail specifies the GCP service account used to annotate
+                      the RootSync/RepoSync controller Kubernetes Service Account.
+                      Note: The field is used when secretType: gcpServiceAccount.
                     type: string
                   noSSLVerify:
-                    description: 'noSSLVerify specifies whether to enable or disable
-                      the SSL certificate verification. Default: false. If noSSLVerify
-                      is set to true, it tells Git to skip the SSL certificate verification.
-                      This should either be false or unset when caCertSecretRef is
-                      provided.'
+                    description: |-
+                      noSSLVerify specifies whether to enable or disable the SSL certificate verification. Default: false.
+                      If noSSLVerify is set to true, it tells Git to skip the SSL certificate verification.
+                      This should either be false or unset when caCertSecretRef is provided.
                     type: boolean
                   period:
-                    description: 'period is the time duration between consecutive
-                      syncs. Default: 15s. Note to developers that customers specify
-                      this value using string (https://golang.org/pkg/time/#Duration.String)
-                      like "3s" in their Custom Resource YAML. However, time.Duration
-                      is at a nanosecond granularity, and it is easy to introduce
-                      a bug where it looks like the code is dealing with seconds but
-                      its actually nanoseconds (or vice versa).'
+                    description: |-
+                      period is the time duration between consecutive syncs. Default: 15s.
+                      Note to developers that customers specify this value using
+                      string (https://golang.org/pkg/time/#Duration.String) like "3s"
+                      in their Custom Resource YAML. However, time.Duration is at a nanosecond
+                      granularity, and it is easy to introduce a bug where it looks like the
+                      code is dealing with seconds but its actually nanoseconds (or vice versa).
                     type: string
                   proxy:
-                    description: proxy specifies an HTTPS proxy for accessing the
-                      Git repo. Only has an effect when secretType is one of ("cookiefile",
-                      "none", "token"). When secretType is "cookiefile" or "token",
-                      if your HTTPS proxy URL contains sensitive information such
-                      as a username or password and you need to hide the sensitive
-                      information, you can leave this field empty and add the URL
-                      for the HTTPS proxy into the same Secret used for the Git credential
-                      via `kubectl create secret ... --from-literal=https_proxy=HTTPS_PROXY_URL`.
-                      Optional.
+                    description: |-
+                      proxy specifies an HTTPS proxy for accessing the Git repo.
+                      Only has an effect when secretType is one of ("cookiefile", "none", "token").
+                      When secretType is "cookiefile" or "token", if your HTTPS proxy URL contains sensitive information
+                      such as a username or password and you need to hide the sensitive information,
+                      you can leave this field empty and add the URL for the HTTPS proxy into the same Secret
+                      used for the Git credential via `kubectl create secret ... --from-literal=https_proxy=HTTPS_PROXY_URL`. Optional.
                     type: string
                   repo:
                     description: repo is the git repository URL to sync from. Required.
                     type: string
                   revision:
-                    description: revision is the git revision (branch, tag, ref or
-                      commit) to fetch. If 'revision' is not specified, it defaults
-                      to the HEAD of the branch that is specified in the 'branch'
-                      field. If neither 'revision' nor 'branch' is specified, it defaults
-                      to the HEAD of the 'master' branch.
+                    description: |-
+                      revision is the git revision (branch, tag, ref or commit) to fetch.
+                      If 'revision' is not specified, it defaults to the HEAD of the branch that
+                      is specified in the 'branch' field.
+                      If neither 'revision' nor 'branch' is specified, it defaults to the HEAD of
+                      the 'master' branch.
                     type: string
                   secretRef:
                     description: secretRef is the secret used to connect to the Git
@@ -1306,9 +1350,10 @@ spec:
                   from a Helm repo.
                 properties:
                   auth:
-                    description: auth specifies the type to authenticate to the Helm
-                      repository. Must be one of token, gcpserviceaccount, k8sserviceaccount,
-                      gcenode or none. The validation of this is case-sensitive. Required.
+                    description: |-
+                      auth specifies the type to authenticate to the Helm repository.
+                      Must be one of token, gcpserviceaccount, k8sserviceaccount, gcenode or none.
+                      The validation of this is case-sensitive. Required.
                     enum:
                     - none
                     - gcpserviceaccount
@@ -1317,13 +1362,12 @@ spec:
                     - gcenode
                     type: string
                   caCertSecretRef:
-                    description: caCertSecretRef specifies the name of the secret
-                      where the CA certificate is stored. The creation of the secret
-                      should be done out of band by the user and should store the
-                      certificate in a key named "cert". For RepoSync resources, the
-                      secret must be created in the same namespace as the RepoSync.
-                      For RootSync resource, the secret must be created in the config-management-system
-                      namespace.
+                    description: |-
+                      caCertSecretRef specifies the name of the secret where the CA certificate is stored.
+                      The creation of the secret should be done out of band by the user and should store the
+                      certificate in a key named "cert". For RepoSync resources, the secret must be
+                      created in the same namespace as the RepoSync. For RootSync resource, the secret
+                      must be created in the config-management-system namespace.
                     nullable: true
                     properties:
                       name:
@@ -1334,38 +1378,39 @@ spec:
                     description: chart is a Helm chart name. Required.
                     type: string
                   deployNamespace:
-                    description: deployNamespace specifies the namespace in which
-                      to deploy the chart. This is a mutually exclusive setting with
-                      "namespace". If neither namespace nor deployNamespace are set,
-                      the chart will be deployed into the default namespace.
+                    description: |-
+                      deployNamespace specifies the namespace in which to deploy the chart.
+                      This is a mutually exclusive setting with "namespace".
+                      If neither namespace nor deployNamespace are set, the chart will be
+                      deployed into the default namespace.
                     type: string
                   gcpServiceAccountEmail:
-                    description: 'gcpServiceAccountEmail specifies the GCP service
-                      account used to annotate the RootSync/RepoSync controller Kubernetes
-                      Service Account. Note: The field is used when spec.helm.auth:
-                      gcpserviceaccount.'
+                    description: |-
+                      gcpServiceAccountEmail specifies the GCP service account used to annotate
+                      the RootSync/RepoSync controller Kubernetes Service Account.
+                      Note: The field is used when spec.helm.auth: gcpserviceaccount.
                     type: string
                   includeCRDs:
-                    description: 'includeCRDs specifies if Helm template should also
-                      generate CustomResourceDefinitions. If IncludeCRDs is set to
-                      false, no CustomeResourceDefinition will be generated. Default:
-                      false.'
+                    description: |-
+                      includeCRDs specifies if Helm template should also generate CustomResourceDefinitions.
+                      If IncludeCRDs is set to false, no CustomeResourceDefinition will be generated.
+                      Default: false.
                     type: boolean
                   namespace:
-                    description: 'namespace sets the value of {{Release.Namespace}}
-                      defined in the chart templates. This is a mutually exclusive
-                      setting with "deployNamespace". Default: default.'
+                    description: |-
+                      namespace sets the value of {{Release.Namespace}} defined in the chart templates.
+                      This is a mutually exclusive setting with "deployNamespace".
+                      Default: default.
                     type: string
                   period:
-                    description: 'period is the time duration that Config Sync waits
-                      before refetching the chart. Default: 1 hour. Use string to
-                      specify this field value, like "30s", "5m". More details about
-                      valid inputs: https://pkg.go.dev/time#ParseDuration. If the
-                      chart version is a range, the literal tag "latest", or left
-                      empty to indicate that Config Sync should fetch the latest version,
-                      the chart will be re-fetched according to spec.helm.period.
-                      If the chart version is specified as a single static version,
-                      the chart will not be re-fetched.'
+                    description: |-
+                      period is the time duration that Config Sync waits before refetching the chart.
+                      Default: 1 hour.
+                      Use string to specify this field value, like "30s", "5m".
+                      More details about valid inputs: https://pkg.go.dev/time#ParseDuration.
+                      If the chart version is a range, the literal tag "latest", or left empty to indicate that Config Sync
+                      should fetch the latest version, the chart will be re-fetched according to spec.helm.period.
+                      If the chart version is specified as a single static version, the chart will not be re-fetched.
                     type: string
                   releaseName:
                     description: releaseName is the name of the Helm release.
@@ -1374,7 +1419,8 @@ spec:
                     description: repo is the helm repository URL to sync from. Required.
                     type: string
                   secretRef:
-                    description: secretRef holds the authentication secret for accessing
+                    description: |-
+                      secretRef holds the authentication secret for accessing
                       the Helm repository.
                     nullable: true
                     properties:
@@ -1383,25 +1429,24 @@ spec:
                         type: string
                     type: object
                   values:
-                    description: values to use instead of default values that accompany
-                      the chart. Format values the same as default values.yaml. If
-                      `valuesFileRefs` is also specified, fields from `values` will
-                      override fields from `valuesFileRefs`.
+                    description: |-
+                      values to use instead of default values that accompany the chart. Format
+                      values the same as default values.yaml. If `valuesFileRefs` is also specified,
+                      fields from `values` will override fields from `valuesFileRefs`.
                     x-kubernetes-preserve-unknown-fields: true
                   valuesFileRefs:
-                    description: valuesFileRefs holds references to objects in the
-                      cluster that represent values to use instead of default values
-                      that accompany the chart. Currently, only ConfigMaps are supported.
-                      The ConfigMaps must be immutable and in the same namespace as
-                      the RootSync/RepoSync. When multiple values files are specified,
-                      duplicated keys in later files will override the value from
-                      earlier files. This is equivalent to passing in multiple values
-                      files to Helm CLI. If `values` is also specified, fields from
-                      `values` will override fields from `valuesFileRefs`.
+                    description: |-
+                      valuesFileRefs holds references to objects in the cluster that represent
+                      values to use instead of default values that accompany the chart. Currently,
+                      only ConfigMaps are supported. The ConfigMaps must be immutable and in the same
+                      namespace as the RootSync/RepoSync. When multiple values files are specified, duplicated
+                      keys in later files will override the value from earlier files. This is equivalent
+                      to passing in multiple values files to Helm CLI. If `values` is also specified,
+                      fields from `values` will override fields from `valuesFileRefs`.
                     items:
-                      description: ValuesFileRef references a ConfigMap object that
-                        contains a values file to use for helm rendering. The ConfigMap
-                        must be in the same namespace as the RootSync/RepoSync.
+                      description: |-
+                        ValuesFileRef references a ConfigMap object that contains a values file to use for
+                        helm rendering. The ConfigMap must be in the same namespace as the RootSync/RepoSync.
                       properties:
                         dataKey:
                           description: 'dataKey represents the object data key to
@@ -1413,15 +1458,14 @@ spec:
                       type: object
                     type: array
                   version:
-                    description: 'version is the chart version. This can be specified
-                      as a static version, or as a range of values from which Config
-                      Sync will fetch the latest. If left empty, Config Sync will
-                      fetch the latest version according to semver. The supported
-                      version range syntax is identical to the version range syntax
+                    description: |-
+                      version is the chart version.
+                      This can be specified as a static version, or as a range of values from which Config Sync
+                      will fetch the latest. If left empty, Config Sync will fetch the latest version according to semver.
+                      The supported version range syntax is identical to the version range syntax
                       supported by helm CLI, and is documented here: https://github.com/Masterminds/semver#hyphen-range-comparisons.
-                      Versions specified as a range, the literal tag "latest", or
-                      left empty to indicate that Config Sync should fetch the latest
-                      version, will be fetched every sync according to spec.helm.period.'
+                      Versions specified as a range, the literal tag "latest", or left empty to indicate that Config Sync should
+                      fetch the latest version, will be fetched every sync according to spec.helm.period.
                     type: string
                 required:
                 - auth
@@ -1433,10 +1477,10 @@ spec:
                   from an OCI package.
                 properties:
                   auth:
-                    description: auth is the type of secret configured for access
-                      to the OCI package. Must be one of gcenode, gcpserviceaccount,
-                      k8sserviceaccount, or none. The validation of this is case-sensitive.
-                      Required.
+                    description: |-
+                      auth is the type of secret configured for access to the OCI package.
+                      Must be one of gcenode, gcpserviceaccount, k8sserviceaccount, or none.
+                      The validation of this is case-sensitive. Required.
                     enum:
                     - gcenode
                     - gcpserviceaccount
@@ -1444,13 +1488,12 @@ spec:
                     - none
                     type: string
                   caCertSecretRef:
-                    description: caCertSecretRef specifies the name of the secret
-                      where the CA certificate is stored. The creation of the secret
-                      should be done out of band by the user and should store the
-                      certificate in a key named "cert". For RepoSync resources, the
-                      secret must be created in the same namespace as the RepoSync.
-                      For RootSync resource, the secret must be created in the config-management-system
-                      namespace.
+                    description: |-
+                      caCertSecretRef specifies the name of the secret where the CA certificate is stored.
+                      The creation of the secret should be done out of band by the user and should store the
+                      certificate in a key named "cert". For RepoSync resources, the secret must be
+                      created in the same namespace as the RepoSync. For RootSync resource, the secret
+                      must be created in the config-management-system namespace.
                     nullable: true
                     properties:
                       name:
@@ -1458,31 +1501,34 @@ spec:
                         type: string
                     type: object
                   dir:
-                    description: 'dir is the absolute path of the directory that contains
-                      the local resources.  Default: the root directory of the image.'
+                    description: |-
+                      dir is the absolute path of the directory that contains
+                      the local resources.  Default: the root directory of the image.
                     type: string
                   gcpServiceAccountEmail:
-                    description: 'gcpServiceAccountEmail specifies the GCP service
-                      account used to annotate the RootSync/RepoSync controller Kubernetes
-                      Service Account. Note: The field is used when secretType: gcpServiceAccount.'
+                    description: |-
+                      gcpServiceAccountEmail specifies the GCP service account used to annotate
+                      the RootSync/RepoSync controller Kubernetes Service Account.
+                      Note: The field is used when secretType: gcpServiceAccount.
                     type: string
                   image:
-                    description: 'image is the OCI image repository URL for the package
-                      to sync from. e.g. `LOCATION-docker.pkg.dev/PROJECT_ID/REPOSITORY_NAME/PACKAGE_NAME`.
-                      The image can be pulled by TAG or by DIGEST if it is specified
-                      in PACKAGE_NAME. - Pull by tag: `LOCATION-docker.pkg.dev/PROJECT_ID/REPOSITORY_NAME/PACKAGE_NAME:TAG`.
+                    description: |-
+                      image is the OCI image repository URL for the package to sync from.
+                      e.g. `LOCATION-docker.pkg.dev/PROJECT_ID/REPOSITORY_NAME/PACKAGE_NAME`.
+                      The image can be pulled by TAG or by DIGEST if it is specified in PACKAGE_NAME.
+                      - Pull by tag: `LOCATION-docker.pkg.dev/PROJECT_ID/REPOSITORY_NAME/PACKAGE_NAME:TAG`.
                       - Pull by digest: `LOCATION-docker.pkg.dev/PROJECT_ID/REPOSITORY_NAME/PACKAGE_NAME@sha256:DIGEST`.
-                      If neither TAG nor DIGEST is specified, it pulls with the `latest`
-                      tag by default. Required'
+                      If neither TAG nor DIGEST is specified, it pulls with the `latest` tag by default.
+                      Required
                     type: string
                   period:
-                    description: 'period is the time duration between consecutive
-                      syncs. Default: 15s. Note to developers that customers specify
-                      this value using string (https://golang.org/pkg/time/#Duration.String)
-                      like "3s" in their Custom Resource YAML. However, time.Duration
-                      is at a nanosecond granularity, and it is easy to introduce
-                      a bug where it looks like the code is dealing with seconds but
-                      its actually nanoseconds (or vice versa).'
+                    description: |-
+                      period is the time duration between consecutive syncs. Default: 15s.
+                      Note to developers that customers specify this value using
+                      string (https://golang.org/pkg/time/#Duration.String) like "3s"
+                      in their Custom Resource YAML. However, time.Duration is at a nanosecond
+                      granularity, and it is easy to introduce a bug where it looks like the
+                      code is dealing with seconds but its actually nanoseconds (or vice versa).
                     type: string
                 required:
                 - auth
@@ -1493,51 +1539,50 @@ spec:
                 nullable: true
                 properties:
                   apiServerTimeout:
-                    description: 'apiServerTimeout allows one to override the client-side
-                      timeout for requests to the API server. Default: 15s. Use string
-                      to specify this field value, like "30s", "1m". More details
-                      about valid inputs: https://pkg.go.dev/time#ParseDuration. Recommended
-                      apiServerTimeout range is from "3s" to "1m".'
+                    description: |-
+                      apiServerTimeout allows one to override the client-side timeout for requests to the API server.
+                      Default: 15s.
+                      Use string to specify this field value, like "30s", "1m".
+                      More details about valid inputs: https://pkg.go.dev/time#ParseDuration.
+                      Recommended apiServerTimeout range is from "3s" to "1m".
                     type: string
                   enableShellInRendering:
-                    description: 'enableShellInRendering specifies whether to enable
-                      or disable the shell access in rendering process. Default: false.
-                      Kustomize remote bases requires shell access. Setting this field
-                      to true will enable shell in the rendering process and support
-                      pulling remote bases from public repositories.'
+                    description: |-
+                      enableShellInRendering specifies whether to enable or disable the shell access in rendering process. Default: false.
+                      Kustomize remote bases requires shell access. Setting this field to true will enable shell in the rendering process and
+                      support pulling remote bases from public repositories.
                     type: boolean
                   gitSyncDepth:
-                    description: gitSyncDepth allows one to override the number of
-                      git commits to fetch. Must be no less than 0. Config Sync would
-                      do a full clone if this field is 0, and a shallow clone if this
-                      field is greater than 0. If this field is not provided, Config
-                      Sync would configure it automatically.
+                    description: |-
+                      gitSyncDepth allows one to override the number of git commits to fetch.
+                      Must be no less than 0.
+                      Config Sync would do a full clone if this field is 0, and a shallow
+                      clone if this field is greater than 0.
+                      If this field is not provided, Config Sync would configure it automatically.
                     format: int64
                     minimum: 0
                     type: integer
                   logLevels:
-                    description: logLevels specify the container name and log level
-                      override value for the reconciler deployment container. Each
-                      entry must contain the name of the reconciler deployment container
-                      and the desired log level.
+                    description: |-
+                      logLevels specify the container name and log level override value for the reconciler deployment container.
+                      Each entry must contain the name of the reconciler deployment container and the desired log level.
                     items:
                       description: ContainerLogLevelOverride specifies the container
                         name and log level override value
                       properties:
                         containerName:
-                          description: 'containerName specifies the name of the reconciler
-                            deployment container for which log level will be overridden.
-                            Must be one of the following: "reconciler", "git-sync",
-                            "hydration-controller", "oci-sync", or "helm-sync".'
+                          description: |-
+                            containerName specifies the name of the reconciler deployment container for which log level will be overridden.
+                            Must be one of the following: "reconciler", "git-sync", "hydration-controller", "oci-sync", or "helm-sync".
                           pattern: ^(reconciler|git-sync|hydration-controller|oci-sync|helm-sync|gcenode-askpass-sidecar|otel-agent)$
                           type: string
                         logLevel:
-                          description: logLevel specifies the verbosity level of the
-                            logging for a specific container. The "git-sync" and "otel-agent"
-                            containers default to 5, while all other containers default
-                            to 0. Increasing the value of logLevel increases the verbosity
-                            of the logs. Lower severity messages are logged at higher
-                            verbosity. Allowed values are from 0 to 10.
+                          description: |-
+                            logLevel specifies the verbosity level of the logging for a specific container.
+                            The "git-sync" and "otel-agent" containers default to 5, while all other containers default to 0.
+                            Increasing the value of logLevel increases the verbosity of the logs.
+                            Lower severity messages are logged at higher verbosity.
+                            Allowed values are from 0 to 10.
                           maximum: 10
                           minimum: 0
                           type: integer
@@ -1550,24 +1595,27 @@ spec:
                     - containerName
                     x-kubernetes-list-type: map
                   namespaceStrategy:
-                    description: 'namespaceStrategy controls how the reconciler handles
-                      Namespaces which are used by resources in the source but not
-                      declared. Only applies when using the unstructured sourceFormat.
-                      Must be "implicit" or "explicit". Default: "implicit". "implicit"
-                      means that the reconciler will implicitly create Namespaces
+                    description: |-
+                      namespaceStrategy controls how the reconciler handles Namespaces
+                      which are used by resources in the source but not declared. Only applies
+                      when using the unstructured sourceFormat.
+                      Must be "implicit" or "explicit". Default: "implicit".
+                      "implicit" means that the reconciler will implicitly create Namespaces
                       if they do not exist, even if they are not declared in the source.
-                      "explicit" means that the reconciler will not create Namespaces
-                      which are not declared in the source.'
+                      "explicit" means that the reconciler will not create Namespaces which
+                      are not declared in the source.
                     enum:
                     - implicit
                     - explicit
                     type: string
                   reconcileTimeout:
-                    description: 'reconcileTimeout allows one to override the threshold
-                      for how long to wait for all resources to reconcile before giving
-                      up. Default: 5m. Use string to specify this field value, like
-                      "30s", "5m". More details about valid inputs: https://pkg.go.dev/time#ParseDuration.
-                      Recommended reconcileTimeout range is from "10s" to "1h".'
+                    description: |-
+                      reconcileTimeout allows one to override the threshold for how long to wait for
+                      all resources to reconcile before giving up.
+                      Default: 5m.
+                      Use string to specify this field value, like "30s", "5m".
+                      More details about valid inputs: https://pkg.go.dev/time#ParseDuration.
+                      Recommended reconcileTimeout range is from "10s" to "1h".
                     type: string
                   resources:
                     description: resources allow one to override the resource requirements
@@ -1577,10 +1625,9 @@ spec:
                         requirements for a container
                       properties:
                         containerName:
-                          description: containerName specifies the name of a container
-                            whose resource requirements will be overridden. Must be
-                            "reconciler", "git-sync", "hydration-controller", "oci-sync",
-                            or "helm-sync".
+                          description: |-
+                            containerName specifies the name of a container whose resource requirements will be overridden.
+                            Must be "reconciler", "git-sync", "hydration-controller", "oci-sync", or "helm-sync".
                           pattern: ^(reconciler|git-sync|hydration-controller|oci-sync|helm-sync|gcenode-askpass-sidecar|otel-agent)$
                           type: string
                         cpuLimit:
@@ -1618,16 +1665,18 @@ spec:
                       type: object
                     type: array
                   roleRefs:
-                    description: roleRefs is a list of Roles or ClusterRoles to create
-                      bindings. If unset, a binding to cluster-admin will be created.
+                    description: |-
+                      roleRefs is a list of Roles or ClusterRoles to create bindings.
+                      If unset, a binding to cluster-admin will be created.
                     items:
-                      description: each item references a Role or ClusterRole to create
-                        a binding to for this reconciler. It supports a namespace
-                        field that can be used to create RoleBindings rather than
-                        ClusterRoleBindings.
+                      description: |-
+                        each item references a Role or ClusterRole to create
+                        a binding to for this reconciler. It supports a namespace field that can be used
+                        to create RoleBindings rather than ClusterRoleBindings.
                       properties:
                         kind:
-                          description: kind refers to the Kind of the RBAC resource.
+                          description: |-
+                            kind refers to the Kind of the RBAC resource.
                             Accepted values are Role and ClusterRole. Required.
                           enum:
                           - Role
@@ -1638,11 +1687,11 @@ spec:
                             resource. Required.
                           type: string
                         namespace:
-                          description: namespace indicates the Namespace in which
-                            a RoleBinding should be created. For ClusterRole objects,
-                            will determine whether a RoleBinding or ClusterRoleBinding
-                            is created. For Role objects, must be set to the same
-                            namespace as the Role.
+                          description: |-
+                            namespace indicates the Namespace in which a RoleBinding should be created.
+                            For ClusterRole objects, will determine whether a RoleBinding or ClusterRoleBinding
+                            is created.
+                            For Role objects, must be set to the same namespace as the Role.
                           type: string
                       required:
                       - kind
@@ -1650,24 +1699,34 @@ spec:
                       type: object
                     type: array
                   statusMode:
-                    description: statusMode controls whether the actuation status
-                      such as apply failed or not should be embedded into the ResourceGroup
-                      object. Must be "enabled" or "disabled". If set to "enabled",
-                      it increases the size of the ResourceGroup object.
+                    description: |-
+                      statusMode controls whether the actuation status
+                      such as apply failed or not should be embedded into the ResourceGroup object.
+                      Must be "enabled" or "disabled".
+                      If set to "enabled", it increases the size of the ResourceGroup object.
                     pattern: ^(enabled|disabled|)$
                     type: string
                 type: object
               sourceFormat:
-                description: "sourceFormat specifies how the repository is formatted.
-                  See documentation for specifics of what these options do. \n Must
-                  be one of hierarchy, unstructured. Optional. Set to hierarchy if
-                  not specified. \n The validation of this is case-sensitive."
+                description: |-
+                  sourceFormat specifies how the repository is formatted.
+                  See documentation for specifics of what these options do.
+
+
+                  Must be one of hierarchy, unstructured. Optional. Set to
+                  hierarchy if not specified.
+
+
+                  The validation of this is case-sensitive.
                 pattern: ^(hierarchy|unstructured|)$
                 type: string
               sourceType:
                 default: git
-                description: "sourceType specifies the type of the source of truth.
-                  \n Must be one of git, oci, helm. Optional. Set to git if not specified."
+                description: |-
+                  sourceType specifies the type of the source of truth.
+
+
+                  Must be one of git, oci, helm. Optional. Set to git if not specified.
                 pattern: ^(git|oci|helm)$
                 type: string
             type: object
@@ -1675,8 +1734,9 @@ spec:
             description: RootSyncStatus defines the observed state of RootSync
             properties:
               conditions:
-                description: conditions represents the latest available observations
-                  of the RootSync's current state.
+                description: |-
+                  conditions represents the latest available observations of the RootSync's
+                  current state.
                 items:
                   description: RootSyncCondition describes the state of a RootSync
                     at a certain point.
@@ -1693,10 +1753,9 @@ spec:
                         type: string
                       type: array
                     errorSummary:
-                      description: errorSummary summarizes the errors in the `errors`
-                        field when the condition type is Reconciling or Stalled, and
-                        summarizes the errors referred in the `errorsSourceRefs` field
-                        when the condition type is Syncing.
+                      description: |-
+                        errorSummary summarizes the errors in the `errors` field when the condition type is Reconciling or Stalled,
+                        and summarizes the errors referred in the `errorsSourceRefs` field when the condition type is Syncing.
                       properties:
                         errorCountAfterTruncation:
                           description: errorCountAfterTruncation tracks the number
@@ -1706,27 +1765,29 @@ spec:
                           description: totalCount tracks the total number of errors.
                           type: integer
                         truncated:
-                          description: truncated indicates whether the `Errors` field
-                            includes all the errors. If `true`, the `Errors` field
-                            does not includes all the errors. If `false`, the `Errors`
-                            field includes all the errors. The size limit of a RootSync/RepoSync
-                            object is 2MiB. The status update would fail with the
-                            `ResourceExhausted` rpc error if there are too many errors.
+                          description: |-
+                            truncated indicates whether the `Errors` field includes all the errors.
+                            If `true`, the `Errors` field does not includes all the errors.
+                            If `false`, the `Errors` field includes all the errors.
+                            The size limit of a RootSync/RepoSync object is 2MiB. The status update would
+                            fail with the `ResourceExhausted` rpc error if there are too many errors.
                           type: boolean
                       type: object
                     errors:
-                      description: errors is a list of errors that occurred in the
-                        process. This field is used to track errors when the condition
-                        type is Reconciling or Stalled. When the condition type is
-                        Syncing, the `errorSourceRefs` field is used instead to avoid
-                        duplicating errors between `status.conditions` and `status.rendering|source|sync`.
+                      description: |-
+                        errors is a list of errors that occurred in the process.
+                        This field is used to track errors when the condition type is Reconciling or Stalled.
+                        When the condition type is Syncing, the `errorSourceRefs` field is used instead to
+                        avoid duplicating errors between `status.conditions` and `status.rendering|source|sync`.
                       items:
-                        description: ConfigSyncError represents an error that occurs
-                          while parsing, applying, or remediating a resource.
+                        description: |-
+                          ConfigSyncError represents an error that occurs while parsing, applying, or
+                          remediating a resource.
                         properties:
                           code:
-                            description: code is the error code of this particular
-                              error.  Error codes are numeric strings, like "1012".
+                            description: |-
+                              code is the error code of this particular error.  Error codes are numeric strings,
+                              like "1012".
                             type: string
                           errorMessage:
                             description: errorMessage describes the error that occurred.
@@ -1739,10 +1800,9 @@ spec:
                                 bits of a single managed resource.
                               properties:
                                 gvk:
-                                  description: gvk is the GroupVersionKind of the
-                                    affected K8S resource. This field may be empty
-                                    for errors that are not associated with a specific
-                                    resource.
+                                  description: |-
+                                    gvk is the GroupVersionKind of the affected K8S resource. This field may be
+                                    empty for errors that are not associated with a specific resource.
                                   properties:
                                     group:
                                       type: string
@@ -1756,21 +1816,21 @@ spec:
                                   - version
                                   type: object
                                 name:
-                                  description: name is the name of the affected K8S
-                                    resource. This field may be empty for errors that
-                                    are not associated with a specific resource.
+                                  description: |-
+                                    name is the name of the affected K8S resource. This field may be empty for
+                                    errors that are not associated with a specific resource.
                                   type: string
                                 namespace:
-                                  description: namespace is the namespace of the affected
-                                    K8S resource. This field may be empty for errors
-                                    that are associated with a cluster-scoped resource
-                                    or not associated with a specific resource.
+                                  description: |-
+                                    namespace is the namespace of the affected K8S resource. This field may be
+                                    empty for errors that are associated with a cluster-scoped resource or not
+                                    associated with a specific resource.
                                   type: string
                                 sourcePath:
-                                  description: sourcePath is the repo-relative slash
-                                    path to where the config is defined. This field
-                                    may be empty for errors that are not associated
-                                    with a specific config file.
+                                  description: |-
+                                    sourcePath is the repo-relative slash path to where the config is defined.
+                                    This field may be empty for errors that are not associated with a specific
+                                    config file.
                                   type: string
                               type: object
                             type: array
@@ -1809,28 +1869,31 @@ spec:
                   type: object
                 type: array
               lastSyncedCommit:
-                description: lastSyncedCommit describes the most recent hash that
-                  is successfully synced. It can be a git commit hash, or an OCI image
-                  digest.
+                description: |-
+                  lastSyncedCommit describes the most recent hash that is successfully synced.
+                  It can be a git commit hash, or an OCI image digest.
                 type: string
               observedGeneration:
                 default: 0
-                description: observedGeneration is the most recent generation observed
-                  for the sync resource. It corresponds to the it's generation, which
-                  is updated on mutation by the API Server.
+                description: |-
+                  observedGeneration is the most recent generation observed for the sync resource.
+                  It corresponds to the it's generation, which is updated on mutation by the API Server.
                 format: int64
                 type: integer
               reconciler:
-                description: reconciler is the name of the reconciler process which
-                  corresponds to the sync resource.
+                description: |-
+                  reconciler is the name of the reconciler process which corresponds to the
+                  sync resource.
                 type: string
               rendering:
-                description: rendering contains fields describing the status of rendering
-                  resources from the source of truth.
+                description: |-
+                  rendering contains fields describing the status of rendering resources from
+                  the source of truth.
                 properties:
                   commit:
-                    description: hash of the source of truth that is rendered. It
-                      can be a git commit hash, or an OCI image digest.
+                    description: |-
+                      hash of the source of truth that is rendered.
+                      It can be a git commit hash, or an OCI image digest.
                     type: string
                   errorSummary:
                     description: errorSummary summarizes the errors encountered during
@@ -1844,24 +1907,26 @@ spec:
                         description: totalCount tracks the total number of errors.
                         type: integer
                       truncated:
-                        description: truncated indicates whether the `Errors` field
-                          includes all the errors. If `true`, the `Errors` field does
-                          not includes all the errors. If `false`, the `Errors` field
-                          includes all the errors. The size limit of a RootSync/RepoSync
-                          object is 2MiB. The status update would fail with the `ResourceExhausted`
-                          rpc error if there are too many errors.
+                        description: |-
+                          truncated indicates whether the `Errors` field includes all the errors.
+                          If `true`, the `Errors` field does not includes all the errors.
+                          If `false`, the `Errors` field includes all the errors.
+                          The size limit of a RootSync/RepoSync object is 2MiB. The status update would
+                          fail with the `ResourceExhausted` rpc error if there are too many errors.
                         type: boolean
                     type: object
                   errors:
                     description: errors is a list of any errors that occurred while
                       rendering the source of truth.
                     items:
-                      description: ConfigSyncError represents an error that occurs
-                        while parsing, applying, or remediating a resource.
+                      description: |-
+                        ConfigSyncError represents an error that occurs while parsing, applying, or
+                        remediating a resource.
                       properties:
                         code:
-                          description: code is the error code of this particular error.  Error
-                            codes are numeric strings, like "1012".
+                          description: |-
+                            code is the error code of this particular error.  Error codes are numeric strings,
+                            like "1012".
                           type: string
                         errorMessage:
                           description: errorMessage describes the error that occurred.
@@ -1874,9 +1939,9 @@ spec:
                               of a single managed resource.
                             properties:
                               gvk:
-                                description: gvk is the GroupVersionKind of the affected
-                                  K8S resource. This field may be empty for errors
-                                  that are not associated with a specific resource.
+                                description: |-
+                                  gvk is the GroupVersionKind of the affected K8S resource. This field may be
+                                  empty for errors that are not associated with a specific resource.
                                 properties:
                                   group:
                                     type: string
@@ -1890,21 +1955,21 @@ spec:
                                 - version
                                 type: object
                               name:
-                                description: name is the name of the affected K8S
-                                  resource. This field may be empty for errors that
-                                  are not associated with a specific resource.
+                                description: |-
+                                  name is the name of the affected K8S resource. This field may be empty for
+                                  errors that are not associated with a specific resource.
                                 type: string
                               namespace:
-                                description: namespace is the namespace of the affected
-                                  K8S resource. This field may be empty for errors
-                                  that are associated with a cluster-scoped resource
-                                  or not associated with a specific resource.
+                                description: |-
+                                  namespace is the namespace of the affected K8S resource. This field may be
+                                  empty for errors that are associated with a cluster-scoped resource or not
+                                  associated with a specific resource.
                                 type: string
                               sourcePath:
-                                description: sourcePath is the repo-relative slash
-                                  path to where the config is defined. This field
-                                  may be empty for errors that are not associated
-                                  with a specific config file.
+                                description: |-
+                                  sourcePath is the repo-relative slash path to where the config is defined.
+                                  This field may be empty for errors that are not associated with a specific
+                                  config file.
                                 type: string
                             type: object
                           type: array
@@ -1921,9 +1986,9 @@ spec:
                         description: branch is the git branch being fetched
                         type: string
                       dir:
-                        description: 'dir is the path within the Git repository that
-                          represents the top level of the repo to sync. Default: the
-                          root directory of the repository'
+                        description: |-
+                          dir is the path within the Git repository that represents the top level of the repo to sync.
+                          Default: the root directory of the repository
                         type: string
                       repo:
                         description: repo is the git repository URL being synced from.
@@ -1958,8 +2023,9 @@ spec:
                     - version
                     type: object
                   lastUpdate:
-                    description: lastUpdate is the timestamp of when this status was
-                      last updated by a reconciler.
+                    description: |-
+                      lastUpdate is the timestamp of when this status was last updated by a
+                      reconciler.
                     format: date-time
                     nullable: true
                     type: string
@@ -1972,9 +2038,9 @@ spec:
                       an OCI source of truth.
                     properties:
                       dir:
-                        description: 'dir is the absolute path of the directory that
-                          contains the local resources. Default: the root directory
-                          of the repository'
+                        description: |-
+                          dir is the absolute path of the directory that contains the local resources.
+                          Default: the root directory of the repository
                         type: string
                       image:
                         description: image is the OCI image repository URL for the
@@ -1986,12 +2052,14 @@ spec:
                     type: object
                 type: object
               source:
-                description: source contains fields describing the status of a *Sync's
-                  source of truth.
+                description: |-
+                  source contains fields describing the status of a *Sync's source of
+                  truth.
                 properties:
                   commit:
-                    description: hash of the source of truth that is rendered. It
-                      can be a git commit hash, or an OCI image digest.
+                    description: |-
+                      hash of the source of truth that is rendered.
+                      It can be a git commit hash, or an OCI image digest.
                     type: string
                   errorSummary:
                     description: errorSummary summarizes the errors encountered during
@@ -2005,24 +2073,26 @@ spec:
                         description: totalCount tracks the total number of errors.
                         type: integer
                       truncated:
-                        description: truncated indicates whether the `Errors` field
-                          includes all the errors. If `true`, the `Errors` field does
-                          not includes all the errors. If `false`, the `Errors` field
-                          includes all the errors. The size limit of a RootSync/RepoSync
-                          object is 2MiB. The status update would fail with the `ResourceExhausted`
-                          rpc error if there are too many errors.
+                        description: |-
+                          truncated indicates whether the `Errors` field includes all the errors.
+                          If `true`, the `Errors` field does not includes all the errors.
+                          If `false`, the `Errors` field includes all the errors.
+                          The size limit of a RootSync/RepoSync object is 2MiB. The status update would
+                          fail with the `ResourceExhausted` rpc error if there are too many errors.
                         type: boolean
                     type: object
                   errors:
                     description: errors is a list of any errors that occurred while
                       reading from the source of truth.
                     items:
-                      description: ConfigSyncError represents an error that occurs
-                        while parsing, applying, or remediating a resource.
+                      description: |-
+                        ConfigSyncError represents an error that occurs while parsing, applying, or
+                        remediating a resource.
                       properties:
                         code:
-                          description: code is the error code of this particular error.  Error
-                            codes are numeric strings, like "1012".
+                          description: |-
+                            code is the error code of this particular error.  Error codes are numeric strings,
+                            like "1012".
                           type: string
                         errorMessage:
                           description: errorMessage describes the error that occurred.
@@ -2035,9 +2105,9 @@ spec:
                               of a single managed resource.
                             properties:
                               gvk:
-                                description: gvk is the GroupVersionKind of the affected
-                                  K8S resource. This field may be empty for errors
-                                  that are not associated with a specific resource.
+                                description: |-
+                                  gvk is the GroupVersionKind of the affected K8S resource. This field may be
+                                  empty for errors that are not associated with a specific resource.
                                 properties:
                                   group:
                                     type: string
@@ -2051,21 +2121,21 @@ spec:
                                 - version
                                 type: object
                               name:
-                                description: name is the name of the affected K8S
-                                  resource. This field may be empty for errors that
-                                  are not associated with a specific resource.
+                                description: |-
+                                  name is the name of the affected K8S resource. This field may be empty for
+                                  errors that are not associated with a specific resource.
                                 type: string
                               namespace:
-                                description: namespace is the namespace of the affected
-                                  K8S resource. This field may be empty for errors
-                                  that are associated with a cluster-scoped resource
-                                  or not associated with a specific resource.
+                                description: |-
+                                  namespace is the namespace of the affected K8S resource. This field may be
+                                  empty for errors that are associated with a cluster-scoped resource or not
+                                  associated with a specific resource.
                                 type: string
                               sourcePath:
-                                description: sourcePath is the repo-relative slash
-                                  path to where the config is defined. This field
-                                  may be empty for errors that are not associated
-                                  with a specific config file.
+                                description: |-
+                                  sourcePath is the repo-relative slash path to where the config is defined.
+                                  This field may be empty for errors that are not associated with a specific
+                                  config file.
                                 type: string
                             type: object
                           type: array
@@ -2082,9 +2152,9 @@ spec:
                         description: branch is the git branch being fetched
                         type: string
                       dir:
-                        description: 'dir is the path within the Git repository that
-                          represents the top level of the repo to sync. Default: the
-                          root directory of the repository'
+                        description: |-
+                          dir is the path within the Git repository that represents the top level of the repo to sync.
+                          Default: the root directory of the repository
                         type: string
                       repo:
                         description: repo is the git repository URL being synced from.
@@ -2119,8 +2189,9 @@ spec:
                     - version
                     type: object
                   lastUpdate:
-                    description: lastUpdate is the timestamp of when this status was
-                      last updated by a reconciler.
+                    description: |-
+                      lastUpdate is the timestamp of when this status was last updated by a
+                      reconciler.
                     format: date-time
                     nullable: true
                     type: string
@@ -2129,9 +2200,9 @@ spec:
                       an OCI source of truth.
                     properties:
                       dir:
-                        description: 'dir is the absolute path of the directory that
-                          contains the local resources. Default: the root directory
-                          of the repository'
+                        description: |-
+                          dir is the absolute path of the directory that contains the local resources.
+                          Default: the root directory of the repository
                         type: string
                       image:
                         description: image is the OCI image repository URL for the
@@ -2143,12 +2214,14 @@ spec:
                     type: object
                 type: object
               sync:
-                description: sync contains fields describing the status of syncing
-                  resources from the source of truth to the cluster.
+                description: |-
+                  sync contains fields describing the status of syncing resources from the
+                  source of truth to the cluster.
                 properties:
                   commit:
-                    description: hash of the source of truth that is rendered. It
-                      can be a git commit hash, or an OCI image digest.
+                    description: |-
+                      hash of the source of truth that is rendered.
+                      It can be a git commit hash, or an OCI image digest.
                     type: string
                   errorSummary:
                     description: errorSummary summarizes the errors encountered during
@@ -2162,24 +2235,27 @@ spec:
                         description: totalCount tracks the total number of errors.
                         type: integer
                       truncated:
-                        description: truncated indicates whether the `Errors` field
-                          includes all the errors. If `true`, the `Errors` field does
-                          not includes all the errors. If `false`, the `Errors` field
-                          includes all the errors. The size limit of a RootSync/RepoSync
-                          object is 2MiB. The status update would fail with the `ResourceExhausted`
-                          rpc error if there are too many errors.
+                        description: |-
+                          truncated indicates whether the `Errors` field includes all the errors.
+                          If `true`, the `Errors` field does not includes all the errors.
+                          If `false`, the `Errors` field includes all the errors.
+                          The size limit of a RootSync/RepoSync object is 2MiB. The status update would
+                          fail with the `ResourceExhausted` rpc error if there are too many errors.
                         type: boolean
                     type: object
                   errors:
-                    description: errors is a list of any errors that occurred while
-                      applying the resources from the change indicated by Commit.
+                    description: |-
+                      errors is a list of any errors that occurred while applying the resources
+                      from the change indicated by Commit.
                     items:
-                      description: ConfigSyncError represents an error that occurs
-                        while parsing, applying, or remediating a resource.
+                      description: |-
+                        ConfigSyncError represents an error that occurs while parsing, applying, or
+                        remediating a resource.
                       properties:
                         code:
-                          description: code is the error code of this particular error.  Error
-                            codes are numeric strings, like "1012".
+                          description: |-
+                            code is the error code of this particular error.  Error codes are numeric strings,
+                            like "1012".
                           type: string
                         errorMessage:
                           description: errorMessage describes the error that occurred.
@@ -2192,9 +2268,9 @@ spec:
                               of a single managed resource.
                             properties:
                               gvk:
-                                description: gvk is the GroupVersionKind of the affected
-                                  K8S resource. This field may be empty for errors
-                                  that are not associated with a specific resource.
+                                description: |-
+                                  gvk is the GroupVersionKind of the affected K8S resource. This field may be
+                                  empty for errors that are not associated with a specific resource.
                                 properties:
                                   group:
                                     type: string
@@ -2208,21 +2284,21 @@ spec:
                                 - version
                                 type: object
                               name:
-                                description: name is the name of the affected K8S
-                                  resource. This field may be empty for errors that
-                                  are not associated with a specific resource.
+                                description: |-
+                                  name is the name of the affected K8S resource. This field may be empty for
+                                  errors that are not associated with a specific resource.
                                 type: string
                               namespace:
-                                description: namespace is the namespace of the affected
-                                  K8S resource. This field may be empty for errors
-                                  that are associated with a cluster-scoped resource
-                                  or not associated with a specific resource.
+                                description: |-
+                                  namespace is the namespace of the affected K8S resource. This field may be
+                                  empty for errors that are associated with a cluster-scoped resource or not
+                                  associated with a specific resource.
                                 type: string
                               sourcePath:
-                                description: sourcePath is the repo-relative slash
-                                  path to where the config is defined. This field
-                                  may be empty for errors that are not associated
-                                  with a specific config file.
+                                description: |-
+                                  sourcePath is the repo-relative slash path to where the config is defined.
+                                  This field may be empty for errors that are not associated with a specific
+                                  config file.
                                 type: string
                             type: object
                           type: array
@@ -2239,9 +2315,9 @@ spec:
                         description: branch is the git branch being fetched
                         type: string
                       dir:
-                        description: 'dir is the path within the Git repository that
-                          represents the top level of the repo to sync. Default: the
-                          root directory of the repository'
+                        description: |-
+                          dir is the path within the Git repository that represents the top level of the repo to sync.
+                          Default: the root directory of the repository
                         type: string
                       repo:
                         description: repo is the git repository URL being synced from.
@@ -2276,8 +2352,9 @@ spec:
                     - version
                     type: object
                   lastUpdate:
-                    description: lastUpdate is the timestamp of when this status was
-                      last updated by a reconciler.
+                    description: |-
+                      lastUpdate is the timestamp of when this status was last updated by a
+                      reconciler.
                     format: date-time
                     nullable: true
                     type: string
@@ -2286,9 +2363,9 @@ spec:
                       an OCI source of truth.
                     properties:
                       dir:
-                        description: 'dir is the absolute path of the directory that
-                          contains the local resources. Default: the root directory
-                          of the repository'
+                        description: |-
+                          dir is the absolute path of the directory that contains the local resources.
+                          Default: the root directory of the repository
                         type: string
                       image:
                         description: image is the OCI image repository URL for the

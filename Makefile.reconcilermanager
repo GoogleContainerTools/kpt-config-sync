@@ -1,6 +1,6 @@
 
 
-CONTROLLER_GEN_VERSION := v0.13.0
+CONTROLLER_GEN_VERSION := v0.15.0
 CONTROLLER_GEN := $(BIN_DIR)/controller-gen
 
 .PHONY: generate

@@ -23,4 +23,6 @@ package tools
 import (
 	// for envtest install
 	_ "sigs.k8s.io/controller-runtime/tools/setup-envtest"
+	// for checking dependency licenses
+	_ "github.com/google/go-licenses"
 )

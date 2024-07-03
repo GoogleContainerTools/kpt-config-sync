@@ -53,6 +53,9 @@ DOCKER_CLI_IMAGE := gcr.io/cloud-builders/docker:20.10.14
 # Directory containing installed go binaries.
 BIN_DIR := $(GO_DIR)/bin
 
+# Vendered. Use "go get github.com/google/go-licenses" to update.
+GO_LICENSES := $(BIN_DIR)/go-licenses
+
 ADDLICENSE_VERSION := v1.1.1
 ADDLICENSE := $(BIN_DIR)/addlicense
 
@@ -355,8 +358,21 @@ lint-bash:
 	@./scripts/lint-bash.sh
 
 .PHONY: lint-license
-lint-license: buildenv-dirs
-	./scripts/lint-license.sh
+# Lints licenses for all packages, even ones just for testing.
+lint-license: "$(GO_LICENSES)"
+	@echo "\"$(GO_LICENSES)\" check \$$(go list all)"
+	@"$(GO_LICENSES)" check $(shell go list all)
+
+"$(GO_LICENSES)": buildenv-dirs
+	GOPATH="$(GO_DIR)" go install github.com/google/go-licenses
+
+.PHONY: install-go-licenses
+# install go-licenses (user-friendly target alias)
+install-go-licenses: "$(GO_LICENSES)"
+
+.PHONY: clean-go-licenses
+clean-go-licenses:
+	@rm -rf $(GO_LICENSES)
 
 "$(ADDLICENSE)": buildenv-dirs
 	GOPATH="$(GO_DIR)" go install github.com/google/addlicense@$(ADDLICENSE_VERSION)

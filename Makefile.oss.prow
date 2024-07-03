@@ -19,10 +19,12 @@
 
 # This is the image used by the new GKE e2e jobs. This job type runs against GKE
 # clusters rather than kind, so we don't need docker in docker.
-# Note: nothing builds this, if you update the version, you will need to rebuild manually.
-# TODO: setup postsubmit job to build this image
-GKE_E2E_TAG := $(INFRA_IMAGE_PREFIX)-v1.0.0-$(shell git rev-parse --short HEAD)
+# This is published automatically by postsubmit whenever an input changes.
+GKE_E2E_TAG := $(INFRA_VERSION)-go$(GOLANG_IMAGE_VERSION)-gcloud$(GCLOUD_IMAGE_VERSION)-docker$(DOCKER_CLI_IMAGE_VERSION)
 GKE_E2E_IMAGE := $(TEST_INFRA_REGISTRY)/gke-e2e:$(GKE_E2E_TAG)
+# The gke-e2e image is also tagged with a git sha so that it can be traced
+# back to commit it was built from.
+GKE_E2E_SHA_IMAGE := $(TEST_INFRA_REGISTRY)/gke-e2e:$(INFRA_IMAGE_VERSION)
 .PHONY: build-gke-e2e
 build-gke-e2e:
 	@echo "+++ Building $(GKE_E2E_IMAGE)"
@@ -36,6 +38,8 @@ build-gke-e2e:
 .PHONY: push-gke-e2e
 push-gke-e2e:
 	@docker push $(GKE_E2E_IMAGE)
+	@docker tag $(GKE_E2E_IMAGE) $(GKE_E2E_SHA_IMAGE)
+	@docker push $(GKE_E2E_SHA_IMAGE)
 
 ###################################
 # Prow environment provisioning

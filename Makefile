@@ -38,7 +38,8 @@ GO_DIR := $(OUTPUT_DIR)/go
 
 # Base image used for all golang containers
 # Uses trusted google-built golang image
-GOLANG_IMAGE := google-go.pkg.dev/golang:1.21.11
+GOLANG_IMAGE_VERSION := 1.21.11
+GOLANG_IMAGE := google-go.pkg.dev/golang:$(GOLANG_IMAGE_VERSION)
 # Base image used for debian containers
 # When updating you can use this command: 
 # gcloud container images list-tags gcr.io/gke-release/debian-base --filter="tags:bookworm*" 
@@ -46,9 +47,11 @@ DEBIAN_BASE_IMAGE := gcr.io/gke-release/debian-base:bookworm-v1.0.3-gke.1
 # Base image used for gcloud install, primarily for test images.
 # We use -slim for a smaller base image where we can choose which components to install.
 # https://cloud.google.com/sdk/docs/downloads-docker#docker_image_options
-GCLOUD_IMAGE := gcr.io/google.com/cloudsdktool/google-cloud-cli:449.0.0-slim
+GCLOUD_IMAGE_VERSION := 449.0.0
+GCLOUD_IMAGE := gcr.io/google.com/cloudsdktool/google-cloud-cli:$(GCLOUD_IMAGE_VERSION)-slim
 # Base image used for docker cli install, primarily used for test images.
-DOCKER_CLI_IMAGE := gcr.io/cloud-builders/docker:20.10.14
+DOCKER_CLI_IMAGE_VERSION := 20.10.14
+DOCKER_CLI_IMAGE := gcr.io/cloud-builders/docker:$(DOCKER_CLI_IMAGE_VERSION)
 
 # Directory containing installed go binaries.
 BIN_DIR := $(GO_DIR)/bin
@@ -137,12 +140,20 @@ OLD_REGISTRY ?= $(REGISTRY)
 TEST_INFRA_PROJECT ?= kpt-config-sync-ci-artifacts
 TEST_INFRA_REGISTRY ?= $(LOCATION)-docker.pkg.dev/$(TEST_INFRA_PROJECT)/test-infra
 INFRA_IMAGE_PREFIX := infrastructure-public-image
+# Arbitrary semver to indicate infra versioning. Can be bumped in the future
+# if there are notable changes. Bumping this will force all infra images to
+# be re-published.
+INFRA_VERSION := v2.0.0
+INFRA_IMAGE_VERSION := $(INFRA_IMAGE_PREFIX)-$(INFRA_VERSION)-$(shell git rev-parse --short HEAD)
 
 # Docker image used for build and test. This image does not support CGO.
 # When upgrading this tag, the image will be rebuilt locally during presubmits.
 # After the change is submitted, a postsubmit job will publish the new tag.
 # There is no need to manually publish this image.
-BUILDENV_IMAGE := $(TEST_INFRA_REGISTRY)/buildenv:$(INFRA_IMAGE_PREFIX)-v0.3.3
+BUILDENV_IMAGE := $(TEST_INFRA_REGISTRY)/buildenv:$(INFRA_VERSION)-go$(GOLANG_IMAGE_VERSION)-gcloud$(GCLOUD_IMAGE_VERSION)
+# The buildenv image is also tagged with a git sha so that it can be traced
+# back to commit it was built from.
+BUILDENV_SHA_IMAGE := $(TEST_INFRA_REGISTRY)/buildenv:$(INFRA_IMAGE_VERSION)
 
 # Nomos docker images containing all binaries.
 RECONCILER_IMAGE := reconciler

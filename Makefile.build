@@ -22,6 +22,8 @@ build-buildenv: build/buildenv/Dockerfile
 push-buildenv: build-buildenv
 	@gcloud $(GCLOUD_QUIET) auth configure-docker $(firstword $(subst /, ,$(BUILDENV_IMAGE)))
 	@docker push $(BUILDENV_IMAGE)
+	@docker tag $(BUILDENV_IMAGE) $(BUILDENV_SHA_IMAGE)
+	@docker push $(BUILDENV_SHA_IMAGE)
 
 ###################################
 # Docker images
@@ -244,22 +246,28 @@ push-http-git-server:
 	@docker push $(E2E_TEST_IMAGE_HTTP_GIT_SERVER)
 
 # Used by the vulnerability scanning periodic prow job.
-VULNERABILITY_SCANNER_VERSION := $(INFRA_IMAGE_PREFIX)-v1.0.0-$(shell git rev-parse --short HEAD)
-VULNERABILITY_SCANNER_IMAGE_TAG := $(TEST_INFRA_REGISTRY)/vulnerability-scanner:$(VULNERABILITY_SCANNER_VERSION)
+VULNERABILITY_SCANNER_VERSION := $(INFRA_VERSION)-go$(GOLANG_IMAGE_VERSION)-gcloud$(GCLOUD_IMAGE_VERSION)
+VULNERABILITY_SCANNER_IMAGE := $(TEST_INFRA_REGISTRY)/vulnerability-scanner:$(VULNERABILITY_SCANNER_VERSION)
+# The vuln-scanner image is also tagged with a git sha so that it can be traced
+# back to commit it was built from.
+VULNERABILITY_SCANNER_SHA_IMAGE := $(TEST_INFRA_REGISTRY)/vulnerability-scanner:$(INFRA_IMAGE_VERSION)
 .PHONY: build-vulnerability-scanner
 build-vulnerability-scanner:
-	@echo "+++ Building $(VULNERABILITY_SCANNER_IMAGE_TAG)"
+	@echo "+++ Building $(VULNERABILITY_SCANNER_IMAGE)"
 	docker buildx build \
-		-t $(VULNERABILITY_SCANNER_IMAGE_TAG) \
+		-t $(VULNERABILITY_SCANNER_IMAGE) \
 		$(DOCKER_BUILD_ARGS) \
 		build/prow/vulnerability-scanner/
 
-# Push vulnerability-scanner image to registry. For now this is done manually.
+# Push vulnerability-scanner image to registry. This is done automatically by
+# the postsubmit whenever one of the input images changes.
 .PHONY: push-vulnerability-scanner
 push-vulnerability-scanner:
-	@echo "+++ Pushing $(VULNERABILITY_SCANNER_IMAGE_TAG)"
-	@gcloud $(GCLOUD_QUIET) auth configure-docker $(firstword $(subst /, ,$(VULNERABILITY_SCANNER_IMAGE_TAG)))
-	docker push $(VULNERABILITY_SCANNER_IMAGE_TAG)
+	@echo "+++ Pushing $(VULNERABILITY_SCANNER_IMAGE)"
+	@gcloud $(GCLOUD_QUIET) auth configure-docker $(firstword $(subst /, ,$(VULNERABILITY_SCANNER_IMAGE)))
+	docker push $(VULNERABILITY_SCANNER_IMAGE)
+	docker tag $(VULNERABILITY_SCANNER_IMAGE) $(VULNERABILITY_SCANNER_SHA_IMAGE)
+	docker push $(VULNERABILITY_SCANNER_SHA_IMAGE)
 
 .PHONY: deploy
 deploy:

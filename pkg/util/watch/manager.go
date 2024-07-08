@@ -87,8 +87,7 @@ func NewManager(mgr manager.Manager, builder ControllerBuilder) (RestartableMana
 	}
 
 	// Create a watch for errors when starting the subManager and force it to retry.
-	managerRestartSource := &source.Channel{Source: errCh}
-	if err := c.Watch(managerRestartSource, &handler.EnqueueRequestForObject{}); err != nil {
+	if err := c.Watch(source.Channel(errCh, &handler.EnqueueRequestForObject{})); err != nil {
 		return nil, fmt.Errorf("could not watch manager initialization errors in the %q controller: %w", restartControllerName, err)
 	}
 

@@ -522,9 +522,9 @@ func (r *RepoSyncReconciler) watchConfigMaps(rs *v1beta1.RepoSync) error {
 		klog.Infoln("Adding watch for ConfigMaps in namespace ", rs.Namespace)
 		ctrlr := *r.controller
 
-		if err := ctrlr.Watch(source.Kind(r.cache, withNamespace(&corev1.ConfigMap{}, rs.Namespace)),
+		if err := ctrlr.Watch(source.Kind(r.cache, withNamespace(&corev1.ConfigMap{}, rs.Namespace),
 			handler.EnqueueRequestsFromMapFunc(r.mapConfigMapToRepoSyncs),
-			predicate.ResourceVersionChangedPredicate{}); err != nil {
+			predicate.ResourceVersionChangedPredicate{})); err != nil {
 			return err
 		}
 

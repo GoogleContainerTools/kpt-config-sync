@@ -421,7 +421,7 @@ func NewRGController(mgr ctrl.Manager, channel chan event.GenericEvent, logger l
 		return err
 	}
 
-	err = c.Watch(&source.Channel{Source: channel}, handler.NewThrottler(duration))
+	err = c.Watch(source.Channel(channel, handler.NewThrottler(duration)))
 	if err != nil {
 		return err
 	}

@@ -106,7 +106,10 @@ func (c *Cache) Start(ctx context.Context) error {
 		// Start each informer
 		for gvk, informer := range c.informersByGVK {
 			klog.V(5).Infof("starting informer for %s", kinds.GVKToString(gvk))
-			go informer.Informer.Run(c.informerCtx.Done())
+			// Create a context for each informer so we can stop them independently, if needed.
+			singleCtx, singleCtxCancel := context.WithCancel(c.informerCtx)
+			informer.Stop = singleCtxCancel
+			go informer.Informer.Run(singleCtx.Done())
 		}
 
 		// Set started to true so we immediately start any informers added later.
@@ -188,6 +191,33 @@ func (c *Cache) GetInformerForKind(ctx context.Context, gvk schema.GroupVersionK
 		return nil, err
 	}
 	return entry.Informer, nil
+}
+
+// RemoveInformer removes the informer for the GroupVersionKind of the specified
+// object from the cache and stops it if it was running.
+func (c *Cache) RemoveInformer(ctx context.Context, obj client.Object) error {
+	gvk, err := kinds.Lookup(obj, c.Scheme())
+	if err != nil {
+		return err
+	}
+	return c.RemoveInformerForKind(ctx, gvk)
+}
+
+// RemoveInformerForKind removes the informer for the specific GroupVersionKind
+// from the cache and stops it if it was running.
+func (c *Cache) RemoveInformerForKind(_ context.Context, gvk schema.GroupVersionKind) error {
+	c.mux.Lock()
+	defer c.mux.Unlock()
+
+	entry, found := c.informersByGVK[gvk]
+	if found {
+		// Stop if started
+		if entry.Stop != nil {
+			entry.Stop()
+		}
+		delete(c.informersByGVK, gvk)
+	}
+	return nil
 }
 
 // IndexField adds an indexer to the underlying cache, using extraction function to get
@@ -344,6 +374,9 @@ type MapEntry struct {
 
 	// CacheReader wraps Informer and implements the CacheReader interface for a single type
 	Reader client.Reader
+
+	// Stop the informer
+	Stop func()
 }
 
 // fieldIndexName constructs the name of the index over the given field,

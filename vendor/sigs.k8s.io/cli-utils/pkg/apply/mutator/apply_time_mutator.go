@@ -229,7 +229,7 @@ func computeStatus(obj *unstructured.Unstructured) cache.ResourceStatus {
 	if err != nil {
 		if klog.V(3).Enabled() {
 			ref := mutation.ResourceReferenceFromUnstructured(obj)
-			klog.Info("failed to compute object status (%s): %d", ref, err)
+			klog.Infof("failed to compute object status (%s): %d", ref, err)
 		}
 		return cache.ResourceStatus{
 			Resource: obj,

@@ -15,13 +15,13 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
+	"k8s.io/cli-runtime/pkg/genericiooptions"
 	"k8s.io/cli-runtime/pkg/resource"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/klog/v2"
 	"k8s.io/kubectl/pkg/cmd/apply"
 	cmddelete "k8s.io/kubectl/pkg/cmd/delete"
-
 	applyerror "sigs.k8s.io/cli-utils/pkg/apply/error"
 	"sigs.k8s.io/cli-utils/pkg/apply/event"
 	"sigs.k8s.io/cli-utils/pkg/apply/filter"
@@ -193,7 +193,7 @@ func newApplyOptions(taskName string, eventChannel chan<- event.Event, serverSid
 		Overwrite:         true, // Normally set in apply.NewApplyOptions
 		OpenAPIPatch:      true, // Normally set in apply.NewApplyOptions
 		Recorder:          genericclioptions.NoopRecorder{},
-		IOStreams: genericclioptions.IOStreams{
+		IOStreams: genericiooptions.IOStreams{
 			Out:    io.Discard,
 			ErrOut: io.Discard, // TODO: Warning for no lastConfigurationAnnotation
 			// is printed directly to stderr in ApplyOptions. We

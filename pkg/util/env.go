@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"k8s.io/klog/v2"
+	"kpt.dev/configsync/cmd/nomos/util"
 )
 
 const (
@@ -59,7 +60,7 @@ func EnvInt(key string, def int) int {
 	if env := os.Getenv(key); env != "" {
 		val, err := strconv.ParseInt(env, 0, 0)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "WARNING: invalid env value (%v): using default, key=%s, val=%q, default=%d\n", err, key, env, def)
+			util.MustFprintf(os.Stderr, "WARNING: invalid env value (%v): using default, key=%s, val=%q, default=%d\n", err, key, env, def)
 			return def
 		}
 		return int(val)
@@ -73,7 +74,7 @@ func EnvFloat(key string, def float64) float64 {
 	if env := os.Getenv(key); env != "" {
 		val, err := strconv.ParseFloat(env, 64)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "WARNING: invalid env value (%v): using default, key=%s, val=%q, default=%f\n", err, key, env, def)
+			util.MustFprintf(os.Stderr, "WARNING: invalid env value (%v): using default, key=%s, val=%q, default=%f\n", err, key, env, def)
 			return def
 		}
 		return val

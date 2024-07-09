@@ -16,7 +16,6 @@ package applier
 
 import (
 	"fmt"
-	"io"
 	"strings"
 
 	"kpt.dev/configsync/pkg/core"
@@ -118,11 +117,16 @@ func (m ObjectStatusMap) Log(logger infofLogger) {
 	}
 }
 
-func writeStatus(w io.Writer, status interface{ String() string }, ids []core.ID) {
+func writeStatus(b *strings.Builder, status interface{ String() string }, ids []core.ID) {
+	var err error
 	if len(ids) == 0 {
-		fmt.Fprintf(w, "%s (%d)", status, len(ids))
+		_, err = fmt.Fprintf(b, "%s (%d)", status, len(ids))
 	} else {
-		fmt.Fprintf(w, "%s (%d): [%s]", status, len(ids), joinIDs(commaSpaceDelimiter, ids...))
+		_, err = fmt.Fprintf(b, "%s (%d): [%s]", status, len(ids), joinIDs(commaSpaceDelimiter, ids...))
+	}
+	// Builder.Write never returns an error. So this should never happen.
+	if err != nil {
+		panic(fmt.Sprintf("Failed to write status: %v", err))
 	}
 }
 

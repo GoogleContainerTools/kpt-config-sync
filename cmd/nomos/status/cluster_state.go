@@ -48,15 +48,15 @@ type ClusterState struct {
 }
 
 func (c *ClusterState) printRows(writer io.Writer) {
-	fmt.Fprintln(writer, "")
-	fmt.Fprintf(writer, "%s\n", c.Ref)
+	util.MustFprintf(writer, "\n")
+	util.MustFprintf(writer, "%s\n", c.Ref)
 	if c.status != "" || c.Error != "" {
-		fmt.Fprintf(writer, "%s%s\n", util.Indent, util.Separator)
-		fmt.Fprintf(writer, "%s%s\t%s\n", util.Indent, c.status, c.Error)
+		util.MustFprintf(writer, "%s%s\n", util.Indent, util.Separator)
+		util.MustFprintf(writer, "%s%s\t%s\n", util.Indent, c.status, c.Error)
 	}
 	for _, repo := range c.repos {
 		if name == "" || name == repo.syncName {
-			fmt.Fprintf(writer, "%s%s\n", util.Indent, util.Separator)
+			util.MustFprintf(writer, "%s%s\n", util.Indent, util.Separator)
 			repo.printRows(writer)
 		}
 	}
@@ -90,44 +90,44 @@ type RepoState struct {
 }
 
 func (r *RepoState) printRows(writer io.Writer) {
-	fmt.Fprintf(writer, "%s%s:%s\t%s\t\n", util.Indent, r.scope, r.syncName, sourceString(r.sourceType, r.git, r.oci, r.helm))
+	util.MustFprintf(writer, "%s%s:%s\t%s\t\n", util.Indent, r.scope, r.syncName, sourceString(r.sourceType, r.git, r.oci, r.helm))
 	if r.status == syncedMsg {
-		fmt.Fprintf(writer, "%s%s @ %v\t%s\t\n", util.Indent, r.status, r.lastSyncTimestamp, r.commit)
+		util.MustFprintf(writer, "%s%s @ %v\t%s\t\n", util.Indent, r.status, r.lastSyncTimestamp, r.commit)
 	} else {
-		fmt.Fprintf(writer, "%s%s\t%s\t\n", util.Indent, r.status, r.commit)
+		util.MustFprintf(writer, "%s%s\t%s\t\n", util.Indent, r.status, r.commit)
 	}
 
 	if r.errorSummary != nil && r.errorSummary.TotalCount > 0 {
 		if r.errorSummary.Truncated {
-			fmt.Fprintf(writer, "%sTotalErrorCount: %d, ErrorTruncated: %v, ErrorCountAfterTruncation: %d\n", util.Indent,
+			util.MustFprintf(writer, "%sTotalErrorCount: %d, ErrorTruncated: %v, ErrorCountAfterTruncation: %d\n", util.Indent,
 				r.errorSummary.TotalCount, r.errorSummary.Truncated, r.errorSummary.ErrorCountAfterTruncation)
 		} else {
-			fmt.Fprintf(writer, "%sTotalErrorCount: %d\n", util.Indent, r.errorSummary.TotalCount)
+			util.MustFprintf(writer, "%sTotalErrorCount: %d\n", util.Indent, r.errorSummary.TotalCount)
 		}
 	}
 
 	for _, err := range r.errors {
-		fmt.Fprintf(writer, "%sError:\t%s\t\n", util.Indent, err)
+		util.MustFprintf(writer, "%sError:\t%s\t\n", util.Indent, err)
 	}
 
 	if resourceStatus && len(r.resources) > 0 {
 		sort.Sort(byNamespaceAndType(r.resources))
-		fmt.Fprintf(writer, "%sManaged resources:\n", util.Indent)
+		util.MustFprintf(writer, "%sManaged resources:\n", util.Indent)
 		hasSourceHash := r.resources[0].SourceHash != ""
 		if !hasSourceHash {
-			fmt.Fprintf(writer, "%s\tNAMESPACE\tNAME\tSTATUS\n", util.Indent)
+			util.MustFprintf(writer, "%s\tNAMESPACE\tNAME\tSTATUS\n", util.Indent)
 		} else {
-			fmt.Fprintf(writer, "%s\tNAMESPACE\tNAME\tSTATUS\tSOURCEHASH\n", util.Indent)
+			util.MustFprintf(writer, "%s\tNAMESPACE\tNAME\tSTATUS\tSOURCEHASH\n", util.Indent)
 		}
 		for _, r := range r.resources {
 			if !hasSourceHash {
-				fmt.Fprintf(writer, "%s\t%s\t%s\t%s\n", util.Indent, r.Namespace, r.String(), r.Status)
+				util.MustFprintf(writer, "%s\t%s\t%s\t%s\n", util.Indent, r.Namespace, r.String(), r.Status)
 			} else {
-				fmt.Fprintf(writer, "%s\t%s\t%s\t%s\t%s\n", util.Indent, r.Namespace, r.String(), r.Status, r.SourceHash)
+				util.MustFprintf(writer, "%s\t%s\t%s\t%s\t%s\n", util.Indent, r.Namespace, r.String(), r.Status, r.SourceHash)
 			}
 			if len(r.Conditions) > 0 {
 				for _, condition := range r.Conditions {
-					fmt.Fprintf(writer, "%s%s%s%s%s\n", util.Indent, util.Indent, util.Indent, util.Indent, condition.Message)
+					util.MustFprintf(writer, "%s%s%s%s%s\n", util.Indent, util.Indent, util.Indent, util.Indent, condition.Message)
 				}
 			}
 		}

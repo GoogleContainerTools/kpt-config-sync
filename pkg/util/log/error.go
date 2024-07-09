@@ -24,7 +24,9 @@ import (
 // exports the error to the error file and exits the process with the exit code.
 func HandleError(log *Logger, printUsage bool, format string, a ...interface{}) {
 	s := fmt.Sprintf(format, a...)
-	fmt.Fprintln(os.Stderr, s)
+	if _, err := fmt.Fprintln(os.Stderr, s); err != nil {
+		panic(fmt.Sprintf("Failed to write error to STDERR: %v", err))
+	}
 	if printUsage {
 		flag.Usage()
 	}

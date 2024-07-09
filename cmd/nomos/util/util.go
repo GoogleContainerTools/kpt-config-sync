@@ -45,12 +45,19 @@ func MonoRepoNotice(writer io.Writer, monoRepoClusters ...string) {
 	clusterCount := len(monoRepoClusters)
 	if clusterCount != 0 {
 		if clusterCount == 1 {
-			fmt.Fprintf(writer, "%sNotice: The cluster %q is still running in the legacy mode.\n",
+			MustFprintf(writer, "%sNotice: The cluster %q is still running in the legacy mode.\n",
 				ColorYellow, monoRepoClusters[0])
 		} else {
-			fmt.Fprintf(writer, "%sNotice: The following clusters are still running in the legacy mode:\n%s%s\n",
+			MustFprintf(writer, "%sNotice: The following clusters are still running in the legacy mode:\n%s%s\n",
 				ColorYellow, Bullet, strings.Join(monoRepoClusters, "\n"+Bullet))
 		}
-		fmt.Fprintf(writer, "Run `nomos migrate` to enable multi-repo mode. It provides you with additional features and gives you the flexibility to sync to a single repository, or multiple repositories.%s\n", ColorDefault)
+		MustFprintf(writer, "Run `nomos migrate` to enable multi-repo mode. It provides you with additional features and gives you the flexibility to sync to a single repository, or multiple repositories.%s\n", ColorDefault)
+	}
+}
+
+// MustFprintf prints a formatted string to the writer and panics on error.
+func MustFprintf(w io.Writer, format string, a ...any) {
+	if _, err := fmt.Fprintf(w, format, a...); err != nil {
+		panic(fmt.Sprintf("Failed to write: %v", err))
 	}
 }

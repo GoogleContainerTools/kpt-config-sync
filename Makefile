@@ -81,7 +81,7 @@ OTELCONTRIBCOL_IMAGE_NAME := gcr.io/config-management-release/otelcontribcol:$(O
 
 # Keep KIND_VERSION in sync with the version defined in go.mod
 # When upgrading, update the node image versions at e2e/nomostest/clusters/kind.go
-KIND_VERSION := v0.20.0
+KIND_VERSION := v0.23.0
 KIND := $(BIN_DIR)/kind
 
 # crane cli version used for publishing OCI images

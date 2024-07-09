@@ -7,14 +7,13 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/spyzhov/ajson"
 	// Using gopkg.in/yaml.v3 instead of sigs.k8s.io/yaml on purpose.
 	// yaml.v3 correctly parses ints:
 	// https://github.com/kubernetes-sigs/yaml/issues/45
 	// yaml.v3 Node is also used as input to yqlib.
 	"gopkg.in/yaml.v3"
 	"k8s.io/klog/v2"
-
-	"github.com/spyzhov/ajson"
 )
 
 // Get evaluates the JSONPath expression to extract values from the input map.
@@ -28,7 +27,7 @@ func Get(obj map[string]interface{}, expression string) ([]interface{}, error) {
 		return nil, fmt.Errorf("failed to marshal input to json: %w", err)
 	}
 
-	klog.V(7).Info("jsonpath.Get input as json:\n%s", jsonBytes)
+	klog.V(7).Infof("jsonpath.Get input as json:\n%s", jsonBytes)
 
 	// parse json into an ajson node
 	root, err := ajson.Unmarshal(jsonBytes)
@@ -52,7 +51,7 @@ func Get(obj map[string]interface{}, expression string) ([]interface{}, error) {
 			return nil, fmt.Errorf("failed to marshal jsonpath result to json: %w", err)
 		}
 
-		klog.V(7).Info("jsonpath.Get output as json:\n%s", jsonBytes)
+		klog.V(7).Infof("jsonpath.Get output as json:\n%s", jsonBytes)
 
 		// parse json back into a Go primitive
 		var value interface{}
@@ -77,7 +76,7 @@ func Set(obj map[string]interface{}, expression string, value interface{}) (int,
 		return 0, fmt.Errorf("failed to marshal input to json: %w", err)
 	}
 
-	klog.V(7).Info("jsonpath.Set input as json:\n%s", jsonBytes)
+	klog.V(7).Infof("jsonpath.Set input as json:\n%s", jsonBytes)
 
 	// parse json into an ajson node
 	root, err := ajson.Unmarshal(jsonBytes)
@@ -138,7 +137,7 @@ func Set(obj map[string]interface{}, expression string, value interface{}) (int,
 		return 0, fmt.Errorf("failed to marshal jsonpath result to json: %w", err)
 	}
 
-	klog.V(7).Info("jsonpath.Set output as json:\n%s", jsonBytes)
+	klog.V(7).Infof("jsonpath.Set output as json:\n%s", jsonBytes)
 
 	// parse json back into the input map
 	err = yaml.Unmarshal(jsonBytes, &obj)

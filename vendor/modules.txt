@@ -1316,8 +1316,8 @@ k8s.io/utils/pointer
 k8s.io/utils/ptr
 k8s.io/utils/strings/slices
 k8s.io/utils/trace
-# sigs.k8s.io/cli-utils v0.35.1-0.20240504222723-227a03f4a7f9
-## explicit; go 1.20
+# sigs.k8s.io/cli-utils v0.37.2
+## explicit; go 1.22.0
 sigs.k8s.io/cli-utils/pkg/apis/actuation
 sigs.k8s.io/cli-utils/pkg/apply
 sigs.k8s.io/cli-utils/pkg/apply/cache

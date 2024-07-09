@@ -693,7 +693,7 @@ func (w *ObjectStatusReporter) newStatusCheckTaskFunc(
 	id object.ObjMetadata,
 ) taskFunc {
 	return func() {
-		klog.V(5).Infof("Re-reading object status: %s", status.ScheduleWindow, id)
+		klog.V(5).Infof("Re-reading object status: %v", id)
 		// check again
 		rs, err := w.readStatusFromCluster(ctx, id)
 		if err != nil {

@@ -34,15 +34,25 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
+const (
+	// versionTemplate is the template used when "nomos --version" is invoked.
+	// The default template outputs "nomos version <VERSION>". This just outputs
+	// "<VERSION>" for easier programmatic use.
+	versionTemplate = `{{.Version}}
+`
+)
+
 var (
 	rootCmd = &cobra.Command{
-		Use: configmanagement.CLIName,
+		Use:     configmanagement.CLIName,
+		Version: pkgversion.VERSION,
 		Short: fmt.Sprintf(
 			"Set up and manage a Anthos Configuration Management directory (version %v)", pkgversion.VERSION),
 	}
 )
 
 func init() {
+	rootCmd.SetVersionTemplate(versionTemplate)
 	rootCmd.AddCommand(initialize.Cmd)
 	rootCmd.AddCommand(hydrate.Cmd)
 	rootCmd.AddCommand(vet.Cmd)

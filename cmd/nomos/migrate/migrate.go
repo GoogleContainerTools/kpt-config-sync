@@ -112,7 +112,7 @@ var Cmd = &cobra.Command{
 			fmt.Println()
 			fmt.Println(util.Separator)
 			cs := &status.ClusterState{Ref: context}
-			if !c.IsInstalled(cmd.Context(), cs) || !c.IsConfigured(cmd.Context(), cs) {
+			if !c.IsInstalled(cmd.Context(), cs) {
 				printError(cs.Error)
 				migrationError = true
 				continue

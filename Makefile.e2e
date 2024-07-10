@@ -15,7 +15,7 @@ KIND_E2E_TIMEOUT ?= 60m
 # Configurable number of kind clusters to run the tests against.
 # A higher number will lead to a faster test execution, but may cause stability
 # issues depending on the size of the host machine.
-KIND_NUM_CLUSTERS ?= 15
+KIND_NUM_CLUSTERS ?= 10
 
 E2E_CREATE_CLUSTERS ?= "true"
 E2E_DESTROY_CLUSTERS ?= "true"

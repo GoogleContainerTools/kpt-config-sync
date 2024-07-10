@@ -47,7 +47,7 @@ func init() {
 }
 
 // GetVersionReadCloser returns a ReadCloser with the output produced by running the "nomos version" command as a string
-func GetVersionReadCloser(ctx context.Context, contexts []string) (io.ReadCloser, error) {
+func GetVersionReadCloser(ctx context.Context) (io.ReadCloser, error) {
 	r, w, _ := os.Pipe()
 	writer := util.NewWriter(w)
 	allCfgs, err := allKubectlConfigs()
@@ -55,7 +55,7 @@ func GetVersionReadCloser(ctx context.Context, contexts []string) (io.ReadCloser
 		return nil, err
 	}
 
-	versionInternal(ctx, allCfgs, writer, contexts)
+	versionInternal(ctx, allCfgs, writer)
 	err = w.Close()
 	if err != nil {
 		return nil, fmt.Errorf("failed to close version file writer with error: %w", err)
@@ -82,7 +82,7 @@ of the "nomos" client binary for debugging purposes.`,
 			cmd.SilenceUsage = true
 
 			allCfgs, err := allKubectlConfigs()
-			versionInternal(cmd.Context(), allCfgs, os.Stdout, flags.Contexts)
+			versionInternal(cmd.Context(), allCfgs, os.Stdout)
 
 			if err != nil {
 				return fmt.Errorf("unable to parse kubectl config: %w", err)
@@ -94,7 +94,7 @@ of the "nomos" client binary for debugging purposes.`,
 
 // allKubectlConfigs gets all kubectl configs, with error handling
 func allKubectlConfigs() (map[string]*rest.Config, error) {
-	allCfgs, err := restconfig.AllKubectlConfigs(flags.ClientTimeout)
+	allCfgs, err := restconfig.AllKubectlConfigs(flags.ClientTimeout, flags.Contexts)
 	if err != nil {
 		var pathErr *os.PathError
 		if errors.As(err, &pathErr) {
@@ -108,14 +108,11 @@ func allKubectlConfigs() (map[string]*rest.Config, error) {
 }
 
 // versionInternal allows stubbing out the config for tests.
-func versionInternal(ctx context.Context, configs map[string]*rest.Config, w io.Writer, contexts []string) {
+func versionInternal(ctx context.Context, configs map[string]*rest.Config, w io.Writer) {
 	// See go/nomos-cli-version-design for the output below.
-	if contexts != nil {
-		// filter by specified contexts
-		configs = filterConfigs(contexts, configs)
-		if len(configs) == 0 {
-			fmt.Print("No clusters match the specified context.\n")
-		}
+
+	if len(configs) == 0 {
+		fmt.Print("No clusters match the specified context.\n")
 	}
 
 	vs, monoRepoClusters := versions(ctx, configs)
@@ -123,20 +120,6 @@ func versionInternal(ctx context.Context, configs map[string]*rest.Config, w io.
 	util.MonoRepoNotice(w, monoRepoClusters...)
 	es := entries(vs)
 	tabulate(es, w)
-}
-
-// filterConfigs retains from all only the configs that have been selected
-// through flag use. contexts is the list of contexts to print information for.
-// If allClusters is true, contexts is ignored and information for all contexts
-// is printed.
-func filterConfigs(contexts []string, all map[string]*rest.Config) map[string]*rest.Config {
-	cfgs := make(map[string]*rest.Config)
-	for _, name := range contexts {
-		if cfg, ok := all[name]; ok {
-			cfgs[name] = cfg
-		}
-	}
-	return cfgs
 }
 
 func getImageVersion(deployment *v1.Deployment) (string, error) {

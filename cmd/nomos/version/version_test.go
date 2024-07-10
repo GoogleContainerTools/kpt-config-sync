@@ -38,14 +38,12 @@ func TestVersion(t *testing.T) {
 		objects        []runtime.Object
 		expected       []string
 		currentContext string
-		contexts       []string
 		configs        map[string]*rest.Config
 	}{
 		{
-			name:     "specify zero clusters",
-			version:  "v1.2.3",
-			contexts: []string{},
-			configs:  nil,
+			name:    "specify zero clusters",
+			version: "v1.2.3",
+			configs: nil,
 			objects: []runtime.Object{
 				&unstructured.Unstructured{
 					Object: map[string]interface{}{
@@ -123,7 +121,7 @@ func TestVersion(t *testing.T) {
 			}
 			var b strings.Builder
 			ctx := context.Background()
-			versionInternal(ctx, test.configs, &b, test.contexts)
+			versionInternal(ctx, test.configs, &b)
 			actuals := strings.Split(b.String(), "\n")
 			if diff := cmp.Diff(test.expected, actuals); diff != "" {
 				t.Errorf(diff)

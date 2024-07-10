@@ -450,14 +450,13 @@ func (c *ClusterClient) IsConfigured(ctx context.Context, cs *ClusterState) bool
 // ClusterClients returns a map of of typed clients keyed by the name of the kubeconfig context they
 // are initialized from.
 func ClusterClients(ctx context.Context, contexts []string) (map[string]*ClusterClient, error) {
-	configs, err := restconfig.AllKubectlConfigs(flags.ClientTimeout)
+	configs, err := restconfig.AllKubectlConfigs(flags.ClientTimeout, contexts)
 	if configs == nil {
 		return nil, fmt.Errorf("failed to create client configs: %w", err)
 	}
 	if err != nil {
 		fmt.Println(err)
 	}
-	configs = filterConfigs(contexts, configs)
 
 	if klog.V(4).Enabled() {
 		// Sort contexts for consistent ordering in the log
@@ -544,22 +543,6 @@ func ClusterClients(ctx context.Context, contexts []string) (map[string]*Cluster
 		fmt.Println()
 	}
 	return clientMap, nil
-}
-
-// filterConfigs returns the intersection of the given slice and map. If contexts is nil then the
-// full map is returned unfiltered.
-// TODO: dedup this with the function in version/version.go
-func filterConfigs(contexts []string, all map[string]*rest.Config) map[string]*rest.Config {
-	if contexts == nil {
-		return all
-	}
-	cfgs := make(map[string]*rest.Config)
-	for _, name := range contexts {
-		if cfg, ok := all[name]; ok {
-			cfgs[name] = cfg
-		}
-	}
-	return cfgs
 }
 
 // isReachable returns true if the given ClientSet points to a reachable cluster.

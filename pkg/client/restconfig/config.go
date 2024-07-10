@@ -91,7 +91,7 @@ func currentContextNameFromConfig() (string, error) {
 // AllKubectlConfigs creates a config for every context available in the kubeconfig. The configs are
 // mapped by context name. There is no way to detect unhealthy clusters specified by a context, so
 // timeout can be used to prevent calls to those clusters from hanging for long periods of time.
-func AllKubectlConfigs(timeout time.Duration) (map[string]*rest.Config, error) {
+func AllKubectlConfigs(timeout time.Duration, wantContexts []string) (map[string]*rest.Config, error) {
 	apiCfg, rules, err := newRawConfigWithRules()
 	if err != nil {
 		return nil, err
@@ -112,8 +112,12 @@ func AllKubectlConfigs(timeout time.Duration) (map[string]*rest.Config, error) {
 	}
 
 	var badConfigs []string
-	configs := make(map[string]*rest.Config, len(apiCfg.Contexts))
-	for ctxName := range apiCfg.Contexts {
+	// Filter out contexts we are not interested in before creating all rest configs.
+	// UpdateQPS makes an API call, which can make this expensive to perform on
+	// all clusters in the kubeconfig.
+	contexts := filterContexts(wantContexts, apiCfg.Contexts)
+	configs := make(map[string]*rest.Config)
+	for ctxName := range contexts {
 		cfg := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 			rules, &clientcmd.ConfigOverrides{CurrentContext: ctxName})
 		restCfg, err2 := cfg.ClientConfig()
@@ -134,4 +138,17 @@ func AllKubectlConfigs(timeout time.Duration) (map[string]*rest.Config, error) {
 		return configs, fmt.Errorf("failed to build configs:\n%s", strings.Join(badConfigs, "\n"))
 	}
 	return configs, nil
+}
+
+func filterContexts(wantContexts []string, contexts map[string]*clientcmdapi.Context) map[string]*clientcmdapi.Context {
+	filteredContexts := make(map[string]*clientcmdapi.Context)
+	if wantContexts == nil {
+		return contexts
+	}
+	for _, ctxName := range wantContexts {
+		if context, ok := contexts[ctxName]; ok {
+			filteredContexts[ctxName] = context
+		}
+	}
+	return filteredContexts
 }

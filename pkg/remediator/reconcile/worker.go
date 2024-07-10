@@ -99,9 +99,29 @@ func (w *Worker) process(ctx context.Context, obj client.Object) error {
 	id := core.IDOf(obj)
 	var toRemediate client.Object
 	if queue.WasDeleted(ctx, obj) {
-		// Passing a nil Object to the reconciler signals that the accompanying ID
-		// is for an Object that was deleted.
-		toRemediate = nil
+		// Unwrap deleted object
+		prevObj := obj.(*queue.Deleted).Object
+		// Get object from cluster to confirm deletion.
+		// This is required because delete events always include the previous
+		// object state, even if the object wasn't actually deleted, which can
+		// happen when a selected label is removed.
+		latestObj, err := w.getObject(ctx, prevObj)
+		if err != nil {
+			// Failed to confirm object state. Enqueue for retry.
+			w.objectQueue.Retry(obj)
+			return fmt.Errorf("failed to remediate %q: %w", id, err)
+		}
+		if queue.WasDeleted(ctx, latestObj) {
+			// Confirmed not on the server.
+			// Passing a nil Object to the reconciler signals that the
+			// accompanying ID is for an Object that was deleted.
+			toRemediate = nil
+		} else {
+			// Not actually deleted, or if it was then it's since been recreated.
+			// Pass the latest Object state to the reconciler to handle as if
+			// in response to an update event.
+			toRemediate = latestObj
+		}
 	} else {
 		toRemediate = obj
 	}
@@ -128,25 +148,29 @@ func (w *Worker) process(ctx context.Context, obj client.Object) error {
 }
 
 // refresh updates the cached version of the object.
-func (w *Worker) refresh(ctx context.Context, o client.Object) status.Error {
-	c := w.reconciler.GetClient()
-
-	// Try to get an updated version of the object from the cluster.
-	u := &unstructured.Unstructured{}
-	u.SetGroupVersionKind(o.GetObjectKind().GroupVersionKind())
-	err := c.Get(ctx, client.ObjectKey{Name: o.GetName(), Namespace: o.GetNamespace()}, u)
-
-	switch {
-	case apierrors.IsNotFound(err):
-		// The object no longer exists on the cluster, so mark it deleted.
-		w.objectQueue.Add(queue.MarkDeleted(ctx, o))
-	case err != nil:
-		// We encountered some other error that we don't know how to solve, so
-		// surface it.
-		return status.APIServerError(err, "failed to get updated object for worker cache", o)
-	default:
-		// Update the cached version of the resource.
-		w.objectQueue.Add(u)
+func (w *Worker) refresh(ctx context.Context, obj client.Object) status.Error {
+	obj, err := w.getObject(ctx, obj)
+	if err != nil {
+		return err
 	}
+	// Enqueue object for remediation
+	w.objectQueue.Add(obj)
 	return nil
+}
+
+// getObject updates the object from the server.
+// Wraps the supplied object with MarkDeleted, if NotFound.
+func (w *Worker) getObject(ctx context.Context, obj client.Object) (client.Object, status.Error) {
+	uObj := &unstructured.Unstructured{}
+	uObj.SetGroupVersionKind(obj.GetObjectKind().GroupVersionKind())
+	err := w.reconciler.GetClient().Get(ctx, client.ObjectKeyFromObject(obj), uObj)
+	if err != nil {
+		// If not found, wrap for processing as a deleted object
+		if apierrors.IsNotFound(err) {
+			return queue.MarkDeleted(ctx, obj), nil
+		}
+		// Surface any other errors
+		return uObj, status.APIServerError(err, "failed to get updated object for worker cache", obj)
+	}
+	return uObj, nil
 }

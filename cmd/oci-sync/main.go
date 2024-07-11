@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"os/signal"
 	"strings"
 	"time"
 
@@ -88,6 +89,7 @@ func main() {
 	}
 
 	initialSync := true
+	imageFromSpecHasDigest := oci.HasDigest(*flImage)
 	failCount := 0
 	backoff := errorBackoff()
 
@@ -115,6 +117,19 @@ func main() {
 				log.DeleteErrorFile()
 				os.Exit(0)
 			}
+			// If the image declared in spec contains a digest, then this image should
+			// never change. We can exit early to avoid redundant sync attempts.
+			if imageFromSpecHasDigest {
+				log.Info(oci.NoFurtherSyncsLog, "reason", "image was provided with digest")
+				log.DeleteErrorFile()
+				sleepForever()
+				// If oci-sync is integrated as a k8s sidecar container, then this could exit with
+				// a zero exit code. However since it's implemented as a regular container
+				// exiting here would cause a crash loop.
+				// See: https://kubernetes.io/docs/concepts/workloads/pods/sidecar-containers/
+				// TODO: Exit zero if oci-sync is integrated as a sidecar container
+				//os.Exit(0)
+			}
 			initialSync = false
 		}
 
@@ -126,4 +141,11 @@ func main() {
 		time.Sleep(util.WaitTime(*flWait))
 	}
 
+}
+
+func sleepForever() {
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	<-c
+	os.Exit(0)
 }

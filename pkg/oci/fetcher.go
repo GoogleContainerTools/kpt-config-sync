@@ -34,6 +34,12 @@ import (
 	utillog "kpt.dev/configsync/pkg/util/log"
 )
 
+const (
+	// NoFurtherSyncsLog is the log message for when no further syncs will occur.
+	// exported as a const for use in testing.
+	NoFurtherSyncsLog = "Image has been synced, and no further syncs will occur"
+)
+
 // authenticator returns an authn.Authenticator that generates access tokens.
 func authenticator(authType string, logger *utillog.Logger) (authenticator authn.Authenticator, err error) {
 	switch configsync.AuthType(authType) {
@@ -45,6 +51,12 @@ func authenticator(authType string, logger *utillog.Logger) (authenticator authn
 		utillog.HandleError(logger, true, "ERROR: unsupported authentication type %q", authType)
 	}
 	return nil, nil
+}
+
+// HasDigest returns whether the provided image name contains a digest.
+func HasDigest(imageName string) bool {
+	_, err := name.NewDigest(imageName)
+	return err == nil
 }
 
 // FetchPackage fetches the package from the OCI repository and write it to the destination.

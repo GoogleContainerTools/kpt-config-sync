@@ -24,10 +24,6 @@ linters:
   - unconvert
   - misspell
 
-linters-settings:
-  staticcheck:
-    go: "1.22"
-
 issues:
   exclude-rules:
     - linters:

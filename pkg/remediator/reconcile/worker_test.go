@@ -44,84 +44,144 @@ import (
 // TestWorker_Run_Remediates verifies that worker.Run remediates declared
 // objects added to the queue.
 func TestWorker_Run_Remediates(t *testing.T) {
-	ctx := context.Background()
-
-	existingObjs := []client.Object{
-		fake.ClusterRoleBindingObject(syncertest.ManagementEnabled),
-		fake.ClusterRoleObject(syncertest.ManagementEnabled),
+	testCases := []struct {
+		name         string
+		existingObjs []client.Object
+		declaredObjs []client.Object
+		changedObjs  []client.Object
+		eventObjs    []client.Object
+		expectedObjs []client.Object
+	}{
+		{
+			name: "revert delete",
+			existingObjs: []client.Object{
+				fake.ClusterRoleBindingObject(syncertest.ManagementEnabled),
+			},
+			declaredObjs: []client.Object{
+				fake.ClusterRoleBindingObject(syncertest.ManagementEnabled),
+			},
+			changedObjs: []client.Object{
+				queue.MarkDeleted(context.Background(), fake.ClusterRoleBindingObject()),
+			},
+			eventObjs: []client.Object{
+				queue.MarkDeleted(context.Background(), fake.ClusterRoleBindingObject()),
+			},
+			expectedObjs: []client.Object{
+				// TODO: Upgrade FakeClient to increment UID after deletion
+				fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+					core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
+				),
+			},
+		},
+		{
+			name: "revert watch filter label removal",
+			existingObjs: []client.Object{
+				fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+					core.Label("example-label", "example-value")),
+			},
+			declaredObjs: []client.Object{
+				fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+					core.Label("example-label", "example-value")),
+			},
+			changedObjs: []client.Object{
+				// Update object to remove label
+				fake.ClusterRoleBindingObject(syncertest.ManagementEnabled),
+			},
+			eventObjs: []client.Object{
+				// Watch server treats update to remove required label as a delete.
+				// Delete event includes previous object state.
+				queue.MarkDeleted(context.Background(),
+					fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+						core.Label("example-label", "example-value"))),
+			},
+			expectedObjs: []client.Object{
+				fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+					core.Label("example-label", "example-value"),
+					core.UID("1"), core.ResourceVersion("3"), core.Generation(1),
+				),
+			},
+		},
+		{
+			name: "revert update",
+			existingObjs: []client.Object{
+				fake.ClusterRoleObject(syncertest.ManagementEnabled),
+			},
+			declaredObjs: []client.Object{
+				fake.ClusterRoleObject(syncertest.ManagementEnabled),
+			},
+			changedObjs: []client.Object{
+				fake.ClusterRoleObject(syncertest.ManagementEnabled,
+					core.Label("new", "label")),
+			},
+			eventObjs: []client.Object{
+				fake.ClusterRoleObject(syncertest.ManagementEnabled,
+					core.Label("new", "label")),
+			},
+			expectedObjs: []client.Object{
+				// Role change should be reverted
+				fake.ClusterRoleObject(syncertest.ManagementEnabled,
+					core.UID("1"), core.ResourceVersion("3"), core.Generation(1),
+				),
+			},
+		},
 	}
-	declaredObjs := []client.Object{
-		fake.ClusterRoleBindingObject(syncertest.ManagementEnabled),
-		fake.ClusterRoleObject(syncertest.ManagementEnabled),
-	}
-	changedObjs := []client.Object{
-		queue.MarkDeleted(ctx, fake.ClusterRoleBindingObject()),
-		fake.ClusterRoleObject(syncertest.ManagementEnabled,
-			core.Label("new", "label")),
-	}
-	expectedObjs := []client.Object{
-		// CRB delete should be reverted
-		// TODO: Upgrade FakeClient to increment UID after deletion
-		fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
-			core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
-		),
-		// Role change should be reverted
-		fake.ClusterRoleObject(syncertest.ManagementEnabled,
-			core.UID("1"), core.ResourceVersion("3"), core.Generation(1),
-		),
-	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
 
-	q := queue.New("test")
-	defer q.ShutDown()
+			q := queue.New("test")
+			defer q.ShutDown()
 
-	c := testingfake.NewClient(t, core.Scheme, existingObjs...)
+			c := testingfake.NewClient(t, core.Scheme, tc.existingObjs...)
 
-	d := makeDeclared(t, randomCommitHash(), declaredObjs...)
-	w := NewWorker(declared.RootScope, configsync.RootSyncName, c.Applier(configsync.FieldManager), q, d, syncertestfake.NewFightHandler())
+			d := makeDeclared(t, randomCommitHash(), tc.declaredObjs...)
+			w := NewWorker(declared.RootScope, configsync.RootSyncName, c.Applier(configsync.FieldManager), q, d, syncertestfake.NewFightHandler())
 
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+			ctx, cancel := context.WithCancel(ctx)
+			defer cancel()
 
-	// Run worker in the background
-	doneCh := make(chan struct{})
-	go func() {
-		defer close(doneCh)
-		w.Run(ctx)
-	}()
+			// Run worker in the background
+			doneCh := make(chan struct{})
+			go func() {
+				defer close(doneCh)
+				w.Run(ctx)
+			}()
 
-	// Execute runtime changes
-	for _, obj := range changedObjs {
-		if deletedObj, ok := obj.(*queue.Deleted); ok {
-			if err := c.Delete(ctx, deletedObj.Object); err != nil {
-				t.Fatalf("Failed to delete object in fake client: %v", err)
+			// Execute runtime changes
+			for _, obj := range tc.changedObjs {
+				if deletedObj, ok := obj.(*queue.Deleted); ok {
+					if err := c.Delete(ctx, deletedObj.Object); err != nil {
+						t.Fatalf("Failed to delete object in fake client: %v", err)
+					}
+				} else {
+					if err := c.Update(ctx, obj, client.FieldOwner(testingfake.FieldManager)); err != nil {
+						t.Fatalf("Failed to update object in fake client: %v", err)
+					}
+				}
 			}
-		} else {
-			if err := c.Update(ctx, obj, client.FieldOwner(testingfake.FieldManager)); err != nil {
-				t.Fatalf("Failed to update object in fake client: %v", err)
+
+			// Simulate watch events to add the objects to the queue
+			for _, obj := range tc.eventObjs {
+				q.Add(obj)
 			}
-		}
-	}
 
-	// Simulate watch events to add the objects to the queue
-	for _, obj := range changedObjs {
-		q.Add(obj)
-	}
+			// Give the worker a few seconds to remediate
+			// TODO: use client.Watch to watch for the desired changes (requires FakeClient to impl Watch).
+			time.Sleep(2 * time.Second)
+			cancel()
 
-	// Give the worker a few seconds to remediate
-	// TODO: use client.Watch to watch for the desired changes (requires FakeClient to impl Watch).
-	time.Sleep(2 * time.Second)
-	cancel()
-
-	// Wait for worker to exit or timeout
-	timeout := time.NewTimer(5 * time.Second)
-	defer timeout.Stop()
-	select {
-	case <-timeout.C:
-		// fail
-		t.Error("Run() failed to return when context was cancelled")
-	case <-doneCh:
-		// pass
-		c.Check(t, expectedObjs...)
+			// Wait for worker to exit or timeout
+			timeout := time.NewTimer(5 * time.Second)
+			defer timeout.Stop()
+			select {
+			case <-timeout.C:
+				// fail
+				t.Error("Run() failed to return when context was cancelled")
+			case <-doneCh:
+				// pass
+				c.Check(t, tc.expectedObjs...)
+			}
+		})
 	}
 }
 

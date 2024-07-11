@@ -38,6 +38,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
@@ -45,6 +46,7 @@ import (
 	"kpt.dev/configsync/pkg/util"
 	"kpt.dev/configsync/pkg/webhook/configuration"
 	"sigs.k8s.io/cli-utils/pkg/common"
+	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -68,6 +70,18 @@ func Clean(nt *NT) error {
 		nt.T.Logf("[CLEANUP] Test environment cleanup took %v", elapsed)
 	}()
 
+	// If the reconciler-manager is running, attempt to uninstall packages.
+	// If not running, continue with more aggressive cleanup.
+	// This should help avoid deletion ordering edge cases.
+	running, err := isReconcilerManagerHealthy(nt)
+	if err != nil {
+		return err
+	}
+	if running {
+		if err := uninstallAllPackages(nt); err != nil {
+			nt.T.Errorf("[CLEANUP] failed to uninstall packages: %v", err)
+		}
+	}
 	// Delete lingering APIService, as this will cause API discovery to fail
 	if err := deleteTestAPIServices(nt); err != nil {
 		return err
@@ -124,6 +138,111 @@ func Clean(nt *NT) error {
 	}
 	// Delete namespaces with the detach annotation
 	return deleteImplicitNamespacesAndWait(nt)
+}
+
+func isReconcilerManagerHealthy(nt *NT) (bool, error) {
+	// Check if reconciler-manager is reconciled and healthy
+	nt.T.Log("[CLEANUP] checking reconciler-manager status...")
+	rmObj := &unstructured.Unstructured{}
+	rmObj.SetGroupVersionKind(kinds.Deployment())
+	if err := nt.KubeClient.Get(reconcilermanager.ManagerName, configmanagement.ControllerNamespace, rmObj); err != nil {
+		if apierrors.IsNotFound(err) || meta.IsNoMatchError(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("checking reconciler-manager status: %v", err)
+	}
+	if err := testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus)(rmObj); err != nil {
+		nt.T.Logf("[CLEANUP] reconciler-manager installed but not healthy: %v", err)
+		return false, nil
+	}
+	return true, nil
+}
+
+// uninstallAllPackages uninstalls all the unmanaged RootSyncs & RepoSyncs.
+// Assuming the managed RSyncs are managed by the unmanaged RSyncs, and all the
+// packages have deletion-propagation enabled, all the packages should be
+// uninstalled.
+func uninstallAllPackages(nt *NT) error {
+	for _, gvk := range []schema.GroupVersionKind{kinds.RepoSyncV1Beta1(), kinds.RootSyncV1Beta1()} {
+		if err := uninstallUnmanagedPackagesOfType(nt, gvk); err != nil {
+			return fmt.Errorf("uninstalling unmanged %s: %v", gvk.Kind, err)
+		}
+	}
+	return nil
+}
+
+func uninstallUnmanagedPackagesOfType(nt *NT, gvk schema.GroupVersionKind) error {
+	// Find all packages
+	nt.T.Logf("[CLEANUP] Listing %s objects...", gvk.Kind)
+	rsObjList := &unstructured.UnstructuredList{}
+	rsObjList.SetGroupVersionKind(kinds.ListGVKForItemGVK(gvk))
+	if err := nt.KubeClient.List(rsObjList, client.InNamespace(configmanagement.ControllerNamespace)); err != nil {
+		return fmt.Errorf("listing %s: %v", gvk.Kind, err)
+	}
+	// Find the unmanaged packages
+	var rsObjs []*unstructured.Unstructured
+	for _, item := range rsObjList.Items {
+		if core.GetAnnotation(&item, metadata.ResourceManagementKey) != metadata.ResourceManagementEnabled {
+			rsObjs = append(rsObjs, &item)
+		} else {
+			nt.T.Logf("[CLEANUP] Skipping deletion of managed %s object %s",
+				gvk.Kind, client.ObjectKeyFromObject(&item))
+		}
+	}
+	// Once deleted, one of the following conditions must be satisfied to continue
+	conditions := []testpredicates.Predicate{
+		testpredicates.ObjectNotFoundPredicate(nt.Scheme),
+		testpredicates.StatusEquals(nt.Scheme, kstatus.FailedStatus),
+	}
+	switch gvk {
+	case kinds.RootSyncV1Beta1():
+		conditions = append(conditions, testpredicates.HasConditionStatus(nt.Scheme,
+			string(v1beta1.RootSyncReconcilerFinalizerFailure), corev1.ConditionTrue))
+	case kinds.RepoSyncV1Beta1():
+		conditions = append(conditions, testpredicates.HasConditionStatus(nt.Scheme,
+			string(v1beta1.RepoSyncReconcilerFinalizerFailure), corev1.ConditionTrue))
+	}
+	conditions = []testpredicates.Predicate{
+		testpredicates.Or(nt.Logger, conditions...),
+	}
+	// Delete the unmanaged packages in parallel
+	nt.T.Log("[CLEANUP] Deleting unmanaged %s objects...", gvk.Kind)
+	tg := taskgroup.New()
+	for _, obj := range rsObjs {
+		nn := client.ObjectKeyFromObject(obj)
+		if !obj.GetDeletionTimestamp().IsZero() {
+			nt.T.Logf("[CLEANUP] Already terminating %s object %s ...", gvk.Kind, nn)
+		} else {
+			nt.T.Logf("[CLEANUP] Deleting %s object %s ...", gvk.Kind, nn)
+			if err := nt.KubeClient.Delete(obj, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil {
+				if apierrors.IsNotFound(err) || meta.IsNoMatchError(err) {
+					nt.T.Logf("[CLEANUP] Confirmed removal of %s object %s", gvk.Kind, nn)
+				} else {
+					// return an error, but don't prevent other deletes or waits
+					tg.Go(func() error {
+						return fmt.Errorf("unable to delete %s object %s: %w",
+							gvk.Kind, nn, err)
+					})
+				}
+				// skip waiting
+				continue
+			}
+		}
+		tg.Go(func() error {
+			nt.T.Logf("[CLEANUP] Waiting for removal or failure of %s object %s ...", gvk.Kind, nn)
+			err := nt.Watcher.WatchObject(gvk, nn.Name, nn.Namespace, conditions)
+			if err == nil {
+				nt.T.Logf("[CLEANUP] Confirmed removal of %s object %s", gvk.Kind, nn)
+			}
+			return err
+		})
+	}
+	// Wait for the unmanaged packages to be deleted or fail or timeout
+	if err := tg.Wait(); err != nil {
+		return err
+	}
+	nt.T.Logf("[CLEANUP] Successfully uninstalled all %s objects", gvk.Kind)
+	return nil
 }
 
 // deleteTestObjectsAndWait deletes all resource objects with the following constraints:

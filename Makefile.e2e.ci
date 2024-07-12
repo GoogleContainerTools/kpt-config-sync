@@ -44,21 +44,26 @@ publish-gke-e2e:
 publish-vulnerability-scanner:
 	docker manifest inspect $(VULNERABILITY_SCANNER_IMAGE) &> /dev/null || $(MAKE) build-vulnerability-scanner push-vulnerability-scanner
 
+GCS_MANIFESTS := $(GCS_BUCKET)/manifests
+GCS_BINARIES := $(GCS_BUCKET)/binaries
+
 .PHONY: publish-gcs
 publish-gcs:
-	gsutil cp $(OSS_MANIFEST_STAGING_DIR)/* $(GCS_BUCKET)
-	gsutil cp $(BIN_DIR)/darwin_amd64/nomos $(GCS_BUCKET)/darwin_amd64/nomos
-	gsutil cp $(BIN_DIR)/darwin_arm64/nomos $(GCS_BUCKET)/darwin_arm64/nomos
-	gsutil cp $(BIN_DIR)/linux_amd64/nomos $(GCS_BUCKET)/linux_amd64/nomos
-	gsutil cp $(BIN_DIR)/linux_arm64/nomos $(GCS_BUCKET)/linux_arm64/nomos
+	gsutil cp $(OSS_MANIFEST_STAGING_DIR)/* $(GCS_MANIFESTS)/oss/
+	gsutil cp $(NOMOS_MANIFEST_STAGING_DIR)/* $(GCS_MANIFESTS)/operator/
+	gsutil cp $(BIN_DIR)/darwin_amd64/nomos $(GCS_BINARIES)/darwin_amd64/nomos
+	gsutil cp $(BIN_DIR)/darwin_arm64/nomos $(GCS_BINARIES)/darwin_arm64/nomos
+	gsutil cp $(BIN_DIR)/linux_amd64/nomos $(GCS_BINARIES)/linux_amd64/nomos
+	gsutil cp $(BIN_DIR)/linux_arm64/nomos $(GCS_BINARIES)/linux_arm64/nomos
 
 .PHONY: pull-gcs
 pull-gcs: clean $(OUTPUT_DIR)
-	gsutil cp $(GCS_BUCKET)/*.yaml $(OSS_MANIFEST_STAGING_DIR)
-	gsutil cp $(GCS_BUCKET)/darwin_amd64/nomos $(BIN_DIR)/darwin_amd64/nomos
-	gsutil cp $(GCS_BUCKET)/darwin_arm64/nomos $(BIN_DIR)/darwin_arm64/nomos
-	gsutil cp $(GCS_BUCKET)/linux_amd64/nomos $(BIN_DIR)/linux_amd64/nomos
-	gsutil cp $(GCS_BUCKET)/linux_arm64/nomos $(BIN_DIR)/linux_arm64/nomos
+	gsutil cp $(GCS_MANIFESTS)/oss/*.yaml $(OSS_MANIFEST_STAGING_DIR)/
+	gsutil cp $(GCS_MANIFESTS)/operator/*.yaml $(NOMOS_MANIFEST_STAGING_DIR)/
+	gsutil cp $(GCS_BINARIES)/darwin_amd64/nomos $(BIN_DIR)/darwin_amd64/nomos
+	gsutil cp $(GCS_BINARIES)/darwin_arm64/nomos $(BIN_DIR)/darwin_arm64/nomos
+	gsutil cp $(GCS_BINARIES)/linux_amd64/nomos $(BIN_DIR)/linux_amd64/nomos
+	gsutil cp $(GCS_BINARIES)/linux_arm64/nomos $(BIN_DIR)/linux_arm64/nomos
 	$(MAKE) copy-cli
 
 .PHONY: pull-gcs-postsubmit

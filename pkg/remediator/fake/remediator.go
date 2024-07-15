@@ -29,6 +29,7 @@ import (
 type Remediator struct {
 	ManagementConflictOutput bool
 	Watches                  map[schema.GroupVersionKind]struct{}
+	AddWatchesError          status.MultiError
 	UpdateWatchesError       status.MultiError
 	Watching                 bool
 	Paused                   bool
@@ -59,6 +60,19 @@ func (r *Remediator) Pause() {
 // Resume fakes remediator.Remediator.Resume
 func (r *Remediator) Resume() {
 	r.Paused = false
+}
+
+// AddWatches fakes remediator.Remediator.AddWatches
+func (r *Remediator) AddWatches(_ context.Context, watches map[schema.GroupVersionKind]struct{}) status.MultiError {
+	r.Watching = true
+	if r.Watches == nil {
+		r.Watches = watches
+	} else {
+		for gvk := range watches {
+			r.Watches[gvk] = struct{}{}
+		}
+	}
+	return r.AddWatchesError
 }
 
 // UpdateWatches fakes remediator.Remediator.UpdateWatches

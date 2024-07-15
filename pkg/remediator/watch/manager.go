@@ -19,6 +19,7 @@ import (
 	"errors"
 	"sync"
 
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
@@ -49,6 +50,9 @@ type Manager struct {
 	// watcherFactory is the function to create a watcher.
 	watcherFactory watcherFactory
 
+	// mapper is the RESTMapper used by the watcherFactory
+	mapper meta.RESTMapper
+
 	// The following fields are guarded by the mutex.
 	mux sync.RWMutex
 	// watching is true if UpdateWatches has been called
@@ -63,18 +67,20 @@ type Manager struct {
 // Options contains options for creating a watch manager.
 type Options struct {
 	watcherFactory watcherFactory
+	mapper         meta.RESTMapper
 }
 
 // DefaultOptions return the default options with a ListerWatcherFactory built
 // from the specified REST config.
 func DefaultOptions(cfg *rest.Config) (*Options, error) {
-	factory, err := NewListerWatcherFactoryFromClient(cfg)
+	factory, err := DynamicListerWatcherFactoryFromConfig(cfg)
 	if err != nil {
 		return nil, status.APIServerError(err, "failed to build ListerWatcherFactory")
 	}
 
 	return &Options{
-		watcherFactory: watcherFactoryFromListerWatcherFactory(factory),
+		watcherFactory: watcherFactoryFromListerWatcherFactory(factory.ListerWatcher),
+		mapper:         factory.Mapper,
 	}, nil
 }
 
@@ -96,6 +102,7 @@ func NewManager(scope declared.Scope, syncName string, cfg *rest.Config,
 		resources:       decls,
 		watcherMap:      make(map[schema.GroupVersionKind]Runnable),
 		watcherFactory:  options.watcherFactory,
+		mapper:          options.mapper,
 		queue:           q,
 		conflictHandler: ch,
 	}, nil
@@ -133,6 +140,55 @@ func (m *Manager) ManagementConflict() bool {
 	return managementConflict
 }
 
+// AddWatches accepts a map of GVKs that should be watched and takes the
+// following actions:
+//   - start watchers for any GroupVersionKind that is present in the given map
+//     and not present in the current watch map.
+//
+// This function is threadsafe.
+func (m *Manager) AddWatches(ctx context.Context, gvkMap map[schema.GroupVersionKind]struct{}) status.MultiError {
+	m.mux.Lock()
+	defer m.mux.Unlock()
+	m.watching = true
+
+	klog.V(3).Infof("AddWatches(%v)", gvkMap)
+
+	var startedWatches uint64
+
+	// Start new watchers
+	var errs status.MultiError
+	for gvk := range gvkMap {
+		// Skip watchers that are already started
+		if _, isWatched := m.watcherMap[gvk]; isWatched {
+			continue
+		}
+		// Only start watcher if the resource exists.
+		// Watch will be started later by UpdateWatches, after the applier succeeds.
+		// TODO: register pending resources and start watching them when the CRD is established
+		if _, err := m.mapper.RESTMapping(gvk.GroupKind(), gvk.Version); err != nil {
+			if meta.IsNoMatchError(err) {
+				klog.Infof("Remediator skipped adding watch for resource %v: %v: resource watch will be started after apply is successful", gvk, err)
+				continue
+			}
+			errs = status.Append(errs, status.APIServerErrorWrap(err))
+			continue
+		}
+		// We don't have a watcher for this type, so add a watcher for it.
+		if err := m.startWatcher(ctx, gvk); err != nil {
+			errs = status.Append(errs, err)
+			continue
+		}
+		startedWatches++
+	}
+
+	if startedWatches > 0 {
+		klog.Infof("The remediator made new progress: started %d new watches", startedWatches)
+	} else {
+		klog.V(4).Infof("The remediator made no new progress")
+	}
+	return errs
+}
+
 // UpdateWatches accepts a map of GVKs that should be watched and takes the
 // following actions:
 //   - stop watchers for any GroupVersionKind that is not present in the given
@@ -164,13 +220,22 @@ func (m *Manager) UpdateWatches(ctx context.Context, gvkMap map[schema.GroupVers
 	// Start new watchers
 	var errs status.MultiError
 	for gvk := range gvkMap {
-		if _, isWatched := m.watcherMap[gvk]; !isWatched {
-			// We don't have a watcher for this type, so add a watcher for it.
-			if err := m.startWatcher(ctx, gvk); err != nil {
-				errs = status.Append(errs, err)
-			}
-			startedWatches++
+		// Skip watchers that are already started
+		if _, isWatched := m.watcherMap[gvk]; isWatched {
+			continue
 		}
+		// Only start watcher if the resource exists.
+		// All resources should exist and be established by now. If not, error.
+		if _, err := m.mapper.RESTMapping(gvk.GroupKind(), gvk.Version); err != nil {
+			errs = status.Append(errs, status.APIServerErrorWrap(err))
+			continue
+		}
+		// We don't have a watcher for this type, so add a watcher for it.
+		if err := m.startWatcher(ctx, gvk); err != nil {
+			errs = status.Append(errs, err)
+			continue
+		}
+		startedWatches++
 	}
 
 	if startedWatches > 0 || stoppedWatches > 0 {

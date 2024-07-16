@@ -20,9 +20,11 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
@@ -32,12 +34,16 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/registryproviders"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
+	"kpt.dev/configsync/pkg/oci"
+	"kpt.dev/configsync/pkg/reconcilermanager"
+	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -256,6 +262,79 @@ func isSourceType(sourceType configsync.SourceType) testpredicates.Predicate {
 			return fmt.Errorf("RepoSync sourceType %q is not equal to the expected %q", actual, sourceType)
 		}
 		return nil
+	}
+}
+
+func TestOciSyncWithDigest(t *testing.T) {
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
+		ntopts.RequireOCIProvider,
+	)
+	var err error
+	// OCI image will only contain the bookinfo-admin role
+	bookinfoRole := fake.RoleObject(core.Name("bookinfo-admin"))
+	image, err := nt.BuildAndPushOCIImage(rootSyncNN, registryproviders.ImageInputObjects(nt.Scheme, bookinfoRole))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.T.Log("Create RootSync with OCI image")
+	rootSyncOCI := nt.RootSyncObjectOCI(rootSyncNN.Name, image)
+	rootSyncOCI.Spec.Oci.Period = metav1.Duration{Duration: 5 * time.Second}
+	nt.Must(nt.KubeClient.Apply(rootSyncOCI))
+	nt.Must(nt.WatchForAllSyncs(
+		nomostest.WithRootSha1Func(imageDigestFuncByDigest(image.Digest)),
+		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
+			rootSyncNN: ".",
+		}),
+	))
+
+	// Delete the remote image
+	nt.T.Log("Delete image from remote registry")
+	nt.Must(image.Delete())
+	// RootSync should fail because image can no longer be pulled
+	nt.T.Log("Wait for RootSync to have source error")
+	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
+		[]testpredicates.Predicate{testpredicates.RootSyncHasSourceError(status.SourceErrorCode, "failed to pull image")}))
+	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "failed to pull image")
+	// Specify image with digest
+	image, err = nt.BuildAndPushOCIImage(rootSyncNN, registryproviders.ImageInputObjects(nt.Scheme, bookinfoRole))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	imageWithDigest, err := image.RemoteAddressWithDigest()
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	nt.T.Log("Apply RootSync with fully specified OCI image digest")
+	rootSyncOCI = nt.RootSyncObjectOCI(rootSyncNN.Name, image)
+	rootSyncOCI.Spec.Oci.Image = imageWithDigest
+	rootSyncOCI.Spec.Oci.Period = metav1.Duration{Duration: 5 * time.Second}
+	nt.Must(nt.KubeClient.Apply(rootSyncOCI))
+	nt.Must(nt.WatchForAllSyncs(
+		nomostest.WithRootSha1Func(imageDigestFuncByDigest(image.Digest)),
+		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
+			rootSyncNN: ".",
+		}),
+	))
+	nt.T.Log("Check for log message in oci-sync container")
+	out, err := nt.Shell.Kubectl("logs", fmt.Sprintf("deployment/%s", core.RootReconcilerName(rootSyncNN.Name)),
+		"-n", configsync.ControllerNamespace, "-c", reconcilermanager.OciSync)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	if !strings.Contains(string(out), oci.NoFurtherSyncsLog) {
+		nt.T.Fatalf("expected to find log %s, got:\n%s", oci.NoFurtherSyncsLog, string(out))
+	}
+	// Delete the remote image
+	nt.T.Log("Delete image from remote registry")
+	nt.Must(image.Delete())
+	nt.T.Log("Make sure RootSync remains healthy for 30 seconds")
+	// RootSync should remain healthy as long as the Pod isn't restarted (could be flaky)
+	err = nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
+		[]testpredicates.Predicate{testpredicates.RootSyncHasSourceError(status.SourceErrorCode, "failed to pull image")},
+		testwatcher.WatchTimeout(30*time.Second)) // wait for source error to occur (it shouldn't)
+	if err == nil {
+		nt.T.Fatal("expected no source error code but found one")
 	}
 }
 

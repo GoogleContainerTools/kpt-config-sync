@@ -488,7 +488,7 @@ func (b *BugReporter) copyToZip(inputFile *os.File, zipFileName string) error {
 
 // AddNomosVersionToZip writes `nomos version` to bugreport zip file
 func (b *BugReporter) AddNomosVersionToZip(ctx context.Context) {
-	if versionRc, err := version.GetVersionReadCloser(ctx, []string{b.k8sContext}); err != nil {
+	if versionRc, err := version.GetVersionReadCloser(ctx); err != nil {
 		b.ErrorList = append(b.ErrorList, err)
 	} else if err = b.writeReadableToZip(Readable{
 		Name:       path.Join(Processed, b.k8sContext, "version.txt"),

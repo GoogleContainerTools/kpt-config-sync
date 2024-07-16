@@ -21,6 +21,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
@@ -29,6 +30,7 @@ import (
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/testerrors"
+	"sigs.k8s.io/cli-utils/pkg/testutil"
 )
 
 func fakeRunnable() Runnable {
@@ -55,7 +57,7 @@ func testRunnables(errOnType map[schema.GroupVersionKind]bool) watcherFactory {
 	}
 }
 
-func TestManager_Update(t *testing.T) {
+func TestManager_AddWatches(t *testing.T) {
 	testCases := []struct {
 		name string
 		// watcherMap is the manager's map of watchers before the test begins.
@@ -63,8 +65,9 @@ func TestManager_Update(t *testing.T) {
 		// failedWatchers is the set of watchers which, if attempted to be
 		// initialized, fail.
 		failedWatchers map[schema.GroupVersionKind]bool
-		// gvks is the map of gvks to update watches for. True/false indicates
-		// validity to establish a new watch.
+		// mappedGVKs is the list of gvks that the RESTMapper knows about
+		mappedGVKs []schema.GroupVersionKind
+		// gvks is the map of gvks to update watches for.
 		gvks map[schema.GroupVersionKind]struct{}
 		// wantWatchedTypes is the set of GVKS we want the Manager to be watching at
 		// the end of the test.
@@ -77,6 +80,7 @@ func TestManager_Update(t *testing.T) {
 			name:           "no watchers and nothing declared",
 			watcherMap:     map[schema.GroupVersionKind]Runnable{},
 			failedWatchers: map[schema.GroupVersionKind]bool{},
+			mappedGVKs:     []schema.GroupVersionKind{},
 			gvks:           map[schema.GroupVersionKind]struct{}{},
 			wantErr:        nil,
 		},
@@ -84,11 +88,18 @@ func TestManager_Update(t *testing.T) {
 		{
 			name:       "add watchers if declared",
 			watcherMap: map[schema.GroupVersionKind]Runnable{},
+			mappedGVKs: []schema.GroupVersionKind{
+				kinds.Namespace(),
+				kinds.Role(),
+			},
 			gvks: map[schema.GroupVersionKind]struct{}{
 				kinds.Namespace(): {},
 				kinds.Role():      {},
 			},
-			wantWatchedTypes: []schema.GroupVersionKind{kinds.Namespace(), kinds.Role()},
+			wantWatchedTypes: []schema.GroupVersionKind{
+				kinds.Namespace(),
+				kinds.Role(),
+			},
 		},
 		{
 			name: "keep watchers if still declared",
@@ -96,11 +107,173 @@ func TestManager_Update(t *testing.T) {
 				kinds.Namespace(): fakeRunnable(),
 				kinds.Role():      fakeRunnable(),
 			},
+			mappedGVKs: []schema.GroupVersionKind{
+				kinds.Namespace(),
+				kinds.Role(),
+			},
 			gvks: map[schema.GroupVersionKind]struct{}{
 				kinds.Namespace(): {},
 				kinds.Role():      {},
 			},
-			wantWatchedTypes: []schema.GroupVersionKind{kinds.Namespace(), kinds.Role()},
+			wantWatchedTypes: []schema.GroupVersionKind{
+				kinds.Namespace(),
+				kinds.Role(),
+			},
+		},
+		{
+			name: "do not delete watchers if nothing declared",
+			watcherMap: map[schema.GroupVersionKind]Runnable{
+				kinds.Namespace(): fakeRunnable(),
+				kinds.Role():      fakeRunnable(),
+			},
+			mappedGVKs: []schema.GroupVersionKind{},
+			gvks:       map[schema.GroupVersionKind]struct{}{},
+			wantWatchedTypes: []schema.GroupVersionKind{
+				kinds.Namespace(),
+				kinds.Role(),
+			},
+		},
+		{
+			name: "add/keep/no-delete watchers",
+			watcherMap: map[schema.GroupVersionKind]Runnable{
+				kinds.Role():        fakeRunnable(),
+				kinds.RoleBinding(): fakeRunnable(),
+			},
+			mappedGVKs: []schema.GroupVersionKind{
+				kinds.Namespace(),
+				kinds.Role(),
+				kinds.RoleBinding(),
+			},
+			gvks: map[schema.GroupVersionKind]struct{}{
+				kinds.Namespace(): {},
+				kinds.Role():      {},
+			},
+			wantWatchedTypes: []schema.GroupVersionKind{
+				kinds.Namespace(),
+				kinds.Role(),
+				kinds.RoleBinding(),
+			},
+		},
+		{
+			name:       "error on starting watcher",
+			watcherMap: map[schema.GroupVersionKind]Runnable{},
+			failedWatchers: map[schema.GroupVersionKind]bool{
+				kinds.Role(): true,
+			},
+			mappedGVKs: []schema.GroupVersionKind{
+				kinds.Namespace(),
+				kinds.Role(),
+			},
+			gvks: map[schema.GroupVersionKind]struct{}{
+				kinds.Namespace(): {},
+				kinds.Role():      {},
+			},
+			wantWatchedTypes: []schema.GroupVersionKind{
+				kinds.Namespace(),
+			},
+			wantErr: fakeError(kinds.Role()),
+		},
+		{
+			name:       "skip adding unknown resource",
+			watcherMap: map[schema.GroupVersionKind]Runnable{},
+			mappedGVKs: []schema.GroupVersionKind{
+				kinds.Namespace(),
+			},
+			gvks: map[schema.GroupVersionKind]struct{}{
+				kinds.Namespace(): {},
+				kinds.Role():      {},
+			},
+			wantWatchedTypes: []schema.GroupVersionKind{
+				kinds.Namespace(),
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeMapper := testutil.NewFakeRESTMapper(tc.mappedGVKs...)
+			options := &Options{
+				watcherFactory: testRunnables(tc.failedWatchers),
+				mapper:         fakeMapper,
+			}
+			m, err := NewManager(":test", "rs", nil, nil, &declared.Resources{}, options, fake.NewConflictHandler())
+			if err != nil {
+				t.Fatal(err)
+			}
+			m.watcherMap = tc.watcherMap
+
+			err = m.AddWatches(context.Background(), tc.gvks)
+			testerrors.AssertEqual(t, tc.wantErr, err)
+
+			if diff := cmp.Diff(tc.wantWatchedTypes, m.watchedGVKs(), cmpopts.SortSlices(sortGVKs)); diff != "" {
+				t.Error(diff)
+			}
+		})
+	}
+}
+
+func TestManager_UpdateWatches(t *testing.T) {
+	testCases := []struct {
+		name string
+		// watcherMap is the manager's map of watchers before the test begins.
+		watcherMap map[schema.GroupVersionKind]Runnable
+		// failedWatchers is the set of watchers which, if attempted to be
+		// initialized, fail.
+		failedWatchers map[schema.GroupVersionKind]bool
+		// mappedGVKs is the list of gvks that the RESTMapper knows about
+		mappedGVKs []schema.GroupVersionKind
+		// gvks is the map of gvks to update watches for.
+		gvks map[schema.GroupVersionKind]struct{}
+		// wantWatchedTypes is the set of GVKS we want the Manager to be watching at
+		// the end of the test.
+		wantWatchedTypes []schema.GroupVersionKind
+		// wantErr, if non-nil, reports that we want Update to return an error.
+		wantErr status.MultiError
+	}{
+		// Base Case.
+		{
+			name:           "no watchers and nothing declared",
+			watcherMap:     map[schema.GroupVersionKind]Runnable{},
+			failedWatchers: map[schema.GroupVersionKind]bool{},
+			mappedGVKs:     []schema.GroupVersionKind{},
+			gvks:           map[schema.GroupVersionKind]struct{}{},
+			wantErr:        nil,
+		},
+		// Watcher set mutations.
+		{
+			name:       "add watchers if declared",
+			watcherMap: map[schema.GroupVersionKind]Runnable{},
+			mappedGVKs: []schema.GroupVersionKind{
+				kinds.Namespace(),
+				kinds.Role(),
+			},
+			gvks: map[schema.GroupVersionKind]struct{}{
+				kinds.Namespace(): {},
+				kinds.Role():      {},
+			},
+			wantWatchedTypes: []schema.GroupVersionKind{
+				kinds.Namespace(),
+				kinds.Role(),
+			},
+		},
+		{
+			name: "keep watchers if still declared",
+			watcherMap: map[schema.GroupVersionKind]Runnable{
+				kinds.Namespace(): fakeRunnable(),
+				kinds.Role():      fakeRunnable(),
+			},
+			mappedGVKs: []schema.GroupVersionKind{
+				kinds.Namespace(),
+				kinds.Role(),
+			},
+			gvks: map[schema.GroupVersionKind]struct{}{
+				kinds.Namespace(): {},
+				kinds.Role():      {},
+			},
+			wantWatchedTypes: []schema.GroupVersionKind{
+				kinds.Namespace(),
+				kinds.Role(),
+			},
 		},
 		{
 			name: "delete watchers if nothing declared",
@@ -108,7 +281,8 @@ func TestManager_Update(t *testing.T) {
 				kinds.Namespace(): fakeRunnable(),
 				kinds.Role():      fakeRunnable(),
 			},
-			gvks: map[schema.GroupVersionKind]struct{}{},
+			mappedGVKs: []schema.GroupVersionKind{},
+			gvks:       map[schema.GroupVersionKind]struct{}{},
 		},
 		{
 			name: "add/keep/delete watchers",
@@ -116,32 +290,66 @@ func TestManager_Update(t *testing.T) {
 				kinds.Role():        fakeRunnable(),
 				kinds.RoleBinding(): fakeRunnable(),
 			},
+			mappedGVKs: []schema.GroupVersionKind{
+				kinds.Namespace(),
+				kinds.Role(),
+			},
 			gvks: map[schema.GroupVersionKind]struct{}{
 				kinds.Namespace(): {},
 				kinds.Role():      {},
 			},
-			wantWatchedTypes: []schema.GroupVersionKind{kinds.Namespace(), kinds.Role()},
+			wantWatchedTypes: []schema.GroupVersionKind{
+				kinds.Namespace(),
+				kinds.Role(),
+			},
 		},
-		// Error case.
 		{
 			name:       "error on starting watcher",
 			watcherMap: map[schema.GroupVersionKind]Runnable{},
 			failedWatchers: map[schema.GroupVersionKind]bool{
 				kinds.Role(): true,
 			},
+			mappedGVKs: []schema.GroupVersionKind{
+				kinds.Namespace(),
+				kinds.Role(),
+			},
 			gvks: map[schema.GroupVersionKind]struct{}{
 				kinds.Namespace(): {},
 				kinds.Role():      {},
 			},
-			wantWatchedTypes: []schema.GroupVersionKind{kinds.Namespace()},
-			wantErr:          fakeError(kinds.Role()),
+			wantWatchedTypes: []schema.GroupVersionKind{
+				kinds.Namespace(),
+			},
+			wantErr: fakeError(kinds.Role()),
+		},
+		{
+			name:       "error adding unknown resource",
+			watcherMap: map[schema.GroupVersionKind]Runnable{},
+			mappedGVKs: []schema.GroupVersionKind{
+				kinds.Namespace(),
+			},
+			gvks: map[schema.GroupVersionKind]struct{}{
+				kinds.Namespace(): {},
+				kinds.Role():      {},
+			},
+			wantWatchedTypes: []schema.GroupVersionKind{
+				kinds.Namespace(),
+			},
+			wantErr: status.APIServerErrorWrap(&meta.NoKindMatchError{
+				GroupKind: kinds.Role().GroupKind(),
+				SearchedVersions: []string{
+					kinds.Role().Version,
+				},
+			}),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			fakeMapper := testutil.NewFakeRESTMapper(tc.mappedGVKs...)
 			options := &Options{
 				watcherFactory: testRunnables(tc.failedWatchers),
+				mapper:         fakeMapper,
 			}
 			m, err := NewManager(":test", "rs", nil, nil, &declared.Resources{}, options, fake.NewConflictHandler())
 			if err != nil {

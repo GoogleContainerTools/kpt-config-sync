@@ -79,6 +79,9 @@ type Interface interface {
 	// NeedsUpdate returns true if the Remediator needs its watches to be updated
 	// (typically due to some asynchronous error that occurred).
 	NeedsUpdate() bool
+	// AddWatches starts server-side watches based upon the given map of GVKs
+	// which should be watched.
+	AddWatches(context.Context, map[schema.GroupVersionKind]struct{}) status.MultiError
 	// UpdateWatches starts and stops server-side watches based upon the given map
 	// of GVKs which should be watched.
 	UpdateWatches(context.Context, map[schema.GroupVersionKind]struct{}) status.MultiError
@@ -224,6 +227,11 @@ func (r *Remediator) Resume() {
 // NeedsUpdate implements Interface.
 func (r *Remediator) NeedsUpdate() bool {
 	return r.watchMgr.NeedsUpdate()
+}
+
+// AddWatches implements Interface.
+func (r *Remediator) AddWatches(ctx context.Context, gvks map[schema.GroupVersionKind]struct{}) status.MultiError {
+	return r.watchMgr.AddWatches(ctx, gvks)
 }
 
 // UpdateWatches implements Interface.

@@ -59,14 +59,26 @@ type ListerWatcher interface {
 // GroupVersionKind and Namespace.
 type ListerWatcherFactory func(gvk schema.GroupVersionKind, namespace string) ListerWatcher
 
-// NewListerWatcherFactoryFromClient creates a ListerWatcherFactory using a
-// dynamic client and mapper build from the specified REST config.
-func NewListerWatcherFactoryFromClient(cfg *rest.Config) (ListerWatcherFactory, error) {
+// DynamicListerWatcherFactory provides a ListerWatcher method that implements
+// the ListerWatcherFactory interface. It uses the specified DynamicClient and
+// RESTMapper.
+type DynamicListerWatcherFactory struct {
+	DynamicClient *dynamic.DynamicClient
+	Mapper        meta.RESTMapper
+}
+
+// ListerWatcher constructs a ListerWatcher for the specified GroupVersionKind
+// and Namespace.
+func (dlwf *DynamicListerWatcherFactory) ListerWatcher(gvk schema.GroupVersionKind, namespace string) ListerWatcher {
+	return NewListWatchFromClient(dlwf.DynamicClient, dlwf.Mapper, gvk, namespace)
+}
+
+// DynamicListerWatcherFactoryFromConfig constructs a DynamicListerWatcherFactory
+func DynamicListerWatcherFactoryFromConfig(cfg *rest.Config) (*DynamicListerWatcherFactory, error) {
 	dynamicClient, err := dynamic.NewForConfig(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build dynamic client: %w", err)
 	}
-
 	httpClient, err := rest.HTTPClientFor(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create HTTPClient: %w", err)
@@ -75,9 +87,9 @@ func NewListerWatcherFactoryFromClient(cfg *rest.Config) (ListerWatcherFactory, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to build mapper: %w", err)
 	}
-
-	return func(gvk schema.GroupVersionKind, namespace string) ListerWatcher {
-		return NewListWatchFromClient(dynamicClient, mapper, gvk, namespace)
+	return &DynamicListerWatcherFactory{
+		DynamicClient: dynamicClient,
+		Mapper:        mapper,
 	}, nil
 }
 

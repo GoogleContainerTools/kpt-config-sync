@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/docker"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	"kpt.dev/configsync/e2e/nomostest/testing"
@@ -113,7 +114,7 @@ func (c *KindCluster) Create() error {
 // Delete the kind cluster
 func (c *KindCluster) Delete() error {
 	c.initProvider()
-	if !c.creationSuccessful {
+	if !c.creationSuccessful || *e2e.Debug || c.T.Failed() {
 		// Since we have set retain=true, the cluster is still available even
 		// though creation did not execute successfully.
 		artifactsDir := os.Getenv("ARTIFACTS")

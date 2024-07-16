@@ -409,7 +409,8 @@ clean-helm:
 	@rm -rf $(HELM)
 
 "$(GOBIN)/kind":
-	go install sigs.k8s.io/kind@$(KIND_VERSION)
+	# Build kind with CGO disabled so it can be used in containers without C installed.
+	CGO_ENABLED=0 go install sigs.k8s.io/kind@$(KIND_VERSION)
 
 "$(KIND)": "$(GOBIN)/kind" buildenv-dirs
 	cp $(GOBIN)/kind $(KIND)

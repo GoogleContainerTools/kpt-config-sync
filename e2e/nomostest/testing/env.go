@@ -30,4 +30,12 @@ const (
 	TestInfraArtifactRegistry = ARHost + "/kpt-config-sync-ci-artifacts/test-infra"
 	// ConfigSyncTestPublicRegistry is the Config Sync config-sync-test-public registry hosted on GAR
 	ConfigSyncTestPublicRegistry = ARHost + "/kpt-config-sync-ci-artifacts/config-sync-test-public"
+	// HTTPDImage is the httpd image used by on-cluster test components
+	HTTPDImage = "httpd:2"
+	// RegistryImage is the registry image used by on-cluster test components
+	RegistryImage = "registry:2"
+	// NginxImage is the nginx image used by on-cluster test components
+	NginxImage = "nginx:1.23"
+	// PrometheusImage is the prometheus image used by on-cluster test components
+	PrometheusImage = "prom/prometheus:v2.37.6"
 )

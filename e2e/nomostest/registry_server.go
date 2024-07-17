@@ -28,6 +28,7 @@ import (
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/registryproviders"
+	"kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/testing/fake"
@@ -301,7 +302,7 @@ func registryDeployment() *appsv1.Deployment {
 				},
 				InitContainers: []v1.Container{
 					{ // bootstrap credentials for e2e testing usage
-						Image:   "httpd:2",
+						Image:   testing.HTTPDImage,
 						Name:    "httpd",
 						Command: []string{"htpasswd"},
 						// use contrived username/password for testing
@@ -313,7 +314,7 @@ func registryDeployment() *appsv1.Deployment {
 				},
 				Containers: []v1.Container{
 					{ // nginx reverse proxy for testing with token auth (username/password)
-						Image: "nginx:1.23",
+						Image: testing.NginxImage,
 						Name:  "nginx",
 						VolumeMounts: []v1.VolumeMount{
 							{
@@ -336,7 +337,7 @@ func registryDeployment() *appsv1.Deployment {
 						},
 					},
 					{ // registry server. See https://distribution.github.io/distribution/about/deploying/
-						Image: "registry:2",
+						Image: testing.RegistryImage,
 						Name:  "registry",
 						Ports: []v1.ContainerPort{ // expose port for pushing images and public registry testing
 							{ContainerPort: RegistryHTTPPort},

@@ -19,9 +19,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"kpt.dev/configsync/e2e/nomostest/docker"
+	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	"kpt.dev/configsync/e2e/nomostest/testing"
 	"sigs.k8s.io/kind/pkg/apis/config/v1alpha4"
 	"sigs.k8s.io/kind/pkg/cluster"
@@ -95,13 +97,18 @@ func (c *KindCluster) Create() error {
 	if err != nil {
 		return err
 	}
-	err = createKindCluster(c.provider, c.Name, c.KubeConfigPath, version)
-	if err == nil {
-		c.creationSuccessful = true
-	} else {
-		c.creationSuccessful = false
+	tg := taskgroup.New()
+	tg.Go(func() error {
+		return createKindCluster(c.provider, c.Name, c.KubeConfigPath, version)
+	})
+	tg.Go(func() error {
+		return pullImages()
+	})
+	if err := tg.Wait(); err != nil {
+		return err
 	}
-	return err
+	c.creationSuccessful = true
+	return sideLoadImages(c.Name)
 }
 
 // Delete the kind cluster
@@ -197,4 +204,46 @@ apiServer:
 
 	// We failed to create the cluster maxKindTries times, so fail out.
 	return err
+}
+
+var preloadImages = []string{
+	testing.HTTPDImage,
+	testing.RegistryImage,
+	testing.NginxImage,
+	testing.PrometheusImage,
+}
+
+// Pull each public image a single time on the host, and then sideload the images
+// into each kind cluster. This reduces the number of times each image is pulled
+// to avoid 429 too many requests errors from public docker registries.
+// Alternatively we may choose to host these images in a registry we control.
+func sideLoadImages(clusterName string) error {
+	for _, image := range preloadImages {
+		out, err := exec.Command("kind", "load", "docker-image", image, "--name", clusterName).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("failed to sideload image %s: %w\n%s", image, err, out)
+		}
+	}
+	return nil
+}
+
+var imagesPulled = false
+var imagePullMux sync.Mutex
+
+func pullImages() error {
+	imagePullMux.Lock()
+	defer imagePullMux.Unlock()
+
+	if imagesPulled {
+		return nil
+	}
+
+	for _, image := range preloadImages {
+		out, err := exec.Command("docker", "pull", image).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("failed to pull image %s: %w\n%s", image, err, out)
+		}
+	}
+	imagesPulled = true
+	return nil
 }

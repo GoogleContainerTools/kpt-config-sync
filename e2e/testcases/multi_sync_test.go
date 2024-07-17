@@ -574,15 +574,6 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	nt.T.Logf("Stop the admission webhook, to confirm that the remediator still reports the conflicts")
 	nomostest.StopWebhook(nt)
 
-	nt.T.Logf("The Role resource version should be changed because two reconcilers are fighting with each other")
-	err = nt.Watcher.WatchObject(kinds.Role(), "pods", testNs,
-		[]testpredicates.Predicate{
-			testpredicates.ResourceVersionNotEquals(nt.Scheme, roleResourceVersion),
-		})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-
 	// When the webhook is disabled, both RootSyncs will repeatedly try to adopt
 	// the object.
 	// This error can be reported from two sources:
@@ -591,6 +582,15 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	// Both use the phrase "declared in another repository".
 	nt.T.Logf("Both RootSyncs should still report conflicts with the webhook disabled")
 	tg = taskgroup.New()
+	// Watch the Role until it has been updated by both remediators
+	manager1 := declared.ResourceManager(declared.RootScope, configsync.RootSyncName)
+	manager2 := declared.ResourceManager(declared.RootScope, rootSync2)
+	tg.Go(func() error {
+		return nt.Watcher.WatchObject(kinds.Role(), "pods", testNs,
+			[]testpredicates.Predicate{
+				testpredicates.HasBeenManagedBy(nt.Scheme, nt.Logger, manager1, manager2),
+			})
+	})
 	// Reconciler conflict, detected by the first reconciler's applier OR reported by the second reconciler
 	tg.Go(func() error {
 		return nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,

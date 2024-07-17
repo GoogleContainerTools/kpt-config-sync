@@ -27,6 +27,11 @@ type ConflictHandler struct{}
 // AddConflictError is a fake implementation of AddConflictError of conflict.Handler.
 func (h *ConflictHandler) AddConflictError(core.ID, status.ManagementConflictError) {}
 
+// HasConflictError is a fake implementation of HasConflictError of conflict.Handler.
+func (h *ConflictHandler) HasConflictError(_ core.ID) bool {
+	return false
+}
+
 // RemoveConflictError is a fake implementation of the RemoveConflictError of conflict.Handler.
 func (h *ConflictHandler) RemoveConflictError(core.ID) {
 }

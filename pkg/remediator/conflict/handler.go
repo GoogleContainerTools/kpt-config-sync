@@ -37,6 +37,8 @@ type Handler interface {
 	ConflictErrors() []status.ManagementConflictError
 	// HasConflictErrors returns true when there are conflict errors
 	HasConflictErrors() bool
+	// HasConflictError returns true when there is a conflict for the specified object ID.
+	HasConflictError(core.ID) bool
 }
 
 // handler implements Handler.
@@ -73,6 +75,15 @@ func (h *handler) AddConflictError(id core.ID, newErr status.ManagementConflictE
 	}
 
 	h.conflictErrs.Set(id, newErr)
+}
+
+// HasConflictError returns true when there is a conflict for the specified object ID.
+func (h *handler) HasConflictError(id core.ID) bool {
+	h.mux.RLock()
+	defer h.mux.RUnlock()
+
+	_, found := h.conflictErrs.Get(id)
+	return found
 }
 
 func (h *handler) RemoveConflictError(id core.ID) {

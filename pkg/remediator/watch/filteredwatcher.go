@@ -434,8 +434,6 @@ func (w *filteredWatcher) shouldProcess(object client.Object) bool {
 
 	// Process the resource if we are the manager regardless if it is declared or not.
 	if diff.IsManager(w.scope, w.syncName, object) {
-		// TODO: Remove conflict error AFTER it has been resolved, not before.
-		w.conflictHandler.RemoveConflictError(id)
 		return true
 	}
 
@@ -458,8 +456,6 @@ func (w *filteredWatcher) shouldProcess(object client.Object) bool {
 	}
 
 	if diff.CanManage(w.scope, w.syncName, object, diff.OperationManage) {
-		// TODO: Remove conflict error AFTER it has been resolved, not before.
-		w.conflictHandler.RemoveConflictError(id)
 		return true
 	}
 

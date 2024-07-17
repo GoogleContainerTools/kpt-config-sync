@@ -19,6 +19,7 @@
 ##### CONFIG #####
 
 REPO := kpt.dev/configsync
+# Do not submit
 
 # Some of our recipes use bash syntax, so explicitly set the shell to bash.
 SHELL := /bin/bash
@@ -195,7 +196,7 @@ endif
 #
 # To turn off, for example:
 #   make DOCKER_BUILD_QUIET="" deploy
-DOCKER_BUILD_QUIET ?= --quiet
+DOCKER_BUILD_QUIET ?= --progress=plain
 
 # Suppresses gcloud output.
 GCLOUD_QUIET := --quiet

@@ -1793,17 +1793,17 @@ func TestPrependRootSyncRemediatorStatus(t *testing.T) {
 	const rootSyncName = "my-root-sync"
 	const thisManager = "this-manager"
 	const otherManager = "other-manager"
-	conflictingObject := fake.NamespaceObject("foo-ns",
-		core.Annotation(metadata.ResourceManagerKey, otherManager))
-	conflictError := status.ManagementConflictErrorWrap(conflictingObject, thisManager)
-	invertedObject := fake.NamespaceObject("foo-ns",
-		core.Annotation(metadata.ResourceManagerKey, thisManager))
-	invertedConflictError := status.ManagementConflictErrorWrap(invertedObject, otherManager)
-	kptManagementConflictError := applier.KptManagementConflictError(conflictingObject)
-	currentManagerError := conflictError.CurrentManagerError()
-	conflictingManagerError := conflictError.ConflictingManagerError()
+	conflictingObject := fake.NamespaceObject("foo-ns", core.Annotation(metadata.ResourceManagerKey, otherManager))
+	conflictAB := status.ManagementConflictErrorWrap(conflictingObject, thisManager)
+	invertedObject := fake.NamespaceObject("foo-ns", core.Annotation(metadata.ResourceManagerKey, thisManager))
+	conflictBA := status.ManagementConflictErrorWrap(invertedObject, otherManager)
+	conflictABInverted := conflictAB.Invert()
+	// KptManagementConflictError is created with the desired object, not the current live object.
+	// So its manager annotation matches the reconciler doing the applying.
+	// This is the opposite of the objects passed to ManagementConflictErrorWrap.
+	kptConflictError := applier.KptManagementConflictError(invertedObject)
 	// Assert the value of each error message to make each value clear
-	const thisManagerMessage = `KNV1060: The "this-manager" reconciler cannot manage resources declared in another repository. Remove the declaration for this resource from either the current repository, or the repository managed by "other-manager".
+	const conflictABMessage = `KNV1060: The "this-manager" reconciler detected a management conflict with the "other-manager" reconciler. Remove the object from one of the sources of truth so that the object is only managed by one reconciler.
 
 metadata.name: foo-ns
 group:
@@ -1811,7 +1811,7 @@ version: v1
 kind: Namespace
 
 For more information, see https://g.co/cloud/acm-errors#knv1060`
-	const otherManagerMessage = `KNV1060: The "other-manager" reconciler cannot manage resources declared in another repository. Remove the declaration for this resource from either the current repository, or the repository managed by "this-manager".
+	const conflictBAMessage = `KNV1060: The "other-manager" reconciler detected a management conflict with the "this-manager" reconciler. Remove the object from one of the sources of truth so that the object is only managed by one reconciler.
 
 metadata.name: foo-ns
 group:
@@ -1819,7 +1819,7 @@ version: v1
 kind: Namespace
 
 For more information, see https://g.co/cloud/acm-errors#knv1060`
-	const kptManagementConflictMessage = `KNV1060: The "other-manager" reconciler cannot manage resources declared in another repository. Remove the declaration for this resource from either the current repository, or the managed repository.
+	const kptConflictMessage = `KNV1060: The "this-manager" reconciler detected a management conflict with another reconciler. Remove the object from one of the sources of truth so that the object is only managed by one reconciler.
 
 metadata.name: foo-ns
 group:
@@ -1827,29 +1827,10 @@ version: v1
 kind: Namespace
 
 For more information, see https://g.co/cloud/acm-errors#knv1060`
-	// TODO: CurrentManagerError currently seems to print an incorrect error message
-	const currentManagerMessage = `KNV1060: The "this-manager" reconciler cannot manage resources declared in another repository. Remove the declaration for this resource from either the current repository, or the repository managed by "this-manager".
-
-metadata.name: foo-ns
-group:
-version: v1
-kind: Namespace
-
-For more information, see https://g.co/cloud/acm-errors#knv1060`
-	// TODO: ConflictingManagerError currently seems to print an incorrect error message
-	const conflictingManagerMessage = `KNV1060: The "this-manager" reconciler detects a management conflict for a resource declared in another repository. Remove the declaration for this resource from either the current repository, or the repository managed by "this-manager".
-
-metadata.name: foo-ns
-group:
-version: v1
-kind: Namespace
-
-For more information, see https://g.co/cloud/acm-errors#knv1060`
-	testutil.AssertEqual(t, thisManagerMessage, conflictError.ToCSE().ErrorMessage)
-	testutil.AssertEqual(t, currentManagerMessage, currentManagerError.ToCSE().ErrorMessage)
-	testutil.AssertEqual(t, otherManagerMessage, invertedConflictError.ToCSE().ErrorMessage)
-	testutil.AssertEqual(t, conflictingManagerMessage, conflictingManagerError.ToCSE().ErrorMessage)
-	testutil.AssertEqual(t, kptManagementConflictMessage, kptManagementConflictError.ToCSE().ErrorMessage)
+	testutil.AssertEqual(t, conflictABMessage, conflictAB.ToCSE().ErrorMessage)
+	testutil.AssertEqual(t, conflictBAMessage, conflictBA.ToCSE().ErrorMessage)
+	testutil.AssertEqual(t, kptConflictMessage, kptConflictError.ToCSE().ErrorMessage)
+	testutil.AssertEqual(t, conflictBA, conflictABInverted)
 	testCases := map[string]struct {
 		thisSyncErrors []v1beta1.ConfigSyncError
 		expectedErrors []v1beta1.ConfigSyncError
@@ -1857,60 +1838,52 @@ For more information, see https://g.co/cloud/acm-errors#knv1060`
 		"empty errors": {
 			thisSyncErrors: []v1beta1.ConfigSyncError{},
 			expectedErrors: []v1beta1.ConfigSyncError{
-				conflictError.ToCSE(),
+				conflictAB.ToCSE(),
 			},
 		},
 		"unchanged conflict error": {
 			thisSyncErrors: []v1beta1.ConfigSyncError{
-				conflictError.ToCSE(),
+				conflictAB.ToCSE(),
 			},
 			expectedErrors: []v1beta1.ConfigSyncError{
-				conflictError.ToCSE(),
+				conflictAB.ToCSE(),
 			},
 		},
-		"prepend with other error": {
+		"prepend conflict error": {
 			thisSyncErrors: []v1beta1.ConfigSyncError{
 				{ErrorMessage: "foo"},
 			},
 			expectedErrors: []v1beta1.ConfigSyncError{
-				conflictError.ToCSE(),
+				conflictAB.ToCSE(),
 				{ErrorMessage: "foo"},
 			},
 		},
-		"unchanged CurrentManagerError": {
+		"dedupe AB and BA errors": {
 			thisSyncErrors: []v1beta1.ConfigSyncError{
-				currentManagerError.ToCSE(),
+				conflictBA.ToCSE(),
 			},
 			expectedErrors: []v1beta1.ConfigSyncError{
-				currentManagerError.ToCSE(),
+				conflictBA.ToCSE(),
 			},
 		},
-		// TODO: the follow testcases document the current behavior, but probably isn't the desired behavior
+		"dedupe AB and AB inverted errors": {
+			thisSyncErrors: []v1beta1.ConfigSyncError{
+				conflictABInverted.ToCSE(),
+			},
+			expectedErrors: []v1beta1.ConfigSyncError{
+				conflictABInverted.ToCSE(),
+			},
+		},
+		// TODO: De-dupe ManagementConflictErrorWrap & KptManagementConflictError
+		// These are currently de-duped locally by the conflict handler,
+		// but not remotely by prependRootSyncRemediatorStatus.
 		"prepend KptManagementConflictError": {
 			thisSyncErrors: []v1beta1.ConfigSyncError{
-				kptManagementConflictError.ToCSE(),
+				kptConflictError.ToCSE(),
 			},
 			expectedErrors: []v1beta1.ConfigSyncError{
-				conflictError.ToCSE(),
-				kptManagementConflictError.ToCSE(),
-			},
-		},
-		"prepend inverted conflict error": {
-			thisSyncErrors: []v1beta1.ConfigSyncError{
-				invertedConflictError.ToCSE(),
-			},
-			expectedErrors: []v1beta1.ConfigSyncError{
-				conflictError.ToCSE(),
-				invertedConflictError.ToCSE(),
-			},
-		},
-		"prepend ConflictingManagerError": {
-			thisSyncErrors: []v1beta1.ConfigSyncError{
-				conflictingManagerError.ToCSE(),
-			},
-			expectedErrors: []v1beta1.ConfigSyncError{
-				conflictError.ToCSE(),
-				conflictingManagerError.ToCSE(),
+				conflictAB.ToCSE(),
+				kptConflictError.ToCSE(),
 			},
 		},
 	}
@@ -1921,7 +1894,7 @@ For more information, see https://g.co/cloud/acm-errors#knv1060`
 			fakeClient := syncertest.NewClient(t, core.Scheme, rootSync)
 			ctx := context.Background()
 			err := prependRootSyncRemediatorStatus(ctx, fakeClient, rootSyncName,
-				[]status.ManagementConflictError{conflictError}, defaultDenominator)
+				[]status.ManagementConflictError{conflictAB}, defaultDenominator)
 			require.NoError(t, err)
 			var updatedRootSync v1beta1.RootSync
 			err = fakeClient.Get(ctx, rootsync.ObjectKey(rootSyncName), &updatedRootSync)

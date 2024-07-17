@@ -28,8 +28,8 @@ import (
 func KptManagementConflictError(resource client.Object) status.Error {
 	newManager := core.GetAnnotation(resource, metadata.ResourceManagerKey)
 	return status.ManagementConflictErrorBuilder.
-		Sprintf("The %q reconciler cannot manage resources declared in another repository. "+
-			"Remove the declaration for this resource from either the current repository, or the managed repository.",
+		Sprintf("The %q reconciler detected a management conflict with another reconciler. "+
+			"Remove the object from one of the sources of truth so that the object is only managed by one reconciler.",
 			newManager).
 		BuildWithConflictingManagers(resource, newManager, conflict.UnknownManager)
 }

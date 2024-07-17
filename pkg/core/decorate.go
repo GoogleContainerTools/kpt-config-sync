@@ -14,8 +14,6 @@
 
 package core
 
-import "sigs.k8s.io/controller-runtime/pkg/client"
-
 // Annotated is the interface defined by types with annotations. Note that
 // some non-objects (such as PodTemplates) define annotations but are not objects.
 type Annotated interface {
@@ -34,7 +32,7 @@ func SetAnnotation(obj Annotated, annotation, value string) {
 }
 
 // GetAnnotation gets the annotation value on the passed annotated object for a given key.
-func GetAnnotation(obj client.Object, annotation string) string {
+func GetAnnotation(obj Annotated, annotation string) string {
 	as := obj.GetAnnotations()
 	if as == nil {
 		return ""
@@ -47,7 +45,7 @@ func GetAnnotation(obj client.Object, annotation string) string {
 }
 
 // GetLabel gets the label value on the passed object for a given key.
-func GetLabel(obj client.Object, label string) string {
+func GetLabel(obj Labeled, label string) string {
 	as := obj.GetLabels()
 	if as == nil {
 		return ""
@@ -60,7 +58,7 @@ func GetLabel(obj client.Object, label string) string {
 }
 
 // RemoveAnnotations removes the passed set of annotations from obj.
-func RemoveAnnotations(obj client.Object, annotations ...string) {
+func RemoveAnnotations(obj Annotated, annotations ...string) {
 	as := obj.GetAnnotations()
 	for _, a := range annotations {
 		delete(as, a)
@@ -69,7 +67,7 @@ func RemoveAnnotations(obj client.Object, annotations ...string) {
 }
 
 // AddAnnotations adds the specified annotations to the object.
-func AddAnnotations(obj client.Object, annotations map[string]string) {
+func AddAnnotations(obj Annotated, annotations map[string]string) {
 	existing := obj.GetAnnotations()
 	if existing == nil {
 		existing = make(map[string]string, len(annotations))

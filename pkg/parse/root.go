@@ -729,20 +729,20 @@ func prependRootSyncRemediatorStatus(ctx context.Context, c client.Client, syncN
 		return status.APIServerError(err, "failed to get RootSync: "+syncName)
 	}
 
+	// Skip updating if already reported by this reconciler or the remote reconciler (inverted)
 	var errs []v1beta1.ConfigSyncError
 	for _, conflictErr := range conflictErrs {
-		conflictCSEError := conflictErr.ToCSE()
-		conflictPairCSEError := conflictErr.CurrentManagerError().ToCSE()
+		cse := conflictErr.ToCSE()
+		invertedCSE := conflictErr.Invert().ToCSE()
 		errorFound := false
 		for _, e := range rs.Status.Sync.Errors {
-			// Dedup the same remediator conflict error.
-			if e.Code == status.ManagementConflictErrorCode && (e.ErrorMessage == conflictCSEError.ErrorMessage || e.ErrorMessage == conflictPairCSEError.ErrorMessage) {
+			if e.Code == status.ManagementConflictErrorCode && (e.ErrorMessage == cse.ErrorMessage || e.ErrorMessage == invertedCSE.ErrorMessage) {
 				errorFound = true
 				break
 			}
 		}
 		if !errorFound {
-			errs = append(errs, conflictCSEError)
+			errs = append(errs, cse)
 		}
 	}
 

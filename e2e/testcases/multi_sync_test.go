@@ -320,7 +320,7 @@ func TestConflictingDefinitions_RootToNamespace(t *testing.T) {
 	}
 
 	nt.T.Logf("The RepoSync %s reports a problem since it can't sync the declaration.", repoSyncNN)
-	nt.WaitForRepoSyncSyncError(repoSyncNN.Namespace, repoSyncNN.Name, status.ManagementConflictErrorCode, "declared in another repository", nil)
+	nt.WaitForRepoSyncSyncError(repoSyncNN.Namespace, repoSyncNN.Name, status.ManagementConflictErrorCode, "detected a management conflict", nil)
 
 	nt.T.Logf("Validate reconciler error metric is emitted from namespace reconciler %s", repoSyncNN)
 	repoSyncLabels, err := nomostest.MetricLabelsForRepoSync(nt, repoSyncNN)
@@ -439,8 +439,9 @@ func TestConflictingDefinitions_NamespaceToRoot(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.T.Logf("The RepoSync %s reports a problem since it can't sync the declaration.", testNs)
-	nt.WaitForRepoSyncSyncError(repoSyncNN.Namespace, repoSyncNN.Name, status.ManagementConflictErrorCode, "declared in another repository", nil)
+
+	nt.T.Log("The RepoSync remediator should report a conflict error")
+	nt.WaitForRepoSyncSyncError(repoSyncNN.Namespace, repoSyncNN.Name, status.ManagementConflictErrorCode, "detected a management conflict", nil)
 
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rootRoleObj)
 
@@ -579,7 +580,7 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	// This error can be reported from two sources:
 	// - `KptManagementConflictError` is returned by the applier
 	// - `ManagementConflictErrorWrap` is returned by the remediator
-	// Both use the phrase "declared in another repository".
+	// Both use the phrase "detected a management conflict".
 	nt.T.Logf("Both RootSyncs should still report conflicts with the webhook disabled")
 	tg = taskgroup.New()
 	// Watch the Role until it has been updated by both remediators
@@ -595,14 +596,14 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	tg.Go(func() error {
 		return nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
 			[]testpredicates.Predicate{
-				testpredicates.RootSyncHasSyncError(status.ManagementConflictErrorCode, "declared in another repository"),
+				testpredicates.RootSyncHasSyncError(status.ManagementConflictErrorCode, "detected a management conflict"),
 			})
 	})
 	// Reconciler conflict, detected by the second reconciler's applier OR reported by the first reconciler
 	tg.Go(func() error {
 		return nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync2, configsync.ControllerNamespace,
 			[]testpredicates.Predicate{
-				testpredicates.RootSyncHasSyncError(status.ManagementConflictErrorCode, "declared in another repository"),
+				testpredicates.RootSyncHasSyncError(status.ManagementConflictErrorCode, "detected a management conflict"),
 			})
 	})
 	if err := tg.Wait(); err != nil {
@@ -689,7 +690,7 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 	nt.Must(nt.NonRootRepos[repoSyncNN2].CommitAndPush("add conflicting pod owner role"))
 
 	nt.T.Logf("Only RepoSync %s reports the conflict error because kpt_applier won't update the resource", repoSyncNN2)
-	nt.WaitForRepoSyncSyncError(repoSyncNN2.Namespace, repoSyncNN2.Name, status.ManagementConflictErrorCode, "declared in another repository", nil)
+	nt.WaitForRepoSyncSyncError(repoSyncNN2.Namespace, repoSyncNN2.Name, status.ManagementConflictErrorCode, "detected a management conflict", nil)
 	err = nt.WatchForSync(kinds.RepoSyncV1Beta1(), repoSyncNN1.Name, repoSyncNN1.Namespace,
 		nomostest.DefaultRepoSha1Fn, nomostest.RepoSyncHasStatusSyncCommit, nil)
 	if err != nil {
@@ -704,7 +705,7 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 
 	nt.T.Logf("Stop the admission webhook, the remediator should not be affected, which still reports the conflicts")
 	nomostest.StopWebhook(nt)
-	nt.WaitForRepoSyncSyncError(repoSyncNN2.Namespace, repoSyncNN2.Name, status.ManagementConflictErrorCode, "declared in another repository", nil)
+	nt.WaitForRepoSyncSyncError(repoSyncNN2.Namespace, repoSyncNN2.Name, status.ManagementConflictErrorCode, "detected a management conflict", nil)
 	err = nt.WatchForSync(kinds.RepoSyncV1Beta1(), repoSyncNN1.Name, repoSyncNN1.Namespace,
 		nomostest.DefaultRepoSha1Fn, nomostest.RepoSyncHasStatusSyncCommit, nil)
 	if err != nil {

@@ -15,8 +15,6 @@
 package status
 
 import (
-	"fmt"
-
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
@@ -33,28 +31,24 @@ var ManagementConflictErrorBuilder = NewErrorBuilder(ManagementConflictErrorCode
 // ManagementConflictError indicates that the passed resource is illegally
 // declared in multiple repositories.
 type ManagementConflictError interface {
+	Error
+
 	// ConflictingObjectID returns the ID of the object with the management conflict.
 	ConflictingObjectID() core.ID
 	// ConflictingManager returns the annotation value of the other conflicting manager.
 	ConflictingManager() string
-	// CurrentManagerError returns the error that will be surfaced to the current manager.
-	CurrentManagerError() ManagementConflictError
-	// ConflictingManagerError returns the error that will be surfaced to the other conflicting manager.
-	ConflictingManagerError() ManagementConflictError
-	Error
-}
-
-func currentErrorMsg(newManager, currentManager string) string {
-	return fmt.Sprintf("The %q reconciler cannot manage resources declared in another repository. "+
-		"Remove the declaration for this resource from either the current repository, or the repository managed by %q.",
-		newManager, currentManager)
+	// Invert returns a copy of the error with the current and new managers
+	// flipped. This is how the error would be reported by the other reconciler.
+	Invert() ManagementConflictError
 }
 
 // ManagementConflictErrorWrap returns the ManagementConflictError.
 func ManagementConflictErrorWrap(resource client.Object, newManager string) ManagementConflictError {
 	currentManager := resource.GetAnnotations()[metadata.ResourceManagerKey]
 	return ManagementConflictErrorBuilder.
-		Sprint(currentErrorMsg(newManager, currentManager)).
+		Sprintf("The %q reconciler detected a management conflict with the %q reconciler. "+
+			"Remove the object from one of the sources of truth so that the object is only managed by one reconciler.",
+			newManager, currentManager).
 		BuildWithConflictingManagers(resource, newManager, currentManager)
 }
 
@@ -73,20 +67,6 @@ func (m *managementConflictErrorImpl) ConflictingManager() string {
 	return m.currentManager
 }
 
-func (m *managementConflictErrorImpl) CurrentManagerError() ManagementConflictError {
-	return ManagementConflictErrorBuilder.
-		Sprint(currentErrorMsg(m.newManager, m.newManager)).
-		BuildWithConflictingManagers(m.resource, m.newManager, m.currentManager)
-}
-
-func (m *managementConflictErrorImpl) ConflictingManagerError() ManagementConflictError {
-	return ManagementConflictErrorBuilder.
-		Sprintf("The %q reconciler detects a management conflict for a resource declared in another repository. "+
-			"Remove the declaration for this resource from either the current repository, or the repository managed by %q.",
-			m.newManager, m.newManager).
-		BuildWithConflictingManagers(m.resource, m.newManager, m.currentManager)
-}
-
 func (m *managementConflictErrorImpl) Cause() error {
 	return m.underlying.Cause()
 }
@@ -97,6 +77,13 @@ func (m *managementConflictErrorImpl) Error() string {
 
 func (m *managementConflictErrorImpl) Errors() []Error {
 	return []Error{m}
+}
+
+func (m *managementConflictErrorImpl) Invert() ManagementConflictError {
+	obj := m.resource.DeepCopyObject().(client.Object)
+	currentManager := core.GetAnnotation(obj, metadata.ResourceManagerKey)
+	core.SetAnnotation(obj, metadata.ResourceManagerKey, m.newManager)
+	return ManagementConflictErrorWrap(obj, currentManager)
 }
 
 func (m *managementConflictErrorImpl) ToCME() v1.ConfigManagementError {

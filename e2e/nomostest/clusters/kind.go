@@ -186,12 +186,13 @@ func createKindCluster(p *cluster.Provider, name, kcfgPath string, version KindV
 				},
 				// Enable ValidatingAdmissionWebhooks in the Kind cluster, as these
 				// are disabled by default.
+				// Also mount etcd to tmpfs for memory-backed storage.
 				KubeadmConfigPatches: []string{
 					`
-apiVersion: kubeadm.k8s.io/v1beta2
 kind: ClusterConfiguration
-metadata:
-  name: config
+etcd:
+  local:
+    dataDir: /tmp/etcd
 apiServer:
   extraArgs:
     "enable-admission-plugins": "ValidatingAdmissionWebhook"`,

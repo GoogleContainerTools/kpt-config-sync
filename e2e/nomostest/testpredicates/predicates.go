@@ -633,6 +633,42 @@ func IsManagedBy(scheme *runtime.Scheme, scope declared.Scope, syncName string) 
 	}
 }
 
+// HasBeenManagedBy validates that an object has been managed by all of the
+// specified managers, one at a time.
+func HasBeenManagedBy(scheme *runtime.Scheme, logger *testlogger.TestLogger, managers ...string) Predicate {
+	managersSeen := make(map[string]struct{}, len(managers))
+	return func(obj client.Object) error {
+		if obj == nil {
+			return ErrObjectNotFound
+		}
+		// Make sure GVK is populated (it's usually not for typed structs).
+		gvk := obj.GetObjectKind().GroupVersionKind()
+		if gvk.Empty() {
+			var err error
+			gvk, err = kinds.Lookup(obj, scheme)
+			if err != nil {
+				return err
+			}
+			obj.GetObjectKind().SetGroupVersionKind(gvk)
+		}
+		manager := core.GetAnnotation(obj, metadata.ResourceManagerKey)
+		managersSeen[manager] = struct{}{}
+		logger.Infof("%s %s update: ResourceManager: %s, ResourceVersion: %s",
+			gvk.Kind, core.ObjectNamespacedName(obj), manager, obj.GetResourceVersion())
+		var unseenManagers []string
+		for _, manager := range managers {
+			if _, found := managersSeen[manager]; !found {
+				unseenManagers = append(unseenManagers, manager)
+			}
+		}
+		if len(unseenManagers) > 0 {
+			return fmt.Errorf("waiting for %s %s to be managed by: %s",
+				gvk.Kind, core.ObjectNamespacedName(obj), strings.Join(unseenManagers, ","))
+		}
+		return nil
+	}
+}
+
 // IsNotManaged checks that the object is NOT managed by configsync.
 // Use differ.ManagedByConfigSync if you just need a boolean without errors.
 func IsNotManaged(scheme *runtime.Scheme) Predicate {

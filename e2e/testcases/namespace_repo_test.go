@@ -40,9 +40,9 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/validate/raw/validate"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -85,7 +85,7 @@ func TestNamespaceRepo_Centralized(t *testing.T) {
 		nt.T.Errorf("store service account already present: %v", err)
 	}
 
-	sa := fake.ServiceAccountObject("store", core.Namespace(bsNamespace))
+	sa := k8sobjects.ServiceAccountObject("store", core.Namespace(bsNamespace))
 	nt.Must(repo.Add("acme/sa.yaml", sa))
 	nt.Must(repo.CommitAndPush("Adding service account"))
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -206,7 +206,7 @@ func configureRBACInCentralizedMode(nt *nomostest.NT, ns string, verbs []string)
 			Verbs:     verbs,
 		},
 	}
-	rsRole := fake.RoleObject(
+	rsRole := k8sobjects.RoleObject(
 		core.Name("deployment-admin"),
 		core.Namespace(ns),
 	)
@@ -217,7 +217,7 @@ func configureRBACInCentralizedMode(nt *nomostest.NT, ns string, verbs []string)
 		Kind:     rsRole.Kind,
 		Name:     rsRole.Name,
 	}
-	rb := fake.RoleBindingObject(core.Name("syncs-repo"), core.Namespace(ns))
+	rb := k8sobjects.RoleBindingObject(core.Name("syncs-repo"), core.Namespace(ns))
 	sb := []rbacv1.Subject{
 		{
 			Kind:      "ServiceAccount",
@@ -239,7 +239,7 @@ func configureRBACInDelegatedMode(nt *nomostest.NT, ns string, verbs []string) {
 			Verbs:     verbs,
 		},
 	}
-	rsRole := fake.RoleObject(
+	rsRole := k8sobjects.RoleObject(
 		core.Name("deployment-admin"),
 		core.Namespace(ns),
 	)
@@ -263,7 +263,7 @@ func configureRBACInDelegatedMode(nt *nomostest.NT, ns string, verbs []string) {
 		Kind:     rsRole.Kind,
 		Name:     rsRole.Name,
 	}
-	rb := fake.RoleBindingObject(core.Name("syncs-repo"), core.Namespace(ns))
+	rb := k8sobjects.RoleBindingObject(core.Name("syncs-repo"), core.Namespace(ns))
 	sb := []rbacv1.Subject{
 		{
 			Kind:      "ServiceAccount",
@@ -338,7 +338,7 @@ func TestNamespaceRepo_Delegated(t *testing.T) {
 		nt.T.Errorf("store service account already present: %v", err)
 	}
 
-	sa := fake.ServiceAccountObject("store", core.Namespace(bsNamespaceRepo))
+	sa := k8sobjects.ServiceAccountObject("store", core.Namespace(bsNamespaceRepo))
 	nt.Must(nt.NonRootRepos[repoSyncNN].Add("acme/sa.yaml", sa))
 	nt.Must(nt.NonRootRepos[repoSyncNN].CommitAndPush("Adding service account"))
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -473,7 +473,7 @@ func TestManageSelfRepoSync(t *testing.T) {
 	if err := nt.KubeClient.Get(configsync.RepoSyncName, bsNamespace, rs); err != nil {
 		nt.T.Fatal(err)
 	}
-	sanitizedRs := fake.RepoSyncObjectV1Beta1(rs.Namespace, rs.Name)
+	sanitizedRs := k8sobjects.RepoSyncObjectV1Beta1(rs.Namespace, rs.Name)
 	sanitizedRs.Spec = rs.Spec
 	rsNN := nomostest.RepoSyncNN(rs.Namespace, rs.Name)
 	nt.Must(nt.NonRootRepos[rsNN].Add("acme/repo-sync.yaml", sanitizedRs))

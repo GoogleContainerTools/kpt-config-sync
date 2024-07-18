@@ -25,11 +25,11 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 func TestRootSyncSSHKnownHost(t *testing.T) {
@@ -85,7 +85,7 @@ func TestRootSyncSSHKnownHost(t *testing.T) {
 	// try syncing resource and validate
 	cmName := "configmap-test"
 	cmPath := "acme/configmap.yaml"
-	cm := fake.ConfigMapObject(core.Name(cmName))
+	cm := k8sobjects.ConfigMapObject(core.Name(cmName))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding test ConfigMap"))
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -181,7 +181,7 @@ func TestRepoSyncSSHKnownHost(t *testing.T) {
 	// try syncing resource and validate
 	cmName := "configmap-test"
 	cmPath := "acme/configmap.yaml"
-	cm := fake.ConfigMapObject(core.Name(cmName))
+	cm := k8sobjects.ConfigMapObject(core.Name(cmName))
 	nt.Must(nt.NonRootRepos[repoSyncNN].Add(cmPath, cm))
 	nt.Must(nt.NonRootRepos[repoSyncNN].CommitAndPush("Adding test ConfigMap"))
 	if err := nt.WatchForAllSyncs(); err != nil {

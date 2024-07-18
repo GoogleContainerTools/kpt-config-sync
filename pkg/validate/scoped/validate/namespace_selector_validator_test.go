@@ -19,50 +19,50 @@ import (
 	"testing"
 
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 )
 
 func TestNamespaceSelectors(t *testing.T) {
 	testCases := []struct {
 		name     string
-		objs     *objects.Scoped
+		objs     *fileobjects.Scoped
 		wantErrs status.MultiError
 	}{
 		{
 			name: "No objects",
-			objs: &objects.Scoped{},
+			objs: &fileobjects.Scoped{},
 		},
 		{
 			name: "One NamespaceSelector",
-			objs: &objects.Scoped{
+			objs: &fileobjects.Scoped{
 				Cluster: []ast.FileObject{
-					fake.NamespaceSelector(core.Name("first")),
+					k8sobjects.NamespaceSelector(core.Name("first")),
 				},
 			},
 		},
 		{
 			name: "Two NamespaceSelectors",
-			objs: &objects.Scoped{
+			objs: &fileobjects.Scoped{
 				Cluster: []ast.FileObject{
-					fake.NamespaceSelector(core.Name("first")),
-					fake.NamespaceSelector(core.Name("second")),
+					k8sobjects.NamespaceSelector(core.Name("first")),
+					k8sobjects.NamespaceSelector(core.Name("second")),
 				},
 			},
 		},
 		{
 			name: "Duplicate NamespaceSelectors",
-			objs: &objects.Scoped{
+			objs: &fileobjects.Scoped{
 				Cluster: []ast.FileObject{
-					fake.NamespaceSelector(core.Name("first")),
-					fake.NamespaceSelector(core.Name("first")),
+					k8sobjects.NamespaceSelector(core.Name("first")),
+					k8sobjects.NamespaceSelector(core.Name("first")),
 				},
 			},
-			wantErrs: nonhierarchical.SelectorMetadataNameCollisionError(kinds.NamespaceSelector().Kind, "first", fake.NamespaceSelector()),
+			wantErrs: nonhierarchical.SelectorMetadataNameCollisionError(kinds.NamespaceSelector().Kind, "first", k8sobjects.NamespaceSelector()),
 		},
 	}
 

@@ -20,13 +20,13 @@ import (
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/semantic"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // Inheritance verifies that all syncable resources in an abstract namespace
 // have a concrete Namespace as a descendant.
-func Inheritance(tree *objects.Tree) status.MultiError {
+func Inheritance(tree *fileobjects.Tree) status.MultiError {
 	_, err := validateTreeNode(tree.Tree)
 	return err
 }

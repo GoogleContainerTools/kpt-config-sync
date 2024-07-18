@@ -32,9 +32,9 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -44,12 +44,12 @@ func TestPreserveGeneratedServiceFields(t *testing.T) {
 
 	// Declare the Service's Namespace
 	ns := "autogen-fields"
-	nsObj := fake.NamespaceObject(ns)
+	nsObj := k8sobjects.NamespaceObject(ns)
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/ns.yaml", ns), nsObj))
 
 	// Declare the Service.
 	serviceName := "e2e-test-service"
-	serviceObj := fake.ServiceObject(core.Name(serviceName))
+	serviceObj := k8sobjects.ServiceObject(core.Name(serviceName))
 	// The port numbers are arbitrary - just any unused port.
 	// Don't reuse these port in other tests just in case.
 	targetPort1 := 9376
@@ -159,7 +159,7 @@ func TestPreserveGeneratedClusterRoleFields(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
 	nsViewerName := "namespace-viewer"
-	nsViewer := fake.ClusterRoleObject(core.Name(nsViewerName),
+	nsViewer := k8sobjects.ClusterRoleObject(core.Name(nsViewerName),
 		core.Label("permissions", "viewer"))
 	nsViewer.Rules = []rbacv1.PolicyRule{{
 		APIGroups: []string{""},
@@ -169,7 +169,7 @@ func TestPreserveGeneratedClusterRoleFields(t *testing.T) {
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/ns-viewer-cr.yaml", nsViewer))
 
 	rbacViewerName := "rbac-viewer"
-	rbacViewer := fake.ClusterRoleObject(core.Name(rbacViewerName),
+	rbacViewer := k8sobjects.ClusterRoleObject(core.Name(rbacViewerName),
 		core.Label("permissions", "viewer"))
 	rbacViewer.Rules = []rbacv1.PolicyRule{{
 		APIGroups: []string{rbacv1.SchemeGroupVersion.Group},
@@ -268,7 +268,7 @@ func TestPreserveLastApplied(t *testing.T) {
 
 	// Declare a ClusterRole and wait for it to sync.
 	nsViewerName := "namespace-viewer"
-	nsViewer := fake.ClusterRoleObject(core.Name(nsViewerName),
+	nsViewer := k8sobjects.ClusterRoleObject(core.Name(nsViewerName),
 		core.Label("permissions", "viewer"))
 	nsViewer.Rules = []rbacv1.PolicyRule{{
 		APIGroups: []string{""},
@@ -321,12 +321,12 @@ func TestAddUpdateDeleteLabels(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
 	ns := "crud-labels"
-	nsObj := fake.NamespaceObject(ns)
+	nsObj := k8sobjects.NamespaceObject(ns)
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/crud-labels/ns.yaml", nsObj))
 
 	cmName := "e2e-test-configmap"
 	cmPath := "acme/namespaces/crud-labels/configmap.yaml"
-	cm := fake.ConfigMapObject(core.Name(cmName))
+	cm := k8sobjects.ConfigMapObject(core.Name(cmName))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding ConfigMap with no labels to repo"))
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -388,12 +388,12 @@ func TestAddUpdateDeleteAnnotations(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
 	ns := "crud-annotations"
-	nsObj := fake.NamespaceObject(ns)
+	nsObj := k8sobjects.NamespaceObject(ns)
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/crud-annotations/ns.yaml", nsObj))
 
 	cmName := "e2e-test-configmap"
 	cmPath := "acme/namespaces/crud-annotations/configmap.yaml"
-	cmObj := fake.ConfigMapObject(core.Name(cmName))
+	cmObj := k8sobjects.ConfigMapObject(core.Name(cmName))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(cmPath, cmObj))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding ConfigMap with no annotations to repo"))
 	if err := nt.WatchForAllSyncs(); err != nil {

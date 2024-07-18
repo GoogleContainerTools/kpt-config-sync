@@ -21,24 +21,24 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/cli-utils/pkg/testutil"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func TestErrorForResourceWithResource(t *testing.T) {
 	namespace := "test-namespace"
-	namespaceObj := fake.UnstructuredObject(kinds.Namespace(),
+	namespaceObj := k8sobjects.UnstructuredObject(kinds.Namespace(),
 		core.Name(namespace))
 	namespaceObjID := core.IDOf(namespaceObj)
 
-	cmObj := fake.UnstructuredObject(kinds.ConfigMap(),
+	cmObj := k8sobjects.UnstructuredObject(kinds.ConfigMap(),
 		core.Name("test-configmap"), core.Namespace(namespace))
 	cmObjID := core.IDOf(cmObj)
 
-	anvilObj := fake.UnstructuredObject(kinds.Anvil(),
+	anvilObj := k8sobjects.UnstructuredObject(kinds.Anvil(),
 		core.Namespace(namespace), core.Name("test-anvil"),
 		core.Annotation(metadata.SourcePathAnnotationKey, "foo/anvil.yaml"))
 	anvilObjID := core.IDOf(anvilObj)

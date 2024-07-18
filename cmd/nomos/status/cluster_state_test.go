@@ -27,7 +27,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -1494,7 +1494,7 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 		{
 			name:          "[accurate status before syncing condition is supported] repo is synced",
 			gitSpec:       git,
-			resourceGroup: fake.ResourceGroupObject(core.Namespace("bookstore"), core.Name("repo-sync"), withResources()),
+			resourceGroup: k8sobjects.ResourceGroupObject(core.Namespace("bookstore"), core.Name("repo-sync"), withResources()),
 			conditions:    []v1beta1.RepoSyncCondition{reconciledCondition},
 			renderingStatus: v1beta1.RenderingStatus{
 				Git:     toGitStatus(git),
@@ -1524,7 +1524,7 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 		{
 			name:                      "[accurate status with syncing condition supported] repo is synced",
 			gitSpec:                   git,
-			resourceGroup:             fake.ResourceGroupObject(core.Namespace("bookstore"), core.Name("repo-sync"), withResourcesAndCommit("abc123")),
+			resourceGroup:             k8sobjects.ResourceGroupObject(core.Namespace("bookstore"), core.Name("repo-sync"), withResourcesAndCommit("abc123")),
 			syncingConditionSupported: true,
 			conditions: []v1beta1.RepoSyncCondition{
 				reconciledCondition,
@@ -1771,7 +1771,7 @@ func TestRepoState_NamespaceRepoStatus(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			repoSync := fake.RepoSyncObjectV1Beta1("bookstore", configsync.RepoSyncName)
+			repoSync := k8sobjects.RepoSyncObjectV1Beta1("bookstore", configsync.RepoSyncName)
 			repoSync.Spec.Git = tc.gitSpec
 			repoSync.Spec.Oci = tc.ociSpec
 			if tc.helmSpec != nil {
@@ -2842,7 +2842,7 @@ func TestRepoState_RootRepoStatus(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			rootSync := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+			rootSync := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 			rootSync.Spec.Git = tc.gitSpec
 			rootSync.Status.Conditions = tc.conditions
 			rootSync.Status.Source = tc.sourceStatus

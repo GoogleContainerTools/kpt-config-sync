@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/syntax"
 	"kpt.dev/configsync/pkg/importer/analyzer/vet/vettesting"
@@ -33,7 +34,6 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/resourcequota"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -90,7 +90,7 @@ func TestFilesystemReader(t *testing.T) {
 			testFiles: ft.FileContentMap{
 				"namespaces/bar/namespace.yaml": aNamespace("bar"),
 			},
-			expectObject: pointer(fake.UnstructuredAtPath(kinds.Namespace(), "namespaces/bar/namespace.yaml", core.Name("bar"))),
+			expectObject: pointer(k8sobjects.UnstructuredAtPath(kinds.Namespace(), "namespaces/bar/namespace.yaml", core.Name("bar"))),
 		},
 		{
 			testName: "Namespace dir with JSON Namespace",
@@ -105,7 +105,7 @@ func TestFilesystemReader(t *testing.T) {
 }
 `,
 			},
-			expectObject: pointer(fake.UnstructuredAtPath(kinds.Namespace(), "namespaces/bar/namespace.json", core.Name("bar"))),
+			expectObject: pointer(k8sobjects.UnstructuredAtPath(kinds.Namespace(), "namespaces/bar/namespace.json", core.Name("bar"))),
 		},
 		{
 			testName: "Namespaces dir with ignored file",
@@ -120,7 +120,7 @@ func TestFilesystemReader(t *testing.T) {
 				"namespaces/bar/ignore":         "",
 				"namespaces/bar/ignore2":        "blah blah blah",
 			},
-			expectObject: pointer(fake.UnstructuredAtPath(kinds.Namespace(), "namespaces/bar/namespace.yaml", core.Name("bar"))),
+			expectObject: pointer(k8sobjects.UnstructuredAtPath(kinds.Namespace(), "namespaces/bar/namespace.yaml", core.Name("bar"))),
 		},
 		{
 			testName: "Namespace with labels/annotations",
@@ -136,7 +136,7 @@ metadata:
     audit: "true"
 `,
 			},
-			expectObject: pointer(fake.UnstructuredAtPath(kinds.Namespace(), "namespaces/bar/namespace.yaml", core.Name("bar"), core.Label("env", "prod"), core.Annotation("audit", "true"))),
+			expectObject: pointer(k8sobjects.UnstructuredAtPath(kinds.Namespace(), "namespaces/bar/namespace.yaml", core.Name("bar"), core.Label("env", "prod"), core.Annotation("audit", "true"))),
 		},
 		{
 			testName: "Abstract Namespace dir with ignored file",
@@ -157,7 +157,7 @@ spec:
     pods: "10"
 `,
 			},
-			expectObject: pointer(ast.NewFileObject(fake.UnstructuredObject(kinds.ResourceQuota(), specHardPods, core.Name("pod-quota")), cmpath.RelativeSlash("namespaces/bar/rq.yaml"))),
+			expectObject: pointer(ast.NewFileObject(k8sobjects.UnstructuredObject(kinds.ResourceQuota(), specHardPods, core.Name("pod-quota")), cmpath.RelativeSlash("namespaces/bar/rq.yaml"))),
 		},
 		{
 			testName: "Namespace dir with Custom Resource",
@@ -248,7 +248,7 @@ metadata:
     number: "0000"
 `,
 			},
-			expectObject: pointer(fake.UnstructuredAtPath(kinds.Namespace(), "namespaces/backend/namespace.yaml", core.Name("backend"), core.Annotation("number", "0000"))),
+			expectObject: pointer(k8sobjects.UnstructuredAtPath(kinds.Namespace(), "namespaces/backend/namespace.yaml", core.Name("backend"), core.Annotation("number", "0000"))),
 		},
 		{
 			testName: "metadata.annotations with boolean value",
@@ -276,7 +276,7 @@ metadata:
     boolean: "true"
 `,
 			},
-			expectObject: pointer(fake.UnstructuredAtPath(kinds.Namespace(), "namespaces/backend/namespace.yaml", core.Name("backend"), core.Annotation("boolean", "true"))),
+			expectObject: pointer(k8sobjects.UnstructuredAtPath(kinds.Namespace(), "namespaces/backend/namespace.yaml", core.Name("backend"), core.Annotation("boolean", "true"))),
 		},
 		{
 			testName: "metadata.labels with boolean value",
@@ -304,7 +304,7 @@ metadata:
     boolean: "true"
 `,
 			},
-			expectObject: pointer(fake.UnstructuredAtPath(kinds.Namespace(), "namespaces/backend/namespace.yaml", core.Name("backend"), core.Label("boolean", "true"))),
+			expectObject: pointer(k8sobjects.UnstructuredAtPath(kinds.Namespace(), "namespaces/backend/namespace.yaml", core.Name("backend"), core.Label("boolean", "true"))),
 		},
 		{
 			testName: "metadata.labels with numerical value",
@@ -332,7 +332,7 @@ metadata:
     number: "123456789"
 `,
 			},
-			expectObject: pointer(fake.UnstructuredAtPath(kinds.Namespace(), "namespaces/backend/namespace.yaml", core.Name("backend"), core.Label("number", "123456789"))),
+			expectObject: pointer(k8sobjects.UnstructuredAtPath(kinds.Namespace(), "namespaces/backend/namespace.yaml", core.Name("backend"), core.Label("number", "123456789"))),
 		},
 		{
 			testName: "parses nested List",
@@ -350,7 +350,7 @@ items:
       name: foo
 `,
 			},
-			expectObject: pointer(fake.UnstructuredAtPath(kinds.Namespace(), "namespaces/foo/list.yaml", core.Name("foo"))),
+			expectObject: pointer(k8sobjects.UnstructuredAtPath(kinds.Namespace(), "namespaces/foo/list.yaml", core.Name("foo"))),
 		},
 		{
 			testName: "parses specialized List",
@@ -365,7 +365,7 @@ items:
     name: my-role
 `,
 			},
-			expectObject: pointer(fake.UnstructuredAtPath(kinds.Role(), "namespaces/foo/list.yaml", core.Name("my-role"))),
+			expectObject: pointer(k8sobjects.UnstructuredAtPath(kinds.Role(), "namespaces/foo/list.yaml", core.Name("my-role"))),
 		},
 		{
 			testName: "illegal field in list-embedded resource",

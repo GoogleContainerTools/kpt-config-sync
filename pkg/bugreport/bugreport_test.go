@@ -23,7 +23,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	v1 "k8s.io/api/core/v1"
-	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 )
 
 func TestAssembleLogSources(t *testing.T) {
@@ -35,45 +35,45 @@ func TestAssembleLogSources(t *testing.T) {
 	}{
 		{
 			name:           "No pods",
-			ns:             *fake.NamespaceObject("foo"),
+			ns:             *k8sobjects.NamespaceObject("foo"),
 			pods:           v1.PodList{Items: make([]v1.Pod, 0)},
 			expectedValues: make(logSources, 0),
 		},
 		{
 			name: "Multiple pods with various container configurations",
-			ns:   *fake.NamespaceObject("foo"),
+			ns:   *k8sobjects.NamespaceObject("foo"),
 			pods: v1.PodList{Items: []v1.Pod{
-				*fake.PodObject("foo_a", []v1.Container{
-					*fake.ContainerObject("1"),
-					*fake.ContainerObject("2"),
+				*k8sobjects.PodObject("foo_a", []v1.Container{
+					*k8sobjects.ContainerObject("1"),
+					*k8sobjects.ContainerObject("2"),
 				}),
-				*fake.PodObject("foo_b", []v1.Container{
-					*fake.ContainerObject("3"),
+				*k8sobjects.PodObject("foo_b", []v1.Container{
+					*k8sobjects.ContainerObject("3"),
 				}),
 			}},
 			expectedValues: logSources{
 				&logSource{
-					ns: *fake.NamespaceObject("foo"),
-					pod: *fake.PodObject("foo_a", []v1.Container{
-						*fake.ContainerObject("1"),
-						*fake.ContainerObject("2"),
+					ns: *k8sobjects.NamespaceObject("foo"),
+					pod: *k8sobjects.PodObject("foo_a", []v1.Container{
+						*k8sobjects.ContainerObject("1"),
+						*k8sobjects.ContainerObject("2"),
 					}),
-					cont: *fake.ContainerObject("1"),
+					cont: *k8sobjects.ContainerObject("1"),
 				},
 				&logSource{
-					ns: *fake.NamespaceObject("foo"),
-					pod: *fake.PodObject("foo_a", []v1.Container{
-						*fake.ContainerObject("1"),
-						*fake.ContainerObject("2"),
+					ns: *k8sobjects.NamespaceObject("foo"),
+					pod: *k8sobjects.PodObject("foo_a", []v1.Container{
+						*k8sobjects.ContainerObject("1"),
+						*k8sobjects.ContainerObject("2"),
 					}),
-					cont: *fake.ContainerObject("2"),
+					cont: *k8sobjects.ContainerObject("2"),
 				},
 				&logSource{
-					ns: *fake.NamespaceObject("foo"),
-					pod: *fake.PodObject("foo_b", []v1.Container{
-						*fake.ContainerObject("3"),
+					ns: *k8sobjects.NamespaceObject("foo"),
+					pod: *k8sobjects.PodObject("foo_b", []v1.Container{
+						*k8sobjects.ContainerObject("3"),
 					}),
-					cont: *fake.ContainerObject("3"),
+					cont: *k8sobjects.ContainerObject("3"),
 				},
 			},
 		},

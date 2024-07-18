@@ -12,33 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package fake
+package status
 
 import (
 	"fmt"
 
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
-	"kpt.dev/configsync/pkg/status"
 )
 
-// Errors returns a MultiError consisting of fake errors. For use in unit tests
+// FakeMultiError returns a MultiError consisting of fake errors. For use in unit tests
 // where multiple errors are expected to be returned.
 //
-// In all cases where a single error is expected, it is safe to use fake.Error
+// In all cases where a single error is expected, it is safe to use fake.FakeError
 // instead.
-func Errors(codes ...string) status.MultiError {
-	var result status.MultiError
+func FakeMultiError(codes ...string) MultiError {
+	var result MultiError
 	for i, code := range codes {
-		result = status.Append(result, fakeError{id: i + 1, code: code})
+		result = Append(result, fakeError{id: i + 1, code: code})
 	}
 	return result
 }
 
-// Error returns a fake error for use in tests which matches errors with the
+// FakeError returns a fake error for use in tests which matches errors with the
 // specified KNV code. This is preferable to requiring test authors to specify
 // fields they don't really care about.
-func Error(code string) status.Error {
+func FakeError(code string) Error {
 	return fakeError{id: 1, code: code}
 }
 
@@ -47,22 +46,22 @@ type fakeError struct {
 	code string
 }
 
-// Cause implements status.Error.
+// Cause implements Error.
 func (f fakeError) Cause() error {
 	return nil
 }
 
-// Cause implements status.Error.
+// Cause implements Error.
 func (f fakeError) Error() string {
 	return fmt.Sprintf("KNV%s fake error %d", f.code, f.id)
 }
 
-// Errors implements status.Error.
-func (f fakeError) Errors() []status.Error {
-	return []status.Error{f}
+// Errors implements Error.
+func (f fakeError) Errors() []Error {
+	return []Error{f}
 }
 
-// ToCME implements status.Error.
+// ToCME implements Error.
 func (f fakeError) ToCME() v1.ConfigManagementError {
 	return v1.ConfigManagementError{
 		Code:         f.code,
@@ -70,7 +69,7 @@ func (f fakeError) ToCME() v1.ConfigManagementError {
 	}
 }
 
-// ToCSE implements status.Error.
+// ToCSE implements Error.
 func (f fakeError) ToCSE() v1beta1.ConfigSyncError {
 	return v1beta1.ConfigSyncError{
 		Code:         f.code,
@@ -78,22 +77,22 @@ func (f fakeError) ToCSE() v1beta1.ConfigSyncError {
 	}
 }
 
-// Code implements status.Error.
+// Code implements Error.
 func (f fakeError) Code() string {
 	return f.code
 }
 
-// Body implements status.Error.
+// Body implements Error.
 func (f fakeError) Body() string {
 	return f.Error()
 }
 
-// Is implements status.Error.
+// Is implements Error.
 func (f fakeError) Is(target error) bool {
 	switch err := target.(type) {
-	case status.Error:
+	case Error:
 		return err.Code() == f.code
-	case status.MultiError:
+	case MultiError:
 		return len(err.Errors()) == 1 && err.Errors()[0].Code() == f.code
 	default:
 		return false

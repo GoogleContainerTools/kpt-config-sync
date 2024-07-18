@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package objects
+package fileobjects
 
 import (
 	"errors"
@@ -20,12 +20,12 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast/node"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 func TestBuildTree(t *testing.T) {
@@ -39,11 +39,11 @@ func TestBuildTree(t *testing.T) {
 			name: "almost-empty tree",
 			from: &Scoped{
 				Cluster: []ast.FileObject{
-					fake.Repo(),
+					k8sobjects.Repo(),
 				},
 			},
 			want: &Tree{
-				Repo:               fake.Repo(),
+				Repo:               k8sobjects.Repo(),
 				NamespaceSelectors: map[string]ast.FileObject{},
 				Tree: &ast.TreeNode{
 					Relative: cmpath.RelativeSlash(""),
@@ -55,30 +55,30 @@ func TestBuildTree(t *testing.T) {
 			name: "populated tree",
 			from: &Scoped{
 				Cluster: []ast.FileObject{
-					fake.Repo(),
-					fake.HierarchyConfig(),
-					fake.ClusterRole(core.Name("hello-reader")),
-					fake.Namespace("namespaces/hello/world"),
-					fake.Namespace("namespaces/hello/moon"),
-					fake.NamespaceSelectorAtPath("namespaces/selector.yaml"),
+					k8sobjects.Repo(),
+					k8sobjects.HierarchyConfig(),
+					k8sobjects.ClusterRole(core.Name("hello-reader")),
+					k8sobjects.Namespace("namespaces/hello/world"),
+					k8sobjects.Namespace("namespaces/hello/moon"),
+					k8sobjects.NamespaceSelectorAtPath("namespaces/selector.yaml"),
 				},
 				Namespace: []ast.FileObject{
-					fake.RoleAtPath("namespaces/hello/role.yaml", core.Name("writer")),
+					k8sobjects.RoleAtPath("namespaces/hello/role.yaml", core.Name("writer")),
 				},
 				Unknown: []ast.FileObject{
-					fake.AnvilAtPath("namespaces/hello/world/anvil.yaml"),
+					k8sobjects.AnvilAtPath("namespaces/hello/world/anvil.yaml"),
 				},
 			},
 			want: &Tree{
-				Repo: fake.Repo(),
+				Repo: k8sobjects.Repo(),
 				HierarchyConfigs: []ast.FileObject{
-					fake.HierarchyConfig(),
+					k8sobjects.HierarchyConfig(),
 				},
 				NamespaceSelectors: map[string]ast.FileObject{
-					"default-name": fake.NamespaceSelectorAtPath("namespaces/selector.yaml"),
+					"default-name": k8sobjects.NamespaceSelectorAtPath("namespaces/selector.yaml"),
 				},
 				Cluster: []ast.FileObject{
-					fake.ClusterRole(core.Name("hello-reader")),
+					k8sobjects.ClusterRole(core.Name("hello-reader")),
 				},
 				Tree: &ast.TreeNode{
 					Relative: cmpath.RelativeSlash("namespaces"),
@@ -88,22 +88,22 @@ func TestBuildTree(t *testing.T) {
 							Relative: cmpath.RelativeSlash("namespaces/hello"),
 							Type:     node.AbstractNamespace,
 							Objects: []ast.FileObject{
-								fake.RoleAtPath("namespaces/hello/role.yaml", core.Name("writer")),
+								k8sobjects.RoleAtPath("namespaces/hello/role.yaml", core.Name("writer")),
 							},
 							Children: []*ast.TreeNode{
 								{
 									Relative: cmpath.RelativeSlash("namespaces/hello/moon"),
 									Type:     node.Namespace,
 									Objects: []ast.FileObject{
-										fake.Namespace("namespaces/hello/moon"),
+										k8sobjects.Namespace("namespaces/hello/moon"),
 									},
 								},
 								{
 									Relative: cmpath.RelativeSlash("namespaces/hello/world"),
 									Type:     node.Namespace,
 									Objects: []ast.FileObject{
-										fake.Namespace("namespaces/hello/world"),
-										fake.AnvilAtPath("namespaces/hello/world/anvil.yaml"),
+										k8sobjects.Namespace("namespaces/hello/world"),
+										k8sobjects.AnvilAtPath("namespaces/hello/world/anvil.yaml"),
 									},
 								},
 							},
@@ -116,42 +116,42 @@ func TestBuildTree(t *testing.T) {
 			name: "cluster-scoped resource in wrong directory",
 			from: &Scoped{
 				Cluster: []ast.FileObject{
-					fake.Repo(),
-					fake.ClusterRoleAtPath("namespaces/hello/cr.yaml", core.Name("hello-reader")),
-					fake.Namespace("namespaces/hello"),
+					k8sobjects.Repo(),
+					k8sobjects.ClusterRoleAtPath("namespaces/hello/cr.yaml", core.Name("hello-reader")),
+					k8sobjects.Namespace("namespaces/hello"),
 				},
 				Namespace: []ast.FileObject{
-					fake.RoleAtPath("namespaces/hello/role.yaml", core.Name("writer")),
+					k8sobjects.RoleAtPath("namespaces/hello/role.yaml", core.Name("writer")),
 				},
 			},
 			want:     nil,
-			wantErrs: validation.ShouldBeInClusterError(fake.ClusterRole()),
+			wantErrs: validation.ShouldBeInClusterError(k8sobjects.ClusterRole()),
 		},
 		{
 			name: "namespace-scoped resource in wrong directory",
 			from: &Scoped{
 				Cluster: []ast.FileObject{
-					fake.Repo(),
-					fake.Namespace("namespaces/hello"),
+					k8sobjects.Repo(),
+					k8sobjects.Namespace("namespaces/hello"),
 				},
 				Namespace: []ast.FileObject{
-					fake.RoleAtPath("cluster/role.yaml", core.Name("writer")),
+					k8sobjects.RoleAtPath("cluster/role.yaml", core.Name("writer")),
 				},
 			},
 			want:     nil,
-			wantErrs: validation.ShouldBeInNamespacesError(fake.Role()),
+			wantErrs: validation.ShouldBeInNamespacesError(k8sobjects.Role()),
 		},
 		{
 			name: "system resource in wrong directory",
 			from: &Scoped{
 				Cluster: []ast.FileObject{
-					fake.Repo(),
-					fake.HierarchyConfigAtPath("cluster/hc.yaml"),
-					fake.Namespace("namespaces/hello"),
+					k8sobjects.Repo(),
+					k8sobjects.HierarchyConfigAtPath("cluster/hc.yaml"),
+					k8sobjects.Namespace("namespaces/hello"),
 				},
 			},
 			want:     nil,
-			wantErrs: validation.ShouldBeInSystemError(fake.HierarchyConfig()),
+			wantErrs: validation.ShouldBeInSystemError(k8sobjects.HierarchyConfig()),
 		},
 	}
 

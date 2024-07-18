@@ -37,6 +37,7 @@ import (
 	"kpt.dev/configsync/pkg/applier"
 	applierfake "kpt.dev/configsync/pkg/applier/fake"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/diff/difftest"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
@@ -53,7 +54,6 @@ import (
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/syncer/reconcile/fight"
 	syncertest "kpt.dev/configsync/pkg/syncer/syncertest/fake"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/testing/openapitest"
 	"kpt.dev/configsync/pkg/testing/testerrors"
 	"kpt.dev/configsync/pkg/testing/testmetrics"
@@ -254,12 +254,12 @@ func TestRoot_Parse(t *testing.T) {
 			parseOutputs: []fsfake.ParserOutputs{
 				{
 					FileObjects: []ast.FileObject{
-						fake.Role(core.Namespace("foo")),
+						k8sobjects.Role(core.Namespace("foo")),
 					},
 				},
 			},
 			expectedObjsToApply: []ast.FileObject{
-				fake.Role(core.Namespace("foo"),
+				k8sobjects.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
@@ -270,7 +270,7 @@ func TestRoot_Parse(t *testing.T) {
 					core.Annotation(metadata.ResourceIDKey, "rbac.authorization.k8s.io_role_foo_default-name"),
 					difftest.ManagedBy(declared.RootScope, rootSyncName),
 				),
-				fake.UnstructuredAtPath(kinds.Namespace(),
+				k8sobjects.UnstructuredAtPath(kinds.Namespace(),
 					"",
 					core.Name("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
@@ -295,12 +295,12 @@ func TestRoot_Parse(t *testing.T) {
 			parseOutputs: []fsfake.ParserOutputs{
 				{
 					FileObjects: []ast.FileObject{
-						fake.Role(core.Namespace("foo")),
+						k8sobjects.Role(core.Namespace("foo")),
 					},
 				},
 			},
 			expectedObjsToApply: []ast.FileObject{
-				fake.Role(core.Namespace("foo"),
+				k8sobjects.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
@@ -319,7 +319,7 @@ func TestRoot_Parse(t *testing.T) {
 			format:            configsync.SourceFormatUnstructured,
 			namespaceStrategy: configsync.NamespaceStrategyImplicit,
 			existingObjects: []client.Object{
-				fake.NamespaceObject("foo",
+				k8sobjects.NamespaceObject("foo",
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
@@ -333,12 +333,12 @@ func TestRoot_Parse(t *testing.T) {
 			parseOutputs: []fsfake.ParserOutputs{
 				{
 					FileObjects: []ast.FileObject{
-						fake.Role(core.Namespace("foo")),
+						k8sobjects.Role(core.Namespace("foo")),
 					},
 				},
 			},
 			expectedObjsToApply: []ast.FileObject{
-				fake.Role(core.Namespace("foo"),
+				k8sobjects.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
@@ -349,7 +349,7 @@ func TestRoot_Parse(t *testing.T) {
 					core.Annotation(metadata.ResourceIDKey, "rbac.authorization.k8s.io_role_foo_default-name"),
 					difftest.ManagedBy(declared.RootScope, rootSyncName),
 				),
-				fake.UnstructuredAtPath(kinds.Namespace(),
+				k8sobjects.UnstructuredAtPath(kinds.Namespace(),
 					"",
 					core.Name("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
@@ -368,7 +368,7 @@ func TestRoot_Parse(t *testing.T) {
 			name:              "no implicit namespace if unstructured, present, but managed by others",
 			format:            configsync.SourceFormatUnstructured,
 			namespaceStrategy: configsync.NamespaceStrategyImplicit,
-			existingObjects: []client.Object{fake.NamespaceObject("foo",
+			existingObjects: []client.Object{k8sobjects.NamespaceObject("foo",
 				core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 				core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
 				core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
@@ -382,12 +382,12 @@ func TestRoot_Parse(t *testing.T) {
 			parseOutputs: []fsfake.ParserOutputs{
 				{
 					FileObjects: []ast.FileObject{
-						fake.Role(core.Namespace("foo")),
+						k8sobjects.Role(core.Namespace("foo")),
 					},
 				},
 			},
 			expectedObjsToApply: []ast.FileObject{
-				fake.Role(core.Namespace("foo"),
+				k8sobjects.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
@@ -406,18 +406,18 @@ func TestRoot_Parse(t *testing.T) {
 			format:            configsync.SourceFormatUnstructured,
 			namespaceStrategy: configsync.NamespaceStrategyImplicit,
 			existingObjects: []client.Object{
-				fake.NamespaceObject("foo"),
+				k8sobjects.NamespaceObject("foo"),
 				rootSyncInput.DeepCopy(),
 			},
 			parseOutputs: []fsfake.ParserOutputs{
 				{
 					FileObjects: []ast.FileObject{
-						fake.Role(core.Namespace("foo")),
+						k8sobjects.Role(core.Namespace("foo")),
 					},
 				},
 			},
 			expectedObjsToApply: []ast.FileObject{
-				fake.Role(core.Namespace("foo"),
+				k8sobjects.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
@@ -441,13 +441,13 @@ func TestRoot_Parse(t *testing.T) {
 			parseOutputs: []fsfake.ParserOutputs{
 				{
 					FileObjects: []ast.FileObject{
-						fake.RootSyncV1Beta1("test", fake.WithRootSyncSourceType(configsync.GitSource), gitSpec("https://github.com/test/test.git", configsync.AuthNone)),
+						k8sobjects.RootSyncV1Beta1("test", k8sobjects.WithRootSyncSourceType(configsync.GitSource), gitSpec("https://github.com/test/test.git", configsync.AuthNone)),
 					},
 				},
 			},
 			expectedObjsToApply: []ast.FileObject{
-				fake.RootSyncV1Beta1("test", gitSpec("https://github.com/test/test.git", configsync.AuthNone),
-					fake.WithRootSyncSourceType(configsync.GitSource),
+				k8sobjects.RootSyncV1Beta1("test", gitSpec("https://github.com/test/test.git", configsync.AuthNone),
+					k8sobjects.WithRootSyncSourceType(configsync.GitSource),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1beta1"),
 					core.Annotation(metadata.SourcePathAnnotationKey, fmt.Sprintf("namespaces/%s/test.yaml", configsync.ControllerNamespace)),
@@ -471,13 +471,13 @@ func TestRoot_Parse(t *testing.T) {
 			parseOutputs: []fsfake.ParserOutputs{
 				{
 					FileObjects: []ast.FileObject{
-						fake.Role(core.Namespace("bar")),
-						fake.ConfigMap(core.Namespace("bar")),
+						k8sobjects.Role(core.Namespace("bar")),
+						k8sobjects.ConfigMap(core.Namespace("bar")),
 					},
 				},
 			},
 			expectedObjsToApply: []ast.FileObject{
-				fake.Role(core.Namespace("bar"),
+				k8sobjects.Role(core.Namespace("bar"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
@@ -488,7 +488,7 @@ func TestRoot_Parse(t *testing.T) {
 					core.Annotation(metadata.ResourceIDKey, "rbac.authorization.k8s.io_role_bar_default-name"),
 					difftest.ManagedBy(declared.RootScope, rootSyncName),
 				),
-				fake.ConfigMap(core.Namespace("bar"),
+				k8sobjects.ConfigMap(core.Namespace("bar"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/configmap.yaml"),
@@ -499,7 +499,7 @@ func TestRoot_Parse(t *testing.T) {
 					core.Annotation(metadata.ResourceIDKey, "_configmap_bar_default-name"),
 					difftest.ManagedBy(declared.RootScope, rootSyncName),
 				),
-				fake.UnstructuredAtPath(kinds.Namespace(),
+				k8sobjects.UnstructuredAtPath(kinds.Namespace(),
 					"",
 					core.Name("bar"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
@@ -519,9 +519,9 @@ func TestRoot_Parse(t *testing.T) {
 			format:            configsync.SourceFormatUnstructured,
 			namespaceStrategy: configsync.NamespaceStrategyImplicit,
 			existingObjects: []client.Object{
-				fake.NamespaceObject("foo"), // foo exists but not managed, should NOT be added as an implicit namespace
+				k8sobjects.NamespaceObject("foo"), // foo exists but not managed, should NOT be added as an implicit namespace
 				// bar not exists, should be added as an implicit namespace
-				fake.NamespaceObject("baz", // baz exists and self-managed, should be added as an implicit namespace
+				k8sobjects.NamespaceObject("baz", // baz exists and self-managed, should be added as an implicit namespace
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
@@ -535,16 +535,16 @@ func TestRoot_Parse(t *testing.T) {
 			parseOutputs: []fsfake.ParserOutputs{
 				{
 					FileObjects: []ast.FileObject{
-						fake.Role(core.Namespace("foo")),
-						fake.Role(core.Namespace("bar")),
-						fake.ConfigMap(core.Namespace("bar")),
-						fake.Role(core.Namespace("baz")),
-						fake.ConfigMap(core.Namespace("baz")),
+						k8sobjects.Role(core.Namespace("foo")),
+						k8sobjects.Role(core.Namespace("bar")),
+						k8sobjects.ConfigMap(core.Namespace("bar")),
+						k8sobjects.Role(core.Namespace("baz")),
+						k8sobjects.ConfigMap(core.Namespace("baz")),
 					},
 				},
 			},
 			expectedObjsToApply: []ast.FileObject{
-				fake.Role(core.Namespace("foo"),
+				k8sobjects.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
@@ -555,7 +555,7 @@ func TestRoot_Parse(t *testing.T) {
 					core.Annotation(metadata.ResourceIDKey, "rbac.authorization.k8s.io_role_foo_default-name"),
 					difftest.ManagedBy(declared.RootScope, rootSyncName),
 				),
-				fake.Role(core.Namespace("bar"),
+				k8sobjects.Role(core.Namespace("bar"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
@@ -566,7 +566,7 @@ func TestRoot_Parse(t *testing.T) {
 					core.Annotation(metadata.ResourceIDKey, "rbac.authorization.k8s.io_role_bar_default-name"),
 					difftest.ManagedBy(declared.RootScope, rootSyncName),
 				),
-				fake.ConfigMap(core.Namespace("bar"),
+				k8sobjects.ConfigMap(core.Namespace("bar"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/configmap.yaml"),
@@ -577,7 +577,7 @@ func TestRoot_Parse(t *testing.T) {
 					core.Annotation(metadata.ResourceIDKey, "_configmap_bar_default-name"),
 					difftest.ManagedBy(declared.RootScope, rootSyncName),
 				),
-				fake.Role(core.Namespace("baz"),
+				k8sobjects.Role(core.Namespace("baz"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
@@ -588,7 +588,7 @@ func TestRoot_Parse(t *testing.T) {
 					core.Annotation(metadata.ResourceIDKey, "rbac.authorization.k8s.io_role_baz_default-name"),
 					difftest.ManagedBy(declared.RootScope, rootSyncName),
 				),
-				fake.ConfigMap(core.Namespace("baz"),
+				k8sobjects.ConfigMap(core.Namespace("baz"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/configmap.yaml"),
@@ -599,7 +599,7 @@ func TestRoot_Parse(t *testing.T) {
 					core.Annotation(metadata.ResourceIDKey, "_configmap_baz_default-name"),
 					difftest.ManagedBy(declared.RootScope, rootSyncName),
 				),
-				fake.UnstructuredAtPath(kinds.Namespace(),
+				k8sobjects.UnstructuredAtPath(kinds.Namespace(),
 					"",
 					core.Name("bar"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
@@ -611,7 +611,7 @@ func TestRoot_Parse(t *testing.T) {
 					core.Annotation(metadata.ResourceIDKey, "_namespace_bar"),
 					difftest.ManagedBy(declared.RootScope, rootSyncName),
 				),
-				fake.UnstructuredAtPath(kinds.Namespace(),
+				k8sobjects.UnstructuredAtPath(kinds.Namespace(),
 					"",
 					core.Name("baz"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
@@ -650,7 +650,7 @@ func TestRoot_Parse(t *testing.T) {
 					{}, // One Apply call
 				},
 			}
-			tc.existingObjects = append(tc.existingObjects, fake.RootSyncObjectV1Beta1(rootSyncName))
+			tc.existingObjects = append(tc.existingObjects, k8sobjects.RootSyncObjectV1Beta1(rootSyncName))
 			parser := &root{
 				Options: &Options{
 					Clock:              fakeClock,
@@ -739,7 +739,7 @@ func TestRoot_DeclaredFields(t *testing.T) {
 		{
 			name:           "has declared-fields annotation, admission webhook is disabled",
 			webhookEnabled: false,
-			existingObjects: []client.Object{fake.NamespaceObject("foo",
+			existingObjects: []client.Object{k8sobjects.NamespaceObject("foo",
 				core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 				core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 				core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:rules":{}}`),
@@ -749,10 +749,10 @@ func TestRoot_DeclaredFields(t *testing.T) {
 				core.Annotation(metadata.ResourceIDKey, "_namespace_foo"),
 				difftest.ManagedBy(declared.RootScope, "other-root-sync"))},
 			parsed: []ast.FileObject{
-				fake.Role(core.Namespace("foo")),
+				k8sobjects.Role(core.Namespace("foo")),
 			},
 			expectedObjsToApply: []ast.FileObject{
-				fake.Role(core.Namespace("foo"),
+				k8sobjects.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
@@ -768,7 +768,7 @@ func TestRoot_DeclaredFields(t *testing.T) {
 		{
 			name:           "has declared-fields annotation, admission webhook enabled",
 			webhookEnabled: true,
-			existingObjects: []client.Object{fake.NamespaceObject("foo",
+			existingObjects: []client.Object{k8sobjects.NamespaceObject("foo",
 				core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 				core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 				core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:rules":{}}`),
@@ -779,10 +779,10 @@ func TestRoot_DeclaredFields(t *testing.T) {
 				difftest.ManagedBy(declared.RootScope, "other-root-sync")),
 			},
 			parsed: []ast.FileObject{
-				fake.Role(core.Namespace("foo")),
+				k8sobjects.Role(core.Namespace("foo")),
 			},
 			expectedObjsToApply: []ast.FileObject{
-				fake.Role(core.Namespace("foo"),
+				k8sobjects.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{"f:configmanagement.gke.io/source-path":{}},"f:labels":{"f:configsync.gke.io/declared-version":{}}},"f:rules":{}}`),
@@ -800,7 +800,7 @@ func TestRoot_DeclaredFields(t *testing.T) {
 			name:           "has no declared-fields annotation, admission webhook is enabled",
 			webhookEnabled: true,
 			existingObjects: []client.Object{
-				fake.NamespaceObject("foo",
+				k8sobjects.NamespaceObject("foo",
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -808,13 +808,13 @@ func TestRoot_DeclaredFields(t *testing.T) {
 					core.Annotation(metadata.OwningInventoryKey, applier.InventoryID(rootSyncName, configmanagement.ControllerNamespace)),
 					core.Annotation(metadata.ResourceIDKey, "_namespace_foo"),
 					difftest.ManagedBy(declared.RootScope, "other-root-sync")),
-				fake.AdmissionWebhookObject(webhookconfiguration.Name),
+				k8sobjects.AdmissionWebhookObject(webhookconfiguration.Name),
 			},
 			parsed: []ast.FileObject{
-				fake.Role(core.Namespace("foo")),
+				k8sobjects.Role(core.Namespace("foo")),
 			},
 			expectedObjsToApply: []ast.FileObject{
-				fake.Role(core.Namespace("foo"),
+				k8sobjects.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{"f:configmanagement.gke.io/source-path":{}},"f:labels":{"f:configsync.gke.io/declared-version":{}}},"f:rules":{}}`),
@@ -832,7 +832,7 @@ func TestRoot_DeclaredFields(t *testing.T) {
 			name:           "has no declared-fields annotation, admission webhook disabled",
 			webhookEnabled: false,
 			existingObjects: []client.Object{
-				fake.NamespaceObject("foo",
+				k8sobjects.NamespaceObject("foo",
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -842,10 +842,10 @@ func TestRoot_DeclaredFields(t *testing.T) {
 					difftest.ManagedBy(declared.RootScope, "other-root-sync")),
 			},
 			parsed: []ast.FileObject{
-				fake.Role(core.Namespace("foo")),
+				k8sobjects.Role(core.Namespace("foo")),
 			},
 			expectedObjsToApply: []ast.FileObject{
-				fake.Role(core.Namespace("foo"),
+				k8sobjects.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
@@ -878,7 +878,7 @@ func TestRoot_DeclaredFields(t *testing.T) {
 					{}, // One Apply call
 				},
 			}
-			tc.existingObjects = append(tc.existingObjects, fake.RootSyncObjectV1Beta1(rootSyncName))
+			tc.existingObjects = append(tc.existingObjects, k8sobjects.RootSyncObjectV1Beta1(rootSyncName))
 			parser := &root{
 				Options: &Options{
 					Clock:              clock.RealClock{}, // TODO: Test with fake clock
@@ -920,7 +920,7 @@ func TestRoot_DeclaredFields(t *testing.T) {
 }
 
 func fakeCRD(opts ...core.MetaMutator) ast.FileObject {
-	crd := fake.CustomResourceDefinitionV1Object(opts...)
+	crd := k8sobjects.CustomResourceDefinitionV1Object(opts...)
 	crd.Spec.Group = "acme.com"
 	crd.Spec.Names = apiextensionsv1.CustomResourceDefinitionNames{
 		Plural:   "anvils",
@@ -953,13 +953,13 @@ func fakeCRD(opts ...core.MetaMutator) ast.FileObject {
 			},
 		},
 	}
-	return fake.FileObject(crd, "cluster/crd.yaml")
+	return k8sobjects.FileObject(crd, "cluster/crd.yaml")
 }
 
 func fakeFileObjects() []ast.FileObject {
 	var fileObjects []ast.FileObject
 	for i := 0; i < 500; i++ {
-		fileObjects = append(fileObjects, fake.RoleAtPath(fmt.Sprintf("namespaces/foo/role%v.yaml", i), core.Namespace("foo")))
+		fileObjects = append(fileObjects, k8sobjects.RoleAtPath(fmt.Sprintf("namespaces/foo/role%v.yaml", i), core.Namespace("foo")))
 	}
 	return fileObjects
 }
@@ -995,9 +995,9 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 			discoveryClient: syncertest.NewDiscoveryClientWithError(context.DeadlineExceeded, kinds.Namespace(), kinds.Role()),
 			expectedError:   fakeParseError(context.DeadlineExceeded, kinds.Namespace(), kinds.Role()),
 			parsed: []ast.FileObject{
-				fake.Role(core.Namespace("foo")),
+				k8sobjects.Role(core.Namespace("foo")),
 				// add a faked obect in parser.parsed without CRD so it's scope will be unknown when validating
-				fake.Unstructured(kinds.Anvil(), core.Name("deploy")),
+				k8sobjects.Unstructured(kinds.Anvil(), core.Name("deploy")),
 			},
 			expectedObjsToApply: nil,
 		},
@@ -1007,9 +1007,9 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 			discoveryClient: syncertest.NewDiscoveryClientWithError(errors.New("net/http: request canceled (Client.Timeout exceeded while awaiting headers)"), kinds.Namespace(), kinds.Role()),
 			expectedError:   fakeParseError(errors.New("net/http: request canceled (Client.Timeout exceeded while awaiting headers)"), kinds.Namespace(), kinds.Role()),
 			parsed: []ast.FileObject{
-				fake.Role(core.Namespace("foo")),
+				k8sobjects.Role(core.Namespace("foo")),
 				// add a faked obect in parser.parsed without CRD so it's scope will be unknown when validating
-				fake.Unstructured(kinds.Anvil(), core.Name("deploy")),
+				k8sobjects.Unstructured(kinds.Anvil(), core.Name("deploy")),
 			},
 			expectedObjsToApply: nil,
 		},
@@ -1018,7 +1018,7 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 			name:                "unknown scoped object with discovery failure of 500 deadline exceeded failure",
 			discoveryClient:     syncertest.NewDiscoveryClientWithError(context.DeadlineExceeded, fakeGVKs()...),
 			expectedError:       fakeParseError(context.DeadlineExceeded, fakeGVKs()...),
-			parsed:              append(fakeFileObjects(), fake.Unstructured(kinds.Anvil(), core.Name("deploy"))),
+			parsed:              append(fakeFileObjects(), k8sobjects.Unstructured(kinds.Anvil(), core.Name("deploy"))),
 			expectedObjsToApply: nil,
 		},
 		{
@@ -1026,16 +1026,16 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 			name:            "unknown scoped object without discovery failure",
 			discoveryClient: syncertest.NewDiscoveryClientWithError(nil, kinds.Namespace(), kinds.Role()),
 			expectedError: status.UnknownObjectKindError(
-				fake.Unstructured(kinds.Anvil(), core.Name("deploy"),
+				k8sobjects.Unstructured(kinds.Anvil(), core.Name("deploy"),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/obj.yaml"),
 				)),
 			parsed: []ast.FileObject{
-				fake.Role(core.Namespace("foo")),
+				k8sobjects.Role(core.Namespace("foo")),
 				// add a faked obect in parser.parsed without CRD so it's scope will be unknown when validating
-				fake.Unstructured(kinds.Anvil(), core.Name("deploy")),
+				k8sobjects.Unstructured(kinds.Anvil(), core.Name("deploy")),
 			},
 			expectedObjsToApply: []ast.FileObject{
-				fake.Role(core.Namespace("foo"),
+				k8sobjects.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
@@ -1046,7 +1046,7 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 					core.Annotation(metadata.ResourceIDKey, "rbac.authorization.k8s.io_role_foo_default-name"),
 					difftest.ManagedBy(declared.RootScope, rootSyncName),
 				),
-				fake.UnstructuredAtPath(kinds.Namespace(),
+				k8sobjects.UnstructuredAtPath(kinds.Namespace(),
 					"",
 					core.Name("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
@@ -1066,9 +1066,9 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 			discoveryClient: syncertest.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
 			expectedError:   nil,
 			parsed: []ast.FileObject{
-				fake.Role(core.Namespace("foo")),
+				k8sobjects.Role(core.Namespace("foo")),
 				fakeCRD(core.Name("anvils.acme.com")),
-				fake.Unstructured(kinds.Anvil(), core.Name("deploy"), core.Namespace("foo")),
+				k8sobjects.Unstructured(kinds.Anvil(), core.Name("deploy"), core.Namespace("foo")),
 			},
 			expectedObjsToApply: []ast.FileObject{
 				fakeCRD(core.Name("anvils.acme.com"),
@@ -1081,7 +1081,7 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 					core.Annotation(metadata.OwningInventoryKey, applier.InventoryID(rootSyncName, configmanagement.ControllerNamespace)),
 					core.Annotation(metadata.ResourceIDKey, "apiextensions.k8s.io_customresourcedefinition_anvils.acme.com"),
 					difftest.ManagedBy(declared.RootScope, rootSyncName)),
-				fake.Role(core.Namespace("foo"),
+				k8sobjects.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
@@ -1092,7 +1092,7 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 					core.Annotation(metadata.ResourceIDKey, "rbac.authorization.k8s.io_role_foo_default-name"),
 					difftest.ManagedBy(declared.RootScope, rootSyncName),
 				),
-				fake.Unstructured(kinds.Anvil(),
+				k8sobjects.Unstructured(kinds.Anvil(),
 					core.Name("deploy"),
 					core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
@@ -1105,7 +1105,7 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 					core.Annotation(metadata.OwningInventoryKey, applier.InventoryID(rootSyncName, configmanagement.ControllerNamespace)),
 					core.Annotation(metadata.ResourceIDKey, "acme.com_anvil_foo_deploy"),
 				),
-				fake.UnstructuredAtPath(kinds.Namespace(),
+				k8sobjects.UnstructuredAtPath(kinds.Namespace(),
 					"",
 					core.Name("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
@@ -1145,7 +1145,7 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 					Parser:             fakeConfigParser,
 					SyncName:           rootSyncName,
 					ReconcilerName:     rootReconcilerName,
-					Client:             syncertest.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName)),
+					Client:             syncertest.NewClient(t, core.Scheme, k8sobjects.RootSyncObjectV1Beta1(rootSyncName)),
 					DiscoveryInterface: tc.discoveryClient,
 					Converter:          converter,
 					Updater: Updater{
@@ -1237,7 +1237,7 @@ func TestRoot_SourceReconcilerErrorsMetricValidation(t *testing.T) {
 					Parser:             fakeConfigParser,
 					SyncName:           rootSyncName,
 					ReconcilerName:     rootReconcilerName,
-					Client:             syncertest.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName)),
+					Client:             syncertest.NewClient(t, core.Scheme, k8sobjects.RootSyncObjectV1Beta1(rootSyncName)),
 					DiscoveryInterface: syncertest.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
 					Updater: Updater{
 						Scope:          declared.RootScope,
@@ -1336,7 +1336,7 @@ func TestRoot_SourceAndSyncReconcilerErrorsMetricValidation(t *testing.T) {
 					},
 					SyncName:           rootSyncName,
 					ReconcilerName:     rootReconcilerName,
-					Client:             syncertest.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName)),
+					Client:             syncertest.NewClient(t, core.Scheme, k8sobjects.RootSyncObjectV1Beta1(rootSyncName)),
 					DiscoveryInterface: syncertest.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
 				},
 				RootOptions: &RootOptions{
@@ -1793,9 +1793,9 @@ func TestPrependRootSyncRemediatorStatus(t *testing.T) {
 	const rootSyncName = "my-root-sync"
 	const thisManager = "this-manager"
 	const otherManager = "other-manager"
-	conflictingObject := fake.NamespaceObject("foo-ns", core.Annotation(metadata.ResourceManagerKey, otherManager))
+	conflictingObject := k8sobjects.NamespaceObject("foo-ns", core.Annotation(metadata.ResourceManagerKey, otherManager))
 	conflictAB := status.ManagementConflictErrorWrap(conflictingObject, thisManager)
-	invertedObject := fake.NamespaceObject("foo-ns", core.Annotation(metadata.ResourceManagerKey, thisManager))
+	invertedObject := k8sobjects.NamespaceObject("foo-ns", core.Annotation(metadata.ResourceManagerKey, thisManager))
 	conflictBA := status.ManagementConflictErrorWrap(invertedObject, otherManager)
 	conflictABInverted := conflictAB.Invert()
 	// KptManagementConflictError is created with the desired object, not the current live object.
@@ -1889,7 +1889,7 @@ For more information, see https://g.co/cloud/acm-errors#knv1060`
 	}
 	for name, tc := range testCases {
 		t.Run(name, func(t *testing.T) {
-			rootSync := fake.RootSyncObjectV1Beta1(rootSyncName)
+			rootSync := k8sobjects.RootSyncObjectV1Beta1(rootSyncName)
 			rootSync.Status.Sync.Errors = tc.thisSyncErrors
 			fakeClient := syncertest.NewClient(t, core.Scheme, rootSync)
 			ctx := context.Background()

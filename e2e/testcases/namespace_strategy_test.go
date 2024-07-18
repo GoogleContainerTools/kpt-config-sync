@@ -29,11 +29,11 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/cli-utils/pkg/common"
 )
 
@@ -51,7 +51,7 @@ func TestNamespaceStrategy(t *testing.T) {
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	rootReconcilerNN := core.RootReconcilerObjectKey(rootSyncNN.Name)
-	rootSync := fake.RootSyncObjectV1Alpha1(rootSyncNN.Name)
+	rootSync := k8sobjects.RootSyncObjectV1Alpha1(rootSyncNN.Name)
 	// set the NamespaceStrategy to explicit
 	nt.MustMergePatch(rootSync, `{"spec": {"override": {"namespaceStrategy": "explicit"}}}`)
 	err := nt.Watcher.WatchObject(
@@ -68,8 +68,8 @@ func TestNamespaceStrategy(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	// add a resource for which the namespace is not declared/created
-	fooNamespace := fake.NamespaceObject("foo-implicit")
-	cm1 := fake.ConfigMapObject(core.Name("cm1"), core.Namespace(fooNamespace.Name))
+	fooNamespace := k8sobjects.NamespaceObject("foo-implicit")
+	cm1 := k8sobjects.ConfigMapObject(core.Name("cm1"), core.Namespace(fooNamespace.Name))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm1.yaml", cm1))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add cm1"))
 
@@ -166,7 +166,7 @@ func TestNamespaceStrategy(t *testing.T) {
 // When using multiple RootSyncs that declare resources in the same namespace,
 // the namespace should only be created if declared explicitly in a sync source.
 func TestNamespaceStrategyMultipleRootSyncs(t *testing.T) {
-	namespaceA := fake.NamespaceObject("namespace-a")
+	namespaceA := k8sobjects.NamespaceObject("namespace-a")
 	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.Unstructured,
 		ntopts.RootRepo("sync-a"), // will declare namespace-a explicitly
 		ntopts.RootRepo("sync-x"), // will declare resources in namespace-a, but not namespace-a itself
@@ -220,10 +220,10 @@ func TestNamespaceStrategyMultipleRootSyncs(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	// add a resource for which the namespace is not declared/created
-	cmX := fake.ConfigMapObject(core.Name("cm-x"), core.Namespace(namespaceA.Name))
+	cmX := k8sobjects.ConfigMapObject(core.Name("cm-x"), core.Namespace(namespaceA.Name))
 	nt.Must(nt.RootRepos[rootSyncX.Name].Add("acme/cm-x.yaml", cmX))
 	nt.Must(nt.RootRepos[rootSyncX.Name].CommitAndPush("Add cm-x"))
-	cmY := fake.ConfigMapObject(core.Name("cm-y"), core.Namespace(namespaceA.Name))
+	cmY := k8sobjects.ConfigMapObject(core.Name("cm-y"), core.Namespace(namespaceA.Name))
 	nt.Must(nt.RootRepos[rootSyncY.Name].Add("acme/cm-y.yaml", cmY))
 	nt.Must(nt.RootRepos[rootSyncY.Name].CommitAndPush("Add cm-y"))
 	// check for error

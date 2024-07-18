@@ -26,13 +26,13 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 )
 
 // ClusterSelectors hydrates the given Raw objects by performing cluster
 // selection to filter out objects which are not specified for the current
 // cluster.
-func ClusterSelectors(objs *objects.Raw) status.MultiError {
+func ClusterSelectors(objs *fileobjects.Raw) status.MultiError {
 	set, errs := buildHydratorSet(objs)
 	if errs != nil {
 		return errs
@@ -96,7 +96,7 @@ func ClusterSelectors(objs *objects.Raw) status.MultiError {
 
 // buildHydratorSet splits the given Raw objects into important types (Cluster,
 // ClusterSelector, Namespace) and populates a hydratorSet with them.
-func buildHydratorSet(objs *objects.Raw) (*hydratorSet, status.MultiError) {
+func buildHydratorSet(objs *fileobjects.Raw) (*hydratorSet, status.MultiError) {
 	set := &hydratorSet{}
 	var errs status.MultiError
 	for _, object := range objs.Objects {

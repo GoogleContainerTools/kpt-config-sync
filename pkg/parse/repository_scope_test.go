@@ -19,10 +19,10 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/testing/testerrors"
 )
 
@@ -37,19 +37,19 @@ func TestNamespaceScopeVisitor(t *testing.T) {
 		{
 			name:  "correct Namespace pass",
 			scope: "foo",
-			obj:   fake.Role(core.Namespace("foo")),
+			obj:   k8sobjects.Role(core.Namespace("foo")),
 		},
 		{
 			name:  "blank Namespace pass and update Namespace",
 			scope: "foo",
-			obj:   fake.Role(core.Namespace("")),
-			want:  fake.Role(core.Namespace("foo")),
+			obj:   k8sobjects.Role(core.Namespace("")),
+			want:  k8sobjects.Role(core.Namespace("foo")),
 		},
 		{
 			name:    "wrong Namespace error",
 			scope:   "foo",
-			obj:     fake.Role(core.Namespace("bar")),
-			wantErr: BadScopeErr(fake.Role(core.Namespace("bar")), "foo"),
+			obj:     k8sobjects.Role(core.Namespace("bar")),
+			wantErr: BadScopeErr(k8sobjects.Role(core.Namespace("bar")), "foo"),
 		},
 	}
 

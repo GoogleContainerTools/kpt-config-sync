@@ -22,10 +22,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/diff/difftest"
 	"kpt.dev/configsync/pkg/syncer/syncertest"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/testing/testerrors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -43,77 +43,77 @@ func TestCanManage(t *testing.T) {
 		{
 			"Root can manage unmanaged object",
 			declared.RootScope,
-			fake.DeploymentObject(),
+			k8sobjects.DeploymentObject(),
 			OperationManage,
 			true,
 		},
 		{
 			"Root can manage any non-root-managed object",
 			declared.RootScope,
-			fake.DeploymentObject(syncertest.ManagementEnabled, difftest.ManagedBy("foo", "any-rs")),
+			k8sobjects.DeploymentObject(syncertest.ManagementEnabled, difftest.ManagedBy("foo", "any-rs")),
 			OperationManage,
 			true,
 		},
 		{
 			"Root can manage self-managed object",
 			declared.RootScope,
-			fake.DeploymentObject(syncertest.ManagementEnabled, difftest.ManagedBy(declared.RootScope, rsName)),
+			k8sobjects.DeploymentObject(syncertest.ManagementEnabled, difftest.ManagedBy(declared.RootScope, rsName)),
 			OperationManage,
 			true,
 		},
 		{
 			"Root can NOT manage other root-managed object",
 			declared.RootScope,
-			fake.DeploymentObject(syncertest.ManagementEnabled, difftest.ManagedBy(declared.RootScope, "other-rs")),
+			k8sobjects.DeploymentObject(syncertest.ManagementEnabled, difftest.ManagedBy(declared.RootScope, "other-rs")),
 			OperationManage,
 			false,
 		},
 		{
 			"Root can manage seemingly other root-managed object",
 			declared.RootScope,
-			fake.DeploymentObject(difftest.ManagedBy(declared.RootScope, "other-rs")),
+			k8sobjects.DeploymentObject(difftest.ManagedBy(declared.RootScope, "other-rs")),
 			OperationManage,
 			true,
 		},
 		{
 			"Non-root can manage unmanaged object",
 			"foo",
-			fake.DeploymentObject(),
+			k8sobjects.DeploymentObject(),
 			OperationManage,
 			true,
 		},
 		{
 			"Non-root can manage self-managed object",
 			"foo",
-			fake.DeploymentObject(syncertest.ManagementEnabled, difftest.ManagedBy("foo", rsName)),
+			k8sobjects.DeploymentObject(syncertest.ManagementEnabled, difftest.ManagedBy("foo", rsName)),
 			OperationManage,
 			true,
 		},
 		{
 			"Non-root can NOT manage other non-root-managed object",
 			"foo",
-			fake.DeploymentObject(syncertest.ManagementEnabled, difftest.ManagedBy("foo", "other-rs")),
+			k8sobjects.DeploymentObject(syncertest.ManagementEnabled, difftest.ManagedBy("foo", "other-rs")),
 			OperationManage,
 			false,
 		},
 		{
 			"Non-root can NOT manage root-managed object",
 			"foo",
-			fake.DeploymentObject(syncertest.ManagementEnabled, difftest.ManagedBy(declared.RootScope, "any-rs")),
+			k8sobjects.DeploymentObject(syncertest.ManagementEnabled, difftest.ManagedBy(declared.RootScope, "any-rs")),
 			OperationManage,
 			false,
 		},
 		{
 			"Non-root can manage seemingly other non-root-managed object",
 			"foo",
-			fake.DeploymentObject(difftest.ManagedBy("foo", "other-rs")),
+			k8sobjects.DeploymentObject(difftest.ManagedBy("foo", "other-rs")),
 			OperationManage,
 			true,
 		},
 		{
 			"Non-root can manage seemingly root-managed object",
 			"foo",
-			fake.DeploymentObject(difftest.ManagedBy(declared.RootScope, "any-rs")),
+			k8sobjects.DeploymentObject(difftest.ManagedBy(declared.RootScope, "any-rs")),
 			OperationManage,
 			true,
 		},

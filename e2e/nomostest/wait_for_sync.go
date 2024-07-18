@@ -29,10 +29,10 @@ import (
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/reposync"
 	"kpt.dev/configsync/pkg/rootsync"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/util/repo"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 )
@@ -261,7 +261,7 @@ func (nt *NT) WaitForRootSyncSourceError(rsName, code string, message string, op
 	Wait(nt.T, fmt.Sprintf("RootSync %s source error code %s", rsName, code), nt.DefaultWaitTimeout,
 		func() error {
 			nt.T.Helper()
-			rs := fake.RootSyncObjectV1Beta1(rsName)
+			rs := k8sobjects.RootSyncObjectV1Beta1(rsName)
 			if err := nt.KubeClient.Get(rs.GetName(), rs.GetNamespace(), rs); err != nil {
 				return err
 			}
@@ -280,7 +280,7 @@ func (nt *NT) WaitForRootSyncSyncError(rsName, code string, message string, reso
 	Wait(nt.T, fmt.Sprintf("RootSync %s rendering error code %s", rsName, code), nt.DefaultWaitTimeout,
 		func() error {
 			nt.T.Helper()
-			rs := fake.RootSyncObjectV1Beta1(rsName)
+			rs := k8sobjects.RootSyncObjectV1Beta1(rsName)
 			err := nt.KubeClient.Get(rs.GetName(), rs.GetNamespace(), rs)
 			if err != nil {
 				return err
@@ -300,7 +300,7 @@ func (nt *NT) WaitForRepoSyncSyncError(ns, rsName, code string, message string, 
 	Wait(nt.T, fmt.Sprintf("RepoSync %s/%s rendering error code %s", ns, rsName, code), nt.DefaultWaitTimeout,
 		func() error {
 			nt.T.Helper()
-			rs := fake.RepoSyncObjectV1Beta1(ns, rsName)
+			rs := k8sobjects.RepoSyncObjectV1Beta1(ns, rsName)
 			err := nt.KubeClient.Get(rs.GetName(), rs.GetNamespace(), rs)
 			if err != nil {
 				return err
@@ -320,7 +320,7 @@ func (nt *NT) WaitForRepoSyncSourceError(ns, rsName, code, message string, opts 
 	Wait(nt.T, fmt.Sprintf("RepoSync %s/%s source error code %s", ns, rsName, code), nt.DefaultWaitTimeout,
 		func() error {
 			nt.T.Helper()
-			rs := fake.RepoSyncObjectV1Beta1(ns, rsName)
+			rs := k8sobjects.RepoSyncObjectV1Beta1(ns, rsName)
 			err := nt.KubeClient.Get(rs.GetName(), rs.GetNamespace(), rs)
 			if err != nil {
 				return err
@@ -419,7 +419,7 @@ func (nt *NT) WaitForRootSyncStalledError(rsNamespace, rsName, reason, message s
 					Name:      rsName,
 					Namespace: rsNamespace,
 				},
-				TypeMeta: fake.ToTypeMeta(kinds.RootSyncV1Beta1()),
+				TypeMeta: k8sobjects.ToTypeMeta(kinds.RootSyncV1Beta1()),
 			}
 			if err := nt.KubeClient.Get(rsName, rsNamespace, rs); err != nil {
 				return err
@@ -450,7 +450,7 @@ func (nt *NT) WaitForRepoSyncStalledError(rsNamespace, rsName, reason, message s
 					Name:      rsName,
 					Namespace: rsNamespace,
 				},
-				TypeMeta: fake.ToTypeMeta(kinds.RepoSyncV1Beta1()),
+				TypeMeta: k8sobjects.ToTypeMeta(kinds.RepoSyncV1Beta1()),
 			}
 			if err := nt.KubeClient.Get(rsName, rsNamespace, rs); err != nil {
 				return err

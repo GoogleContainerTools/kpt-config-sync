@@ -18,7 +18,7 @@ import (
 	"testing"
 
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -30,12 +30,12 @@ func TestGKNN(t *testing.T) {
 	}{
 		{
 			name: "a namespaced object",
-			obj:  fake.RoleObject(core.Namespace("test")),
+			obj:  k8sobjects.RoleObject(core.Namespace("test")),
 			want: "rbac.authorization.k8s.io_role_test_default-name",
 		},
 		{
 			name: "a cluster-scoped object",
-			obj:  fake.ClusterRoleObject(),
+			obj:  k8sobjects.ClusterRoleObject(),
 			want: "rbac.authorization.k8s.io_clusterrole_default-name",
 		},
 		{

@@ -46,6 +46,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/importer/reader"
 	"kpt.dev/configsync/pkg/kinds"
@@ -53,7 +54,6 @@ import (
 	ocmetrics "kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
-	"kpt.dev/configsync/pkg/testing/fake"
 	webhookconfig "kpt.dev/configsync/pkg/webhook/configuration"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/cli-utils/pkg/object/dependson"
@@ -171,7 +171,7 @@ func InstallRootSyncCRD(nt *NT) error {
 // UninstallRootSyncCRD uninstalls the RootSync CRD on the test cluster
 func UninstallRootSyncCRD(nt *NT) error {
 	nt.T.Log("Uninstalling RootSync CRD")
-	rootSyncCRD := fake.CustomResourceDefinitionV1Object(
+	rootSyncCRD := k8sobjects.CustomResourceDefinitionV1Object(
 		core.Name(configsync.RootSyncCRDName))
 	return DeleteObjectsAndWait(nt, rootSyncCRD)
 }
@@ -489,7 +489,7 @@ func noOOMKilledContainer(nt *NT) testpredicates.Predicate {
 // RepoSyncRoleBinding returns rolebinding that grants service account
 // permission to manage resources in the namespace.
 func RepoSyncRoleBinding(nn types.NamespacedName) *rbacv1.RoleBinding {
-	rb := fake.RoleBindingObject(core.Name(nn.Name), core.Namespace(nn.Namespace))
+	rb := k8sobjects.RoleBindingObject(core.Name(nn.Name), core.Namespace(nn.Namespace))
 	sb := []rbacv1.Subject{
 		{
 			Kind:      "ServiceAccount",
@@ -628,7 +628,7 @@ func setupDelegatedControl(nt *NT) {
 
 	for nn := range nt.NonRootRepos {
 		// create namespace for namespace reconciler.
-		err := nt.KubeClient.Create(fake.NamespaceObject(nn.Namespace))
+		err := nt.KubeClient.Create(k8sobjects.NamespaceObject(nn.Namespace))
 		if err != nil {
 			nt.T.Fatal(err)
 		}
@@ -648,7 +648,7 @@ func setupDelegatedControl(nt *NT) {
 
 // RootSyncObjectV1Alpha1 returns the default RootSync object.
 func RootSyncObjectV1Alpha1(name, repoURL string, sourceFormat configsync.SourceFormat) *v1alpha1.RootSync {
-	rs := fake.RootSyncObjectV1Alpha1(name)
+	rs := k8sobjects.RootSyncObjectV1Alpha1(name)
 	rs.Spec.SourceFormat = sourceFormat
 	rs.Spec.SourceType = configsync.GitSource
 	rs.Spec.Git = &v1alpha1.Git{
@@ -697,7 +697,7 @@ func RootSyncObjectV1Alpha1FromRootRepo(nt *NT, name string) *v1alpha1.RootSync 
 
 // RootSyncObjectV1Beta1 returns the default RootSync object with version v1beta1.
 func RootSyncObjectV1Beta1(name, repoURL string, sourceFormat configsync.SourceFormat) *v1beta1.RootSync {
-	rs := fake.RootSyncObjectV1Beta1(name)
+	rs := k8sobjects.RootSyncObjectV1Beta1(name)
 	rs.Spec.SourceFormat = sourceFormat
 	rs.Spec.SourceType = configsync.GitSource
 	rs.Spec.Git = &v1beta1.Git{
@@ -770,7 +770,7 @@ func StructuredNSPath(namespace, resourceName string) string {
 // RepoSyncObjectV1Alpha1 returns the default RepoSync object in the given namespace.
 // SourceFormat for RepoSync must be Unstructured (default), so it's left unspecified.
 func RepoSyncObjectV1Alpha1(nn types.NamespacedName, repoURL string) *v1alpha1.RepoSync {
-	rs := fake.RepoSyncObjectV1Alpha1(nn.Namespace, nn.Name)
+	rs := k8sobjects.RepoSyncObjectV1Alpha1(nn.Namespace, nn.Name)
 	rs.Spec.SourceType = configsync.GitSource
 	rs.Spec.Git = &v1alpha1.Git{
 		Repo:   repoURL,
@@ -826,7 +826,7 @@ func RepoSyncObjectV1Alpha1FromNonRootRepo(nt *NT, nn types.NamespacedName) *v1a
 // RepoSyncObjectV1Beta1 returns the default RepoSync object
 // with version v1beta1 in the given namespace.
 func RepoSyncObjectV1Beta1(nn types.NamespacedName, repoURL string, sourceFormat configsync.SourceFormat) *v1beta1.RepoSync {
-	rs := fake.RepoSyncObjectV1Beta1(nn.Namespace, nn.Name)
+	rs := k8sobjects.RepoSyncObjectV1Beta1(nn.Namespace, nn.Name)
 	rs.Spec.SourceFormat = sourceFormat
 	rs.Spec.SourceType = configsync.GitSource
 	rs.Spec.Git = &v1beta1.Git{
@@ -1065,7 +1065,7 @@ func setupCentralizedControl(nt *NT) {
 		// Add Namespace for this RepoSync.
 		// This may replace an existing Namespace, if there are multiple
 		// RepoSyncs in the same namespace.
-		nsObj := fake.NamespaceObject(ns)
+		nsObj := k8sobjects.NamespaceObject(ns)
 		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, ns), nsObj))
 		nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
 
@@ -1234,7 +1234,7 @@ func DeletePodByLabel(nt *NT, label, value string, waitForChildren bool) {
 // SetPolicyDir updates the root-sync object with the provided policyDir.
 func SetPolicyDir(nt *NT, syncName, policyDir string) {
 	nt.T.Logf("Set policyDir to %q", policyDir)
-	rs := fake.RootSyncObjectV1Beta1(syncName)
+	rs := k8sobjects.RootSyncObjectV1Beta1(syncName)
 	if err := nt.KubeClient.Get(syncName, configmanagement.ControllerNamespace, rs); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -1246,7 +1246,7 @@ func SetPolicyDir(nt *NT, syncName, policyDir string) {
 // SetGitBranch updates the root-sync object with the provided git branch
 func SetGitBranch(nt *NT, syncName, branch string) {
 	nt.T.Logf("Change git branch to %q", branch)
-	rs := fake.RootSyncObjectV1Beta1(syncName)
+	rs := k8sobjects.RootSyncObjectV1Beta1(syncName)
 	if err := nt.KubeClient.Get(syncName, configmanagement.ControllerNamespace, rs); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -1273,7 +1273,7 @@ func SetupFakeSSHCreds(nt *NT, rsKind string, rsRef types.NamespacedName, auth c
 		nt.T.Logf("The auth type %s doesn't need a Secret", auth)
 		return nil
 	}
-	secret := fake.SecretObject(secretName, core.Namespace(rsRef.Namespace))
+	secret := k8sobjects.SecretObject(secretName, core.Namespace(rsRef.Namespace))
 	err := nt.KubeClient.Get(secret.Name, secret.Namespace, secret)
 	if err == nil {
 		// The Secret is already created by the test scaffolding.

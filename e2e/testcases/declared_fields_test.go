@@ -18,19 +18,18 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
-	"kpt.dev/configsync/pkg/api/configsync"
-	"kpt.dev/configsync/pkg/kinds"
-
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
-	"kpt.dev/configsync/pkg/testing/fake"
+	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
+	"kpt.dev/configsync/pkg/kinds"
 )
 
 func TestDeclaredFieldsPod(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured)
 
-	namespace := fake.NamespaceObject("bookstore")
+	namespace := k8sobjects.NamespaceObject("bookstore")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace))
 	// We use literal YAML here instead of an object as:
 	// 1) If we used a literal struct the protocol field would implicitly be added.

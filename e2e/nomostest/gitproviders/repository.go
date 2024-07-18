@@ -33,7 +33,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testlogger"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 )
@@ -630,7 +630,7 @@ func (g *Repository) MustHash(t testing.NTB) string {
 // AddSafetyNamespace adds a Namespace to prevent the mono-repo safety check
 // (KNV2006) from preventing deletion of other objects.
 func (g *Repository) AddSafetyNamespace() error {
-	return g.Add(g.SafetyNSPath, fake.NamespaceObject(g.SafetyNSName))
+	return g.Add(g.SafetyNSPath, k8sobjects.NamespaceObject(g.SafetyNSName))
 }
 
 // RemoveSafetyNamespace removes the safety Namespace.
@@ -641,7 +641,7 @@ func (g *Repository) RemoveSafetyNamespace() error {
 // AddSafetyClusterRole adds a ClusterRole to prevent the mono-repo safety check
 // (KNV2006) from preventing deletion of other objects.
 func (g *Repository) AddSafetyClusterRole() error {
-	return g.Add(g.SafetyClusterRolePath, fake.ClusterRoleObject(core.Name(g.SafetyClusterRoleName)))
+	return g.Add(g.SafetyClusterRolePath, k8sobjects.ClusterRoleObject(core.Name(g.SafetyClusterRoleName)))
 }
 
 // RemoveSafetyClusterRole removes the safety ClusterRole.
@@ -652,5 +652,5 @@ func (g *Repository) RemoveSafetyClusterRole() error {
 // AddRepoObject adds a system.repo.yaml under the specified directory path.
 // Use this for structured repositories.
 func (g *Repository) AddRepoObject(syncDir string) error {
-	return g.Add(filepath.Join(syncDir, "system", "repo.yaml"), fake.RepoObject())
+	return g.Add(filepath.Join(syncDir, "system", "repo.yaml"), k8sobjects.RepoObject())
 }

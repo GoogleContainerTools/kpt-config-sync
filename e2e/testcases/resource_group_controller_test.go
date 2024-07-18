@@ -32,9 +32,9 @@ import (
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/resourcegroup"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 func TestResourceGroupController(t *testing.T) {
@@ -43,11 +43,11 @@ func TestResourceGroupController(t *testing.T) {
 	ns := "rg-test"
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
 		"acme/namespaces/rg-test/ns.yaml",
-		fake.NamespaceObject(ns)))
+		k8sobjects.NamespaceObject(ns)))
 
 	cmName := "e2e-test-configmap"
 	cmPath := "acme/namespaces/rg-test/configmap.yaml"
-	cm := fake.ConfigMapObject(core.Name(cmName), core.Namespace(ns))
+	cm := k8sobjects.ConfigMapObject(core.Name(cmName), core.Namespace(ns))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding a ConfigMap to repo"))
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -77,11 +77,11 @@ func TestResourceGroupControllerInKptGroup(t *testing.T) {
 	namespace := "resourcegroup-e2e"
 	nt.T.Cleanup(func() {
 		// all test resources are created in this namespace
-		if err := nt.KubeClient.Delete(fake.NamespaceObject(namespace)); err != nil {
+		if err := nt.KubeClient.Delete(k8sobjects.NamespaceObject(namespace)); err != nil {
 			nt.T.Error(err)
 		}
 	})
-	if err := nt.KubeClient.Create(fake.NamespaceObject(namespace)); err != nil {
+	if err := nt.KubeClient.Create(k8sobjects.NamespaceObject(namespace)); err != nil {
 		nt.T.Fatal(err)
 	}
 	rgNN := types.NamespacedName{
@@ -237,11 +237,11 @@ func TestResourceGroupCustomResource(t *testing.T) {
 	namespace := "resourcegroup-e2e"
 	nt.T.Cleanup(func() {
 		// all test resources are created in this namespace
-		if err := nt.KubeClient.Delete(fake.NamespaceObject(namespace)); err != nil {
+		if err := nt.KubeClient.Delete(k8sobjects.NamespaceObject(namespace)); err != nil {
 			nt.T.Error(err)
 		}
 	})
-	if err := nt.KubeClient.Create(fake.NamespaceObject(namespace)); err != nil {
+	if err := nt.KubeClient.Create(k8sobjects.NamespaceObject(namespace)); err != nil {
 		nt.T.Fatal(err)
 	}
 	rgNN := types.NamespacedName{
@@ -362,11 +362,11 @@ func TestResourceGroupApplyStatus(t *testing.T) {
 	namespace := "resourcegroup-e2e"
 	nt.T.Cleanup(func() {
 		// all test resources are created in this namespace
-		if err := nt.KubeClient.Delete(fake.NamespaceObject(namespace)); err != nil {
+		if err := nt.KubeClient.Delete(k8sobjects.NamespaceObject(namespace)); err != nil {
 			nt.T.Error(err)
 		}
 	})
-	if err := nt.KubeClient.Create(fake.NamespaceObject(namespace)); err != nil {
+	if err := nt.KubeClient.Create(k8sobjects.NamespaceObject(namespace)); err != nil {
 		nt.T.Fatal(err)
 	}
 	rgNN := types.NamespacedName{

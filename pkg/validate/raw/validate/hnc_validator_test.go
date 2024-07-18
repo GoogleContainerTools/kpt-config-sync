@@ -19,11 +19,11 @@ import (
 	"testing"
 
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/hnc"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 const (
@@ -39,32 +39,32 @@ func TestHNCLabels(t *testing.T) {
 	}{
 		{
 			name: "no labels",
-			obj:  fake.RoleAtPath("namespaces/hello/role.yaml"),
+			obj:  k8sobjects.RoleAtPath("namespaces/hello/role.yaml"),
 		},
 		{
 			name: "one legal label",
-			obj: fake.RoleAtPath("namespaces/hello/role.yaml",
+			obj: k8sobjects.RoleAtPath("namespaces/hello/role.yaml",
 				core.Label(legalLabel, "")),
 		},
 		{
 			name: "one illegal label",
-			obj: fake.RoleAtPath("namespaces/hello/role.yaml",
+			obj: k8sobjects.RoleAtPath("namespaces/hello/role.yaml",
 				core.Label(illegalSuffixedLabel, "")),
-			wantErr: hnc.IllegalDepthLabelError(fake.Role(), []string{illegalSuffixedLabel}),
+			wantErr: hnc.IllegalDepthLabelError(k8sobjects.Role(), []string{illegalSuffixedLabel}),
 		},
 		{
 			name: "two illegal labels",
-			obj: fake.RoleAtPath("namespaces/hello/role.yaml",
+			obj: k8sobjects.RoleAtPath("namespaces/hello/role.yaml",
 				core.Label(illegalSuffixedLabel, ""),
 				core.Label(illegalSuffixedLabel2, "")),
-			wantErr: hnc.IllegalDepthLabelError(fake.Role(), []string{illegalSuffixedLabel, illegalSuffixedLabel2}),
+			wantErr: hnc.IllegalDepthLabelError(k8sobjects.Role(), []string{illegalSuffixedLabel, illegalSuffixedLabel2}),
 		},
 		{
 			name: "one legal and one illegal label",
-			obj: fake.RoleAtPath("namespaces/hello/role.yaml",
+			obj: k8sobjects.RoleAtPath("namespaces/hello/role.yaml",
 				core.Label(legalLabel, ""),
 				core.Label(illegalSuffixedLabel, "")),
-			wantErr: hnc.IllegalDepthLabelError(fake.Role(), []string{illegalSuffixedLabel}),
+			wantErr: hnc.IllegalDepthLabelError(k8sobjects.Role(), []string{illegalSuffixedLabel}),
 		},
 	}
 

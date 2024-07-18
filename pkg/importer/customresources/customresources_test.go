@@ -23,9 +23,9 @@ import (
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/kinds"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -91,42 +91,42 @@ func TestGetCRDs(t *testing.T) {
 		},
 		{
 			name: "ignore non-CRD",
-			objs: []ast.FileObject{fake.Role()},
+			objs: []ast.FileObject{k8sobjects.Role()},
 		},
 		{
 			name: "one v1beta1 CRD",
 			objs: []ast.FileObject{
-				fake.CustomResourceDefinitionV1Beta1(),
+				k8sobjects.CustomResourceDefinitionV1Beta1(),
 			},
 			want: []*apiextensionsv1beta1.CustomResourceDefinition{
-				fake.CustomResourceDefinitionV1Beta1Object(),
+				k8sobjects.CustomResourceDefinitionV1Beta1Object(),
 			},
 		},
 		{
 			name: "one v1 CRD",
 			objs: []ast.FileObject{
-				fake.CustomResourceDefinitionV1(servedStorage(t, true, true)),
+				k8sobjects.CustomResourceDefinitionV1(servedStorage(t, true, true)),
 			},
 			want: []*apiextensionsv1beta1.CustomResourceDefinition{
 				// The default if unspecified is true/true for served/storage.
-				fake.CustomResourceDefinitionV1Beta1Object(servedStorage(t, true, true), preserveUnknownFields(t, false)),
+				k8sobjects.CustomResourceDefinitionV1Beta1Object(servedStorage(t, true, true), preserveUnknownFields(t, false)),
 			},
 		},
 		{
 			name: "both CRD versions",
 			objs: []ast.FileObject{
-				fake.CustomResourceDefinitionV1Beta1(core.Name("a"),
+				k8sobjects.CustomResourceDefinitionV1Beta1(core.Name("a"),
 					groupKind(t, kinds.Role().GroupKind())),
-				fake.CustomResourceDefinitionV1(
+				k8sobjects.CustomResourceDefinitionV1(
 					servedStorage(t, true, true),
 					core.Name("b"),
 					groupKind(t, kinds.ClusterRole().GroupKind())),
 			},
 			want: []*apiextensionsv1beta1.CustomResourceDefinition{
 				// The default if unspecified is true/true for served/storage.
-				fake.CustomResourceDefinitionV1Beta1Object(core.Name("a"),
+				k8sobjects.CustomResourceDefinitionV1Beta1Object(core.Name("a"),
 					groupKind(t, kinds.Role().GroupKind())),
-				fake.CustomResourceDefinitionV1Beta1Object(
+				k8sobjects.CustomResourceDefinitionV1Beta1Object(
 					servedStorage(t, true, true),
 					core.Name("b"),
 					groupKind(t, kinds.ClusterRole().GroupKind()),

@@ -21,14 +21,14 @@ import (
 	"github.com/google/go-cmp/cmp"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast/node"
 	"kpt.dev/configsync/pkg/importer/analyzer/transform/selectors"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -40,20 +40,20 @@ func nsSelector(nssName, mode string) ast.FileObject {
 		}
 		nss.Spec.Mode = mode
 	}
-	return fake.NamespaceSelectorAtPath("namespaces/foo/selector.yaml",
+	return k8sobjects.NamespaceSelectorAtPath("namespaces/foo/selector.yaml",
 		core.Name(nssName), mutFunc)
 }
 
 func TestNamespaceSelectors(t *testing.T) {
 	testCases := []struct {
 		name     string
-		objs     *objects.Tree
-		want     *objects.Tree
+		objs     *fileobjects.Tree
+		want     *fileobjects.Tree
 		wantErrs status.MultiError
 	}{
 		{
 			name: "Object without selector is kept",
-			objs: &objects.Tree{
+			objs: &fileobjects.Tree{
 				NamespaceSelectors: map[string]ast.FileObject{
 					"sre": nsSelector("sre", v1.NSSelectorStaticMode),
 				},
@@ -69,9 +69,9 @@ func TestNamespaceSelectors(t *testing.T) {
 									Relative: cmpath.RelativeSlash("namespaces/foo/frontend"),
 									Type:     node.Namespace,
 									Objects: []ast.FileObject{
-										fake.Namespace("namespaces/foo/frontend",
+										k8sobjects.Namespace("namespaces/foo/frontend",
 											core.Label("sre-support", "false")),
-										fake.RoleAtPath("namespaces/foo/role.yaml",
+										k8sobjects.RoleAtPath("namespaces/foo/role.yaml",
 											core.Namespace("frontend")),
 									},
 								},
@@ -80,7 +80,7 @@ func TestNamespaceSelectors(t *testing.T) {
 					},
 				},
 			},
-			want: &objects.Tree{
+			want: &fileobjects.Tree{
 				NamespaceSelectors: map[string]ast.FileObject{
 					"sre": nsSelector("sre", v1.NSSelectorStaticMode),
 				},
@@ -96,9 +96,9 @@ func TestNamespaceSelectors(t *testing.T) {
 									Relative: cmpath.RelativeSlash("namespaces/foo/frontend"),
 									Type:     node.Namespace,
 									Objects: []ast.FileObject{
-										fake.Namespace("namespaces/foo/frontend",
+										k8sobjects.Namespace("namespaces/foo/frontend",
 											core.Label("sre-support", "false")),
-										fake.RoleAtPath("namespaces/foo/role.yaml",
+										k8sobjects.RoleAtPath("namespaces/foo/role.yaml",
 											core.Namespace("frontend")),
 									},
 								},
@@ -110,7 +110,7 @@ func TestNamespaceSelectors(t *testing.T) {
 		},
 		{
 			name: "Object outside selector dir is kept",
-			objs: &objects.Tree{
+			objs: &fileobjects.Tree{
 				NamespaceSelectors: map[string]ast.FileObject{
 					"sre": nsSelector("sre", v1.NSSelectorStaticMode),
 				},
@@ -126,7 +126,7 @@ func TestNamespaceSelectors(t *testing.T) {
 									Relative: cmpath.RelativeSlash("namespaces/foo/frontend"),
 									Type:     node.Namespace,
 									Objects: []ast.FileObject{
-										fake.Namespace("namespaces/foo/frontend",
+										k8sobjects.Namespace("namespaces/foo/frontend",
 											core.Label("sre-support", "false")),
 									},
 								},
@@ -140,8 +140,8 @@ func TestNamespaceSelectors(t *testing.T) {
 									Relative: cmpath.RelativeSlash("namespaces/bar/frontend"),
 									Type:     node.Namespace,
 									Objects: []ast.FileObject{
-										fake.Namespace("namespaces/bar/frontend"),
-										fake.RoleAtPath("namespaces/bar/role.yaml",
+										k8sobjects.Namespace("namespaces/bar/frontend"),
+										k8sobjects.RoleAtPath("namespaces/bar/role.yaml",
 											core.Namespace("bar")),
 									},
 								},
@@ -150,7 +150,7 @@ func TestNamespaceSelectors(t *testing.T) {
 					},
 				},
 			},
-			want: &objects.Tree{
+			want: &fileobjects.Tree{
 				NamespaceSelectors: map[string]ast.FileObject{
 					"sre": nsSelector("sre", v1.NSSelectorStaticMode),
 				},
@@ -166,7 +166,7 @@ func TestNamespaceSelectors(t *testing.T) {
 									Relative: cmpath.RelativeSlash("namespaces/foo/frontend"),
 									Type:     node.Namespace,
 									Objects: []ast.FileObject{
-										fake.Namespace("namespaces/foo/frontend",
+										k8sobjects.Namespace("namespaces/foo/frontend",
 											core.Label("sre-support", "false")),
 									},
 								},
@@ -180,8 +180,8 @@ func TestNamespaceSelectors(t *testing.T) {
 									Relative: cmpath.RelativeSlash("namespaces/bar/frontend"),
 									Type:     node.Namespace,
 									Objects: []ast.FileObject{
-										fake.Namespace("namespaces/bar/frontend"),
-										fake.RoleAtPath("namespaces/bar/role.yaml",
+										k8sobjects.Namespace("namespaces/bar/frontend"),
+										k8sobjects.RoleAtPath("namespaces/bar/role.yaml",
 											core.Namespace("bar")),
 									},
 								},
@@ -193,7 +193,7 @@ func TestNamespaceSelectors(t *testing.T) {
 		},
 		{
 			name: "Object and Namespace with labels is kept",
-			objs: &objects.Tree{
+			objs: &fileobjects.Tree{
 				NamespaceSelectors: map[string]ast.FileObject{
 					"sre": nsSelector("sre", v1.NSSelectorStaticMode),
 				},
@@ -209,9 +209,9 @@ func TestNamespaceSelectors(t *testing.T) {
 									Relative: cmpath.RelativeSlash("namespaces/foo/frontend"),
 									Type:     node.Namespace,
 									Objects: []ast.FileObject{
-										fake.Namespace("namespaces/foo/frontend",
+										k8sobjects.Namespace("namespaces/foo/frontend",
 											core.Label("sre-support", "true")),
-										fake.RoleAtPath("namespaces/foo/role.yaml",
+										k8sobjects.RoleAtPath("namespaces/foo/role.yaml",
 											core.Namespace("frontend"),
 											core.Annotation(metadata.NamespaceSelectorAnnotationKey, "sre")),
 									},
@@ -221,7 +221,7 @@ func TestNamespaceSelectors(t *testing.T) {
 					},
 				},
 			},
-			want: &objects.Tree{
+			want: &fileobjects.Tree{
 				NamespaceSelectors: map[string]ast.FileObject{
 					"sre": nsSelector("sre", v1.NSSelectorStaticMode),
 				},
@@ -237,9 +237,9 @@ func TestNamespaceSelectors(t *testing.T) {
 									Relative: cmpath.RelativeSlash("namespaces/foo/frontend"),
 									Type:     node.Namespace,
 									Objects: []ast.FileObject{
-										fake.Namespace("namespaces/foo/frontend",
+										k8sobjects.Namespace("namespaces/foo/frontend",
 											core.Label("sre-support", "true")),
-										fake.RoleAtPath("namespaces/foo/role.yaml",
+										k8sobjects.RoleAtPath("namespaces/foo/role.yaml",
 											core.Namespace("frontend"),
 											core.Annotation(metadata.NamespaceSelectorAnnotationKey, "sre")),
 									},
@@ -252,7 +252,7 @@ func TestNamespaceSelectors(t *testing.T) {
 		},
 		{
 			name: "Object with selector and Namespace without labels is not kept",
-			objs: &objects.Tree{
+			objs: &fileobjects.Tree{
 				NamespaceSelectors: map[string]ast.FileObject{
 					"sre": nsSelector("sre", v1.NSSelectorStaticMode),
 				},
@@ -268,8 +268,8 @@ func TestNamespaceSelectors(t *testing.T) {
 									Relative: cmpath.RelativeSlash("namespaces/foo/frontend"),
 									Type:     node.Namespace,
 									Objects: []ast.FileObject{
-										fake.Namespace("namespaces/foo/frontend"),
-										fake.RoleAtPath("namespaces/foo/role.yaml",
+										k8sobjects.Namespace("namespaces/foo/frontend"),
+										k8sobjects.RoleAtPath("namespaces/foo/role.yaml",
 											core.Namespace("frontend"),
 											core.Annotation(metadata.NamespaceSelectorAnnotationKey, "sre")),
 									},
@@ -279,7 +279,7 @@ func TestNamespaceSelectors(t *testing.T) {
 					},
 				},
 			},
-			want: &objects.Tree{
+			want: &fileobjects.Tree{
 				NamespaceSelectors: map[string]ast.FileObject{
 					"sre": nsSelector("sre", v1.NSSelectorStaticMode),
 				},
@@ -295,7 +295,7 @@ func TestNamespaceSelectors(t *testing.T) {
 									Relative: cmpath.RelativeSlash("namespaces/foo/frontend"),
 									Type:     node.Namespace,
 									Objects: []ast.FileObject{
-										fake.Namespace("namespaces/foo/frontend"),
+										k8sobjects.Namespace("namespaces/foo/frontend"),
 									},
 								},
 							},
@@ -306,7 +306,7 @@ func TestNamespaceSelectors(t *testing.T) {
 		},
 		{
 			name: "Use dynamic mode in hierarchy mode",
-			objs: &objects.Tree{
+			objs: &fileobjects.Tree{
 				NamespaceSelectors: map[string]ast.FileObject{
 					"sre": nsSelector("sre", v1.NSSelectorDynamicMode),
 				},
@@ -315,7 +315,7 @@ func TestNamespaceSelectors(t *testing.T) {
 		},
 		{
 			name: "Use unknown mode in hierarchy mode",
-			objs: &objects.Tree{
+			objs: &fileobjects.Tree{
 				NamespaceSelectors: map[string]ast.FileObject{
 					"sre": nsSelector("sre", "unknown"),
 				},

@@ -19,12 +19,12 @@ import (
 	"testing"
 
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/system"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/util/repo"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 )
 
 const notAllowedRepoVersion = "0.0.0"
@@ -32,53 +32,53 @@ const notAllowedRepoVersion = "0.0.0"
 func TestRepo(t *testing.T) {
 	testCases := []struct {
 		name    string
-		objs    *objects.Raw
+		objs    *fileobjects.Raw
 		wantErr status.Error
 	}{
 		{
 			name: "Repo with current version",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.Repo(fake.RepoVersion(repo.CurrentVersion)),
+					k8sobjects.Repo(k8sobjects.RepoVersion(repo.CurrentVersion)),
 				},
 			},
 		},
 		{
 			name: "Repo with supported old version",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.Repo(fake.RepoVersion(system.OldAllowedRepoVersion)),
+					k8sobjects.Repo(k8sobjects.RepoVersion(system.OldAllowedRepoVersion)),
 				},
 			},
 		},
 		{
 			name: "Repo with unsupported old version",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.Repo(fake.RepoVersion(notAllowedRepoVersion)),
+					k8sobjects.Repo(k8sobjects.RepoVersion(notAllowedRepoVersion)),
 				},
 			},
-			wantErr: system.UnsupportedRepoSpecVersion(fake.Repo(fake.RepoVersion(notAllowedRepoVersion)), notAllowedRepoVersion),
+			wantErr: system.UnsupportedRepoSpecVersion(k8sobjects.Repo(k8sobjects.RepoVersion(notAllowedRepoVersion)), notAllowedRepoVersion),
 		},
 		{
 			name: "Missing Repo",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.Role(),
-					fake.RoleBinding(),
+					k8sobjects.Role(),
+					k8sobjects.RoleBinding(),
 				},
 			},
 			wantErr: system.MissingRepoError(),
 		},
 		{
 			name: "Multiple Repos",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.Repo(core.Name("first")),
-					fake.Repo(core.Name("second")),
+					k8sobjects.Repo(core.Name("first")),
+					k8sobjects.Repo(core.Name("second")),
 				},
 			},
-			wantErr: status.MultipleSingletonsError(fake.Repo(), fake.Repo()),
+			wantErr: status.MultipleSingletonsError(k8sobjects.Repo(), k8sobjects.Repo()),
 		},
 	}
 

@@ -23,14 +23,14 @@ import (
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/syntax"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 )
 
 type inheritanceSpecs map[schema.GroupKind]transform.InheritanceSpec
 
 // Inheritance hydrates the given Tree objects by copying inherited objects from
 // abstract namespaces down into child namespaces.
-func Inheritance(objs *objects.Tree) status.MultiError {
+func Inheritance(objs *fileobjects.Tree) status.MultiError {
 	if objs.Tree == nil {
 		return nil
 	}

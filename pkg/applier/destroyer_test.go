@@ -25,10 +25,10 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kpt.dev/configsync/pkg/applier/stats"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
 	testingfake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/testing/testerrors"
 	"sigs.k8s.io/cli-utils/pkg/apis/actuation"
 	"sigs.k8s.io/cli-utils/pkg/apply"
@@ -79,7 +79,7 @@ func TestDestroy(t *testing.T) {
 	testObj2 := newTestObj("test-2")
 	testObj2ID := core.IDOf(testObj2)
 
-	namespaceObj := fake.UnstructuredObject(kinds.Namespace(),
+	namespaceObj := k8sobjects.UnstructuredObject(kinds.Namespace(),
 		core.Name("test-namespace"))
 	namespaceMeta := object.UnstructuredToObjMetadata(namespaceObj)
 	namespaceObjID := core.IDOf(namespaceObj)

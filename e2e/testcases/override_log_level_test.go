@@ -26,10 +26,10 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/reconcilermanager"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 func TestOverrideRootSyncLogLevel(t *testing.T) {
@@ -37,7 +37,7 @@ func TestOverrideRootSyncLogLevel(t *testing.T) {
 
 	rootSyncName := nomostest.RootSyncNN(configsync.RootSyncName)
 	rootReconcilerName := core.RootReconcilerObjectKey(rootSyncName.Name)
-	rootSyncV1 := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rootSyncV1 := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 
 	// add kustomize to enable hydration controller container in root-sync
 	nt.T.Log("Add the kustomize components root directory")

@@ -19,8 +19,8 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"kpt.dev/configsync/pkg/api/configmanagement"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/policycontroller"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 func TestIsManageableSystem(t *testing.T) {
@@ -39,7 +39,7 @@ func TestIsManageableSystem(t *testing.T) {
 		testcase := testcase
 		t.Run(testcase.name, func(t *testing.T) {
 			t.Parallel()
-			reserved := IsManageableSystemNamespace(fake.NamespaceObject(testcase.name))
+			reserved := IsManageableSystemNamespace(k8sobjects.NamespaceObject(testcase.name))
 			if reserved != testcase.reserved {
 				t.Errorf("Expected %v got %v", testcase.reserved, reserved)
 			}

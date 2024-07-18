@@ -19,41 +19,41 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/metadata"
-	"kpt.dev/configsync/pkg/testing/fake"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 )
 
 func TestDeclaredVersion(t *testing.T) {
 	testCases := []struct {
 		name string
-		objs *objects.Raw
-		want *objects.Raw
+		objs *fileobjects.Raw
+		want *fileobjects.Raw
 	}{
 		{
 			name: "v1 RoleBinding",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.RoleBinding(),
+					k8sobjects.RoleBinding(),
 				},
 			},
-			want: &objects.Raw{
+			want: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.RoleBinding(core.Label(metadata.DeclaredVersionLabel, "v1")),
+					k8sobjects.RoleBinding(core.Label(metadata.DeclaredVersionLabel, "v1")),
 				},
 			},
 		},
 		{
 			name: "v1beta1 RoleBinding",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.RoleBindingV1Beta1(),
+					k8sobjects.RoleBindingV1Beta1(),
 				},
 			},
-			want: &objects.Raw{
+			want: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.RoleBindingV1Beta1(core.Label(metadata.DeclaredVersionLabel, "v1beta1")),
+					k8sobjects.RoleBindingV1Beta1(core.Label(metadata.DeclaredVersionLabel, "v1beta1")),
 				},
 			},
 		},

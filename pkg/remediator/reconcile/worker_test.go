@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
@@ -36,7 +37,6 @@ import (
 	"kpt.dev/configsync/pkg/syncer/syncertest"
 	syncertestfake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	testingfake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/testing/testerrors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -55,20 +55,20 @@ func TestWorker_Run_Remediates(t *testing.T) {
 		{
 			name: "revert delete",
 			existingObjs: []client.Object{
-				fake.ClusterRoleBindingObject(syncertest.ManagementEnabled),
+				k8sobjects.ClusterRoleBindingObject(syncertest.ManagementEnabled),
 			},
 			declaredObjs: []client.Object{
-				fake.ClusterRoleBindingObject(syncertest.ManagementEnabled),
+				k8sobjects.ClusterRoleBindingObject(syncertest.ManagementEnabled),
 			},
 			changedObjs: []client.Object{
-				queue.MarkDeleted(context.Background(), fake.ClusterRoleBindingObject()),
+				queue.MarkDeleted(context.Background(), k8sobjects.ClusterRoleBindingObject()),
 			},
 			eventObjs: []client.Object{
-				queue.MarkDeleted(context.Background(), fake.ClusterRoleBindingObject()),
+				queue.MarkDeleted(context.Background(), k8sobjects.ClusterRoleBindingObject()),
 			},
 			expectedObjs: []client.Object{
 				// TODO: Upgrade FakeClient to increment UID after deletion
-				fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+				k8sobjects.ClusterRoleBindingObject(syncertest.ManagementEnabled,
 					core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 				),
 			},
@@ -76,26 +76,26 @@ func TestWorker_Run_Remediates(t *testing.T) {
 		{
 			name: "revert watch filter label removal",
 			existingObjs: []client.Object{
-				fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+				k8sobjects.ClusterRoleBindingObject(syncertest.ManagementEnabled,
 					core.Label("example-label", "example-value")),
 			},
 			declaredObjs: []client.Object{
-				fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+				k8sobjects.ClusterRoleBindingObject(syncertest.ManagementEnabled,
 					core.Label("example-label", "example-value")),
 			},
 			changedObjs: []client.Object{
 				// Update object to remove label
-				fake.ClusterRoleBindingObject(syncertest.ManagementEnabled),
+				k8sobjects.ClusterRoleBindingObject(syncertest.ManagementEnabled),
 			},
 			eventObjs: []client.Object{
 				// Watch server treats update to remove required label as a delete.
 				// Delete event includes previous object state.
 				queue.MarkDeleted(context.Background(),
-					fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+					k8sobjects.ClusterRoleBindingObject(syncertest.ManagementEnabled,
 						core.Label("example-label", "example-value"))),
 			},
 			expectedObjs: []client.Object{
-				fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+				k8sobjects.ClusterRoleBindingObject(syncertest.ManagementEnabled,
 					core.Label("example-label", "example-value"),
 					core.UID("1"), core.ResourceVersion("3"), core.Generation(1),
 				),
@@ -104,22 +104,22 @@ func TestWorker_Run_Remediates(t *testing.T) {
 		{
 			name: "revert update",
 			existingObjs: []client.Object{
-				fake.ClusterRoleObject(syncertest.ManagementEnabled),
+				k8sobjects.ClusterRoleObject(syncertest.ManagementEnabled),
 			},
 			declaredObjs: []client.Object{
-				fake.ClusterRoleObject(syncertest.ManagementEnabled),
+				k8sobjects.ClusterRoleObject(syncertest.ManagementEnabled),
 			},
 			changedObjs: []client.Object{
-				fake.ClusterRoleObject(syncertest.ManagementEnabled,
+				k8sobjects.ClusterRoleObject(syncertest.ManagementEnabled,
 					core.Label("new", "label")),
 			},
 			eventObjs: []client.Object{
-				fake.ClusterRoleObject(syncertest.ManagementEnabled,
+				k8sobjects.ClusterRoleObject(syncertest.ManagementEnabled,
 					core.Label("new", "label")),
 			},
 			expectedObjs: []client.Object{
 				// Role change should be reverted
-				fake.ClusterRoleObject(syncertest.ManagementEnabled,
+				k8sobjects.ClusterRoleObject(syncertest.ManagementEnabled,
 					core.UID("1"), core.ResourceVersion("3"), core.Generation(1),
 				),
 			},
@@ -191,26 +191,26 @@ func TestWorker_Run_RemediatesExisting(t *testing.T) {
 	ctx := context.Background()
 
 	existingObjs := []client.Object{
-		fake.ClusterRoleBindingObject(syncertest.ManagementEnabled),
-		fake.ClusterRoleObject(syncertest.ManagementEnabled),
+		k8sobjects.ClusterRoleBindingObject(syncertest.ManagementEnabled),
+		k8sobjects.ClusterRoleObject(syncertest.ManagementEnabled),
 	}
 	declaredObjs := []client.Object{
-		fake.ClusterRoleBindingObject(syncertest.ManagementEnabled),
-		fake.ClusterRoleObject(syncertest.ManagementEnabled),
+		k8sobjects.ClusterRoleBindingObject(syncertest.ManagementEnabled),
+		k8sobjects.ClusterRoleObject(syncertest.ManagementEnabled),
 	}
 	changedObjs := []client.Object{
-		queue.MarkDeleted(ctx, fake.ClusterRoleBindingObject()),
-		fake.ClusterRoleObject(syncertest.ManagementEnabled,
+		queue.MarkDeleted(ctx, k8sobjects.ClusterRoleBindingObject()),
+		k8sobjects.ClusterRoleObject(syncertest.ManagementEnabled,
 			core.Label("new", "label")),
 	}
 	expectedObjs := []client.Object{
 		// CRB delete should be reverted
 		// TODO: Upgrade FakeClient to increment UID after deletion
-		fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+		k8sobjects.ClusterRoleBindingObject(syncertest.ManagementEnabled,
 			core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 		),
 		// Role change should be reverted
-		fake.ClusterRoleObject(syncertest.ManagementEnabled,
+		k8sobjects.ClusterRoleObject(syncertest.ManagementEnabled,
 			core.UID("1"), core.ResourceVersion("3"), core.Generation(1),
 		),
 	}
@@ -279,21 +279,21 @@ func TestWorker_ProcessNextObject(t *testing.T) {
 		{
 			name: "update actual objects",
 			declared: []client.Object{
-				fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+				k8sobjects.ClusterRoleBindingObject(syncertest.ManagementEnabled,
 					core.Label("first", "one")),
-				fake.ClusterRoleObject(syncertest.ManagementEnabled,
+				k8sobjects.ClusterRoleObject(syncertest.ManagementEnabled,
 					core.Label("second", "two")),
 			},
 			toProcess: []client.Object{
-				fake.ClusterRoleBindingObject(syncertest.ManagementEnabled),
-				fake.ClusterRoleObject(syncertest.ManagementEnabled),
+				k8sobjects.ClusterRoleBindingObject(syncertest.ManagementEnabled),
+				k8sobjects.ClusterRoleObject(syncertest.ManagementEnabled),
 			},
 			want: []client.Object{
 				// TODO: Figure out why the reconciler is stripping away labels and annotations.
-				fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+				k8sobjects.ClusterRoleBindingObject(syncertest.ManagementEnabled,
 					core.UID("1"), core.ResourceVersion("2"), core.Generation(1),
 					core.Label("first", "one")),
-				fake.ClusterRoleObject(syncertest.ManagementEnabled,
+				k8sobjects.ClusterRoleObject(syncertest.ManagementEnabled,
 					core.UID("1"), core.ResourceVersion("2"), core.Generation(1),
 					core.Label("second", "two")),
 			},
@@ -302,9 +302,9 @@ func TestWorker_ProcessNextObject(t *testing.T) {
 			name:     "delete undeclared objects",
 			declared: []client.Object{},
 			toProcess: []client.Object{
-				fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+				k8sobjects.ClusterRoleBindingObject(syncertest.ManagementEnabled,
 					core.Annotation(metadata.ResourceIDKey, "rbac.authorization.k8s.io_clusterrolebinding_default-name")),
-				fake.ClusterRoleObject(syncertest.ManagementEnabled,
+				k8sobjects.ClusterRoleObject(syncertest.ManagementEnabled,
 					core.Annotation(metadata.ResourceIDKey, "rbac.authorization.k8s.io_clusterrole_default-name")),
 			},
 			want: []client.Object{},
@@ -312,18 +312,18 @@ func TestWorker_ProcessNextObject(t *testing.T) {
 		{
 			name: "create missing objects",
 			declared: []client.Object{
-				fake.ClusterRoleBindingObject(syncertest.ManagementEnabled),
-				fake.ClusterRoleObject(syncertest.ManagementEnabled),
+				k8sobjects.ClusterRoleBindingObject(syncertest.ManagementEnabled),
+				k8sobjects.ClusterRoleObject(syncertest.ManagementEnabled),
 			},
 			toProcess: []client.Object{
-				queue.MarkDeleted(context.Background(), fake.ClusterRoleBindingObject()),
-				queue.MarkDeleted(context.Background(), fake.ClusterRoleObject()),
+				queue.MarkDeleted(context.Background(), k8sobjects.ClusterRoleBindingObject()),
+				queue.MarkDeleted(context.Background(), k8sobjects.ClusterRoleObject()),
 			},
 			want: []client.Object{
-				fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+				k8sobjects.ClusterRoleBindingObject(syncertest.ManagementEnabled,
 					core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 				),
-				fake.ClusterRoleObject(syncertest.ManagementEnabled,
+				k8sobjects.ClusterRoleObject(syncertest.ManagementEnabled,
 					core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 				),
 			},
@@ -404,25 +404,25 @@ func TestWorker_Run_CancelledWhenNotEmpty(t *testing.T) {
 	defer cancel()
 
 	existingObjs := []client.Object{
-		fake.ClusterRoleBindingObject(syncertest.ManagementEnabled),
-		fake.ClusterRoleObject(syncertest.ManagementEnabled),
+		k8sobjects.ClusterRoleBindingObject(syncertest.ManagementEnabled),
+		k8sobjects.ClusterRoleObject(syncertest.ManagementEnabled),
 	}
 	declaredObjs := []client.Object{
-		fake.ClusterRoleBindingObject(syncertest.ManagementEnabled),
-		fake.ClusterRoleObject(syncertest.ManagementEnabled),
+		k8sobjects.ClusterRoleBindingObject(syncertest.ManagementEnabled),
+		k8sobjects.ClusterRoleObject(syncertest.ManagementEnabled),
 	}
 	changedObjs := []client.Object{
-		queue.MarkDeleted(ctx, fake.ClusterRoleBindingObject()),
-		fake.ClusterRoleObject(syncertest.ManagementEnabled,
+		queue.MarkDeleted(ctx, k8sobjects.ClusterRoleBindingObject()),
+		k8sobjects.ClusterRoleObject(syncertest.ManagementEnabled,
 			core.Label("new", "label")),
 	}
 	expectedObjs := []client.Object{
 		// CRB delete should be reverted
-		fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+		k8sobjects.ClusterRoleBindingObject(syncertest.ManagementEnabled,
 			core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 		),
 		// Role revert should fail from fake Update error
-		fake.ClusterRoleObject(syncertest.ManagementEnabled,
+		k8sobjects.ClusterRoleObject(syncertest.ManagementEnabled,
 			core.UID("1"), core.ResourceVersion("2"), core.Generation(1),
 			core.Label("new", "label"),
 		),
@@ -506,23 +506,23 @@ func TestWorker_Refresh(t *testing.T) {
 		{
 			name: "Not found marks object deleted",
 			queue: fakeQueue{
-				element: fake.UnstructuredObject(kinds.Role(), core.Name(name), core.Namespace(namespace)),
+				element: k8sobjects.UnstructuredObject(kinds.Role(), core.Name(name), core.Namespace(namespace)),
 			},
 			client:      syncertestfake.NewClient(t, scheme),
-			want:        fake.UnstructuredObject(kinds.Role(), core.Name(name), core.Namespace(namespace)),
+			want:        k8sobjects.UnstructuredObject(kinds.Role(), core.Name(name), core.Namespace(namespace)),
 			wantDeleted: true,
 			wantErr:     nil,
 		},
 		{
 			name: "Found updates objects",
 			queue: fakeQueue{
-				element: fake.UnstructuredObject(kinds.Role(), core.Name(name), core.Namespace(namespace),
+				element: k8sobjects.UnstructuredObject(kinds.Role(), core.Name(name), core.Namespace(namespace),
 					core.Annotation("foo", "bar")),
 			},
 			client: syncertestfake.NewClient(t, scheme,
-				fake.RoleObject(core.Name(name), core.Namespace(namespace),
+				k8sobjects.RoleObject(core.Name(name), core.Namespace(namespace),
 					core.Annotation("foo", "qux"))),
-			want: fake.UnstructuredObject(kinds.Role(), core.Name(name), core.Namespace(namespace),
+			want: k8sobjects.UnstructuredObject(kinds.Role(), core.Name(name), core.Namespace(namespace),
 				core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 				core.Annotation("foo", "qux")),
 			wantDeleted: false,
@@ -531,14 +531,14 @@ func TestWorker_Refresh(t *testing.T) {
 		{
 			name: "API Error does not update object",
 			queue: fakeQueue{
-				element: fake.UnstructuredObject(kinds.Role(), core.Name(name), core.Namespace(namespace)),
+				element: k8sobjects.UnstructuredObject(kinds.Role(), core.Name(name), core.Namespace(namespace)),
 			},
 			client:      syncertestfake.NewErrorClient(errors.New("some error")),
-			want:        fake.UnstructuredObject(kinds.Role(), core.Name(name), core.Namespace(namespace)),
+			want:        k8sobjects.UnstructuredObject(kinds.Role(), core.Name(name), core.Namespace(namespace)),
 			wantDeleted: false,
 			wantErr: status.APIServerError(errors.New("some error"),
 				"failed to get updated object for worker cache",
-				fake.UnstructuredObject(kinds.Role(), core.Name(name), core.Namespace(namespace))),
+				k8sobjects.UnstructuredObject(kinds.Role(), core.Name(name), core.Namespace(namespace))),
 		},
 	}
 
@@ -551,7 +551,7 @@ func TestWorker_Refresh(t *testing.T) {
 				},
 			}
 
-			err := w.refresh(context.Background(), fake.UnstructuredObject(
+			err := w.refresh(context.Background(), k8sobjects.UnstructuredObject(
 				kinds.Role(), core.Name(name), core.Namespace(namespace)))
 			testerrors.AssertEqual(t, tc.wantErr, err)
 

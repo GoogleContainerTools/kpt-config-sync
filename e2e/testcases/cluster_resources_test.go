@@ -28,8 +28,8 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -78,7 +78,7 @@ func TestRevertClusterRole(t *testing.T) {
 
 	crName := "e2e-test-clusterrole"
 
-	err := nt.ValidateNotFound(crName, "", fake.ClusterRoleObject())
+	err := nt.ValidateNotFound(crName, "", k8sobjects.ClusterRoleObject())
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -91,7 +91,7 @@ func TestRevertClusterRole(t *testing.T) {
 			Verbs:     []string{"get", "list", "create"},
 		},
 	}
-	declaredCr := fake.ClusterRoleObject(core.Name(crName))
+	declaredCr := k8sobjects.ClusterRoleObject(core.Name(crName))
 	declaredCr.Rules = declaredRules
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/clusterrole.yaml", declaredCr))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add get/list/create ClusterRole"))
@@ -113,7 +113,7 @@ func TestRevertClusterRole(t *testing.T) {
 			Verbs:     []string{"get", "list"}, // missing "create"
 		},
 	}
-	appliedCr := fake.ClusterRoleObject(core.Name(crName))
+	appliedCr := k8sobjects.ClusterRoleObject(core.Name(crName))
 	appliedCr.Rules = appliedRules
 	err = nt.KubeClient.Update(appliedCr)
 	// The admission webhook should deny the conflicting change.
@@ -146,7 +146,7 @@ func TestClusterRoleLifecycle(t *testing.T) {
 
 	crName := "e2e-test-clusterrole"
 
-	err := nt.ValidateNotFound(crName, "", fake.ClusterRoleObject())
+	err := nt.ValidateNotFound(crName, "", k8sobjects.ClusterRoleObject())
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -159,7 +159,7 @@ func TestClusterRoleLifecycle(t *testing.T) {
 			Verbs:     []string{"get", "list", "create"},
 		},
 	}
-	declaredCr := fake.ClusterRoleObject(core.Name(crName))
+	declaredCr := k8sobjects.ClusterRoleObject(core.Name(crName))
 	declaredCr.Rules = declaredRules
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/clusterrole.yaml", declaredCr))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add get/list/create ClusterRole"))
@@ -192,7 +192,7 @@ func TestClusterRoleLifecycle(t *testing.T) {
 			Verbs:     []string{"get", "list"}, // missing "create"
 		},
 	}
-	updatedCr := fake.ClusterRoleObject(core.Name(crName))
+	updatedCr := k8sobjects.ClusterRoleObject(core.Name(crName))
 	updatedCr.Rules = updatedRules
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/clusterrole.yaml", updatedCr))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("update ClusterRole to get/list"))

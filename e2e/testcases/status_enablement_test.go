@@ -28,8 +28,8 @@ import (
 	resourcegroupv1alpha1 "kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/cli-utils/pkg/common"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -41,7 +41,7 @@ func TestStatusEnabledAndDisabled(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.Unstructured)
 	id := applier.InventoryID(configsync.RootSyncName, configsync.ControllerNamespace)
 
-	rootSync := fake.RootSyncObjectV1Alpha1(configsync.RootSyncName)
+	rootSync := k8sobjects.RootSyncObjectV1Alpha1(configsync.RootSyncName)
 	// Override the statusMode for root-reconciler
 	nt.MustMergePatch(rootSync, `{"spec": {"override": {"statusMode": "disabled"}}}`)
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -50,7 +50,7 @@ func TestStatusEnabledAndDisabled(t *testing.T) {
 
 	namespaceName := "status-test"
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespaceObject(namespaceName, nil)))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm1.yaml", fake.ConfigMapObject(core.Name("cm1"), core.Namespace(namespaceName))))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm1.yaml", k8sobjects.ConfigMapObject(core.Name("cm1"), core.Namespace(namespaceName))))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add a namespace and a configmap"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)

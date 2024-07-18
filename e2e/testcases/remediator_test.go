@@ -24,8 +24,8 @@ import (
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 func TestSurfaceFightError(t *testing.T) {
@@ -34,7 +34,7 @@ func TestSurfaceFightError(t *testing.T) {
 	nt.T.Logf("Stop the admission webhook to generate the fights")
 	nomostest.StopWebhook(nt)
 
-	ns := fake.NamespaceObject("test-ns", core.Annotation("foo", "bar"))
+	ns := k8sobjects.NamespaceObject("test-ns", core.Annotation("foo", "bar"))
 	rb := roleBinding("test-rb", ns.Name, map[string]string{"foo": "bar"})
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
 		fmt.Sprintf("acme/namespaces/%s/ns.yaml", ns.Name), ns))

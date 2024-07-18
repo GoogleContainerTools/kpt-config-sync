@@ -41,13 +41,13 @@ import (
 	hubv1 "kpt.dev/configsync/pkg/api/hub/v1"
 	"kpt.dev/configsync/pkg/client/restconfig"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/rootsync"
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/util"
 	"kpt.dev/configsync/pkg/validate/raw/validate"
 	webhookconfiguration "kpt.dev/configsync/pkg/webhook/configuration"
@@ -73,7 +73,7 @@ const (
 var rootReconcilerName = core.RootReconcilerName(rootsyncName)
 
 func role(name string, opts ...core.MetaMutator) *rbacv1.Role {
-	result := fake.RoleObject(opts...)
+	result := k8sobjects.RoleObject(opts...)
 	result.Name = name
 
 	return result
@@ -82,14 +82,14 @@ func role(name string, opts ...core.MetaMutator) *rbacv1.Role {
 func clusterrole(t *testing.T, name string, opts ...core.MetaMutator) *rbacv1.ClusterRole {
 	t.Helper()
 
-	result := fake.ClusterRoleObject(opts...)
+	result := k8sobjects.ClusterRoleObject(opts...)
 	result.Name = name
 
 	return result
 }
 
 func clusterrolebinding(name string, role string, opts ...core.MetaMutator) *rbacv1.ClusterRoleBinding {
-	result := fake.ClusterRoleBindingObject(opts...)
+	result := k8sobjects.ClusterRoleBindingObject(opts...)
 	result.Name = name
 
 	result.RoleRef.Name = role
@@ -150,7 +150,7 @@ func configMapWithData(namespace, name string, data map[string]string, opts ...c
 		}),
 	}
 	opts = append(baseOpts, opts...)
-	result := fake.ConfigMapObject(opts...)
+	result := k8sobjects.ConfigMapObject(opts...)
 	result.Namespace = namespace
 	result.Name = name
 	result.Data = data
@@ -159,14 +159,14 @@ func configMapWithData(namespace, name string, data map[string]string, opts ...c
 
 func secretObj(t *testing.T, name string, auth configsync.AuthType, sourceType configsync.SourceType, opts ...core.MetaMutator) *corev1.Secret {
 	t.Helper()
-	result := fake.SecretObject(name, opts...)
+	result := k8sobjects.SecretObject(name, opts...)
 	result.Data = secretData(t, "test-key", auth, sourceType)
 	return result
 }
 
 func secretObjWithProxy(t *testing.T, name string, auth configsync.AuthType, opts ...core.MetaMutator) *corev1.Secret {
 	t.Helper()
-	result := fake.SecretObject(name, opts...)
+	result := k8sobjects.SecretObject(name, opts...)
 	result.Data = secretData(t, "test-key", auth, configsync.GitSource)
 	m2 := secretData(t, "test-key", "https_proxy", configsync.GitSource)
 	for k, v := range m2 {
@@ -177,7 +177,7 @@ func secretObjWithProxy(t *testing.T, name string, auth configsync.AuthType, opt
 
 func secretObjWithKnownHosts(t *testing.T, name string, opts ...core.MetaMutator) *corev1.Secret {
 	t.Helper()
-	result := fake.SecretObject(name, opts...)
+	result := k8sobjects.SecretObject(name, opts...)
 	result.Data = secretData(t, "test-key", configsync.AuthSSH, configsync.GitSource)
 	result.Data[KnownHostsKey] = []byte("abc")
 	return result
@@ -327,7 +327,7 @@ func rootsyncDynamicNSSelectorEnabled(dynamicNSSelectorEnabled bool) func(*v1bet
 }
 
 func rootSync(name string, opts ...func(*v1beta1.RootSync)) *v1beta1.RootSync {
-	rs := fake.RootSyncObjectV1Beta1(name)
+	rs := k8sobjects.RootSyncObjectV1Beta1(name)
 	// default to require rendering for convenience with existing tests
 	core.SetAnnotation(rs, metadata.RequiresRenderingAnnotationKey, "true")
 	for _, opt := range opts {
@@ -1103,7 +1103,7 @@ func TestRootSyncReconcileAdmissionWebhook(t *testing.T) {
 		{
 			name: "flag false, admission webhook enabled",
 			existingObjects: []client.Object{
-				fake.AdmissionWebhookObject(webhookconfiguration.Name),
+				k8sobjects.AdmissionWebhookObject(webhookconfiguration.Name),
 			},
 			expectedWebhookEnabled: true,
 		},
@@ -1160,7 +1160,7 @@ func TestRootSyncReconcileWithInvalidCACertSecret(t *testing.T) {
 	for name, tc := range testCases {
 		t.Run(name, func(t *testing.T) {
 			reqNamespacedName := namespacedName(tc.rootSync.Name, tc.rootSync.Namespace)
-			certSecret := fake.SecretObject(caCertSecret, core.Namespace(tc.rootSync.Namespace))
+			certSecret := k8sobjects.SecretObject(caCertSecret, core.Namespace(tc.rootSync.Namespace))
 			fakeClient, _, testReconciler := setupRootReconciler(t, tc.rootSync, certSecret)
 
 			// reconcile
@@ -1170,7 +1170,7 @@ func TestRootSyncReconcileWithInvalidCACertSecret(t *testing.T) {
 			}
 
 			// rootsync should be in stalled status
-			wantRs := fake.RootSyncObjectV1Beta1(rootsyncName)
+			wantRs := k8sobjects.RootSyncObjectV1Beta1(rootsyncName)
 			rootsync.SetStalled(wantRs, "Validation", fmt.Errorf("caCertSecretRef was set, but %s key is not present in %s Secret", CACertSecretKey, caCertSecret))
 			validateRootSyncStatus(t, wantRs, fakeClient)
 		})
@@ -1188,7 +1188,7 @@ func TestRootSyncValidateCACertSecret(t *testing.T) {
 		},
 		"caCertSecretRef set but invalid Secret": {
 			objs: []client.Object{
-				fake.SecretObject(caCertSecret, core.Namespace(configsync.ControllerNamespace)),
+				k8sobjects.SecretObject(caCertSecret, core.Namespace(configsync.ControllerNamespace)),
 			},
 			err: fmt.Sprintf("caCertSecretRef was set, but %s key is not present in %s Secret", CACertSecretKey, caCertSecret),
 		},
@@ -1966,7 +1966,7 @@ func TestRootSyncSwitchAuthTypes(t *testing.T) {
 		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
 
-	wantServiceAccount := fake.ServiceAccountObject(
+	wantServiceAccount := k8sobjects.ServiceAccountObject(
 		rootReconcilerName,
 		core.Namespace(configsync.ControllerNamespace),
 		core.Annotation(GCPSAAnnotationKey, rs.Spec.GCPServiceAccountEmail),
@@ -2190,7 +2190,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	wantRs1 := fake.RootSyncObjectV1Beta1(rs1.Name)
+	wantRs1 := k8sobjects.RootSyncObjectV1Beta1(rs1.Name)
 	wantRs1.Spec = rs1.Spec
 	wantRs1.Status.Reconciler = rootReconcilerName
 	rootsync.SetReconciling(wantRs1, "Deployment",
@@ -2205,7 +2205,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
 
-	serviceAccount1 := fake.ServiceAccountObject(
+	serviceAccount1 := k8sobjects.ServiceAccountObject(
 		rootReconcilerName,
 		core.Namespace(configsync.ControllerNamespace),
 		core.Labels(label1),
@@ -2260,7 +2260,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	wantRs2 := fake.RootSyncObjectV1Beta1(rs2.Name)
+	wantRs2 := k8sobjects.RootSyncObjectV1Beta1(rs2.Name)
 	wantRs2.Spec = rs2.Spec
 	wantRs2.Status.Reconciler = rootReconcilerName2
 	rootsync.SetReconciling(wantRs2, "Deployment",
@@ -2288,7 +2288,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 
-	serviceAccount2 := fake.ServiceAccountObject(
+	serviceAccount2 := k8sobjects.ServiceAccountObject(
 		rootReconcilerName2,
 		core.Namespace(configsync.ControllerNamespace),
 		core.Labels(label2),
@@ -2321,7 +2321,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	wantRs3 := fake.RootSyncObjectV1Beta1(rs3.Name)
+	wantRs3 := k8sobjects.RootSyncObjectV1Beta1(rs3.Name)
 	wantRs3.Spec = rs3.Spec
 	wantRs3.Status.Reconciler = rootReconcilerName3
 	rootsync.SetReconciling(wantRs3, "Deployment",
@@ -2349,7 +2349,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 		t.Error(err)
 	}
 
-	serviceAccount3 := fake.ServiceAccountObject(
+	serviceAccount3 := k8sobjects.ServiceAccountObject(
 		rootReconcilerName3,
 		core.Namespace(configsync.ControllerNamespace),
 		core.Annotation(GCPSAAnnotationKey, rs3.Spec.GCPServiceAccountEmail),
@@ -2386,7 +2386,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	wantRs4 := fake.RootSyncObjectV1Beta1(rs4.Name)
+	wantRs4 := k8sobjects.RootSyncObjectV1Beta1(rs4.Name)
 	wantRs4.Spec = rs4.Spec
 	wantRs4.Status.Reconciler = rootReconcilerName4
 	rootsync.SetReconciling(wantRs4, "Deployment",
@@ -2415,7 +2415,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 
-	serviceAccount4 := fake.ServiceAccountObject(
+	serviceAccount4 := k8sobjects.ServiceAccountObject(
 		rootReconcilerName4,
 		core.Namespace(configsync.ControllerNamespace),
 		core.Labels(label4),
@@ -2451,7 +2451,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	wantRs5 := fake.RootSyncObjectV1Beta1(rs5.Name)
+	wantRs5 := k8sobjects.RootSyncObjectV1Beta1(rs5.Name)
 	wantRs5.Spec = rs5.Spec
 	wantRs5.Status.Reconciler = rootReconcilerName5
 	rootsync.SetReconciling(wantRs5, "Deployment",
@@ -2481,7 +2481,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
-	serviceAccount5 := fake.ServiceAccountObject(
+	serviceAccount5 := k8sobjects.ServiceAccountObject(
 		rootReconcilerName5,
 		core.Namespace(configsync.ControllerNamespace),
 		core.Labels(label5),
@@ -2753,13 +2753,13 @@ func validateRootGeneratedResourcesDeleted(t *testing.T, fakeClient *syncerFake.
 	t.Helper()
 
 	// Verify deployment is deleted.
-	deployment := fake.DeploymentObject(core.Namespace(configsync.ControllerNamespace), core.Name(reconcilerName))
+	deployment := k8sobjects.DeploymentObject(core.Namespace(configsync.ControllerNamespace), core.Name(reconcilerName))
 	if err := validateResourceDeleted(core.IDOf(deployment), fakeClient); err != nil {
 		t.Error(err)
 	}
 
 	// Verify service account is deleted.
-	serviceAccount := fake.ServiceAccountObject(reconcilerName, core.Namespace(configsync.ControllerNamespace))
+	serviceAccount := k8sobjects.ServiceAccountObject(reconcilerName, core.Namespace(configsync.ControllerNamespace))
 	if err := validateResourceDeleted(core.IDOf(serviceAccount), fakeClient); err != nil {
 		t.Error(err)
 	}
@@ -2784,22 +2784,22 @@ func TestMapSecretToRootSyncs(t *testing.T) {
 	}{
 		{
 			name:   "A secret from the default namespace",
-			secret: fake.SecretObject("s1", core.Namespace("default")),
+			secret: k8sobjects.SecretObject("s1", core.Namespace("default")),
 			want:   nil,
 		},
 		{
 			name:   fmt.Sprintf("A secret from the %s namespace starting with %s", configsync.ControllerNamespace, core.NsReconcilerPrefix+"-"),
-			secret: fake.SecretObject(fmt.Sprintf("%s-bookstore", core.NsReconcilerPrefix), core.Namespace(configsync.ControllerNamespace)),
+			secret: k8sobjects.SecretObject(fmt.Sprintf("%s-bookstore", core.NsReconcilerPrefix), core.Namespace(configsync.ControllerNamespace)),
 			want:   nil,
 		},
 		{
 			name:   fmt.Sprintf("A secret 'any' from the %s namespace NOT starting with %s, no mapping RootSync", configsync.ControllerNamespace, core.NsReconcilerPrefix+"-"),
-			secret: fake.SecretObject("any", core.Namespace(configsync.ControllerNamespace)),
+			secret: k8sobjects.SecretObject("any", core.Namespace(configsync.ControllerNamespace)),
 			want:   nil,
 		},
 		{
 			name:   fmt.Sprintf("A secret %q from the %s namespace NOT starting with %s", rootsyncSSHKey, configsync.ControllerNamespace, core.NsReconcilerPrefix+"-"),
-			secret: fake.SecretObject(rootsyncSSHKey, core.Namespace(configsync.ControllerNamespace)),
+			secret: k8sobjects.SecretObject(rootsyncSSHKey, core.Namespace(configsync.ControllerNamespace)),
 			want: []reconcile.Request{
 				{
 					NamespacedName: types.NamespacedName{
@@ -2817,7 +2817,7 @@ func TestMapSecretToRootSyncs(t *testing.T) {
 		},
 		{
 			name:   fmt.Sprintf("A secret %q from the %s namespace NOT starting with %s", testSecretName, configsync.ControllerNamespace, core.NsReconcilerPrefix+"-"),
-			secret: fake.SecretObject(testSecretName, core.Namespace(configsync.ControllerNamespace)),
+			secret: k8sobjects.SecretObject(testSecretName, core.Namespace(configsync.ControllerNamespace)),
 			want: []reconcile.Request{
 				{
 					NamespacedName: types.NamespacedName{
@@ -2829,7 +2829,7 @@ func TestMapSecretToRootSyncs(t *testing.T) {
 		},
 		{
 			name:   fmt.Sprintf("A caCertSecretRef %s from the c-m-s namespace with mapping RootSyncs", caCertSecret),
-			secret: fake.SecretObject(caCertSecret, core.Namespace(configsync.ControllerNamespace)),
+			secret: k8sobjects.SecretObject(caCertSecret, core.Namespace(configsync.ControllerNamespace)),
 			want: []reconcile.Request{
 				{
 					NamespacedName: types.NamespacedName{
@@ -3059,7 +3059,7 @@ func TestRootSyncWithHelm(t *testing.T) {
 		metadata.SyncKindLabel:            testReconciler.syncKind,
 		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
-	ksaNoGSAAnnotation := fake.ServiceAccountObject(
+	ksaNoGSAAnnotation := k8sobjects.ServiceAccountObject(
 		rootReconcilerName,
 		core.Namespace(configsync.ControllerNamespace),
 		core.Labels(labels),
@@ -3134,7 +3134,7 @@ func TestRootSyncWithHelm(t *testing.T) {
 	}
 
 	// test 3: validations
-	ksaWithGSAAnnotation := fake.ServiceAccountObject(
+	ksaWithGSAAnnotation := k8sobjects.ServiceAccountObject(
 		rootReconcilerName,
 		core.Namespace(configsync.ControllerNamespace),
 		core.Annotation(GCPSAAnnotationKey, rs.Spec.Helm.GCPServiceAccountEmail),
@@ -3313,7 +3313,7 @@ func TestRootSyncWithOCI(t *testing.T) {
 		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
 
-	ksaNoGSAAnnotation := fake.ServiceAccountObject(
+	ksaNoGSAAnnotation := k8sobjects.ServiceAccountObject(
 		rootReconcilerName,
 		core.Namespace(configsync.ControllerNamespace),
 		core.Labels(labels),
@@ -3387,7 +3387,7 @@ func TestRootSyncWithOCI(t *testing.T) {
 	}
 
 	// test 3: validations
-	ksaWithGSAAnnotation := fake.ServiceAccountObject(
+	ksaWithGSAAnnotation := k8sobjects.ServiceAccountObject(
 		rootReconcilerName,
 		core.Namespace(configsync.ControllerNamespace),
 		core.Annotation(GCPSAAnnotationKey, rs.Spec.Oci.GCPServiceAccountEmail),
@@ -3544,7 +3544,7 @@ func TestRootSyncSpecValidation(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
 
-	rs := fake.RootSyncObjectV1Beta1(rootsyncName)
+	rs := k8sobjects.RootSyncObjectV1Beta1(rootsyncName)
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
 	fakeClient, _, testReconciler := setupRootReconciler(t, rs)
 
@@ -3553,7 +3553,7 @@ func TestRootSyncSpecValidation(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
-	wantRs := fake.RootSyncObjectV1Beta1(rootsyncName)
+	wantRs := k8sobjects.RootSyncObjectV1Beta1(rootsyncName)
 	rootsync.SetStalled(wantRs, "Validation", validate.InvalidSourceType(rs))
 	validateRootSyncStatus(t, wantRs, fakeClient)
 
@@ -3737,13 +3737,13 @@ func TestRootSyncSpecValidation(t *testing.T) {
 }
 
 func TestRootSyncReconcileStaleClientCache(t *testing.T) {
-	rs := fake.RootSyncObjectV1Beta1(rootsyncName)
+	rs := k8sobjects.RootSyncObjectV1Beta1(rootsyncName)
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
 	fakeClient, _, testReconciler := setupRootReconciler(t, rs)
 	ctx := context.Background()
 
 	rs.ResourceVersion = "1"
-	rs = fake.RootSyncObjectV1Beta1(rootsyncName)
+	rs = k8sobjects.RootSyncObjectV1Beta1(rootsyncName)
 	err := fakeClient.Get(ctx, core.ObjectNamespacedName(rs), rs)
 	require.NoError(t, err, "unexpected Get error")
 	oldRS := rs.DeepCopy()
@@ -3753,7 +3753,7 @@ func TestRootSyncReconcileStaleClientCache(t *testing.T) {
 	require.NoError(t, err, "unexpected Reconcile error")
 
 	// Expect Stalled condition with True status, because the RootSync is invalid
-	rs = fake.RootSyncObjectV1Beta1(rootsyncName)
+	rs = k8sobjects.RootSyncObjectV1Beta1(rootsyncName)
 	err = fakeClient.Get(ctx, core.ObjectNamespacedName(rs), rs)
 	require.NoError(t, err, "unexpected Get error")
 	reconcilingCondition := rootsync.GetCondition(rs.Status.Conditions, v1beta1.RootSyncStalled)
@@ -3779,7 +3779,7 @@ func TestRootSyncReconcileStaleClientCache(t *testing.T) {
 	require.NoError(t, err, "unexpected Reconcile error")
 
 	// Expect the same Stalled condition error message
-	rs = fake.RootSyncObjectV1Beta1(rootsyncName)
+	rs = k8sobjects.RootSyncObjectV1Beta1(rootsyncName)
 	err = fakeClient.Get(ctx, core.ObjectNamespacedName(rs), rs)
 	require.NoError(t, err, "unexpected Get error")
 	reconcilingCondition = rootsync.GetCondition(rs.Status.Conditions, v1beta1.RootSyncStalled)
@@ -3788,7 +3788,7 @@ func TestRootSyncReconcileStaleClientCache(t *testing.T) {
 	require.Contains(t, reconcilingCondition.Message, "KNV1061: RootSyncs must specify spec.sourceType", "unexpected Stalled condition message")
 
 	// Simulate a spec update, with ResourceVersion updated by the apiserver
-	rs = fake.RootSyncObjectV1Beta1(rootsyncName)
+	rs = k8sobjects.RootSyncObjectV1Beta1(rootsyncName)
 	err = fakeClient.Get(ctx, core.ObjectNamespacedName(rs), rs)
 	require.NoError(t, err, "unexpected Get error")
 	rs.Spec.SourceType = configsync.GitSource
@@ -3800,7 +3800,7 @@ func TestRootSyncReconcileStaleClientCache(t *testing.T) {
 	require.NoError(t, err, "unexpected Reconcile error")
 
 	// Expect Stalled condition with True status, because the RootSync is differently invalid
-	rs = fake.RootSyncObjectV1Beta1(rootsyncName)
+	rs = k8sobjects.RootSyncObjectV1Beta1(rootsyncName)
 	err = fakeClient.Get(ctx, core.ObjectNamespacedName(rs), rs)
 	require.NoError(t, err, "unexpected Get error")
 	reconcilingCondition = rootsync.GetCondition(rs.Status.Conditions, v1beta1.RootSyncStalled)
@@ -4214,7 +4214,7 @@ func validateRootSyncStatus(t *testing.T, want *v1beta1.RootSync, fakeClient *sy
 type depMutator func(*appsv1.Deployment)
 
 func rootSyncDeployment(reconcilerName string, muts ...depMutator) *appsv1.Deployment {
-	dep := fake.DeploymentObject(
+	dep := k8sobjects.DeploymentObject(
 		core.Namespace(configsync.ControllerNamespace),
 		core.Name(reconcilerName),
 	)

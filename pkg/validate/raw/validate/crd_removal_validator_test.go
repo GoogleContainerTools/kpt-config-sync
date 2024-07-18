@@ -21,12 +21,12 @@ import (
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 )
 
 func crd(gvk schema.GroupVersionKind) *v1beta1.CustomResourceDefinition {
@@ -42,73 +42,73 @@ func crd(gvk schema.GroupVersionKind) *v1beta1.CustomResourceDefinition {
 
 func crdFileObject(t *testing.T, gvk schema.GroupVersionKind) ast.FileObject {
 	t.Helper()
-	u := fake.CustomResourceDefinitionV1Beta1Unstructured()
+	u := k8sobjects.CustomResourceDefinitionV1Beta1Unstructured()
 	if err := unstructured.SetNestedField(u.Object, gvk.Group, "spec", "group"); err != nil {
 		t.Fatal(err)
 	}
 	if err := unstructured.SetNestedField(u.Object, gvk.Kind, "spec", "names", "kind"); err != nil {
 		t.Fatal(err)
 	}
-	return fake.FileObject(u, "crd.yaml")
+	return k8sobjects.FileObject(u, "crd.yaml")
 }
 
 func TestRemovedCRDs(t *testing.T) {
 	testCases := []struct {
 		name    string
-		objs    *objects.Raw
+		objs    *fileobjects.Raw
 		wantErr status.MultiError
 	}{
 		{
 			name: "no previous or current CRDs",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.AnvilAtPath("anvil1.yaml"),
+					k8sobjects.AnvilAtPath("anvil1.yaml"),
 				},
 			},
 		},
 		{
 			name: "add a CRD",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				Objects: []ast.FileObject{
 					crdFileObject(t, kinds.Anvil()),
-					fake.AnvilAtPath("anvil1.yaml"),
+					k8sobjects.AnvilAtPath("anvil1.yaml"),
 				},
 			},
 		},
 		{
 			name: "keep a CRD",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				PreviousCRDs: []*v1beta1.CustomResourceDefinition{
 					crd(kinds.Anvil()),
 				},
 				Objects: []ast.FileObject{
 					crdFileObject(t, kinds.Anvil()),
-					fake.AnvilAtPath("anvil1.yaml"),
+					k8sobjects.AnvilAtPath("anvil1.yaml"),
 				},
 			},
 		},
 		{
 			name: "remove an unused CRD",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				PreviousCRDs: []*v1beta1.CustomResourceDefinition{
 					crd(kinds.Anvil()),
 				},
 				Objects: []ast.FileObject{
-					fake.Role(),
+					k8sobjects.Role(),
 				},
 			},
 		},
 		{
 			name: "remove an in-use CRD",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				PreviousCRDs: []*v1beta1.CustomResourceDefinition{
 					crd(kinds.Anvil()),
 				},
 				Objects: []ast.FileObject{
-					fake.AnvilAtPath("anvil1.yaml"),
+					k8sobjects.AnvilAtPath("anvil1.yaml"),
 				},
 			},
-			wantErr: nonhierarchical.UnsupportedCRDRemovalError(fake.AnvilAtPath("anvil1.yaml")),
+			wantErr: nonhierarchical.UnsupportedCRDRemovalError(k8sobjects.AnvilAtPath("anvil1.yaml")),
 		},
 	}
 

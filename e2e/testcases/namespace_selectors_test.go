@@ -31,11 +31,11 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
+	k8sobjects2 "kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/transform/selectors"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
-	fake "kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -51,41 +51,41 @@ const (
 
 var (
 	selectedResourcesWithBookstoreNSSAndShoestoreNSS = []client.Object{
-		fake.ConfigMapObject(core.Namespace(bookstoreNS), core.Name(bookstoreCMName)),
-		fake.ResourceQuotaObject(core.Namespace(bookstoreNS), core.Name(bookstoreRQName)),
-		fake.ConfigMapObject(core.Namespace(shoestoreNS), core.Name(shoestoreCMName)),
+		k8sobjects2.ConfigMapObject(core.Namespace(bookstoreNS), core.Name(bookstoreCMName)),
+		k8sobjects2.ResourceQuotaObject(core.Namespace(bookstoreNS), core.Name(bookstoreRQName)),
+		k8sobjects2.ConfigMapObject(core.Namespace(shoestoreNS), core.Name(shoestoreCMName)),
 	}
 
 	unselectedResourcesWithBookstoreNSSAndShoestoreNSS = []client.Object{
-		fake.ConfigMapObject(core.Namespace(bookstoreNS), core.Name(shoestoreCMName)),
-		fake.ConfigMapObject(core.Namespace(shoestoreNS), core.Name(bookstoreCMName)),
-		fake.ResourceQuotaObject(core.Namespace(shoestoreNS), core.Name(bookstoreRQName)),
+		k8sobjects2.ConfigMapObject(core.Namespace(bookstoreNS), core.Name(shoestoreCMName)),
+		k8sobjects2.ConfigMapObject(core.Namespace(shoestoreNS), core.Name(bookstoreCMName)),
+		k8sobjects2.ResourceQuotaObject(core.Namespace(shoestoreNS), core.Name(bookstoreRQName)),
 	}
 
 	selectedResourcesWithShoestoreNSSOnly = []client.Object{
-		fake.ConfigMapObject(core.Namespace(shoestoreNS), core.Name(shoestoreCMName)),
+		k8sobjects2.ConfigMapObject(core.Namespace(shoestoreNS), core.Name(shoestoreCMName)),
 	}
 
 	unselectedResourcesWithShoestoreNSSOnly = []client.Object{
-		fake.ConfigMapObject(core.Namespace(bookstoreNS), core.Name(bookstoreCMName)),
-		fake.ResourceQuotaObject(core.Namespace(bookstoreNS), core.Name(bookstoreRQName)),
-		fake.ConfigMapObject(core.Namespace(bookstoreNS), core.Name(shoestoreCMName)),
-		fake.ConfigMapObject(core.Namespace(shoestoreNS), core.Name(bookstoreCMName)),
-		fake.ResourceQuotaObject(core.Namespace(shoestoreNS), core.Name(bookstoreRQName)),
+		k8sobjects2.ConfigMapObject(core.Namespace(bookstoreNS), core.Name(bookstoreCMName)),
+		k8sobjects2.ResourceQuotaObject(core.Namespace(bookstoreNS), core.Name(bookstoreRQName)),
+		k8sobjects2.ConfigMapObject(core.Namespace(bookstoreNS), core.Name(shoestoreCMName)),
+		k8sobjects2.ConfigMapObject(core.Namespace(shoestoreNS), core.Name(bookstoreCMName)),
+		k8sobjects2.ResourceQuotaObject(core.Namespace(shoestoreNS), core.Name(bookstoreRQName)),
 	}
 )
 
 func TestNamespaceSelectorHierarchicalFormat(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Selector)
 
-	bookstoreNSS := fake.NamespaceSelectorObject(core.Name(bookstoreNSSName))
-	bookstoreCM := fake.ConfigMapObject(core.Name(bookstoreCMName),
+	bookstoreNSS := k8sobjects2.NamespaceSelectorObject(core.Name(bookstoreNSSName))
+	bookstoreCM := k8sobjects2.ConfigMapObject(core.Name(bookstoreCMName),
 		core.Annotation(metadata.NamespaceSelectorAnnotationKey, bookstoreNSSName))
-	bookstoreRQ := fake.ResourceQuotaObject(core.Name(bookstoreRQName),
+	bookstoreRQ := k8sobjects2.ResourceQuotaObject(core.Name(bookstoreRQName),
 		core.Annotation(metadata.NamespaceSelectorAnnotationKey, bookstoreNSSName))
 
-	shoestoreNSS := fake.NamespaceSelectorObject(core.Name(shoestoreNSSName))
-	shoestoreCM := fake.ConfigMapObject(core.Name(shoestoreCMName),
+	shoestoreNSS := k8sobjects2.NamespaceSelectorObject(core.Name(shoestoreNSSName))
+	shoestoreCM := k8sobjects2.ConfigMapObject(core.Name(shoestoreCMName),
 		core.Annotation(metadata.NamespaceSelectorAnnotationKey, shoestoreNSSName))
 
 	nt.T.Log("Add Namespaces, NamespaceSelectors and Namespace-scoped resources")
@@ -97,8 +97,8 @@ func TestNamespaceSelectorHierarchicalFormat(t *testing.T) {
 
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/namespace-selector-bookstore.yaml", bookstoreNSS))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/namespace-selector-shoestore.yaml", shoestoreNSS))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/bookstore/ns.yaml", fake.NamespaceObject(bookstoreNS, core.Label("app", bookstoreNS))))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/shoestore/ns.yaml", fake.NamespaceObject(shoestoreNS, core.Label("app", shoestoreNS))))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/bookstore/ns.yaml", k8sobjects2.NamespaceObject(bookstoreNS, core.Label("app", bookstoreNS))))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/shoestore/ns.yaml", k8sobjects2.NamespaceObject(shoestoreNS, core.Label("app", shoestoreNS))))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/cm-bookstore.yaml", bookstoreCM))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/rq-bookstore.yaml", bookstoreRQ))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/cm-shoestore.yaml", shoestoreCM))
@@ -124,14 +124,14 @@ func TestNamespaceSelectorHierarchicalFormat(t *testing.T) {
 func TestNamespaceSelectorUnstructuredFormat(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Selector, ntopts.Unstructured)
 
-	bookstoreNSS := fake.NamespaceSelectorObject(core.Name(bookstoreNSSName))
-	bookstoreCM := fake.ConfigMapObject(core.Name(bookstoreCMName),
+	bookstoreNSS := k8sobjects2.NamespaceSelectorObject(core.Name(bookstoreNSSName))
+	bookstoreCM := k8sobjects2.ConfigMapObject(core.Name(bookstoreCMName),
 		core.Annotation(metadata.NamespaceSelectorAnnotationKey, bookstoreNSSName))
-	bookstoreRQ := fake.ResourceQuotaObject(core.Name(bookstoreRQName),
+	bookstoreRQ := k8sobjects2.ResourceQuotaObject(core.Name(bookstoreRQName),
 		core.Annotation(metadata.NamespaceSelectorAnnotationKey, bookstoreNSSName))
 
-	shoestoreNSS := fake.NamespaceSelectorObject(core.Name(shoestoreNSSName))
-	shoestoreCM := fake.ConfigMapObject(core.Name(shoestoreCMName),
+	shoestoreNSS := k8sobjects2.NamespaceSelectorObject(core.Name(shoestoreNSSName))
+	shoestoreCM := k8sobjects2.ConfigMapObject(core.Name(shoestoreCMName),
 		core.Annotation(metadata.NamespaceSelectorAnnotationKey, shoestoreNSSName))
 
 	nt.T.Log("Add Namespaces, NamespaceSelectors and Namespace-scoped resources")
@@ -142,7 +142,7 @@ func TestNamespaceSelectorUnstructuredFormat(t *testing.T) {
 
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespace-selector-bookstore.yaml", bookstoreNSS))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespace-selector-shoestore.yaml", shoestoreNSS))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/shoestore-ns.yaml", fake.NamespaceObject(shoestoreNS, core.Label("app", shoestoreNS))))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/shoestore-ns.yaml", k8sobjects2.NamespaceObject(shoestoreNS, core.Label("app", shoestoreNS))))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm-bookstore.yaml", bookstoreCM))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/rq-bookstore.yaml", bookstoreRQ))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm-shoestore.yaml", shoestoreCM))
@@ -207,7 +207,7 @@ func TestNamespaceSelectorUnstructuredFormat(t *testing.T) {
 	)
 
 	nt.Logger.Info("Creating a Namespace with labels, matching resources should be selected")
-	bookstoreNamespace := fake.NamespaceObject(bookstoreNS, core.Label("app", bookstoreNS))
+	bookstoreNamespace := k8sobjects2.NamespaceObject(bookstoreNS, core.Label("app", bookstoreNS))
 	if err := nt.KubeClient.Create(bookstoreNamespace); err != nil {
 		nt.T.Fatal(err)
 	}

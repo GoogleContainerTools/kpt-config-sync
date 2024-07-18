@@ -39,11 +39,11 @@ import (
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metrics"
 	csmetrics "kpt.dev/configsync/pkg/metrics"
 	rgmetrics "kpt.dev/configsync/pkg/resourcegroup/controllers/metrics"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 const (
@@ -130,7 +130,7 @@ func TestOtelCollectorDeployment(t *testing.T) {
 	startTime := time.Now().UTC()
 
 	nt.T.Log("Adding test commit after otel-collector is started up so multiple commit hashes are processed in pipelines")
-	namespace := fake.NamespaceObject("foo")
+	namespace := k8sobjects.NamespaceObject("foo")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding foo namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -187,7 +187,7 @@ func TestOtelCollectorDeployment(t *testing.T) {
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add DRY configs to the repository"))
 
 	nt.T.Log("Update RootSync to sync from the kustomize-components directory")
-	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "kustomize-components"}}}`)
 	syncDirMap := map[types.NamespacedName]string{
 		nomostest.DefaultRootRepoNamespacedName: "kustomize-components",
@@ -272,7 +272,7 @@ func TestGCMMetrics(t *testing.T) {
 	}
 
 	nt.T.Log("Adding test namespace")
-	namespace := fake.NamespaceObject("foo")
+	namespace := k8sobjects.NamespaceObject("foo")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding foo namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -325,7 +325,7 @@ func TestOtelCollectorGCMLabelAggregation(t *testing.T) {
 	startTime := time.Now().UTC()
 
 	nt.T.Log("Adding test commit")
-	namespace := fake.NamespaceObject("foo")
+	namespace := k8sobjects.NamespaceObject("foo")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding foo namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {

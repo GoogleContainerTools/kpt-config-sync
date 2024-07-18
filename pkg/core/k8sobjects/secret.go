@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package fake
+package k8sobjects
 
 import (
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	corev1 "k8s.io/api/core/v1"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/resourcegroup"
+	"kpt.dev/configsync/pkg/kinds"
 )
 
-// ResourceGroupObject initializes a ResourceGroup.
-func ResourceGroupObject(opts ...core.MetaMutator) *unstructured.Unstructured {
-	result := resourcegroup.Unstructured("", "", "")
-	defaultMutate(result)
+// SecretObject returns an initialized Secret.
+func SecretObject(name string, opts ...core.MetaMutator) *corev1.Secret {
+	result := &corev1.Secret{TypeMeta: ToTypeMeta(kinds.Secret())}
+	mutate(result, core.Name(name))
 	mutate(result, opts...)
 
 	return result

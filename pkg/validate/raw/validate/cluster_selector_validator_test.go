@@ -19,14 +19,14 @@ import (
 	"testing"
 
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/kinds"
 	csmetadata "kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 )
 
 var (
@@ -37,121 +37,121 @@ var (
 func TestClusterSelectorsForHierarchical(t *testing.T) {
 	testCases := []struct {
 		name     string
-		objs     *objects.Raw
+		objs     *fileobjects.Raw
 		wantErrs status.MultiError
 	}{
 		{
 			name: "No objects",
-			objs: &objects.Raw{},
+			objs: &fileobjects.Raw{},
 		},
 		{
 			name: "One ClusterSelector",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.ClusterSelector(core.Name("first")),
+					k8sobjects.ClusterSelector(core.Name("first")),
 				},
 			},
 		},
 		{
 			name: "Two ClusterSelectors",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.ClusterSelector(core.Name("first")),
-					fake.ClusterSelector(core.Name("second")),
+					k8sobjects.ClusterSelector(core.Name("first")),
+					k8sobjects.ClusterSelector(core.Name("second")),
 				},
 			},
 		},
 		{
 			name: "Duplicate ClusterSelectors",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.ClusterSelector(core.Name("first")),
-					fake.ClusterSelector(core.Name("first")),
+					k8sobjects.ClusterSelector(core.Name("first")),
+					k8sobjects.ClusterSelector(core.Name("first")),
 				},
 			},
-			wantErrs: nonhierarchical.SelectorMetadataNameCollisionError(kinds.ClusterSelector().Kind, "first", fake.ClusterSelector()),
+			wantErrs: nonhierarchical.SelectorMetadataNameCollisionError(kinds.ClusterSelector().Kind, "first", k8sobjects.ClusterSelector()),
 		},
 		{
 			name: "Objects with no cluster selector",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.ClusterRole(),
-					fake.CustomResourceDefinitionV1(),
-					fake.CustomResourceDefinitionV1Beta1(),
+					k8sobjects.ClusterRole(),
+					k8sobjects.CustomResourceDefinitionV1(),
+					k8sobjects.CustomResourceDefinitionV1Beta1(),
 				},
 			},
 		},
 		{
 			name: "Objects with legacy cluster selector",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.ClusterRole(legacyClusterSelectorAnnotation),
-					fake.CustomResourceDefinitionV1(legacyClusterSelectorAnnotation),
-					fake.CustomResourceDefinitionV1Beta1(legacyClusterSelectorAnnotation),
+					k8sobjects.ClusterRole(legacyClusterSelectorAnnotation),
+					k8sobjects.CustomResourceDefinitionV1(legacyClusterSelectorAnnotation),
+					k8sobjects.CustomResourceDefinitionV1Beta1(legacyClusterSelectorAnnotation),
 				},
 			},
 		},
 		{
 			name: "Objects with inline cluster selector",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.ClusterRole(inlineClusterSelectorAnnotation),
-					fake.CustomResourceDefinitionV1(inlineClusterSelectorAnnotation),
-					fake.CustomResourceDefinitionV1Beta1(inlineClusterSelectorAnnotation),
+					k8sobjects.ClusterRole(inlineClusterSelectorAnnotation),
+					k8sobjects.CustomResourceDefinitionV1(inlineClusterSelectorAnnotation),
+					k8sobjects.CustomResourceDefinitionV1Beta1(inlineClusterSelectorAnnotation),
 				},
 			},
 		},
 		{
 			name: "Non-selectable objects with no cluster selectors",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.Cluster(),
-					fake.ClusterSelector(),
-					fake.NamespaceSelector(),
+					k8sobjects.Cluster(),
+					k8sobjects.ClusterSelector(),
+					k8sobjects.NamespaceSelector(),
 				},
 			},
 		},
 		{
 			name: "Non-selectable objects with legacy cluster selectors",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.Cluster(legacyClusterSelectorAnnotation),
-					fake.ClusterSelector(legacyClusterSelectorAnnotation),
-					fake.NamespaceSelector(legacyClusterSelectorAnnotation),
+					k8sobjects.Cluster(legacyClusterSelectorAnnotation),
+					k8sobjects.ClusterSelector(legacyClusterSelectorAnnotation),
+					k8sobjects.NamespaceSelector(legacyClusterSelectorAnnotation),
 				},
 			},
 			wantErrs: status.Wrap(
-				nonhierarchical.IllegalClusterSelectorAnnotationError(fake.Cluster(), "legacy"),
-				nonhierarchical.IllegalClusterSelectorAnnotationError(fake.ClusterSelector(), "legacy"),
-				nonhierarchical.IllegalClusterSelectorAnnotationError(fake.NamespaceSelector(), "legacy"),
+				nonhierarchical.IllegalClusterSelectorAnnotationError(k8sobjects.Cluster(), "legacy"),
+				nonhierarchical.IllegalClusterSelectorAnnotationError(k8sobjects.ClusterSelector(), "legacy"),
+				nonhierarchical.IllegalClusterSelectorAnnotationError(k8sobjects.NamespaceSelector(), "legacy"),
 			),
 		},
 		{
 			name: "Non-selectable objects with inline cluster selectors",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.Cluster(inlineClusterSelectorAnnotation),
-					fake.ClusterSelector(inlineClusterSelectorAnnotation),
-					fake.NamespaceSelector(inlineClusterSelectorAnnotation),
+					k8sobjects.Cluster(inlineClusterSelectorAnnotation),
+					k8sobjects.ClusterSelector(inlineClusterSelectorAnnotation),
+					k8sobjects.NamespaceSelector(inlineClusterSelectorAnnotation),
 				},
 			},
 			wantErrs: status.Wrap(
-				nonhierarchical.IllegalClusterSelectorAnnotationError(fake.Cluster(), "inline"),
-				nonhierarchical.IllegalClusterSelectorAnnotationError(fake.ClusterSelector(), "inline"),
-				nonhierarchical.IllegalClusterSelectorAnnotationError(fake.NamespaceSelector(), "inline"),
+				nonhierarchical.IllegalClusterSelectorAnnotationError(k8sobjects.Cluster(), "inline"),
+				nonhierarchical.IllegalClusterSelectorAnnotationError(k8sobjects.ClusterSelector(), "inline"),
+				nonhierarchical.IllegalClusterSelectorAnnotationError(k8sobjects.NamespaceSelector(), "inline"),
 			),
 		},
 		{
 			name: "Cluster and legacy cluster selector in wrong directory",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.ClusterAtPath("system/cluster.yaml"),
-					fake.ClusterSelectorAtPath("cluster/cs.yaml"),
+					k8sobjects.ClusterAtPath("system/cluster.yaml"),
+					k8sobjects.ClusterSelectorAtPath("cluster/cs.yaml"),
 				},
 			},
 			wantErrs: status.Wrap(
-				validation.ShouldBeInClusterRegistryError(fake.Cluster()),
-				validation.ShouldBeInClusterRegistryError(fake.ClusterSelector()),
+				validation.ShouldBeInClusterRegistryError(k8sobjects.Cluster()),
+				validation.ShouldBeInClusterRegistryError(k8sobjects.ClusterSelector()),
 			),
 		},
 	}
@@ -169,17 +169,17 @@ func TestClusterSelectorsForHierarchical(t *testing.T) {
 func TestClusterSelectorsForUnstructured(t *testing.T) {
 	testCases := []struct {
 		name     string
-		objs     *objects.Raw
+		objs     *fileobjects.Raw
 		wantErrs status.MultiError
 	}{
 		// We really just need to verify that unstructured does not care about the
 		// directory of the files.
 		{
 			name: "Cluster and legacy cluster selector in wrong directory",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.ClusterAtPath("system/cluster.yaml"),
-					fake.ClusterSelectorAtPath("cluster/cs.yaml"),
+					k8sobjects.ClusterAtPath("system/cluster.yaml"),
+					k8sobjects.ClusterSelectorAtPath("cluster/cs.yaml"),
 				},
 			},
 		},

@@ -19,11 +19,11 @@ import (
 	"testing"
 
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 func TestClusterScoped(t *testing.T) {
@@ -34,18 +34,18 @@ func TestClusterScoped(t *testing.T) {
 	}{
 		{
 			name: "Object without metadata.namespace passes",
-			obj:  fake.ClusterRole(),
+			obj:  k8sobjects.ClusterRole(),
 		},
 		{
 			name:    "Object with metadata.namespace fails",
-			obj:     fake.ClusterRole(core.Namespace("hello")),
-			wantErr: nonhierarchical.IllegalNamespaceOnClusterScopedResourceError(fake.ClusterRole()),
+			obj:     k8sobjects.ClusterRole(core.Namespace("hello")),
+			wantErr: nonhierarchical.IllegalNamespaceOnClusterScopedResourceError(k8sobjects.ClusterRole()),
 		},
 		{
 			name: "Object with namespace selector fails",
-			obj: fake.ClusterRole(
+			obj: k8sobjects.ClusterRole(
 				core.Annotation(metadata.NamespaceSelectorAnnotationKey, "value")),
-			wantErr: nonhierarchical.IllegalNamespaceSelectorAnnotationError(fake.ClusterRole()),
+			wantErr: nonhierarchical.IllegalNamespaceSelectorAnnotationError(k8sobjects.ClusterRole()),
 		},
 	}
 
@@ -67,8 +67,8 @@ func TestClusterScopedForNamespaceReconciler(t *testing.T) {
 	}{
 		{
 			name:    "Cluster scoped object fails",
-			obj:     fake.ClusterRole(),
-			wantErr: shouldBeInRootErr(fake.ClusterRole()),
+			obj:     k8sobjects.ClusterRole(),
+			wantErr: shouldBeInRootErr(k8sobjects.ClusterRole()),
 		},
 	}
 
@@ -90,23 +90,23 @@ func TestNamespaceScoped(t *testing.T) {
 	}{
 		{
 			name: "Object without metadata.namespace passes",
-			obj:  fake.Role(),
+			obj:  k8sobjects.Role(),
 		},
 		{
 			name: "Object with metadata.namespace passes",
-			obj:  fake.Role(core.Namespace("hello")),
+			obj:  k8sobjects.Role(core.Namespace("hello")),
 		},
 		{
 			name: "Object with namespace selector passes",
-			obj: fake.Role(
+			obj: k8sobjects.Role(
 				core.Annotation(metadata.NamespaceSelectorAnnotationKey, "value")),
 		},
 		{
 			name: "Object with namespace and namespace selector fails",
-			obj: fake.Role(
+			obj: k8sobjects.Role(
 				core.Namespace("hello"),
 				core.Annotation(metadata.NamespaceSelectorAnnotationKey, "value")),
-			wantErr: nonhierarchical.NamespaceAndSelectorResourceError(fake.Role()),
+			wantErr: nonhierarchical.NamespaceAndSelectorResourceError(k8sobjects.Role()),
 		},
 	}
 

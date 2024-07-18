@@ -19,10 +19,10 @@ import (
 	"testing"
 
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/metadata"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 func TestDirectory(t *testing.T) {
@@ -33,30 +33,30 @@ func TestDirectory(t *testing.T) {
 	}{
 		{
 			name: "Role with unspecified namespace",
-			obj:  fake.RoleAtPath("namespaces/hello/role.yaml", core.Namespace("")),
+			obj:  k8sobjects.RoleAtPath("namespaces/hello/role.yaml", core.Namespace("")),
 		},
 		{
 			name: "Role under valid directory",
-			obj:  fake.RoleAtPath("namespaces/hello/role.yaml", core.Namespace("hello")),
+			obj:  k8sobjects.RoleAtPath("namespaces/hello/role.yaml", core.Namespace("hello")),
 		},
 		{
 			name:    "Role under invalid directory",
-			obj:     fake.RoleAtPath("namespaces/hello/role.yaml", core.Namespace("world")),
-			wantErr: metadata.IllegalMetadataNamespaceDeclarationError(fake.Role(core.Namespace("world")), "hello"),
+			obj:     k8sobjects.RoleAtPath("namespaces/hello/role.yaml", core.Namespace("world")),
+			wantErr: metadata.IllegalMetadataNamespaceDeclarationError(k8sobjects.Role(core.Namespace("world")), "hello"),
 		},
 		{
 			name: "Namespace under valid directory",
-			obj:  fake.Namespace("namespaces/hello"),
+			obj:  k8sobjects.Namespace("namespaces/hello"),
 		},
 		{
 			name:    "Namespace under invalid directory",
-			obj:     fake.Namespace("namespaces/hello", core.Name("world")),
-			wantErr: metadata.InvalidNamespaceNameError(fake.Namespace("namespaces/hello", core.Name("world")), "hello"),
+			obj:     k8sobjects.Namespace("namespaces/hello", core.Name("world")),
+			wantErr: metadata.InvalidNamespaceNameError(k8sobjects.Namespace("namespaces/hello", core.Name("world")), "hello"),
 		},
 		{
 			name:    "Namespace under top-level namespaces directory",
-			obj:     fake.Namespace("namespaces", core.Name("hello")),
-			wantErr: metadata.IllegalTopLevelNamespaceError(fake.Namespace("namespaces", core.Name("hello"))),
+			obj:     k8sobjects.Namespace("namespaces", core.Name("hello")),
+			wantErr: metadata.IllegalTopLevelNamespaceError(k8sobjects.Namespace("namespaces", core.Name("hello"))),
 		},
 	}
 

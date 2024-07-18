@@ -18,13 +18,13 @@ import (
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 )
 
 // UnknownScope hydrates the given Scoped objects by adding an annotation
 // `configsync.gke.io/unknown-scope: true` into every object whose scope is
 // unknown.
-func UnknownScope(objs *objects.Scoped) status.MultiError {
+func UnknownScope(objs *fileobjects.Scoped) status.MultiError {
 	for _, obj := range objs.Unknown {
 		core.SetAnnotation(obj, metadata.UnknownScopeAnnotationKey, metadata.UnknownScopeAnnotationValue)
 	}

@@ -28,10 +28,10 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync/v1alpha1"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 func TestOverrideGitSyncDepthV1Alpha1(t *testing.T) {
@@ -63,7 +63,7 @@ func TestOverrideGitSyncDepthV1Alpha1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	rootSync := fake.RootSyncObjectV1Alpha1(configsync.RootSyncName)
+	rootSync := k8sobjects.RootSyncObjectV1Alpha1(configsync.RootSyncName)
 
 	nn := nomostest.RepoSyncNN(backendNamespace, configsync.RepoSyncName)
 	repoSyncBackend := nomostest.RepoSyncObjectV1Alpha1FromNonRootRepo(nt, nn)
@@ -161,7 +161,7 @@ func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	rootSync := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rootSync := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 
 	nn := nomostest.RepoSyncNN(backendNamespace, configsync.RepoSyncName)
 	repoSyncBackend := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)

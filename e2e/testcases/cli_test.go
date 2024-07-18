@@ -50,12 +50,12 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/hydrate"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -121,8 +121,8 @@ func TestNomosInitHydrate(t *testing.T) {
 	err = hydrate.PrintFile(fmt.Sprintf("%s/namespaces/foo/ns.yaml", tmpDir),
 		flags.OutputYAML,
 		[]*unstructured.Unstructured{
-			fake.UnstructuredObject(kinds.Namespace(), core.Name("foo"), core.Annotation(metadata.HNCManagedBy, "controller1")),
-			fake.UnstructuredObject(kinds.ConfigMap(), core.Name("cm1"), core.Namespace("foo")),
+			k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("foo"), core.Annotation(metadata.HNCManagedBy, "controller1")),
+			k8sobjects.UnstructuredObject(kinds.ConfigMap(), core.Name("cm1"), core.Namespace("foo")),
 		})
 	if err != nil {
 		tw.Fatal(err)
@@ -1329,7 +1329,7 @@ func TestNomosMigrate(t *testing.T) {
 		}
 		// Delete the ConfigManagement operator in case the test failed early.
 		// If this lingers around it could cause issues for subsequent tests.
-		cmDeployment := fake.DeploymentObject(
+		cmDeployment := k8sobjects.DeploymentObject(
 			core.Namespace(configsync.ControllerNamespace),
 			core.Name(util.ACMOperatorDeployment),
 		)
@@ -1475,7 +1475,7 @@ func TestNomosMigrateMonoRepo(t *testing.T) {
 		}
 		// Delete the ConfigManagement operator in case the test failed early.
 		// If this lingers around it could cause issues for subsequent tests.
-		cmDeployment := fake.DeploymentObject(
+		cmDeployment := k8sobjects.DeploymentObject(
 			core.Namespace(configsync.ControllerNamespace),
 			core.Name(util.ACMOperatorDeployment),
 		)
@@ -1486,7 +1486,7 @@ func TestNomosMigrateMonoRepo(t *testing.T) {
 			nt.T.Error(err)
 		}
 		// Ensure the RootSync is deleted since it's not registered with nt
-		rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+		rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 		if err := nt.KubeClient.Delete(rs, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil && !apierrors.IsNotFound(err) {
 			nt.T.Error(err)
 		}

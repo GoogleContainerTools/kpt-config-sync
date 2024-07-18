@@ -28,10 +28,10 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
-	"kpt.dev/configsync/pkg/testing/fake"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 )
 
@@ -46,7 +46,7 @@ func TestAdmission(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl)
 
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/hello/ns.yaml",
-		fake.NamespaceObject("hello", core.Annotation("goodbye", "moon"))))
+		k8sobjects.NamespaceObject("hello", core.Annotation("goodbye", "moon"))))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add Namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -155,7 +155,7 @@ func TestDisableWebhookConfigurationUpdateHierarchy(t *testing.T) {
 	// Test starts with Admission Webhook already installed
 	nomostest.WaitForWebhookReadiness(nt)
 
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/hello/ns.yaml", fake.NamespaceObject("hello")))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/hello/ns.yaml", k8sobjects.NamespaceObject("hello")))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add test namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -189,7 +189,7 @@ func TestDisableWebhookConfigurationUpdateHierarchy(t *testing.T) {
 
 	// The object should be deleted and restored by Remediator
 	nt.T.Log("Verify that the webhook is disabled")
-	if err := nt.KubeClient.Delete(fake.Namespace("hello")); err != nil {
+	if err := nt.KubeClient.Delete(k8sobjects.Namespace("hello")); err != nil {
 		nt.T.Fatalf("failed to run `kubectl delete ns hello` %v", err)
 	}
 
@@ -222,7 +222,7 @@ func TestDisableWebhookConfigurationUpdateHierarchy(t *testing.T) {
 func TestDisableWebhookConfigurationUpdateUnstructured(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.NamespaceRepo(namespaceRepo, configsync.RepoSyncName), ntopts.RepoSyncPermissions(policy.CoreAdmin()))
 	repoSyncNN := nomostest.RepoSyncNN(namespaceRepo, configsync.RepoSyncName)
-	sa := fake.ServiceAccountObject("store", core.Namespace(namespaceRepo))
+	sa := k8sobjects.ServiceAccountObject("store", core.Namespace(namespaceRepo))
 	nt.Must(nt.NonRootRepos[repoSyncNN].Add("acme/sa.yaml", sa))
 	nt.Must(nt.NonRootRepos[repoSyncNN].CommitAndPush("Adding test service account"))
 	if err := nt.WatchForAllSyncs(); err != nil {

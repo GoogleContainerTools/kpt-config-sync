@@ -30,8 +30,8 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/registryproviders"
 	"kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -76,7 +76,7 @@ func setupRegistry(nt *NT) error {
 		return err
 	}
 	if *e2e.OCIProvider == e2e.Local || *e2e.HelmProvider == e2e.Local {
-		if err := nt.KubeClient.Create(fake.NamespaceObject(TestRegistryNamespace)); err != nil {
+		if err := nt.KubeClient.Create(k8sobjects.NamespaceObject(TestRegistryNamespace)); err != nil {
 			return err
 		}
 
@@ -219,7 +219,7 @@ func registryServer() []client.Object {
 // This service exposes a port which maps to the nginx endpoint which uses HTTPS
 // but does not require authentication
 func registryService() *v1.Service {
-	service := fake.ServiceObject(
+	service := k8sobjects.ServiceObject(
 		core.Name(TestRegistryServer),
 		core.Namespace(TestRegistryNamespace),
 	)
@@ -233,7 +233,7 @@ func registryService() *v1.Service {
 // This service exposes a port which maps to the nginx endpoint which requires
 // authentication (using contrived username/password)
 func registryServiceAuthenticated() *v1.Service {
-	service := fake.ServiceObject(
+	service := k8sobjects.ServiceObject(
 		core.Name(TestRegistryServerAuthenticated),
 		core.Namespace(TestRegistryNamespace),
 	)
@@ -245,7 +245,7 @@ func registryServiceAuthenticated() *v1.Service {
 }
 
 func nginxConfigMap() *v1.ConfigMap {
-	configMap := fake.ConfigMapObject(core.Name(nginxConfigMapName),
+	configMap := k8sobjects.ConfigMapObject(core.Name(nginxConfigMapName),
 		core.Namespace(TestRegistryNamespace),
 		core.Labels(testRegistryServerSelector()),
 	)
@@ -256,7 +256,7 @@ func nginxConfigMap() *v1.ConfigMap {
 }
 
 func registryDeployment() *appsv1.Deployment {
-	deployment := fake.DeploymentObject(core.Name(TestRegistryServer),
+	deployment := k8sobjects.DeploymentObject(core.Name(TestRegistryServer),
 		core.Namespace(TestRegistryNamespace),
 		core.Labels(testRegistryServerSelector()),
 	)

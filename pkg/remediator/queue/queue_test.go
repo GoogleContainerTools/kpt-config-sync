@@ -20,7 +20,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -63,10 +63,10 @@ func done(toDone client.Object, wantLen int) action {
 }
 
 func TestObjectQueue(t *testing.T) {
-	cmHelloGen0 := fake.ConfigMapObject(core.Namespace("foo-ns"), core.Name("hello"))
-	cmHelloGen1 := fake.ConfigMapObject(core.Namespace("foo-ns"), core.Name("hello"), core.Generation(1))
-	cmGoodbyeGen0 := fake.ConfigMapObject(core.Namespace("foo-ns"), core.Name("goodbye"))
-	cmGoodbyeGen1 := fake.ConfigMapObject(core.Namespace("foo-ns"), core.Name("goodbye"), core.Generation(1))
+	cmHelloGen0 := k8sobjects.ConfigMapObject(core.Namespace("foo-ns"), core.Name("hello"))
+	cmHelloGen1 := k8sobjects.ConfigMapObject(core.Namespace("foo-ns"), core.Name("hello"), core.Generation(1))
+	cmGoodbyeGen0 := k8sobjects.ConfigMapObject(core.Namespace("foo-ns"), core.Name("goodbye"))
+	cmGoodbyeGen1 := k8sobjects.ConfigMapObject(core.Namespace("foo-ns"), core.Name("goodbye"), core.Generation(1))
 
 	testCases := []struct {
 		name    string

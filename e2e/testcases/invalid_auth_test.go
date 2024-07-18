@@ -22,9 +22,9 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 func TestInvalidAuth(t *testing.T) {
@@ -32,7 +32,7 @@ func TestInvalidAuth(t *testing.T) {
 
 	// Update RootSync to sync from a GitHub repo with an ssh key.
 	// The ssh key only works for test-git-server, not GitHub, so it will get a permission error.
-	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.MustMergePatch(rs, fmt.Sprintf(`{
 		"spec": {
 			"git": {

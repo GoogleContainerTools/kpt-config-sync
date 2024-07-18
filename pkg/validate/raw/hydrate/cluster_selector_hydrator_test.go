@@ -21,12 +21,12 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/transform/selectors"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 )
 
 const (
@@ -49,15 +49,15 @@ var (
 // clusterSelector creates a FileObject containing a ClusterSelector named "name",
 // which matches Cluster objects with label "label" set to "value".
 func clusterSelector(name, label, value string) ast.FileObject {
-	cs := fake.ClusterSelectorObject(core.Name(name))
+	cs := k8sobjects.ClusterSelectorObject(core.Name(name))
 	cs.Spec.Selector.MatchLabels = map[string]string{label: value}
-	return fake.FileObject(cs, fmt.Sprintf("clusterregistry/cs-%s.yaml", name))
+	return k8sobjects.FileObject(cs, fmt.Sprintf("clusterregistry/cs-%s.yaml", name))
 }
 
 // cluster creates a FileObject containing a Cluster named "name", with label "label"
 // set to "value".
 func cluster(name, label, value string) ast.FileObject {
-	return fake.Cluster(core.Name(name), core.Label(label, value))
+	return k8sobjects.Cluster(core.Name(name), core.Label(label, value))
 }
 
 // withLegacyClusterSelector modifies a FileObject to have a legacy cluster-selector annotation
@@ -83,237 +83,237 @@ var (
 func TestClusterSelectors(t *testing.T) {
 	testCases := []struct {
 		name     string
-		objs     *objects.Raw
-		want     *objects.Raw
+		objs     *fileobjects.Raw
+		want     *fileobjects.Raw
 		wantErrs status.MultiError
 	}{
 		{
 			name: "No objects",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				ClusterName: prodClusterName,
 			},
-			want: &objects.Raw{
+			want: &fileobjects.Raw{
 				ClusterName: prodClusterName,
 			},
 		},
 		{
 			name: "Keep object with no cluster selector",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				ClusterName: prodClusterName,
 				Objects: []ast.FileObject{
-					fake.ClusterRole(),
+					k8sobjects.ClusterRole(),
 				},
 			},
-			want: &objects.Raw{
+			want: &fileobjects.Raw{
 				ClusterName: prodClusterName,
 				Objects: []ast.FileObject{
-					fake.ClusterRole(),
+					k8sobjects.ClusterRole(),
 				},
 			},
 		},
 		{
 			name: "Keep object in namespace with no cluster selector",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				ClusterName: prodClusterName,
 				Objects: []ast.FileObject{
-					fake.Namespace("namespaces/foo"),
-					fake.Role(core.Namespace("foo")),
+					k8sobjects.Namespace("namespaces/foo"),
+					k8sobjects.Role(core.Namespace("foo")),
 				},
 			},
-			want: &objects.Raw{
+			want: &fileobjects.Raw{
 				ClusterName: prodClusterName,
 				Objects: []ast.FileObject{
-					fake.Namespace("namespaces/foo"),
-					fake.Role(core.Namespace("foo")),
+					k8sobjects.Namespace("namespaces/foo"),
+					k8sobjects.Role(core.Namespace("foo")),
 				},
 			},
 		},
 		{
 			name: "Keep object in namespace with stateActive legacy cluster selector",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				ClusterName: prodClusterName,
 				Objects: []ast.FileObject{
-					fake.Namespace("namespaces/foo", withProdLegacyClusterSelector),
-					fake.Role(core.Namespace("foo")),
+					k8sobjects.Namespace("namespaces/foo", withProdLegacyClusterSelector),
+					k8sobjects.Role(core.Namespace("foo")),
 					prodCluster,
 					devCluster,
 					prodSelector,
 					devSelector,
 				},
 			},
-			want: &objects.Raw{
+			want: &fileobjects.Raw{
 				ClusterName: prodClusterName,
 				Objects: []ast.FileObject{
-					fake.Namespace("namespaces/foo", withProdLegacyClusterSelector),
-					fake.Role(core.Namespace("foo")),
+					k8sobjects.Namespace("namespaces/foo", withProdLegacyClusterSelector),
+					k8sobjects.Role(core.Namespace("foo")),
 				},
 			},
 		},
 		{
 			name: "Remove object and namespace with stateInactive legacy cluster selector",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				ClusterName: prodClusterName,
 				Objects: []ast.FileObject{
-					fake.Namespace("namespaces/foo", withDevLegacyClusterSelector),
-					fake.Role(core.Namespace("foo")),
+					k8sobjects.Namespace("namespaces/foo", withDevLegacyClusterSelector),
+					k8sobjects.Role(core.Namespace("foo")),
 					prodCluster,
 					devCluster,
 					prodSelector,
 					devSelector,
 				},
 			},
-			want: &objects.Raw{
+			want: &fileobjects.Raw{
 				ClusterName: prodClusterName,
 			},
 		},
 		{
 			name: "Keep object in namespace with stateActive inline cluster selector",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				ClusterName: prodClusterName,
 				Objects: []ast.FileObject{
-					fake.Namespace("namespaces/foo", withProdInlineMatchLabels),
-					fake.Role(core.Namespace("foo")),
+					k8sobjects.Namespace("namespaces/foo", withProdInlineMatchLabels),
+					k8sobjects.Role(core.Namespace("foo")),
 					prodCluster,
 					devCluster,
 				},
 			},
-			want: &objects.Raw{
+			want: &fileobjects.Raw{
 				ClusterName: prodClusterName,
 				Objects: []ast.FileObject{
-					fake.Namespace("namespaces/foo", withProdInlineMatchLabels),
-					fake.Role(core.Namespace("foo")),
+					k8sobjects.Namespace("namespaces/foo", withProdInlineMatchLabels),
+					k8sobjects.Role(core.Namespace("foo")),
 				},
 			},
 		},
 		{
 			name: "Remove object and namespace with stateInactive inline cluster selector",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				ClusterName: prodClusterName,
 				Objects: []ast.FileObject{
-					fake.Namespace("namespaces/foo", withDevInlineMatchLabels),
-					fake.Role(core.Namespace("foo")),
+					k8sobjects.Namespace("namespaces/foo", withDevInlineMatchLabels),
+					k8sobjects.Role(core.Namespace("foo")),
 					prodCluster,
 					devCluster,
 				},
 			},
-			want: &objects.Raw{
+			want: &fileobjects.Raw{
 				ClusterName: prodClusterName,
 			},
 		},
 		{
 			name: "Remove object with legacy cluster selector from stateUnknown cluster",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				ClusterName: unknownClusterName,
 				Objects: []ast.FileObject{
-					fake.Role(core.Namespace("foo"), withDevLegacyClusterSelector),
+					k8sobjects.Role(core.Namespace("foo"), withDevLegacyClusterSelector),
 					devCluster,
 					devSelector,
 				},
 			},
-			want: &objects.Raw{
+			want: &fileobjects.Raw{
 				ClusterName: unknownClusterName,
 			},
 		},
 		{
 			name: "Remove object with inline cluster selector from stateUnknown cluster",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				ClusterName: unknownClusterName,
 				Objects: []ast.FileObject{
-					fake.Role(core.Namespace("foo"), withDevInlineMatchLabels),
+					k8sobjects.Role(core.Namespace("foo"), withDevInlineMatchLabels),
 				},
 			},
-			want: &objects.Raw{
+			want: &fileobjects.Raw{
 				ClusterName: unknownClusterName,
 			},
 		},
 		{
 			name: "Keep object with inline cluster selector listing multiple clusters",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				ClusterName: prodClusterName,
 				Objects: []ast.FileObject{
-					fake.Role(withInlineClusterNameSelector(fmt.Sprintf("%s, %s", devClusterName, prodClusterName))),
+					k8sobjects.Role(withInlineClusterNameSelector(fmt.Sprintf("%s, %s", devClusterName, prodClusterName))),
 					prodCluster,
 					devCluster,
 				},
 			},
-			want: &objects.Raw{
+			want: &fileobjects.Raw{
 				ClusterName: prodClusterName,
 				Objects: []ast.FileObject{
-					fake.Role(withInlineClusterNameSelector(fmt.Sprintf("%s, %s", devClusterName, prodClusterName))),
+					k8sobjects.Role(withInlineClusterNameSelector(fmt.Sprintf("%s, %s", devClusterName, prodClusterName))),
 				},
 			},
 		},
 		{
 			name: "Remove object with empty inline cluster selector",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				ClusterName: prodClusterName,
 				Objects: []ast.FileObject{
-					fake.Role(withInlineClusterNameSelector("")),
+					k8sobjects.Role(withInlineClusterNameSelector("")),
 					prodCluster,
 					devCluster,
 				},
 			},
-			want: &objects.Raw{
+			want: &fileobjects.Raw{
 				ClusterName: prodClusterName,
 			},
 		},
 		{
 			name: "Remove object with inline cluster selector from empty name cluster",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				ClusterName: "",
 				Objects: []ast.FileObject{
-					fake.Role(withInlineClusterNameSelector("a,,b")),
+					k8sobjects.Role(withInlineClusterNameSelector("a,,b")),
 					prodCluster,
 					devCluster,
 				},
 			},
-			want: &objects.Raw{
+			want: &fileobjects.Raw{
 				ClusterName: "",
 			},
 		},
 		{
 			name: "Error if object has both legacy and inline cluster selectors",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				ClusterName: prodClusterName,
 				Objects: []ast.FileObject{
-					fake.Role(withProdLegacyClusterSelector, withProdInlineMatchLabels),
+					k8sobjects.Role(withProdLegacyClusterSelector, withProdInlineMatchLabels),
 					prodCluster,
 					prodSelector,
 				},
 			},
-			want: &objects.Raw{
+			want: &fileobjects.Raw{
 				ClusterName: prodClusterName,
 				Objects: []ast.FileObject{
-					fake.Role(withProdLegacyClusterSelector, withProdInlineMatchLabels),
+					k8sobjects.Role(withProdLegacyClusterSelector, withProdInlineMatchLabels),
 					prodCluster,
 					prodSelector,
 				},
 			},
-			wantErrs: selectors.ClusterSelectorAnnotationConflictError(fake.Role()),
+			wantErrs: selectors.ClusterSelectorAnnotationConflictError(k8sobjects.Role()),
 		},
 		{
 			name: "Error if object has stateUnknown legacy cluster selector",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				ClusterName: prodClusterName,
 				Objects: []ast.FileObject{
-					fake.Role(withUnknownLegacyClusterSelector),
+					k8sobjects.Role(withUnknownLegacyClusterSelector),
 					prodCluster,
 					prodSelector,
 				},
 			},
-			want: &objects.Raw{
+			want: &fileobjects.Raw{
 				ClusterName: prodClusterName,
 				Objects: []ast.FileObject{
-					fake.Role(withUnknownLegacyClusterSelector),
+					k8sobjects.Role(withUnknownLegacyClusterSelector),
 					prodCluster,
 					prodSelector,
 				},
 			},
-			wantErrs: selectors.ObjectHasUnknownClusterSelector(fake.Role(), "stateUnknown"),
+			wantErrs: selectors.ObjectHasUnknownClusterSelector(k8sobjects.Role(), "stateUnknown"),
 		},
 		{
 			name: "Error if ClusterSelector is invalid",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				ClusterName: prodClusterName,
 				Objects: []ast.FileObject{
 					prodCluster,
@@ -321,7 +321,7 @@ func TestClusterSelectors(t *testing.T) {
 					clusterSelector("invalid", "environment", "xin prod"),
 				},
 			},
-			want: &objects.Raw{
+			want: &fileobjects.Raw{
 				ClusterName: prodClusterName,
 				Objects: []ast.FileObject{
 					prodCluster,
@@ -329,23 +329,23 @@ func TestClusterSelectors(t *testing.T) {
 					clusterSelector("invalid", "environment", "xin prod"),
 				},
 			},
-			wantErrs: selectors.InvalidSelectorError(fake.ClusterSelector(), errors.New("")),
+			wantErrs: selectors.InvalidSelectorError(k8sobjects.ClusterSelector(), errors.New("")),
 		},
 		{
 			name: "Error if ClusterSelector is empty",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				ClusterName: prodClusterName,
 				Objects: []ast.FileObject{
-					fake.ClusterSelector(core.Name("empty")),
+					k8sobjects.ClusterSelector(core.Name("empty")),
 				},
 			},
-			want: &objects.Raw{
+			want: &fileobjects.Raw{
 				ClusterName: prodClusterName,
 				Objects: []ast.FileObject{
-					fake.ClusterSelector(core.Name("empty")),
+					k8sobjects.ClusterSelector(core.Name("empty")),
 				},
 			},
-			wantErrs: selectors.EmptySelectorError(fake.ClusterSelector()),
+			wantErrs: selectors.EmptySelectorError(k8sobjects.ClusterSelector()),
 		},
 	}
 

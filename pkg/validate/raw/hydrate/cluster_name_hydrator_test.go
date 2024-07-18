@@ -19,49 +19,49 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/metadata"
-	"kpt.dev/configsync/pkg/testing/fake"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 )
 
 func TestClusterName(t *testing.T) {
 	testCases := []struct {
 		name string
-		objs *objects.Raw
-		want *objects.Raw
+		objs *fileobjects.Raw
+		want *fileobjects.Raw
 	}{
 		{
 			name: "Hydrate with cluster name",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				ClusterName: "hello-world",
 				Objects: []ast.FileObject{
-					fake.ClusterRoleAtPath("cluster/clusterrole.yaml"),
-					fake.RoleBindingAtPath("namespaces/foo/rolebinding.yaml"),
+					k8sobjects.ClusterRoleAtPath("cluster/clusterrole.yaml"),
+					k8sobjects.RoleBindingAtPath("namespaces/foo/rolebinding.yaml"),
 				},
 			},
-			want: &objects.Raw{
+			want: &fileobjects.Raw{
 				ClusterName: "hello-world",
 				Objects: []ast.FileObject{
-					fake.ClusterRoleAtPath("cluster/clusterrole.yaml",
+					k8sobjects.ClusterRoleAtPath("cluster/clusterrole.yaml",
 						core.Annotation(metadata.ClusterNameAnnotationKey, "hello-world")),
-					fake.RoleBindingAtPath("namespaces/foo/rolebinding.yaml",
+					k8sobjects.RoleBindingAtPath("namespaces/foo/rolebinding.yaml",
 						core.Annotation(metadata.ClusterNameAnnotationKey, "hello-world")),
 				},
 			},
 		},
 		{
 			name: "Hydrate with empty cluster name",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.ClusterRoleAtPath("cluster/clusterrole.yaml"),
-					fake.RoleBindingAtPath("namespaces/foo/rolebinding.yaml"),
+					k8sobjects.ClusterRoleAtPath("cluster/clusterrole.yaml"),
+					k8sobjects.RoleBindingAtPath("namespaces/foo/rolebinding.yaml"),
 				},
 			},
-			want: &objects.Raw{
+			want: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.ClusterRoleAtPath("cluster/clusterrole.yaml"),
-					fake.RoleBindingAtPath("namespaces/foo/rolebinding.yaml"),
+					k8sobjects.ClusterRoleAtPath("cluster/clusterrole.yaml"),
+					k8sobjects.RoleBindingAtPath("namespaces/foo/rolebinding.yaml"),
 				},
 			},
 		},

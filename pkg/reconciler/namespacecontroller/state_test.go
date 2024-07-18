@@ -21,7 +21,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 )
 
 var (
@@ -41,35 +41,35 @@ func TestMatchChanged(t *testing.T) {
 			name:               "a Namespace was previously selected by two selectors, but not selected at all",
 			nsSelectors:        map[string]labels.Selector{"dev-nss": devLabelSelector, "feature-nss": featureLabelSelector},
 			selectedNamespaces: map[string][]labels.Selector{"test-ns": {devLabelSelector, featureLabelSelector}},
-			ns:                 fake.NamespaceObject("test-ns", core.Label("environment", "prod")),
+			ns:                 k8sobjects.NamespaceObject("test-ns", core.Label("environment", "prod")),
 			wantChanged:        true,
 		},
 		{
 			name:               "a Namespace was previously selected by two selectors, but only partially selected",
 			nsSelectors:        map[string]labels.Selector{"dev-nss": devLabelSelector, "feature-nss": featureLabelSelector},
 			selectedNamespaces: map[string][]labels.Selector{"test-ns": {devLabelSelector, featureLabelSelector}},
-			ns:                 fake.NamespaceObject("test-ns", core.Label("environment", "dev")),
+			ns:                 k8sobjects.NamespaceObject("test-ns", core.Label("environment", "dev")),
 			wantChanged:        true,
 		},
 		{
 			name:               "a Namespace was previously selected, and is also selected now",
 			nsSelectors:        map[string]labels.Selector{"dev-nss": devLabelSelector, "feature-nss": featureLabelSelector},
 			selectedNamespaces: map[string][]labels.Selector{"test-ns": {devLabelSelector, featureLabelSelector}},
-			ns:                 fake.NamespaceObject("test-ns", core.Labels(map[string]string{"environment": "dev", "feature": "abc"})),
+			ns:                 k8sobjects.NamespaceObject("test-ns", core.Labels(map[string]string{"environment": "dev", "feature": "abc"})),
 			wantChanged:        false,
 		},
 		{
 			name:               "a Namespace was not selected before, but is selected now",
 			nsSelectors:        map[string]labels.Selector{"test-nss": devLabelSelector},
 			selectedNamespaces: map[string][]labels.Selector{"other-ns": {devLabelSelector}},
-			ns:                 fake.NamespaceObject("test-ns", core.Label("environment", "dev")),
+			ns:                 k8sobjects.NamespaceObject("test-ns", core.Label("environment", "dev")),
 			wantChanged:        true,
 		},
 		{
 			name:               "a Namespace is neither selected before nor selected now",
 			nsSelectors:        map[string]labels.Selector{"test-nss": devLabelSelector},
 			selectedNamespaces: map[string][]labels.Selector{"test-other": {devLabelSelector}},
-			ns:                 fake.NamespaceObject("test-ns", core.Label("environment", "prod")),
+			ns:                 k8sobjects.NamespaceObject("test-ns", core.Label("environment", "prod")),
 			wantChanged:        false,
 		},
 	}

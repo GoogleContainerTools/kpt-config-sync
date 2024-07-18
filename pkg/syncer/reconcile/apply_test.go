@@ -20,8 +20,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -34,20 +34,20 @@ func TestEqual(t *testing.T) {
 	}{
 		{
 			name:          "exactly the same object",
-			dryrunStatus:  fake.UnstructuredObject(kinds.Namespace(), core.Name("test")),
-			currentStatus: fake.UnstructuredObject(kinds.Namespace(), core.Name("test")),
+			dryrunStatus:  k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("test")),
+			currentStatus: k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("test")),
 			equal:         true,
 		},
 		{
 			name:          "same object with different generations, different timestamp",
-			dryrunStatus:  fake.UnstructuredObject(kinds.Namespace(), core.Name("test"), core.Generation(1), core.CreationTimeStamp(metav1.Time{})),
-			currentStatus: fake.UnstructuredObject(kinds.Namespace(), core.Name("test"), core.Generation(2), core.CreationTimeStamp(metav1.Now())),
+			dryrunStatus:  k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("test"), core.Generation(1), core.CreationTimeStamp(metav1.Time{})),
+			currentStatus: k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("test"), core.Generation(2), core.CreationTimeStamp(metav1.Now())),
 			equal:         true,
 		},
 		{
 			name:         "same object with status",
-			dryrunStatus: fake.UnstructuredObject(kinds.Namespace(), core.Name("test")),
-			currentStatus: fake.UnstructuredObject(kinds.Namespace(), core.Name("test"),
+			dryrunStatus: k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("test")),
+			currentStatus: k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("test"),
 				func(o client.Object) {
 					u := o.(*unstructured.Unstructured)
 					err := unstructured.SetNestedField(u.Object, "Active", "status", "phase")
@@ -59,8 +59,8 @@ func TestEqual(t *testing.T) {
 		},
 		{
 			name:          "same object with different labels",
-			dryrunStatus:  fake.UnstructuredObject(kinds.Namespace(), core.Name("test"), core.Label("key", "val1")),
-			currentStatus: fake.UnstructuredObject(kinds.Namespace(), core.Name("test"), core.Label("key", "val2")),
+			dryrunStatus:  k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("test"), core.Label("key", "val1")),
+			currentStatus: k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("test"), core.Label("key", "val2")),
 			equal:         false,
 		},
 	}

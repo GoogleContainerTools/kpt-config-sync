@@ -20,7 +20,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 )
 
 // durations creates a sequence of evenly-spaced time.Durations.
@@ -131,11 +131,11 @@ func TestFight(t *testing.T) {
 }
 
 func roleID(name, ns string) core.ID {
-	return core.IDOf(fake.RoleObject(core.Name(name), core.Namespace(ns)))
+	return core.IDOf(k8sobjects.RoleObject(core.Name(name), core.Namespace(ns)))
 }
 
 func roleBindingID(name, ns string) core.ID {
-	return core.IDOf(fake.RoleBinding(core.Name(name), core.Namespace(ns)))
+	return core.IDOf(k8sobjects.RoleBinding(core.Name(name), core.Namespace(ns)))
 }
 
 func TestFightDetector(t *testing.T) {
@@ -189,7 +189,7 @@ func TestFightDetector(t *testing.T) {
 
 			now := time.Now()
 			for id, updates := range tc.updates {
-				u := fake.Unstructured(id.WithVersion(""), core.Namespace(id.Namespace), core.Name(id.Name))
+				u := k8sobjects.Unstructured(id.WithVersion(""), core.Namespace(id.Namespace), core.Name(id.Name))
 
 				aboveThreshold := false
 				logged := false

@@ -21,11 +21,11 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/metadata"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/testing/openapitest"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 )
 
 func TestDeclaredFields(t *testing.T) {
@@ -36,15 +36,15 @@ func TestDeclaredFields(t *testing.T) {
 
 	testCases := []struct {
 		name string
-		objs *objects.Raw
-		want *objects.Raw
+		objs *fileobjects.Raw
+		want *fileobjects.Raw
 	}{
 		{
 			name: "encode fields for Role with rules",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				Converter: converter,
 				Objects: []ast.FileObject{
-					fake.FileObject(&unstructured.Unstructured{
+					k8sobjects.FileObject(&unstructured.Unstructured{
 						Object: map[string]interface{}{
 							"apiVersion": rbacv1.SchemeGroupVersion.String(),
 							"kind":       "Role",
@@ -63,10 +63,10 @@ func TestDeclaredFields(t *testing.T) {
 					}, "role.yaml"),
 				},
 			},
-			want: &objects.Raw{
+			want: &fileobjects.Raw{
 				Converter: converter,
 				Objects: []ast.FileObject{
-					fake.FileObject(&unstructured.Unstructured{
+					k8sobjects.FileObject(&unstructured.Unstructured{
 						Object: map[string]interface{}{
 							"apiVersion": rbacv1.SchemeGroupVersion.String(),
 							"kind":       "Role",
@@ -91,10 +91,10 @@ func TestDeclaredFields(t *testing.T) {
 		},
 		{
 			name: "encode fields for Role with a label",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				Converter: converter,
 				Objects: []ast.FileObject{
-					fake.FileObject(&unstructured.Unstructured{
+					k8sobjects.FileObject(&unstructured.Unstructured{
 						Object: map[string]interface{}{
 							"apiVersion": rbacv1.SchemeGroupVersion.String(),
 							"kind":       "Role",
@@ -109,10 +109,10 @@ func TestDeclaredFields(t *testing.T) {
 					}, "role.yaml"),
 				},
 			},
-			want: &objects.Raw{
+			want: &fileobjects.Raw{
 				Converter: converter,
 				Objects: []ast.FileObject{
-					fake.FileObject(&unstructured.Unstructured{
+					k8sobjects.FileObject(&unstructured.Unstructured{
 						Object: map[string]interface{}{
 							"apiVersion": rbacv1.SchemeGroupVersion.String(),
 							"kind":       "Role",
@@ -133,10 +133,10 @@ func TestDeclaredFields(t *testing.T) {
 		},
 		{
 			name: "encode fields for Custom Resource",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				Converter: converter,
 				Objects: []ast.FileObject{
-					fake.FileObject(&unstructured.Unstructured{
+					k8sobjects.FileObject(&unstructured.Unstructured{
 						Object: map[string]interface{}{
 							"apiVersion": "acme.com/v1",
 							"kind":       "Anvil",
@@ -153,10 +153,10 @@ func TestDeclaredFields(t *testing.T) {
 					}, "anvil.yaml"),
 				},
 			},
-			want: &objects.Raw{
+			want: &fileobjects.Raw{
 				Converter: converter,
 				Objects: []ast.FileObject{
-					fake.FileObject(&unstructured.Unstructured{
+					k8sobjects.FileObject(&unstructured.Unstructured{
 						Object: map[string]interface{}{
 							"apiVersion": "acme.com/v1",
 							"kind":       "Anvil",
@@ -177,7 +177,7 @@ func TestDeclaredFields(t *testing.T) {
 		},
 	}
 
-	ignoreConverter := cmpopts.IgnoreFields(objects.Raw{}, "Converter")
+	ignoreConverter := cmpopts.IgnoreFields(fileobjects.Raw{}, "Converter")
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

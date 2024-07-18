@@ -20,70 +20,70 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/metadata"
-	"kpt.dev/configsync/pkg/testing/fake"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 )
 
 func TestUnknownScope(t *testing.T) {
 	testCases := []struct {
 		name string
-		objs *objects.Scoped
-		want *objects.Scoped
+		objs *fileobjects.Scoped
+		want *fileobjects.Scoped
 	}{
 		{
 			name: "No objects",
-			objs: &objects.Scoped{},
-			want: &objects.Scoped{},
+			objs: &fileobjects.Scoped{},
+			want: &fileobjects.Scoped{},
 		},
 		{
 			name: "no unknown scope objects",
-			objs: &objects.Scoped{
+			objs: &fileobjects.Scoped{
 				Cluster: []ast.FileObject{
-					fake.Namespace("namespaces/prod", core.Label("environment", "prod")),
+					k8sobjects.Namespace("namespaces/prod", core.Label("environment", "prod")),
 				},
 				Namespace: []ast.FileObject{
-					fake.Role(core.Namespace("prod")),
+					k8sobjects.Role(core.Namespace("prod")),
 				},
 			},
-			want: &objects.Scoped{
+			want: &fileobjects.Scoped{
 				Cluster: []ast.FileObject{
-					fake.Namespace("namespaces/prod", core.Label("environment", "prod")),
+					k8sobjects.Namespace("namespaces/prod", core.Label("environment", "prod")),
 				},
 				Namespace: []ast.FileObject{
-					fake.Role(core.Namespace("prod")),
+					k8sobjects.Role(core.Namespace("prod")),
 				},
 			},
 		},
 		{
 			name: "has unknown scope objects",
-			objs: &objects.Scoped{
+			objs: &fileobjects.Scoped{
 				Cluster: []ast.FileObject{
-					fake.Namespace("namespaces/prod", core.Label("environment", "prod")),
-					fake.Namespace("namespaces/dev1", core.Label("environment", "dev")),
-					fake.Namespace("namespaces/dev2", core.Label("environment", "dev")),
+					k8sobjects.Namespace("namespaces/prod", core.Label("environment", "prod")),
+					k8sobjects.Namespace("namespaces/dev1", core.Label("environment", "dev")),
+					k8sobjects.Namespace("namespaces/dev2", core.Label("environment", "dev")),
 				},
 				Namespace: []ast.FileObject{
-					fake.Role(core.Namespace("prod")),
+					k8sobjects.Role(core.Namespace("prod")),
 				},
 				Unknown: []ast.FileObject{
-					fake.FileObject(fake.RootSyncObjectV1Beta1(configsync.RootSyncName), "rootsync.yaml"),
+					k8sobjects.FileObject(k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName), "rootsync.yaml"),
 				},
 			},
-			want: &objects.Scoped{
+			want: &fileobjects.Scoped{
 				Cluster: []ast.FileObject{
-					fake.Namespace("namespaces/prod", core.Label("environment", "prod")),
-					fake.Namespace("namespaces/dev1", core.Label("environment", "dev")),
-					fake.Namespace("namespaces/dev2", core.Label("environment", "dev")),
+					k8sobjects.Namespace("namespaces/prod", core.Label("environment", "prod")),
+					k8sobjects.Namespace("namespaces/dev1", core.Label("environment", "dev")),
+					k8sobjects.Namespace("namespaces/dev2", core.Label("environment", "dev")),
 				},
 				Namespace: []ast.FileObject{
-					fake.Role(
+					k8sobjects.Role(
 						core.Namespace("prod"),
 					),
 				},
 				Unknown: []ast.FileObject{
-					fake.FileObject(fake.RootSyncObjectV1Beta1(configsync.RootSyncName,
+					k8sobjects.FileObject(k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName,
 						core.Annotation(metadata.UnknownScopeAnnotationKey, metadata.UnknownScopeAnnotationValue),
 					), "rootsync.yaml"),
 				},

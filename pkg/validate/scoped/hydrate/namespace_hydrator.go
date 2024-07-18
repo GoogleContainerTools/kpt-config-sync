@@ -34,7 +34,7 @@ import (
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/rootsync"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -45,8 +45,8 @@ import (
 // into namespaces that are dynamically present on the cluster. It also sets a
 // default namespace on any namespace-scoped object that does not already
 // have a namespace or namespace selector set.
-func NamespaceSelectors(ctx context.Context, c client.Client, fieldManager string) objects.ScopedVisitor {
-	return func(objs *objects.Scoped) status.MultiError {
+func NamespaceSelectors(ctx context.Context, c client.Client, fieldManager string) fileobjects.ScopedVisitor {
+	return func(objs *fileobjects.Scoped) status.MultiError {
 		nsSelectors, errs := buildSelectorMap(ctx, c, fieldManager, objs)
 		if errs != nil {
 			return errs
@@ -84,7 +84,7 @@ func NamespaceSelectors(ctx context.Context, c client.Client, fieldManager strin
 // of NamespaceSelector names to the namespaces that are selected by each one.
 // Note that this modifies the Scoped objects to filter out the
 // NamespaceSelectors since they are no longer needed after this point.
-func buildSelectorMap(ctx context.Context, c client.Client, fieldManager string, objs *objects.Scoped) (map[string][]string, status.MultiError) {
+func buildSelectorMap(ctx context.Context, c client.Client, fieldManager string, objs *fileobjects.Scoped) (map[string][]string, status.MultiError) {
 	var namespaces, others []ast.FileObject
 	nsSelectorMap := make(map[string]labels.Selector)
 	selectedNamespaceMap := make(map[string][]labels.Selector)

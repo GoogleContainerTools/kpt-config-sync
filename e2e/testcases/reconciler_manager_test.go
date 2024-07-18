@@ -44,12 +44,12 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/util/log"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -130,7 +130,7 @@ func TestReconcilerManagerTeardownInvalidRSyncs(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Log("Validate the RootSync")
-	rootSync := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rootSync := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	err = nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync.Name, rootSync.Namespace, []testpredicates.Predicate{
 		testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
 		testpredicates.HasFinalizer(metadata.ReconcilerManagerFinalizer),
@@ -158,7 +158,7 @@ func TestReconcilerManagerTeardownInvalidRSyncs(t *testing.T) {
 		"Validation", `git secretType was set as "token" but token key is not present in git-creds secret`)
 
 	t.Log("Validate the RepoSync")
-	repoSync := fake.RepoSyncObjectV1Beta1(testNamespace, configsync.RepoSyncName)
+	repoSync := k8sobjects.RepoSyncObjectV1Beta1(testNamespace, configsync.RepoSyncName)
 	err = nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSync.Name, repoSync.Namespace, []testpredicates.Predicate{
 		testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
 		testpredicates.HasFinalizer(metadata.ReconcilerManagerFinalizer),
@@ -583,7 +583,7 @@ func TestManagingReconciler(t *testing.T) {
 	generation = getDeploymentGeneration(nt, nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace)
 
 	// test case 5: the reconciler-manager should add the gcenode-askpass-sidecar container when needed
-	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.T.Log("Force to use the 'gcpserviceaccount' auth type with an invalid GSA email address")
 	// The initial spec.git.auth is `ssh` when using the test-git-server, bitbucket or gitlab as the Git provider.
 	// It is `gcpserviceaccount` when using CSR as the Git provider.
@@ -1199,7 +1199,7 @@ func TestReconcilerManagerRootSyncCRDMissing(t *testing.T) {
 	rootSyncDir1 := gitproviders.DefaultSyncDir
 	nt.Must(nt.ValidateNotFound(nsName1, "", &corev1.Namespace{}))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/ns-%s.yaml", rootSyncDir1, nsName1),
-		fake.NamespaceObject(nsName1)))
+		k8sobjects.NamespaceObject(nsName1)))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding namespace 1"))
 	nt.Must(nt.WatchForAllSyncs())
 	nt.Must(nt.Validate(nsName1, "", &corev1.Namespace{}))
@@ -1219,7 +1219,7 @@ func TestReconcilerManagerRootSyncCRDMissing(t *testing.T) {
 	repoSyncDir1 := gitproviders.DefaultSyncDir
 	nt.Must(nt.ValidateNotFound(saName1, repoSyncNS, &corev1.ServiceAccount{}))
 	nt.Must(nt.NonRootRepos[repoSyncNN].Add(fmt.Sprintf("%s/sa-%s.yaml", repoSyncDir1, saName1),
-		fake.ServiceAccountObject(saName1, core.Namespace(repoSyncNS))))
+		k8sobjects.ServiceAccountObject(saName1, core.Namespace(repoSyncNS))))
 	nt.Must(nt.NonRootRepos[repoSyncNN].CommitAndPush("Adding service account 1"))
 	nt.Must(nt.WatchForAllSyncs(
 		nomostest.SkipReadyCheck(), // Skip ready check because it requires the RootSync CRD to exist.
@@ -1240,10 +1240,10 @@ func TestReconcilerManagerRootSyncCRDMissing(t *testing.T) {
 	repoSyncDir2 := "acme-2"
 	nt.Must(nt.ValidateNotFound(saName2, repoSyncNS, &corev1.ServiceAccount{}))
 	nt.Must(nt.NonRootRepos[repoSyncNN].Add(fmt.Sprintf("%s/sa-%s.yaml", repoSyncDir2, saName2),
-		fake.ServiceAccountObject(saName2, core.Namespace(repoSyncNS))))
+		k8sobjects.ServiceAccountObject(saName2, core.Namespace(repoSyncNS))))
 	nt.Must(nt.NonRootRepos[repoSyncNN].CommitAndPush("Adding service account 2"))
 	// Change RepoSync sync dir to trigger reconciler-manager to update the reconciler
-	repoSync := fake.RepoSyncObjectV1Beta1(repoSyncNN.Namespace, repoSyncNN.Name)
+	repoSync := k8sobjects.RepoSyncObjectV1Beta1(repoSyncNN.Namespace, repoSyncNN.Name)
 	nt.MustMergePatch(repoSync, fmt.Sprintf(`{"spec":{"git":{"dir":%q}}}`, repoSyncDir2))
 	nt.Must(nt.WatchForAllSyncs(
 		nomostest.SkipReadyCheck(), // Skip ready check because it requires the RootSync CRD to exist.

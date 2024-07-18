@@ -22,8 +22,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/syncer/syncertest"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/cli-utils/pkg/object"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -38,8 +38,8 @@ func TestPartitionObjs(t *testing.T) {
 		{
 			name: "all managed objs",
 			objs: []client.Object{
-				fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"), syncertest.ManagementEnabled),
-				fake.ServiceObject(core.Name("service"), core.Namespace("default"), syncertest.ManagementEnabled),
+				k8sobjects.DeploymentObject(core.Name("deploy"), core.Namespace("default"), syncertest.ManagementEnabled),
+				k8sobjects.ServiceObject(core.Name("service"), core.Namespace("default"), syncertest.ManagementEnabled),
 			},
 			enabledCount:  2,
 			disabledCount: 0,
@@ -47,8 +47,8 @@ func TestPartitionObjs(t *testing.T) {
 		{
 			name: "all disabled objs",
 			objs: []client.Object{
-				fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"), syncertest.ManagementDisabled),
-				fake.ServiceObject(core.Name("service"), core.Namespace("default"), syncertest.ManagementDisabled),
+				k8sobjects.DeploymentObject(core.Name("deploy"), core.Namespace("default"), syncertest.ManagementDisabled),
+				k8sobjects.ServiceObject(core.Name("service"), core.Namespace("default"), syncertest.ManagementDisabled),
 			},
 			enabledCount:  0,
 			disabledCount: 2,
@@ -56,8 +56,8 @@ func TestPartitionObjs(t *testing.T) {
 		{
 			name: "mixed objs",
 			objs: []client.Object{
-				fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"), syncertest.ManagementEnabled),
-				fake.ServiceObject(core.Name("service"), core.Namespace("default"), syncertest.ManagementDisabled),
+				k8sobjects.DeploymentObject(core.Name("deploy"), core.Namespace("default"), syncertest.ManagementEnabled),
+				k8sobjects.ServiceObject(core.Name("service"), core.Namespace("default"), syncertest.ManagementDisabled),
 			},
 			enabledCount:  1,
 			disabledCount: 1,
@@ -77,7 +77,7 @@ func TestPartitionObjs(t *testing.T) {
 }
 
 func TestObjMetaFrom(t *testing.T) {
-	d := fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))
+	d := k8sobjects.DeploymentObject(core.Name("deploy"), core.Namespace("default"))
 	expected := object.ObjMetadata{
 		Namespace: "default",
 		Name:      "deploy",
@@ -93,7 +93,7 @@ func TestObjMetaFrom(t *testing.T) {
 }
 
 func TestIDFrom(t *testing.T) {
-	d := fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))
+	d := k8sobjects.DeploymentObject(core.Name("deploy"), core.Namespace("default"))
 	meta := ObjMetaFromObject(d)
 	id := idFrom(meta)
 	if id != core.IDOf(d) {
@@ -111,51 +111,51 @@ func TestRemoveFrom(t *testing.T) {
 		{
 			name: "toRemove is empty",
 			allObjMeta: []object.ObjMetadata{
-				ObjMetaFromObject(fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
-				ObjMetaFromObject(fake.ServiceObject(core.Name("service"), core.Namespace("default"))),
+				ObjMetaFromObject(k8sobjects.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
+				ObjMetaFromObject(k8sobjects.ServiceObject(core.Name("service"), core.Namespace("default"))),
 			},
 			objs: nil,
 			expected: []object.ObjMetadata{
-				ObjMetaFromObject(fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
-				ObjMetaFromObject(fake.ServiceObject(core.Name("service"), core.Namespace("default"))),
+				ObjMetaFromObject(k8sobjects.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
+				ObjMetaFromObject(k8sobjects.ServiceObject(core.Name("service"), core.Namespace("default"))),
 			},
 		},
 		{
 			name: "all toRemove are in the original list",
 			allObjMeta: []object.ObjMetadata{
-				ObjMetaFromObject(fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
-				ObjMetaFromObject(fake.ServiceObject(core.Name("service"), core.Namespace("default"))),
+				ObjMetaFromObject(k8sobjects.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
+				ObjMetaFromObject(k8sobjects.ServiceObject(core.Name("service"), core.Namespace("default"))),
 			},
 			objs: []client.Object{
-				fake.ServiceObject(core.Name("service"), core.Namespace("default")),
+				k8sobjects.ServiceObject(core.Name("service"), core.Namespace("default")),
 			},
 			expected: []object.ObjMetadata{
-				ObjMetaFromObject(fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
+				ObjMetaFromObject(k8sobjects.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
 			},
 		},
 		{
 			name: "some toRemove are not in the original list",
 			allObjMeta: []object.ObjMetadata{
-				ObjMetaFromObject(fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
-				ObjMetaFromObject(fake.ServiceObject(core.Name("service"), core.Namespace("default"))),
+				ObjMetaFromObject(k8sobjects.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
+				ObjMetaFromObject(k8sobjects.ServiceObject(core.Name("service"), core.Namespace("default"))),
 			},
 			objs: []client.Object{
-				fake.ServiceObject(core.Name("service"), core.Namespace("default")),
-				fake.ConfigMapObject(core.Name("cm"), core.Namespace("default")),
+				k8sobjects.ServiceObject(core.Name("service"), core.Namespace("default")),
+				k8sobjects.ConfigMapObject(core.Name("cm"), core.Namespace("default")),
 			},
 			expected: []object.ObjMetadata{
-				ObjMetaFromObject(fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
+				ObjMetaFromObject(k8sobjects.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
 			},
 		},
 		{
 			name: "toRemove are the same as original objects",
 			allObjMeta: []object.ObjMetadata{
-				ObjMetaFromObject(fake.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
-				ObjMetaFromObject(fake.ServiceObject(core.Name("service"), core.Namespace("default"))),
+				ObjMetaFromObject(k8sobjects.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
+				ObjMetaFromObject(k8sobjects.ServiceObject(core.Name("service"), core.Namespace("default"))),
 			},
 			objs: []client.Object{
-				fake.DeploymentObject(core.Name("deploy"), core.Namespace("default")),
-				fake.ServiceObject(core.Name("service"), core.Namespace("default")),
+				k8sobjects.DeploymentObject(core.Name("deploy"), core.Namespace("default")),
+				k8sobjects.ServiceObject(core.Name("service"), core.Namespace("default")),
 			},
 			expected: nil,
 		},

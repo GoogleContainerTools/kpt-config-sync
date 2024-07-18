@@ -18,12 +18,12 @@ import (
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 )
 
 // Filepath annotates the given Raw objects with the path from the Git repo
 // policy directory to the files which declare them.
-func Filepath(objs *objects.Raw) status.MultiError {
+func Filepath(objs *fileobjects.Raw) status.MultiError {
 	for _, obj := range objs.Objects {
 		path := objs.PolicyDir.Join(obj.Relative).SlashPath()
 		core.SetAnnotation(obj, metadata.SourcePathAnnotationKey, path)

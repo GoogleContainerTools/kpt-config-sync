@@ -17,7 +17,7 @@ package diff
 import (
 	"testing"
 
-	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -34,7 +34,7 @@ func TestIsUnknown(t *testing.T) {
 		},
 		{
 			"known object",
-			fake.ConfigMapObject(),
+			k8sobjects.ConfigMapObject(),
 			false,
 		},
 	}

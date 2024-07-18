@@ -28,9 +28,9 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer"
 	csmetadata "kpt.dev/configsync/pkg/metadata"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/testing/openapitest"
 	"sigs.k8s.io/cli-utils/pkg/common"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -68,7 +68,7 @@ func TestValidator_Handle(t *testing.T) {
 			// The Config Sync Importer is allowed to do anything it likes, so we just
 			// have one test for it.
 			name: "Importer creates a object whose configmanagement.gke.io/managed annotation is set to enabled but whose configsync.gke.io/resource-id annotation is unset",
-			newObj: fake.RoleObject(
+			newObj: k8sobjects.RoleObject(
 				core.Name("hello"),
 				core.Namespace("world"),
 				core.Label(csmetadata.ManagedByKey, csmetadata.ManagedByValue),
@@ -86,7 +86,7 @@ func TestValidator_Handle(t *testing.T) {
 		},
 		{
 			name: "Root reconciler deletes an object it manages",
-			oldObj: fake.RoleObject(
+			oldObj: k8sobjects.RoleObject(
 				core.Name("hello"),
 				core.Namespace("world"),
 				core.Label(csmetadata.ManagedByKey, csmetadata.ManagedByValue),
@@ -105,7 +105,7 @@ func TestValidator_Handle(t *testing.T) {
 		},
 		{
 			name: "Root reconciler deletes an object managed by a namespace reconciler",
-			oldObj: fake.RoleObject(
+			oldObj: k8sobjects.RoleObject(
 				core.Name("hello"),
 				core.Namespace("world"),
 				core.Label(csmetadata.ManagedByKey, csmetadata.ManagedByValue),
@@ -124,7 +124,7 @@ func TestValidator_Handle(t *testing.T) {
 		},
 		{
 			name: "Namespace reconciler deletes an object it manages",
-			oldObj: fake.RoleObject(
+			oldObj: k8sobjects.RoleObject(
 				core.Name("hello"),
 				core.Namespace("world"),
 				core.Label(csmetadata.ManagedByKey, csmetadata.ManagedByValue),
@@ -143,7 +143,7 @@ func TestValidator_Handle(t *testing.T) {
 		},
 		{
 			name: "Namespace reconciler deletes an object it does not manage",
-			oldObj: fake.RoleObject(
+			oldObj: k8sobjects.RoleObject(
 				core.Name("hello"),
 				core.Namespace("world"),
 				core.Label(csmetadata.ManagedByKey, csmetadata.ManagedByValue),
@@ -163,7 +163,7 @@ func TestValidator_Handle(t *testing.T) {
 		},
 		{
 			name: "Namespace reconciler deletes an object it does not manage",
-			oldObj: fake.RoleObject(
+			oldObj: k8sobjects.RoleObject(
 				core.Name("hello"),
 				core.Namespace("world"),
 				core.Label(csmetadata.ManagedByKey, csmetadata.ManagedByValue),
@@ -183,7 +183,7 @@ func TestValidator_Handle(t *testing.T) {
 		},
 		{
 			name: "Bob creates an unmanaged object, which does not have the configmanagement.gke.io/managed and configsync.gke.io/resource-id annotations.",
-			newObj: fake.RoleObject(
+			newObj: k8sobjects.RoleObject(
 				core.Name("hello"),
 				core.Namespace("world"),
 				setRules([]rbacv1.PolicyRule{
@@ -198,7 +198,7 @@ func TestValidator_Handle(t *testing.T) {
 		},
 		{
 			name: "Bob creates an unmanaged object, whose configmanagement.gke.io/managed annotation is set to enabled, but whose configsync.gke.io/resource-id annotation is unset.",
-			newObj: fake.RoleObject(
+			newObj: k8sobjects.RoleObject(
 				core.Name("hello"),
 				core.Namespace("world"),
 				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
@@ -214,7 +214,7 @@ func TestValidator_Handle(t *testing.T) {
 		},
 		{
 			name: "Bob creates an unmanaged object, whose configmanagement.gke.io/managed annotation is unset, but whose configsync.gke.io/resource-id annotation is set.",
-			newObj: fake.RoleObject(
+			newObj: k8sobjects.RoleObject(
 				core.Name("hello"),
 				core.Namespace("world"),
 				core.Annotation(csmetadata.ResourceIDKey, "rbac.authorization.k8s.io_role_world_hello"),
@@ -230,7 +230,7 @@ func TestValidator_Handle(t *testing.T) {
 		},
 		{
 			name: "Bob deletes an unmanaged object, which does not have the configmanagement.gke.io/managed and configsync.gke.io/resource-id annotations.",
-			oldObj: fake.RoleObject(
+			oldObj: k8sobjects.RoleObject(
 				core.Name("hello"),
 				core.Namespace("world"),
 				setRules([]rbacv1.PolicyRule{
@@ -245,7 +245,7 @@ func TestValidator_Handle(t *testing.T) {
 		},
 		{
 			name: "Bob deletes an unmanaged object, whose configmanagement.gke.io/managed annotation is set to enabled, but whose configsync.gke.io/resource-id annotation is unset.",
-			oldObj: fake.RoleObject(
+			oldObj: k8sobjects.RoleObject(
 				core.Name("hello"),
 				core.Namespace("world"),
 				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
@@ -261,7 +261,7 @@ func TestValidator_Handle(t *testing.T) {
 		},
 		{
 			name: "Bob deletes an unmanaged object, whose configmanagement.gke.io/managed annotation is unset, but whose configsync.gke.io/resource-id annotation is set.",
-			oldObj: fake.RoleObject(
+			oldObj: k8sobjects.RoleObject(
 				core.Name("hello"),
 				core.Namespace("world"),
 				core.Annotation(csmetadata.ResourceIDKey, "rbac.authorization.k8s.io_role_world_hello"),
@@ -277,7 +277,7 @@ func TestValidator_Handle(t *testing.T) {
 		},
 		{
 			name: "Bob updates an unmanaged object, oldObj and newObj both do not have the configmanagement.gke.io/managed and configsync.gke.io/resource-id annotations.",
-			oldObj: fake.RoleObject(
+			oldObj: k8sobjects.RoleObject(
 				core.Name("hello"),
 				core.Namespace("world"),
 				setRules([]rbacv1.PolicyRule{
@@ -288,7 +288,7 @@ func TestValidator_Handle(t *testing.T) {
 					},
 				}),
 			),
-			newObj: fake.RoleObject(
+			newObj: k8sobjects.RoleObject(
 				core.Name("hello"),
 				core.Namespace("world"),
 				setRules([]rbacv1.PolicyRule{
@@ -303,7 +303,7 @@ func TestValidator_Handle(t *testing.T) {
 		},
 		{
 			name: "Bob updates an unmanaged object, oldObj has the configmanagement.gke.io/managed  annotation, newObj has the configsync.gke.io/resource-id annotation.",
-			oldObj: fake.RoleObject(
+			oldObj: k8sobjects.RoleObject(
 				core.Name("hello"),
 				core.Namespace("world"),
 				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
@@ -315,7 +315,7 @@ func TestValidator_Handle(t *testing.T) {
 					},
 				}),
 			),
-			newObj: fake.RoleObject(
+			newObj: k8sobjects.RoleObject(
 				core.Name("hello"),
 				core.Namespace("world"),
 				core.Annotation(csmetadata.ResourceIDKey, "rbac.authorization.k8s.io_role_world_hello"),
@@ -331,7 +331,7 @@ func TestValidator_Handle(t *testing.T) {
 		},
 		{
 			name: "Bob creates a managed object",
-			newObj: fake.RoleObject(
+			newObj: k8sobjects.RoleObject(
 				core.Name("hello"),
 				core.Namespace("world"),
 				core.Label(csmetadata.ManagedByKey, csmetadata.ManagedByValue),
@@ -351,7 +351,7 @@ func TestValidator_Handle(t *testing.T) {
 		},
 		{
 			name: "Bob deletes a managed object",
-			oldObj: fake.RoleObject(
+			oldObj: k8sobjects.RoleObject(
 				core.Name("hello"),
 				core.Namespace("world"),
 				core.Label(csmetadata.ManagedByKey, csmetadata.ManagedByValue),
@@ -371,7 +371,7 @@ func TestValidator_Handle(t *testing.T) {
 		},
 		{
 			name: "Bob updates a managed object: undeclared fields",
-			oldObj: fake.RoleObject(
+			oldObj: k8sobjects.RoleObject(
 				core.Name("hello"),
 				core.Namespace("world"),
 				core.Label(csmetadata.ManagedByKey, csmetadata.ManagedByValue),
@@ -386,7 +386,7 @@ func TestValidator_Handle(t *testing.T) {
 				}),
 				core.Annotation(csmetadata.DeclaredFieldsKey, `{"f:metadata":{"f:labels":{"f:app.kubernetes.io/managed-by":{}},"f:annotations":{"f:configmanagement.gke.io/managed":{}}},"f:rules":{}}`),
 			),
-			newObj: fake.RoleObject(
+			newObj: k8sobjects.RoleObject(
 				core.Name("hello"),
 				core.Namespace("world"),
 				core.Label(csmetadata.ManagedByKey, csmetadata.ManagedByValue),
@@ -406,7 +406,7 @@ func TestValidator_Handle(t *testing.T) {
 		},
 		{
 			name: "Bob updates a managed object: declared fields",
-			oldObj: fake.RoleObject(
+			oldObj: k8sobjects.RoleObject(
 				core.Name("hello"),
 				core.Namespace("world"),
 				core.Label(csmetadata.ManagedByKey, csmetadata.ManagedByValue),
@@ -421,7 +421,7 @@ func TestValidator_Handle(t *testing.T) {
 				}),
 				core.Annotation(csmetadata.DeclaredFieldsKey, `{"f:metadata":{"f:labels":{"f:app.kubernetes.io/managed-by":{}},"f:annotations":{"f:configmanagement.gke.io/managed":{}}},"f:rules":{}}`),
 			),
-			newObj: fake.RoleObject(
+			newObj: k8sobjects.RoleObject(
 				core.Name("hello"),
 				core.Namespace("world"),
 				core.Label(csmetadata.ManagedByKey, csmetadata.ManagedByValue),
@@ -441,7 +441,7 @@ func TestValidator_Handle(t *testing.T) {
 		},
 		{
 			name: "Bob updates a managed object: Config Sync metadata",
-			oldObj: fake.RoleObject(
+			oldObj: k8sobjects.RoleObject(
 				core.Name("hello"),
 				core.Namespace("world"),
 				core.Label(csmetadata.ManagedByKey, csmetadata.ManagedByValue),
@@ -456,7 +456,7 @@ func TestValidator_Handle(t *testing.T) {
 				}),
 				core.Annotation(csmetadata.DeclaredFieldsKey, `{"f:metadata":{"f:labels":{"f:app.kubernetes.io/managed-by":{}},"f:annotations":{"f:configmanagement.gke.io/managed":{}}},"f:rules":{}}`),
 			),
-			newObj: fake.RoleObject(
+			newObj: k8sobjects.RoleObject(
 				core.Name("hello"),
 				core.Namespace("world"),
 				// Removed managed-by label
@@ -476,7 +476,7 @@ func TestValidator_Handle(t *testing.T) {
 		},
 		{
 			name: "Bob updates a object (whose configmanagement.gke.io/managed annotation is unset, but whose configsync.gke.io/resource-id annotation is set): Config Sync metadata",
-			oldObj: fake.RoleObject(
+			oldObj: k8sobjects.RoleObject(
 				core.Name("hello"),
 				core.Namespace("world"),
 				core.Label(csmetadata.ManagedByKey, csmetadata.ManagedByValue),
@@ -490,7 +490,7 @@ func TestValidator_Handle(t *testing.T) {
 				}),
 				core.Annotation(csmetadata.DeclaredFieldsKey, `{"f:metadata":{"f:labels":{"f:app.kubernetes.io/managed-by":{}},"f:annotations":{"f:configmanagement.gke.io/managed":{}}},"f:rules":{}}`),
 			),
-			newObj: fake.RoleObject(
+			newObj: k8sobjects.RoleObject(
 				core.Name("hello"),
 				core.Namespace("world"),
 				// Removed managed-by label
@@ -508,7 +508,7 @@ func TestValidator_Handle(t *testing.T) {
 		},
 		{
 			name: "Bob creates a ResourceGroup generated by ConfigSync",
-			newObj: fake.ResourceGroupObject(
+			newObj: k8sobjects.ResourceGroupObject(
 				core.Name("repo-sync"),
 				core.Namespace("bookstore"),
 				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
@@ -518,7 +518,7 @@ func TestValidator_Handle(t *testing.T) {
 		},
 		{
 			name: "Bob deletes a ResourceGroup generated by ConfigSync",
-			oldObj: fake.ResourceGroupObject(
+			oldObj: k8sobjects.ResourceGroupObject(
 				core.Name("repo-sync"),
 				core.Namespace("bookstore"),
 				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
@@ -528,12 +528,12 @@ func TestValidator_Handle(t *testing.T) {
 		},
 		{
 			name: "Bob updates a ResourceGroup generated by ConfigSync",
-			oldObj: fake.ResourceGroupObject(
+			oldObj: k8sobjects.ResourceGroupObject(
 				core.Name("repo-sync"),
 				core.Namespace("bookstore"),
 				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
 				core.Label(common.InventoryLabel, applier.InventoryID("repo-sync", "bookstore"))),
-			newObj: fake.ResourceGroupObject(
+			newObj: k8sobjects.ResourceGroupObject(
 				core.Name("repo-sync"),
 				core.Namespace("bookstore"),
 				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
@@ -544,7 +544,7 @@ func TestValidator_Handle(t *testing.T) {
 		},
 		{
 			name: "Bob creates an independent ResourceGroup",
-			newObj: fake.ResourceGroupObject(
+			newObj: k8sobjects.ResourceGroupObject(
 				core.Name("user-created"),
 				core.Namespace("bookstore"),
 				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled)),
@@ -552,7 +552,7 @@ func TestValidator_Handle(t *testing.T) {
 		},
 		{
 			name: "Bob deletes an independent ResourceGroup",
-			oldObj: fake.ResourceGroupObject(
+			oldObj: k8sobjects.ResourceGroupObject(
 				core.Name("user-created"),
 				core.Namespace("bookstore"),
 				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled)),
@@ -560,11 +560,11 @@ func TestValidator_Handle(t *testing.T) {
 		},
 		{
 			name: "Bob updates an independent ResourceGroup",
-			oldObj: fake.ResourceGroupObject(
+			oldObj: k8sobjects.ResourceGroupObject(
 				core.Name("user-created"),
 				core.Namespace("bookstore"),
 				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled)),
-			newObj: fake.ResourceGroupObject(
+			newObj: k8sobjects.ResourceGroupObject(
 				core.Name("user-created"),
 				core.Namespace("bookstore"),
 				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
@@ -573,31 +573,31 @@ func TestValidator_Handle(t *testing.T) {
 		},
 		{
 			name: "Bob manually modifies lifecycle annotation of an object, whose configmanagement.gke.io/managed annotation is set to enabled, but whose configsync.gke.io/resource-id annotation is unset",
-			oldObj: fake.RoleObject(
+			oldObj: k8sobjects.RoleObject(
 				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
 				core.Annotation(csmetadata.LifecycleMutationAnnotation, csmetadata.IgnoreMutation)),
-			newObj: fake.RoleObject(
+			newObj: k8sobjects.RoleObject(
 				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
 				core.Annotation(csmetadata.LifecycleMutationAnnotation, "other")),
 		},
 		{
 			name: "Bob manually modifies lifecycle annotation of an object, whose configsync.gke.io/resource-id annotation is incorrect",
-			oldObj: fake.RoleObject(
+			oldObj: k8sobjects.RoleObject(
 				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
 				core.Annotation(csmetadata.ResourceIDKey, "rbac.authorization.k8s.io_role_world_hello"),
 				core.Annotation(csmetadata.LifecycleMutationAnnotation, csmetadata.IgnoreMutation)),
-			newObj: fake.RoleObject(
+			newObj: k8sobjects.RoleObject(
 				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
 				core.Annotation(csmetadata.ResourceIDKey, "rbac.authorization.k8s.io_role_world_hello"),
 				core.Annotation(csmetadata.LifecycleMutationAnnotation, "other")),
 		},
 		{
 			name: "Bob manually modifies lifecycle annotation of a managed object",
-			oldObj: fake.RoleObject(
+			oldObj: k8sobjects.RoleObject(
 				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
 				core.Annotation(csmetadata.ResourceIDKey, "rbac.authorization.k8s.io_role_default-name"),
 				core.Annotation(csmetadata.LifecycleMutationAnnotation, csmetadata.IgnoreMutation)),
-			newObj: fake.RoleObject(
+			newObj: k8sobjects.RoleObject(
 				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
 				core.Annotation(csmetadata.ResourceIDKey, "rbac.authorization.k8s.io_role_default-name"),
 				core.Annotation(csmetadata.LifecycleMutationAnnotation, "other")),
@@ -605,10 +605,10 @@ func TestValidator_Handle(t *testing.T) {
 		},
 		{
 			name: "Bob manually adds lifecycle annotation",
-			oldObj: fake.RoleObject(
+			oldObj: k8sobjects.RoleObject(
 				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
 				core.Annotation(csmetadata.ResourceIDKey, "rbac.authorization.k8s.io_role_default-name")),
-			newObj: fake.RoleObject(
+			newObj: k8sobjects.RoleObject(
 				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
 				core.Annotation(csmetadata.ResourceIDKey, "rbac.authorization.k8s.io_role_default-name"),
 				core.Annotation(csmetadata.LifecycleMutationAnnotation, csmetadata.IgnoreMutation)),

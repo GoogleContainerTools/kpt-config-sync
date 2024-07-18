@@ -22,7 +22,6 @@ import (
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 func TestIllegalCRD(t *testing.T) {
@@ -38,22 +37,22 @@ func TestIllegalCRD(t *testing.T) {
 		{
 			name:    "ClusterConfig v1beta1 CRD",
 			obj:     crdv1beta1("crd", kinds.ClusterConfig()),
-			wantErr: fake.Error(nonhierarchical.UnsupportedObjectErrorCode),
+			wantErr: status.FakeError(nonhierarchical.UnsupportedObjectErrorCode),
 		},
 		{
 			name:    "ClusterConfig v1 CRD",
 			obj:     crdv1("crd", kinds.ClusterConfig()),
-			wantErr: fake.Error(nonhierarchical.UnsupportedObjectErrorCode),
+			wantErr: status.FakeError(nonhierarchical.UnsupportedObjectErrorCode),
 		},
 		{
 			name:    "RepoSync v1beta1 CRD",
 			obj:     crdv1beta1("crd", kinds.RepoSyncV1Beta1()),
-			wantErr: fake.Error(nonhierarchical.UnsupportedObjectErrorCode),
+			wantErr: status.FakeError(nonhierarchical.UnsupportedObjectErrorCode),
 		},
 		{
 			name:    "RepoSync v1 CRD",
 			obj:     crdv1("crd", kinds.RepoSyncV1Beta1()),
-			wantErr: fake.Error(nonhierarchical.UnsupportedObjectErrorCode),
+			wantErr: status.FakeError(nonhierarchical.UnsupportedObjectErrorCode),
 		},
 	}
 

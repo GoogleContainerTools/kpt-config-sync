@@ -19,10 +19,10 @@ import (
 	"testing"
 
 	"k8s.io/api/extensions/v1beta1"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 func TestDeprecatedKinds(t *testing.T) {
@@ -33,22 +33,22 @@ func TestDeprecatedKinds(t *testing.T) {
 	}{
 		{
 			name: "Non-deprecated Deployment",
-			obj:  fake.Deployment("namespaces/foo"),
+			obj:  k8sobjects.Deployment("namespaces/foo"),
 		},
 		{
 			name:    "Deprecated Deployment",
-			obj:     fake.Unstructured(v1beta1.SchemeGroupVersion.WithKind("Deployment")),
-			wantErr: fake.Error(nonhierarchical.DeprecatedGroupKindErrorCode),
+			obj:     k8sobjects.Unstructured(v1beta1.SchemeGroupVersion.WithKind("Deployment")),
+			wantErr: status.FakeError(nonhierarchical.DeprecatedGroupKindErrorCode),
 		},
 		{
 			name:    "Deprecated PodSecurityPolicy",
-			obj:     fake.Unstructured(v1beta1.SchemeGroupVersion.WithKind("PodSecurityPolicy")),
-			wantErr: fake.Error(nonhierarchical.DeprecatedGroupKindErrorCode),
+			obj:     k8sobjects.Unstructured(v1beta1.SchemeGroupVersion.WithKind("PodSecurityPolicy")),
+			wantErr: status.FakeError(nonhierarchical.DeprecatedGroupKindErrorCode),
 		},
 		{
 			name:    "Deprecated Ingress",
-			obj:     fake.Unstructured(v1beta1.SchemeGroupVersion.WithKind("Ingress")),
-			wantErr: fake.Error(nonhierarchical.DeprecatedGroupKindErrorCode),
+			obj:     k8sobjects.Unstructured(v1beta1.SchemeGroupVersion.WithKind("Ingress")),
+			wantErr: status.FakeError(nonhierarchical.DeprecatedGroupKindErrorCode),
 		},
 	}
 

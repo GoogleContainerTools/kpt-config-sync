@@ -23,7 +23,7 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -31,7 +31,7 @@ import (
 // selector annotations. This one verifies that legacy NamespaceSelectors are
 // only declared in abstract namespace and that objects only reference legacy
 // NamespaceSelectors that are in an ancestor abstract namespace.
-func NamespaceSelector(tree *objects.Tree) status.MultiError {
+func NamespaceSelector(tree *fileobjects.Tree) status.MultiError {
 	return validateSelectorsInNode(tree.Tree, tree.NamespaceSelectors)
 }
 

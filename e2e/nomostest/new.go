@@ -37,8 +37,8 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testshell"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 )
@@ -357,10 +357,10 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	})
 
 	// You can't add Secrets to Namespaces that don't exist, so create them now.
-	if err := nt.KubeClient.Create(fake.NamespaceObject(configmanagement.ControllerNamespace)); err != nil {
+	if err := nt.KubeClient.Create(k8sobjects.NamespaceObject(configmanagement.ControllerNamespace)); err != nil {
 		nt.T.Fatal(err)
 	}
-	if err := nt.KubeClient.Create(fake.NamespaceObject(configmanagement.MonitoringNamespace)); err != nil {
+	if err := nt.KubeClient.Create(k8sobjects.NamespaceObject(configmanagement.MonitoringNamespace)); err != nil {
 		nt.T.Fatal(err)
 	}
 

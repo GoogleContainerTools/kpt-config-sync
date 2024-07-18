@@ -19,12 +19,12 @@ import (
 	"testing"
 
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/syncer/syncertest"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 func TestValidManagementAnnotation(t *testing.T) {
@@ -35,21 +35,21 @@ func TestValidManagementAnnotation(t *testing.T) {
 	}{
 		{
 			name: "no management annotation",
-			obj:  fake.Role(),
+			obj:  k8sobjects.Role(),
 		},
 		{
 			name: "disabled management passes",
-			obj:  fake.Role(syncertest.ManagementDisabled),
+			obj:  k8sobjects.Role(syncertest.ManagementDisabled),
 		},
 		{
 			name: "enabled management fails",
-			obj:  fake.Role(syncertest.ManagementEnabled),
-			want: fake.Error(nonhierarchical.IllegalManagementAnnotationErrorCode),
+			obj:  k8sobjects.Role(syncertest.ManagementEnabled),
+			want: status.FakeError(nonhierarchical.IllegalManagementAnnotationErrorCode),
 		},
 		{
 			name: "invalid management fails",
-			obj:  fake.Role(core.Annotation(metadata.ResourceManagementKey, "invalid")),
-			want: fake.Error(nonhierarchical.IllegalManagementAnnotationErrorCode),
+			obj:  k8sobjects.Role(core.Annotation(metadata.ResourceManagementKey, "invalid")),
+			want: status.FakeError(nonhierarchical.IllegalManagementAnnotationErrorCode),
 		},
 	}
 

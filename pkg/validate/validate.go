@@ -24,8 +24,8 @@ import (
 	"kpt.dev/configsync/pkg/reconciler/namespacecontroller"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/util/discovery"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 	"kpt.dev/configsync/pkg/validate/final"
-	"kpt.dev/configsync/pkg/validate/objects"
 	"kpt.dev/configsync/pkg/validate/raw"
 	"kpt.dev/configsync/pkg/validate/scoped"
 	"kpt.dev/configsync/pkg/validate/tree"
@@ -97,7 +97,7 @@ func Hierarchical(objs []ast.FileObject, opts Options) ([]ast.FileObject, status
 	// We also perform initial hydration which includes:
 	//   - filtering out resources whose cluster selector does not match
 	//   - adding metadata to resources (such as their filepath in the repo)
-	rawObjects := &objects.Raw{
+	rawObjects := &fileobjects.Raw{
 		ClusterName:       opts.ClusterName,
 		Scope:             opts.Scope,
 		SyncName:          opts.SyncName,
@@ -141,7 +141,7 @@ func Hierarchical(objs []ast.FileObject, opts Options) ([]ast.FileObject, status
 	// We also perform hydration which includes:
 	//   - copying "abstract" resources down into child namespaces and filtering
 	//     based upon their namespace selector
-	treeObjects, errs := objects.BuildTree(scopedObjects)
+	treeObjects, errs := fileobjects.BuildTree(scopedObjects)
 	if errs != nil {
 		return nil, status.Append(nonBlockingErrs, errs)
 	}
@@ -179,7 +179,7 @@ func Unstructured(ctx context.Context, c client.Client, objs []ast.FileObject, o
 	// We also perform initial hydration which includes:
 	//   - filtering out resources whose cluster selector does not match
 	//   - adding metadata to resources (such as their filepath in the repo)
-	rawObjects := &objects.Raw{
+	rawObjects := &fileobjects.Raw{
 		ClusterName:              opts.ClusterName,
 		Scope:                    opts.Scope,
 		SyncName:                 opts.SyncName,

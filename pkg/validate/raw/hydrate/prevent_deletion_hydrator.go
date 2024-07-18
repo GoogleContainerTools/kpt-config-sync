@@ -19,13 +19,13 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/syncer/differ"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 	"sigs.k8s.io/cli-utils/pkg/common"
 )
 
 // PreventDeletion adds the `client.lifecycle.config.k8s.io/deletion: detach` annotation to special namespaces,
 // which include `default`, `kube-system`, `kube-public`, `kube-node-lease`, and `gatekeeper-system`.
-func PreventDeletion(objs *objects.Raw) status.MultiError {
+func PreventDeletion(objs *fileobjects.Raw) status.MultiError {
 	for _, obj := range objs.Objects {
 		if obj.GetObjectKind().GroupVersionKind().GroupKind() == kinds.Namespace().GroupKind() && differ.SpecialNamespaces[obj.GetName()] {
 			core.SetAnnotation(obj, common.LifecycleDeleteAnnotation, common.PreventDeletion)

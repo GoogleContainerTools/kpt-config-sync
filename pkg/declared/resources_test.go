@@ -26,16 +26,16 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/syncer/reconcile"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/testing/testmetrics"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var (
-	obj1 = fake.CustomResourceDefinitionV1Beta1Object()
-	obj2 = fake.ResourceQuotaObject()
+	obj1 = k8sobjects.CustomResourceDefinitionV1Beta1Object()
+	obj2 = k8sobjects.ResourceQuotaObject()
 
 	testSet = []client.Object{obj1, obj2}
 	nilSet  = []client.Object{nil}
@@ -70,9 +70,9 @@ func TestMutateImpossible(t *testing.T) {
 	wantResourceVersion := "version 1"
 
 	dr := Resources{}
-	o1 := fake.RoleObject(core.Name("foo"), core.Namespace("bar"))
+	o1 := k8sobjects.RoleObject(core.Name("foo"), core.Namespace("bar"))
 	o1.SetResourceVersion(wantResourceVersion)
-	o2 := asUnstructured(t, fake.RoleObject(core.Name("baz"), core.Namespace("bar")))
+	o2 := asUnstructured(t, k8sobjects.RoleObject(core.Name("baz"), core.Namespace("bar")))
 	o2.SetResourceVersion(wantResourceVersion)
 
 	expectedCommit := "example"

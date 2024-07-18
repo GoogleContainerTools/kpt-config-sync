@@ -20,8 +20,8 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	csmetadata "kpt.dev/configsync/pkg/metadata"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/testing/openapitest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -131,7 +131,7 @@ func TestObjectDiffer_Structured(t *testing.T) {
 }
 
 func roleForTest(muts ...core.MetaMutator) *rbacv1.Role {
-	role := fake.RoleObject(
+	role := k8sobjects.RoleObject(
 		core.Name("hello"),
 		core.Namespace("world"),
 		core.Label("this", "that"))

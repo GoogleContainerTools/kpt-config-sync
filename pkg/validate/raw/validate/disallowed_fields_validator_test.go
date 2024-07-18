@@ -21,33 +21,33 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/syntax"
 	"kpt.dev/configsync/pkg/importer/id"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 )
 
 func TestDisallowedFields(t *testing.T) {
 	testCases := []struct {
 		name     string
-		objs     *objects.Raw
+		objs     *fileobjects.Raw
 		wantErrs status.MultiError
 	}{
 		{
 			name: "Deployment with allowed fields passes",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.Deployment("hello"),
+					k8sobjects.Deployment("hello"),
 				},
 			},
 		},
 		{
 			name: "Deployment with disallowed fields fails",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.Deployment("hello",
+					k8sobjects.Deployment("hello",
 						core.OwnerReference([]metav1.OwnerReference{{}}),
 						core.SelfLink("this-is-me"),
 						core.UID("my-uid"),
@@ -60,14 +60,14 @@ func TestDisallowedFields(t *testing.T) {
 				},
 			},
 			wantErrs: status.Wrap(
-				syntax.IllegalFieldsInConfigError(fake.Deployment("hello"), id.OwnerReference),
-				syntax.IllegalFieldsInConfigError(fake.Deployment("hello"), id.SelfLink),
-				syntax.IllegalFieldsInConfigError(fake.Deployment("hello"), id.UID),
-				syntax.IllegalFieldsInConfigError(fake.Deployment("hello"), id.ResourceVersion),
-				syntax.IllegalFieldsInConfigError(fake.Deployment("hello"), id.Generation),
-				syntax.IllegalFieldsInConfigError(fake.Deployment("hello"), id.CreationTimestamp),
-				syntax.IllegalFieldsInConfigError(fake.Deployment("hello"), id.DeletionTimestamp),
-				syntax.IllegalFieldsInConfigError(fake.Deployment("hello"), id.DeletionGracePeriodSeconds),
+				syntax.IllegalFieldsInConfigError(k8sobjects.Deployment("hello"), id.OwnerReference),
+				syntax.IllegalFieldsInConfigError(k8sobjects.Deployment("hello"), id.SelfLink),
+				syntax.IllegalFieldsInConfigError(k8sobjects.Deployment("hello"), id.UID),
+				syntax.IllegalFieldsInConfigError(k8sobjects.Deployment("hello"), id.ResourceVersion),
+				syntax.IllegalFieldsInConfigError(k8sobjects.Deployment("hello"), id.Generation),
+				syntax.IllegalFieldsInConfigError(k8sobjects.Deployment("hello"), id.CreationTimestamp),
+				syntax.IllegalFieldsInConfigError(k8sobjects.Deployment("hello"), id.DeletionTimestamp),
+				syntax.IllegalFieldsInConfigError(k8sobjects.Deployment("hello"), id.DeletionGracePeriodSeconds),
 			),
 		},
 	}

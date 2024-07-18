@@ -19,11 +19,11 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/metadata"
-	"kpt.dev/configsync/pkg/testing/fake"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 )
 
 const dir = "acme/"
@@ -31,32 +31,32 @@ const dir = "acme/"
 func TestFilepath(t *testing.T) {
 	testCases := []struct {
 		name string
-		objs *objects.Raw
-		want *objects.Raw
+		objs *fileobjects.Raw
+		want *fileobjects.Raw
 	}{
 		{
 			name: "Hydrate with filepaths",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				PolicyDir: cmpath.RelativeSlash(dir),
 				Objects: []ast.FileObject{
-					fake.ClusterRoleAtPath("cluster/clusterrole.yaml", core.Name("reader")),
-					fake.RoleAtPath("namespaces/role.yaml", core.Name("writer")),
-					fake.Namespace("namespaces/hello"),
-					fake.RoleBindingAtPath("namespaces/hello/binding.yaml", core.Name("bind-writer")),
+					k8sobjects.ClusterRoleAtPath("cluster/clusterrole.yaml", core.Name("reader")),
+					k8sobjects.RoleAtPath("namespaces/role.yaml", core.Name("writer")),
+					k8sobjects.Namespace("namespaces/hello"),
+					k8sobjects.RoleBindingAtPath("namespaces/hello/binding.yaml", core.Name("bind-writer")),
 				},
 			},
-			want: &objects.Raw{
+			want: &fileobjects.Raw{
 				PolicyDir: cmpath.RelativeSlash(dir),
 				Objects: []ast.FileObject{
-					fake.ClusterRoleAtPath("cluster/clusterrole.yaml",
+					k8sobjects.ClusterRoleAtPath("cluster/clusterrole.yaml",
 						core.Name("reader"),
 						core.Annotation(metadata.SourcePathAnnotationKey, dir+"cluster/clusterrole.yaml")),
-					fake.RoleAtPath("namespaces/role.yaml",
+					k8sobjects.RoleAtPath("namespaces/role.yaml",
 						core.Name("writer"),
 						core.Annotation(metadata.SourcePathAnnotationKey, dir+"namespaces/role.yaml")),
-					fake.Namespace("namespaces/hello",
+					k8sobjects.Namespace("namespaces/hello",
 						core.Annotation(metadata.SourcePathAnnotationKey, dir+"namespaces/hello/namespace.yaml")),
-					fake.RoleBindingAtPath("namespaces/hello/binding.yaml",
+					k8sobjects.RoleBindingAtPath("namespaces/hello/binding.yaml",
 						core.Name("bind-writer"),
 						core.Annotation(metadata.SourcePathAnnotationKey, dir+"namespaces/hello/binding.yaml")),
 				},
@@ -64,18 +64,18 @@ func TestFilepath(t *testing.T) {
 		},
 		{
 			name: "Preserve existing annotations",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				PolicyDir: cmpath.RelativeSlash(dir),
 				Objects: []ast.FileObject{
-					fake.ClusterRoleAtPath("cluster/clusterrole.yaml",
+					k8sobjects.ClusterRoleAtPath("cluster/clusterrole.yaml",
 						core.Name("reader"),
 						core.Annotation("color", "blue")),
 				},
 			},
-			want: &objects.Raw{
+			want: &fileobjects.Raw{
 				PolicyDir: cmpath.RelativeSlash(dir),
 				Objects: []ast.FileObject{
-					fake.ClusterRoleAtPath("cluster/clusterrole.yaml",
+					k8sobjects.ClusterRoleAtPath("cluster/clusterrole.yaml",
 						core.Name("reader"),
 						core.Annotation("color", "blue"),
 						core.Annotation(metadata.SourcePathAnnotationKey, dir+"cluster/clusterrole.yaml")),

@@ -22,12 +22,12 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 )
 
 // HNCDepth hydrates the given Raw objects by annotating each Namespace with its
 // depth to be compatible with the Hierarchy Namespace Controller.
-func HNCDepth(objs *objects.Raw) status.MultiError {
+func HNCDepth(objs *fileobjects.Raw) status.MultiError {
 	for _, obj := range objs.Objects {
 		if obj.GetObjectKind().GroupVersionKind() == kinds.Namespace() {
 			addDepthLabels(obj)

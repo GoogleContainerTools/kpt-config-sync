@@ -23,24 +23,24 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // ClusterSelectorsForHierarchical verifies that all ClusterSelectors have a
 // unique name and are under the correct top-level directory. It also verifies
 // that no invalid FileObjects are cluster-selected.
-func ClusterSelectorsForHierarchical(objs *objects.Raw) status.MultiError {
+func ClusterSelectorsForHierarchical(objs *fileobjects.Raw) status.MultiError {
 	return clusterSelectors(objs, true)
 }
 
 // ClusterSelectorsForUnstructured verifies that all ClusterSelectors have a
 // unique name. It also verifies that no invalid FileObjects are cluster-selected.
-func ClusterSelectorsForUnstructured(objs *objects.Raw) status.MultiError {
+func ClusterSelectorsForUnstructured(objs *fileobjects.Raw) status.MultiError {
 	return clusterSelectors(objs, false)
 }
 
-func clusterSelectors(objs *objects.Raw, checkDir bool) status.MultiError {
+func clusterSelectors(objs *fileobjects.Raw, checkDir bool) status.MultiError {
 	var errs status.MultiError
 	clusterGK := kinds.Cluster().GroupKind()
 	selectorGK := kinds.ClusterSelector().GroupKind()

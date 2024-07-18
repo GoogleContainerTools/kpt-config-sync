@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/utils/ptr"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/diff/difftest"
 	"kpt.dev/configsync/pkg/kinds"
@@ -36,7 +37,6 @@ import (
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/syncer/syncertest"
 	testfake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -52,18 +52,18 @@ func TestFilteredWatcher(t *testing.T) {
 	scope := declared.Scope("test")
 	syncName := "rs"
 
-	deployment1 := fake.DeploymentObject(core.Name("hello"))
-	deployment1Beta := fake.DeploymentObject(core.Name("hello"))
+	deployment1 := k8sobjects.DeploymentObject(core.Name("hello"))
+	deployment1Beta := k8sobjects.DeploymentObject(core.Name("hello"))
 	deployment1Beta.GetObjectKind().SetGroupVersionKind(deployment1Beta.GroupVersionKind().GroupKind().WithVersion("beta1"))
 
-	deployment2 := fake.DeploymentObject(core.Name("world"))
-	deployment3 := fake.DeploymentObject(core.Name("nomes"))
+	deployment2 := k8sobjects.DeploymentObject(core.Name("world"))
+	deployment3 := k8sobjects.DeploymentObject(core.Name("nomes"))
 
-	managedBySelfDeployment := fake.DeploymentObject(core.Name("not-declared"),
+	managedBySelfDeployment := k8sobjects.DeploymentObject(core.Name("not-declared"),
 		syncertest.ManagementEnabled, difftest.ManagedBy(scope, syncName))
-	managedByOtherDeployment := fake.DeploymentObject(core.Name("not-declared"),
+	managedByOtherDeployment := k8sobjects.DeploymentObject(core.Name("not-declared"),
 		syncertest.ManagementEnabled, difftest.ManagedBy("other", "other-rs"))
-	deploymentForRoot := fake.DeploymentObject(core.Name("managed-by-root"), difftest.ManagedBy(declared.RootScope, "any-rs"))
+	deploymentForRoot := k8sobjects.DeploymentObject(core.Name("managed-by-root"), difftest.ManagedBy(declared.RootScope, "any-rs"))
 
 	testCases := []struct {
 		name     string

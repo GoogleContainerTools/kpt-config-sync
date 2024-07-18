@@ -41,9 +41,9 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/cli-utils/pkg/common"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -69,7 +69,7 @@ func TestReconcilerFinalizer_Orphan(t *testing.T) {
 	})
 
 	// Add namespace to RootSync
-	namespace1 := fake.NamespaceObject(namespace1NN.Name)
+	namespace1 := k8sobjects.NamespaceObject(namespace1NN.Name)
 	nt.Must(rootRepo.Add(nomostest.StructuredNSPath(namespace1NN.Name, namespace1NN.Name), namespace1))
 
 	// Add deployment-helloworld-1 to RootSync
@@ -95,7 +95,7 @@ func TestReconcilerFinalizer_Orphan(t *testing.T) {
 	go nomostest.TailReconcilerLogs(ctx, nt, nomostest.RootReconcilerObjectKey(rootSyncNN.Name))
 
 	nt.T.Log("Disabling RootSync deletion propagation")
-	rootSync := fake.RootSyncObjectV1Beta1(rootSyncNN.Name)
+	rootSync := k8sobjects.RootSyncObjectV1Beta1(rootSyncNN.Name)
 	err := nt.KubeClient.Get(rootSync.GetName(), rootSync.GetNamespace(), rootSync)
 	if err != nil {
 		nt.T.Fatal(err)
@@ -158,7 +158,7 @@ func TestReconcilerFinalizer_Foreground(t *testing.T) {
 	})
 
 	// Add namespace to RootSync
-	namespace1 := fake.NamespaceObject(namespace1NN.Name)
+	namespace1 := k8sobjects.NamespaceObject(namespace1NN.Name)
 	nt.Must(rootRepo.Add(nomostest.StructuredNSPath(namespace1NN.Name, namespace1NN.Name), namespace1))
 
 	// Add deployment-helloworld-1 to RootSync
@@ -184,7 +184,7 @@ func TestReconcilerFinalizer_Foreground(t *testing.T) {
 	go nomostest.TailReconcilerLogs(ctx, nt, nomostest.RootReconcilerObjectKey(rootSyncNN.Name))
 
 	nt.T.Log("Enabling RootSync deletion propagation")
-	rootSync := fake.RootSyncObjectV1Beta1(rootSyncNN.Name)
+	rootSync := k8sobjects.RootSyncObjectV1Beta1(rootSyncNN.Name)
 	err := nt.KubeClient.Get(rootSync.Name, rootSync.Namespace, rootSync)
 	if err != nil {
 		nt.T.Fatal(err)
@@ -293,7 +293,7 @@ func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
 	go nomostest.TailReconcilerLogs(ctx, nt, nomostest.NsReconcilerObjectKey(repoSyncNN.Namespace, repoSyncNN.Name))
 
 	nt.T.Log("Enabling RootSync deletion propagation")
-	rootSync := fake.RootSyncObjectV1Beta1(rootSyncNN.Name)
+	rootSync := k8sobjects.RootSyncObjectV1Beta1(rootSyncNN.Name)
 	err := nt.KubeClient.Get(rootSync.Name, rootSync.Namespace, rootSync)
 	if err != nil {
 		nt.T.Fatal(err)
@@ -418,7 +418,7 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 	go nomostest.TailReconcilerLogs(ctx, nt, nomostest.NsReconcilerObjectKey(repoSyncNN.Namespace, repoSyncNN.Name))
 
 	nt.T.Log("Enabling RootSync deletion propagation")
-	rootSync := fake.RootSyncObjectV1Beta1(rootSyncNN.Name)
+	rootSync := k8sobjects.RootSyncObjectV1Beta1(rootSyncNN.Name)
 	err := nt.KubeClient.Get(rootSync.Name, rootSync.Namespace, rootSync)
 	if err != nil {
 		nt.T.Fatal(err)
@@ -516,7 +516,7 @@ func TestReconcileFinalizerReconcileTimeout(t *testing.T) {
 		ntopts.WithReconcileTimeout(10*time.Second), // Reconcile expected to fail, so use a short timeout
 	)
 	// add a Namespace to the nested RootSync
-	namespace := fake.NamespaceObject(namespaceNN.Name)
+	namespace := k8sobjects.NamespaceObject(namespaceNN.Name)
 	nsPath := nomostest.StructuredNSPath(namespace.GetNamespace(), namespaceNN.Name)
 	nt.Must(nt.RootRepos[nestedRootSyncNN.Name].Add(nsPath, namespace))
 	nt.Must(nt.RootRepos[nestedRootSyncNN.Name].CommitAndPush(fmt.Sprintf("add Namespace %s", namespaceNN.Name)))
@@ -554,7 +554,7 @@ func TestReconcileFinalizerReconcileTimeout(t *testing.T) {
 
 	// Remove the fake finalizer
 	t.Cleanup(func() {
-		namespace = fake.NamespaceObject(namespaceNN.Name)
+		namespace = k8sobjects.NamespaceObject(namespaceNN.Name)
 		nt.T.Logf("Remove the fake finalizer named %s from Namespace %s", contrivedFinalizer, namespaceNN.Name)
 		if err := nt.KubeClient.Apply(namespace); err != nil {
 			nt.T.Fatal(err)
@@ -613,12 +613,12 @@ func cleanupSingleLevel(nt *nomostest.NT,
 ) {
 	cleanupSyncsAndObjects(nt,
 		[]client.Object{
-			fake.RootSyncObjectV1Beta1(rootSyncNN.Name),
+			k8sobjects.RootSyncObjectV1Beta1(rootSyncNN.Name),
 		},
 		[]client.Object{
-			fake.DeploymentObject(core.Name(deployment1NN.Name), core.Namespace(deployment1NN.Namespace)),
-			fake.NamespaceObject(namespace1NN.Name),
-			fake.NamespaceObject(safetyNamespace1NN.Name),
+			k8sobjects.DeploymentObject(core.Name(deployment1NN.Name), core.Namespace(deployment1NN.Namespace)),
+			k8sobjects.NamespaceObject(namespace1NN.Name),
+			k8sobjects.NamespaceObject(safetyNamespace1NN.Name),
 		})
 }
 
@@ -629,15 +629,15 @@ func cleanupMultiLevel(nt *nomostest.NT,
 ) {
 	cleanupSyncsAndObjects(nt,
 		[]client.Object{
-			fake.RootSyncObjectV1Beta1(rootSyncNN.Name),
-			fake.RepoSyncObjectV1Beta1(repoSyncNN.Namespace, repoSyncNN.Name),
+			k8sobjects.RootSyncObjectV1Beta1(rootSyncNN.Name),
+			k8sobjects.RepoSyncObjectV1Beta1(repoSyncNN.Namespace, repoSyncNN.Name),
 		},
 		[]client.Object{
-			fake.DeploymentObject(core.Name(deployment1NN.Name), core.Namespace(deployment1NN.Namespace)),
-			fake.DeploymentObject(core.Name(deployment2NN.Name), core.Namespace(deployment2NN.Namespace)),
-			fake.NamespaceObject(namespace1NN.Name),
-			fake.NamespaceObject(safetyNamespace1NN.Name),
-			fake.NamespaceObject(safetyNamespace2NN.Name),
+			k8sobjects.DeploymentObject(core.Name(deployment1NN.Name), core.Namespace(deployment1NN.Namespace)),
+			k8sobjects.DeploymentObject(core.Name(deployment2NN.Name), core.Namespace(deployment2NN.Namespace)),
+			k8sobjects.NamespaceObject(namespace1NN.Name),
+			k8sobjects.NamespaceObject(safetyNamespace1NN.Name),
+			k8sobjects.NamespaceObject(safetyNamespace2NN.Name),
 		})
 }
 

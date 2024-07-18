@@ -25,10 +25,10 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/syncer/decode"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/testing/testerrors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -59,19 +59,19 @@ func TestGetCRDs(t *testing.T) {
 		{
 			name: "v1Beta1 CRD",
 			objs: []client.Object{
-				fake.CustomResourceDefinitionV1Beta1Unstructured(),
+				k8sobjects.CustomResourceDefinitionV1Beta1Unstructured(),
 			},
 			want: []*apiextensionsv1beta1.CustomResourceDefinition{
-				fake.CustomResourceDefinitionV1Beta1Object(),
+				k8sobjects.CustomResourceDefinitionV1Beta1Object(),
 			},
 		},
 		{
 			name: "v1 CRD",
 			objs: []client.Object{
-				fake.CustomResourceDefinitionV1Object(),
+				k8sobjects.CustomResourceDefinitionV1Object(),
 			},
 			want: []*apiextensionsv1beta1.CustomResourceDefinition{
-				fake.CustomResourceDefinitionV1Beta1Object(preserveUnknownFields(t, false)),
+				k8sobjects.CustomResourceDefinitionV1Beta1Object(preserveUnknownFields(t, false)),
 			},
 		},
 	}
@@ -99,7 +99,7 @@ const importToken = "abcde"
 // clusterConfig generates a valid ClusterConfig to be put in AllConfigs given the set of hydrated
 // cluster-scoped client.Objects.
 func clusterConfig(objects ...client.Object) *v1.ClusterConfig {
-	config := fake.ClusterConfigObject()
+	config := k8sobjects.ClusterConfigObject()
 	config.Spec.Token = importToken
 	for _, o := range objects {
 		config.AddResource(o)
@@ -108,7 +108,7 @@ func clusterConfig(objects ...client.Object) *v1.ClusterConfig {
 }
 
 func generateMalformedCRD(t *testing.T) *unstructured.Unstructured {
-	u := fake.CustomResourceDefinitionV1Beta1Unstructured()
+	u := k8sobjects.CustomResourceDefinitionV1Beta1Unstructured()
 
 	// the `spec.group` field should be a string
 	// set it to a bool to construct a malformed CRD
@@ -126,12 +126,12 @@ func TestAsCRD(t *testing.T) {
 	}{
 		{
 			name:    "well-formed v1beta1 CRD",
-			obj:     fake.CustomResourceDefinitionV1Beta1Unstructured(),
+			obj:     k8sobjects.CustomResourceDefinitionV1Beta1Unstructured(),
 			wantErr: nil,
 		},
 		{
 			name:    "well-formed v1 CRD",
-			obj:     fake.CustomResourceDefinitionV1Unstructured(),
+			obj:     k8sobjects.CustomResourceDefinitionV1Unstructured(),
 			wantErr: nil,
 		},
 		{

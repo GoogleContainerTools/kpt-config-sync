@@ -35,6 +35,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/hnc"
@@ -52,7 +53,6 @@ import (
 	"kpt.dev/configsync/pkg/status"
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/discoverytest"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/testing/openapitest"
 	"kpt.dev/configsync/pkg/util/discovery"
 	"kpt.dev/configsync/pkg/validate/raw/validate"
@@ -64,7 +64,7 @@ import (
 const dir = "acme"
 
 func validRootSync(name, path string, opts ...core.MetaMutator) ast.FileObject {
-	rs := fake.RootSyncObjectV1Beta1(name)
+	rs := k8sobjects.RootSyncObjectV1Beta1(name)
 	rs.Spec.SourceType = configsync.GitSource
 	rs.Spec.Git = &v1beta1.Git{
 		Repo: "https://github.com/test/abc",
@@ -73,11 +73,11 @@ func validRootSync(name, path string, opts ...core.MetaMutator) ast.FileObject {
 	for _, opt := range opts {
 		opt(rs)
 	}
-	return fake.FileObject(rs, path)
+	return k8sobjects.FileObject(rs, path)
 }
 
 func validRepoSync(ns, name, path string, opts ...core.MetaMutator) ast.FileObject {
-	rs := fake.RepoSyncObjectV1Beta1(ns, name)
+	rs := k8sobjects.RepoSyncObjectV1Beta1(ns, name)
 	rs.Spec.SourceType = configsync.GitSource
 	rs.Spec.Git = &v1beta1.Git{
 		Repo: "https://github.com/test/abc",
@@ -86,17 +86,17 @@ func validRepoSync(ns, name, path string, opts ...core.MetaMutator) ast.FileObje
 	for _, opt := range opts {
 		opt(rs)
 	}
-	return fake.FileObject(rs, path)
+	return k8sobjects.FileObject(rs, path)
 }
 
 func clusterSelector(name, key, value string) *v1.ClusterSelector {
-	cs := fake.ClusterSelectorObject(core.Name(name))
+	cs := k8sobjects.ClusterSelectorObject(core.Name(name))
 	cs.Spec.Selector.MatchLabels = map[string]string{key: value}
 	return cs
 }
 
 func namespaceSelector(name, key, value, mode string) *v1.NamespaceSelector {
-	ns := fake.NamespaceSelectorObject(core.Name(name))
+	ns := k8sobjects.NamespaceSelectorObject(core.Name(name))
 	ns.Spec.Selector.MatchLabels = map[string]string{key: value}
 	ns.Spec.Mode = mode
 	return ns
@@ -104,7 +104,7 @@ func namespaceSelector(name, key, value, mode string) *v1.NamespaceSelector {
 
 func crdUnstructured(t *testing.T, gvk schema.GroupVersionKind, opts ...core.MetaMutator) *unstructured.Unstructured {
 	t.Helper()
-	u := fake.CustomResourceDefinitionV1Beta1Unstructured()
+	u := k8sobjects.CustomResourceDefinitionV1Beta1Unstructured()
 	pluralKind := strings.ToLower(gvk.Kind) + "s"
 	u.SetName(pluralKind + "." + gvk.Group)
 	if err := unstructured.SetNestedField(u.Object, gvk.Group, "spec", "group"); err != nil {
@@ -135,7 +135,7 @@ func crdUnstructured(t *testing.T, gvk schema.GroupVersionKind, opts ...core.Met
 }
 
 func crdObject(gvk schema.GroupVersionKind, opts ...core.MetaMutator) *apiextensionsv1beta1.CustomResourceDefinition {
-	o := fake.CustomResourceDefinitionV1Beta1Object()
+	o := k8sobjects.CustomResourceDefinitionV1Beta1Object()
 	o.Spec.Names.Plural = strings.ToLower(gvk.Kind) + "s"
 	o.SetName(o.Spec.Names.Plural + "." + gvk.Group)
 	o.Spec.Group = gvk.Group
@@ -164,24 +164,24 @@ func TestHierarchical(t *testing.T) {
 		{
 			name: "only a valid repo",
 			objs: []ast.FileObject{
-				fake.Repo(),
+				k8sobjects.Repo(),
 			},
 		},
 		{
 			name: "namespace and object in it",
 			objs: []ast.FileObject{
-				fake.Repo(),
-				fake.Namespace("namespaces/foo"),
-				fake.RoleAtPath("namespaces/foo/role.yaml",
+				k8sobjects.Repo(),
+				k8sobjects.Namespace("namespaces/foo"),
+				k8sobjects.RoleAtPath("namespaces/foo/role.yaml",
 					core.Namespace("foo")),
 			},
 			want: []ast.FileObject{
-				fake.Namespace("namespaces/foo",
+				k8sobjects.Namespace("namespaces/foo",
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/namespaces/foo/namespace.yaml"),
 					core.Annotation(csmetadata.HNCManagedBy, csmetadata.ManagedByValue),
 					core.Label("foo.tree.hnc.x-k8s.io/depth", "0")),
-				fake.RoleAtPath("namespaces/foo/role.yaml",
+				k8sobjects.RoleAtPath("namespaces/foo/role.yaml",
 					core.Namespace("foo"),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/namespaces/foo/role.yaml")),
@@ -190,39 +190,39 @@ func TestHierarchical(t *testing.T) {
 		{
 			name: "abstract namespaces with object inheritance",
 			objs: []ast.FileObject{
-				fake.Repo(),
-				fake.Namespace("namespaces/bar/foo"),
-				fake.Namespace("namespaces/bar/qux/lym"),
-				fake.RoleAtPath("namespaces/bar/role.yaml",
+				k8sobjects.Repo(),
+				k8sobjects.Namespace("namespaces/bar/foo"),
+				k8sobjects.Namespace("namespaces/bar/qux/lym"),
+				k8sobjects.RoleAtPath("namespaces/bar/role.yaml",
 					core.Name("first")),
-				fake.RoleAtPath("namespaces/bar/qux/role.yaml",
+				k8sobjects.RoleAtPath("namespaces/bar/qux/role.yaml",
 					core.Name("second")),
 			},
 			want: []ast.FileObject{
-				fake.Namespace("namespaces/bar/foo",
+				k8sobjects.Namespace("namespaces/bar/foo",
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/namespaces/bar/foo/namespace.yaml"),
 					core.Annotation(csmetadata.HNCManagedBy, csmetadata.ManagedByValue),
 					core.Label("bar.tree.hnc.x-k8s.io/depth", "1"),
 					core.Label("foo.tree.hnc.x-k8s.io/depth", "0")),
-				fake.RoleAtPath("namespaces/bar/role.yaml",
+				k8sobjects.RoleAtPath("namespaces/bar/role.yaml",
 					core.Name("first"),
 					core.Namespace("foo"),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/namespaces/bar/role.yaml")),
-				fake.Namespace("namespaces/bar/qux/lym",
+				k8sobjects.Namespace("namespaces/bar/qux/lym",
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/namespaces/bar/qux/lym/namespace.yaml"),
 					core.Annotation(csmetadata.HNCManagedBy, csmetadata.ManagedByValue),
 					core.Label("bar.tree.hnc.x-k8s.io/depth", "2"),
 					core.Label("qux.tree.hnc.x-k8s.io/depth", "1"),
 					core.Label("lym.tree.hnc.x-k8s.io/depth", "0")),
-				fake.RoleAtPath("namespaces/bar/role.yaml",
+				k8sobjects.RoleAtPath("namespaces/bar/role.yaml",
 					core.Name("first"),
 					core.Namespace("lym"),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/namespaces/bar/role.yaml")),
-				fake.RoleAtPath("namespaces/bar/qux/role.yaml",
+				k8sobjects.RoleAtPath("namespaces/bar/qux/role.yaml",
 					core.Name("second"),
 					core.Namespace("lym"),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
@@ -232,22 +232,22 @@ func TestHierarchical(t *testing.T) {
 		{
 			name: "CRD and CR",
 			objs: []ast.FileObject{
-				fake.Repo(),
-				fake.FileObject(crdUnstructured(t, kinds.Anvil()), "cluster/crd.yaml"),
-				fake.Namespace("namespaces/foo"),
-				fake.AnvilAtPath("namespaces/foo/anvil.yaml",
+				k8sobjects.Repo(),
+				k8sobjects.FileObject(crdUnstructured(t, kinds.Anvil()), "cluster/crd.yaml"),
+				k8sobjects.Namespace("namespaces/foo"),
+				k8sobjects.AnvilAtPath("namespaces/foo/anvil.yaml",
 					core.Namespace("foo")),
 			},
 			want: []ast.FileObject{
-				fake.FileObject(crdUnstructured(t, kinds.Anvil(),
+				k8sobjects.FileObject(crdUnstructured(t, kinds.Anvil(),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1beta1"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/cluster/crd.yaml")), "cluster/crd.yaml"),
-				fake.Namespace("namespaces/foo",
+				k8sobjects.Namespace("namespaces/foo",
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/namespaces/foo/namespace.yaml"),
 					core.Annotation(csmetadata.HNCManagedBy, csmetadata.ManagedByValue),
 					core.Label("foo.tree.hnc.x-k8s.io/depth", "0")),
-				fake.AnvilAtPath("namespaces/foo/anvil.yaml",
+				k8sobjects.AnvilAtPath("namespaces/foo/anvil.yaml",
 					core.Namespace("foo"),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/namespaces/foo/anvil.yaml")),
@@ -259,11 +259,11 @@ func TestHierarchical(t *testing.T) {
 				crdObject(kinds.Anvil()),
 			},
 			objs: []ast.FileObject{
-				fake.Repo(),
-				fake.AnvilAtPath("cluster/anvil.yaml"),
+				k8sobjects.Repo(),
+				k8sobjects.AnvilAtPath("cluster/anvil.yaml"),
 			},
 			want: []ast.FileObject{
-				fake.AnvilAtPath("cluster/anvil.yaml",
+				k8sobjects.AnvilAtPath("cluster/anvil.yaml",
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/cluster/anvil.yaml")),
 			},
@@ -274,18 +274,18 @@ func TestHierarchical(t *testing.T) {
 				AllowUnknownKinds: true,
 			},
 			objs: []ast.FileObject{
-				fake.Repo(),
-				fake.Namespace("namespaces/foo"),
-				fake.AnvilAtPath("namespaces/foo/anvil.yaml",
+				k8sobjects.Repo(),
+				k8sobjects.Namespace("namespaces/foo"),
+				k8sobjects.AnvilAtPath("namespaces/foo/anvil.yaml",
 					core.Namespace("foo")),
 			},
 			want: []ast.FileObject{
-				fake.Namespace("namespaces/foo",
+				k8sobjects.Namespace("namespaces/foo",
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/namespaces/foo/namespace.yaml"),
 					core.Annotation(csmetadata.HNCManagedBy, csmetadata.ManagedByValue),
 					core.Label("foo.tree.hnc.x-k8s.io/depth", "0")),
-				fake.AnvilAtPath("namespaces/foo/anvil.yaml",
+				k8sobjects.AnvilAtPath("namespaces/foo/anvil.yaml",
 					core.Namespace("foo"),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.UnknownScopeAnnotationKey, csmetadata.UnknownScopeAnnotationValue),
@@ -298,128 +298,128 @@ func TestHierarchical(t *testing.T) {
 				ClusterName: "prod",
 			},
 			objs: []ast.FileObject{
-				fake.Repo(),
-				fake.ClusterAtPath("clusterregistry/cluster-dev.yaml",
+				k8sobjects.Repo(),
+				k8sobjects.ClusterAtPath("clusterregistry/cluster-dev.yaml",
 					core.Name("dev"),
 					core.Label("environment", "dev")),
-				fake.ClusterAtPath("clusterregistry/cluster-prod.yaml",
+				k8sobjects.ClusterAtPath("clusterregistry/cluster-prod.yaml",
 					core.Name("prod"),
 					core.Label("environment", "prod")),
-				fake.FileObject(clusterSelector("prod-only", "environment", "prod"), "clusterregistry/prod-only_cs.yaml"),
-				fake.FileObject(clusterSelector("dev-only", "environment", "dev"), "clusterregistry/dev-only_cs.yaml"),
+				k8sobjects.FileObject(clusterSelector("prod-only", "environment", "prod"), "clusterregistry/prod-only_cs.yaml"),
+				k8sobjects.FileObject(clusterSelector("dev-only", "environment", "dev"), "clusterregistry/dev-only_cs.yaml"),
 				// Should be selected
-				fake.ClusterRoleAtPath("cluster/prod-admin_cr.yaml",
+				k8sobjects.ClusterRoleAtPath("cluster/prod-admin_cr.yaml",
 					core.Name("prod-admin"),
 					core.Annotation(csmetadata.LegacyClusterSelectorAnnotationKey, "prod-only")),
-				fake.ClusterRoleAtPath("cluster/prod-dev_cr.yaml",
+				k8sobjects.ClusterRoleAtPath("cluster/prod-dev_cr.yaml",
 					core.Name("prod-dev"),
 					core.Annotation(csmetadata.LegacyClusterSelectorAnnotationKey, "prod-only")),
-				fake.ClusterRoleAtPath("cluster/prod-owner_cr.yaml",
+				k8sobjects.ClusterRoleAtPath("cluster/prod-owner_cr.yaml",
 					core.Name("prod-owner"),
 					core.Annotation(csmetadata.ClusterNameSelectorAnnotationKey, "prod")),
-				fake.RoleAtPath("namespaces/prod-abstract.yaml",
+				k8sobjects.RoleAtPath("namespaces/prod-abstract.yaml",
 					core.Name("abstract"),
 					core.Annotation(csmetadata.ClusterNameSelectorAnnotationKey, "prod")),
-				fake.Namespace("namespaces/bookstore",
+				k8sobjects.Namespace("namespaces/bookstore",
 					core.Annotation(csmetadata.ClusterNameSelectorAnnotationKey, "prod")),
-				fake.RoleAtPath("namespaces/bookstore/role-prod.yaml",
+				k8sobjects.RoleAtPath("namespaces/bookstore/role-prod.yaml",
 					core.Name("role"),
 					core.Annotation(csmetadata.LegacyClusterSelectorAnnotationKey, "prod-only"),
 					core.Namespace("bookstore")),
-				fake.Namespace("namespaces/prod-shipping",
+				k8sobjects.Namespace("namespaces/prod-shipping",
 					core.Annotation(csmetadata.ClusterNameSelectorAnnotationKey, "prod")),
-				fake.RoleAtPath("namespaces/prod-shipping/prod-sre.yaml",
+				k8sobjects.RoleAtPath("namespaces/prod-shipping/prod-sre.yaml",
 					core.Name("prod-sre"),
 					core.Namespace("prod-shipping")),
-				fake.RoleAtPath("namespaces/prod-shipping/prod-swe.yaml",
+				k8sobjects.RoleAtPath("namespaces/prod-shipping/prod-swe.yaml",
 					core.Name("prod-swe")),
 				// Should not be selected
-				fake.ClusterRoleAtPath("cluster/prod-dev_cr.yaml",
+				k8sobjects.ClusterRoleAtPath("cluster/prod-dev_cr.yaml",
 					core.Name("prod-dev"),
 					core.Annotation(csmetadata.ClusterNameSelectorAnnotationKey, "dev")),
-				fake.ClusterRoleAtPath("cluster/dev-admin_cr.yaml",
+				k8sobjects.ClusterRoleAtPath("cluster/dev-admin_cr.yaml",
 					core.Name("dev-admin"),
 					core.Annotation(csmetadata.LegacyClusterSelectorAnnotationKey, "dev-only")),
-				fake.ClusterRoleAtPath("cluster/dev-owner_cr.yaml",
+				k8sobjects.ClusterRoleAtPath("cluster/dev-owner_cr.yaml",
 					core.Name("dev-owner"),
 					core.Annotation(csmetadata.ClusterNameSelectorAnnotationKey, "dev")),
-				fake.RoleAtPath("namespaces/dev-abstract.yaml",
+				k8sobjects.RoleAtPath("namespaces/dev-abstract.yaml",
 					core.Name("abstract"),
 					core.Annotation(csmetadata.ClusterNameSelectorAnnotationKey, "dev")),
-				fake.Namespace("namespaces/bookstore",
+				k8sobjects.Namespace("namespaces/bookstore",
 					core.Annotation(csmetadata.ClusterNameSelectorAnnotationKey, "dev")),
-				fake.RoleAtPath("namespaces/bookstore/role-dev.yaml",
+				k8sobjects.RoleAtPath("namespaces/bookstore/role-dev.yaml",
 					core.Name("role"),
 					core.Annotation(csmetadata.ClusterNameSelectorAnnotationKey, "dev"),
 					core.Namespace("bookstore")),
-				fake.Namespace("namespaces/dev-shipping",
+				k8sobjects.Namespace("namespaces/dev-shipping",
 					core.Annotation(csmetadata.ClusterNameSelectorAnnotationKey, "dev")),
-				fake.RoleAtPath("namespaces/dev-shipping/dev-sre.yaml",
+				k8sobjects.RoleAtPath("namespaces/dev-shipping/dev-sre.yaml",
 					core.Name("dev-sre"),
 					core.Namespace("dev-shipping")),
-				fake.RoleAtPath("namespaces/dev-shipping/dev-swe.yaml",
+				k8sobjects.RoleAtPath("namespaces/dev-shipping/dev-swe.yaml",
 					core.Name("dev-swe")),
 			},
 			want: []ast.FileObject{
-				fake.ClusterRoleAtPath("cluster/prod-admin_cr.yaml",
+				k8sobjects.ClusterRoleAtPath("cluster/prod-admin_cr.yaml",
 					core.Name("prod-admin"),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.ClusterNameAnnotationKey, "prod"),
 					core.Annotation(csmetadata.LegacyClusterSelectorAnnotationKey, "prod-only"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/cluster/prod-admin_cr.yaml")),
-				fake.ClusterRoleAtPath("cluster/prod-dev_cr.yaml",
+				k8sobjects.ClusterRoleAtPath("cluster/prod-dev_cr.yaml",
 					core.Name("prod-dev"),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.ClusterNameAnnotationKey, "prod"),
 					core.Annotation(csmetadata.LegacyClusterSelectorAnnotationKey, "prod-only"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/cluster/prod-dev_cr.yaml")),
-				fake.ClusterRoleAtPath("cluster/prod-owner_cr.yaml",
+				k8sobjects.ClusterRoleAtPath("cluster/prod-owner_cr.yaml",
 					core.Name("prod-owner"),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.ClusterNameAnnotationKey, "prod"),
 					core.Annotation(csmetadata.ClusterNameSelectorAnnotationKey, "prod"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/cluster/prod-owner_cr.yaml")),
-				fake.Namespace("namespaces/bookstore",
+				k8sobjects.Namespace("namespaces/bookstore",
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.ClusterNameAnnotationKey, "prod"),
 					core.Annotation(csmetadata.ClusterNameSelectorAnnotationKey, "prod"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/namespaces/bookstore/namespace.yaml"),
 					core.Annotation(csmetadata.HNCManagedBy, csmetadata.ManagedByValue),
 					core.Label("bookstore.tree.hnc.x-k8s.io/depth", "0")),
-				fake.RoleAtPath("namespaces/bookstore/role-prod.yaml",
+				k8sobjects.RoleAtPath("namespaces/bookstore/role-prod.yaml",
 					core.Name("role"),
 					core.Namespace("bookstore"),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.ClusterNameAnnotationKey, "prod"),
 					core.Annotation(csmetadata.LegacyClusterSelectorAnnotationKey, "prod-only"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/namespaces/bookstore/role-prod.yaml")),
-				fake.RoleAtPath("namespaces/prod-abstract.yaml",
+				k8sobjects.RoleAtPath("namespaces/prod-abstract.yaml",
 					core.Name("abstract"),
 					core.Namespace("bookstore"),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.ClusterNameAnnotationKey, "prod"),
 					core.Annotation(csmetadata.ClusterNameSelectorAnnotationKey, "prod"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/namespaces/prod-abstract.yaml")),
-				fake.Namespace("namespaces/prod-shipping",
+				k8sobjects.Namespace("namespaces/prod-shipping",
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.ClusterNameAnnotationKey, "prod"),
 					core.Annotation(csmetadata.ClusterNameSelectorAnnotationKey, "prod"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/namespaces/prod-shipping/namespace.yaml"),
 					core.Annotation(csmetadata.HNCManagedBy, csmetadata.ManagedByValue),
 					core.Label("prod-shipping.tree.hnc.x-k8s.io/depth", "0")),
-				fake.RoleAtPath("namespaces/prod-shipping/prod-sre.yaml",
+				k8sobjects.RoleAtPath("namespaces/prod-shipping/prod-sre.yaml",
 					core.Name("prod-sre"),
 					core.Namespace("prod-shipping"),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.ClusterNameAnnotationKey, "prod"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/namespaces/prod-shipping/prod-sre.yaml")),
-				fake.RoleAtPath("namespaces/prod-shipping/prod-swe.yaml",
+				k8sobjects.RoleAtPath("namespaces/prod-shipping/prod-swe.yaml",
 					core.Name("prod-swe"),
 					core.Namespace("prod-shipping"),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.ClusterNameAnnotationKey, "prod"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/namespaces/prod-shipping/prod-swe.yaml")),
-				fake.RoleAtPath("namespaces/prod-abstract.yaml",
+				k8sobjects.RoleAtPath("namespaces/prod-abstract.yaml",
 					core.Name("abstract"),
 					core.Namespace("prod-shipping"),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
@@ -431,44 +431,44 @@ func TestHierarchical(t *testing.T) {
 		{
 			name: "object with namespace selector",
 			objs: []ast.FileObject{
-				fake.Repo(),
-				fake.FileObject(namespaceSelector("sre-supported", "env", "prod", v1.NSSelectorStaticMode),
+				k8sobjects.Repo(),
+				k8sobjects.FileObject(namespaceSelector("sre-supported", "env", "prod", v1.NSSelectorStaticMode),
 					"namespaces/bar/ns-selector.yaml"),
-				fake.FileObject(namespaceSelector("dev-supported", "env", "test", v1.NSSelectorStaticMode),
+				k8sobjects.FileObject(namespaceSelector("dev-supported", "env", "test", v1.NSSelectorStaticMode),
 					"namespaces/bar/ns-selector.yaml"),
-				fake.RoleBindingAtPath("namespaces/bar/sre-rb.yaml",
+				k8sobjects.RoleBindingAtPath("namespaces/bar/sre-rb.yaml",
 					core.Name("rb"),
 					core.Annotation(csmetadata.NamespaceSelectorAnnotationKey, "sre-supported")),
-				fake.RoleBindingAtPath("namespaces/bar/dev-rb.yaml",
+				k8sobjects.RoleBindingAtPath("namespaces/bar/dev-rb.yaml",
 					core.Name("rb"),
 					core.Annotation(csmetadata.NamespaceSelectorAnnotationKey, "dev-supported")),
-				fake.Namespace("namespaces/bar/prod-ns",
+				k8sobjects.Namespace("namespaces/bar/prod-ns",
 					core.Label("env", "prod")),
-				fake.Namespace("namespaces/bar/test-ns",
+				k8sobjects.Namespace("namespaces/bar/test-ns",
 					core.Label("env", "test")),
 			},
 			want: []ast.FileObject{
-				fake.Namespace("namespaces/bar/prod-ns",
+				k8sobjects.Namespace("namespaces/bar/prod-ns",
 					core.Label("env", "prod"),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/namespaces/bar/prod-ns/namespace.yaml"),
 					core.Annotation(csmetadata.HNCManagedBy, csmetadata.ManagedByValue),
 					core.Label("bar.tree.hnc.x-k8s.io/depth", "1"),
 					core.Label("prod-ns.tree.hnc.x-k8s.io/depth", "0")),
-				fake.RoleBindingAtPath("namespaces/bar/sre-rb.yaml",
+				k8sobjects.RoleBindingAtPath("namespaces/bar/sre-rb.yaml",
 					core.Name("rb"),
 					core.Namespace("prod-ns"),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.NamespaceSelectorAnnotationKey, "sre-supported"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/namespaces/bar/sre-rb.yaml")),
-				fake.Namespace("namespaces/bar/test-ns",
+				k8sobjects.Namespace("namespaces/bar/test-ns",
 					core.Label("env", "test"),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/namespaces/bar/test-ns/namespace.yaml"),
 					core.Annotation(csmetadata.HNCManagedBy, csmetadata.ManagedByValue),
 					core.Label("bar.tree.hnc.x-k8s.io/depth", "1"),
 					core.Label("test-ns.tree.hnc.x-k8s.io/depth", "0")),
-				fake.RoleBindingAtPath("namespaces/bar/dev-rb.yaml",
+				k8sobjects.RoleBindingAtPath("namespaces/bar/dev-rb.yaml",
 					core.Name("rb"),
 					core.Namespace("test-ns"),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
@@ -479,25 +479,25 @@ func TestHierarchical(t *testing.T) {
 		{
 			name: "abstract namespaces with shared names",
 			objs: []ast.FileObject{
-				fake.Repo(),
-				fake.Namespace("namespaces/bar/foo"),
-				fake.Namespace("namespaces/foo/bar"),
-				fake.Namespace("namespaces/foo/foo/qux"),
+				k8sobjects.Repo(),
+				k8sobjects.Namespace("namespaces/bar/foo"),
+				k8sobjects.Namespace("namespaces/foo/bar"),
+				k8sobjects.Namespace("namespaces/foo/foo/qux"),
 			},
 			want: []ast.FileObject{
-				fake.Namespace("namespaces/bar/foo",
+				k8sobjects.Namespace("namespaces/bar/foo",
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/namespaces/bar/foo/namespace.yaml"),
 					core.Annotation(csmetadata.HNCManagedBy, csmetadata.ManagedByValue),
 					core.Label("bar.tree.hnc.x-k8s.io/depth", "1"),
 					core.Label("foo.tree.hnc.x-k8s.io/depth", "0")),
-				fake.Namespace("namespaces/foo/bar",
+				k8sobjects.Namespace("namespaces/foo/bar",
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/namespaces/foo/bar/namespace.yaml"),
 					core.Annotation(csmetadata.HNCManagedBy, csmetadata.ManagedByValue),
 					core.Label("foo.tree.hnc.x-k8s.io/depth", "1"),
 					core.Label("bar.tree.hnc.x-k8s.io/depth", "0")),
-				fake.Namespace("namespaces/foo/foo/qux",
+				k8sobjects.Namespace("namespaces/foo/foo/qux",
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/namespaces/foo/foo/qux/namespace.yaml"),
 					core.Annotation(csmetadata.HNCManagedBy, csmetadata.ManagedByValue),
@@ -508,18 +508,18 @@ func TestHierarchical(t *testing.T) {
 		{
 			name: "system namespaces",
 			objs: []ast.FileObject{
-				fake.Repo(),
-				fake.Namespace("namespaces/default"),
-				fake.Namespace("namespaces/kube-system"),
+				k8sobjects.Repo(),
+				k8sobjects.Namespace("namespaces/default"),
+				k8sobjects.Namespace("namespaces/kube-system"),
 			},
 			want: []ast.FileObject{
-				fake.Namespace("namespaces/default",
+				k8sobjects.Namespace("namespaces/default",
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/namespaces/default/namespace.yaml"),
 					core.Annotation(csmetadata.HNCManagedBy, csmetadata.ManagedByValue),
 					core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
 					core.Label("default.tree.hnc.x-k8s.io/depth", "0")),
-				fake.Namespace("namespaces/kube-system",
+				k8sobjects.Namespace("namespaces/kube-system",
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/namespaces/kube-system/namespace.yaml"),
 					core.Annotation(csmetadata.HNCManagedBy, csmetadata.ManagedByValue),
@@ -530,14 +530,14 @@ func TestHierarchical(t *testing.T) {
 		{
 			name: "namespace without declared-fields annotation when webhook is enabled",
 			objs: []ast.FileObject{
-				fake.Repo(),
-				fake.Namespace("namespaces/test-namespace"),
+				k8sobjects.Repo(),
+				k8sobjects.Namespace("namespaces/test-namespace"),
 			},
 			options: Options{
 				WebhookEnabled: true,
 			},
 			want: []ast.FileObject{
-				fake.Namespace("namespaces/test-namespace",
+				k8sobjects.Namespace("namespaces/test-namespace",
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/namespaces/test-namespace/namespace.yaml"),
 					core.Annotation(csmetadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{"f:configmanagement.gke.io/source-path":{},"f:hnc.x-k8s.io/managed-by":{}},"f:labels":{"f:configsync.gke.io/declared-version":{},"f:test-namespace.tree.hnc.x-k8s.io/depth":{}}},"f:spec":{},"f:status":{}}`),
@@ -548,13 +548,13 @@ func TestHierarchical(t *testing.T) {
 		{
 			name: "objects in non-namespace subdirectories",
 			objs: []ast.FileObject{
-				fake.Repo(),
-				fake.HierarchyConfigAtPath("system/sub/hc.yaml"),
-				fake.ClusterAtPath("clusterregistry/foo/cluster.yaml"),
-				fake.ClusterRoleBindingAtPath("cluster/foo/crb.yaml"),
+				k8sobjects.Repo(),
+				k8sobjects.HierarchyConfigAtPath("system/sub/hc.yaml"),
+				k8sobjects.ClusterAtPath("clusterregistry/foo/cluster.yaml"),
+				k8sobjects.ClusterRoleBindingAtPath("cluster/foo/crb.yaml"),
 			},
 			want: []ast.FileObject{
-				fake.ClusterRoleBindingAtPath("cluster/foo/crb.yaml",
+				k8sobjects.ClusterRoleBindingAtPath("cluster/foo/crb.yaml",
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/cluster/foo/crb.yaml")),
 			},
@@ -562,187 +562,187 @@ func TestHierarchical(t *testing.T) {
 		{
 			name: "same namespace resource with different cluster selector",
 			objs: []ast.FileObject{
-				fake.Repo(),
-				fake.FileObject(clusterSelector("prod-only", "environment", "prod"), "clusterregistry/prod-only_cs.yaml"),
-				fake.FileObject(clusterSelector("dev-only", "environment", "dev"), "clusterregistry/dev-only_cs.yaml"),
-				fake.NamespaceAtPath("namespaces/foo/foo-prod.yaml",
+				k8sobjects.Repo(),
+				k8sobjects.FileObject(clusterSelector("prod-only", "environment", "prod"), "clusterregistry/prod-only_cs.yaml"),
+				k8sobjects.FileObject(clusterSelector("dev-only", "environment", "dev"), "clusterregistry/dev-only_cs.yaml"),
+				k8sobjects.NamespaceAtPath("namespaces/foo/foo-prod.yaml",
 					core.Name("foo"), core.Annotation(csmetadata.LegacyClusterSelectorAnnotationKey, "prod-only")),
-				fake.NamespaceAtPath("namespaces/foo/foo-dev.yaml",
+				k8sobjects.NamespaceAtPath("namespaces/foo/foo-dev.yaml",
 					core.Name("foo"), core.Annotation(csmetadata.LegacyClusterSelectorAnnotationKey, "dev-only")),
-				fake.NamespaceAtPath("namespaces/foo/foo-stg.yaml",
+				k8sobjects.NamespaceAtPath("namespaces/foo/foo-stg.yaml",
 					core.Name("foo"), core.Annotation(csmetadata.ClusterNameSelectorAnnotationKey, "stg-only")),
-				fake.NamespaceAtPath("namespaces/foo/foo-test.yaml",
+				k8sobjects.NamespaceAtPath("namespaces/foo/foo-test.yaml",
 					core.Name("foo"), core.Annotation(csmetadata.ClusterNameSelectorAnnotationKey, "test-only")),
 			},
 		},
 		{
 			name:     "no objects fails",
-			wantErrs: fake.Errors(system.MissingRepoErrorCode),
+			wantErrs: status.FakeMultiError(system.MissingRepoErrorCode),
 		},
 		{
 			name: "invalid repo fails",
 			objs: []ast.FileObject{
-				fake.Repo(fake.RepoVersion("0.0.0")),
+				k8sobjects.Repo(k8sobjects.RepoVersion("0.0.0")),
 			},
-			wantErrs: fake.Errors(system.UnsupportedRepoSpecVersionCode),
+			wantErrs: status.FakeMultiError(system.UnsupportedRepoSpecVersionCode),
 		},
 		{
 			name: "duplicate repos fails",
 			objs: []ast.FileObject{
-				fake.Repo(),
-				fake.Repo(),
+				k8sobjects.Repo(),
+				k8sobjects.Repo(),
 			},
-			wantErrs: fake.Errors(status.MultipleSingletonsErrorCode),
+			wantErrs: status.FakeMultiError(status.MultipleSingletonsErrorCode),
 		},
 		{
 			name: "top-level namespace fails",
 			objs: []ast.FileObject{
-				fake.Repo(),
-				fake.Namespace("namespaces"),
+				k8sobjects.Repo(),
+				k8sobjects.Namespace("namespaces"),
 			},
-			wantErrs: fake.Errors(metadata.IllegalTopLevelNamespaceErrorCode),
+			wantErrs: status.FakeMultiError(metadata.IllegalTopLevelNamespaceErrorCode),
 		},
 		{
 			name: "namespace with child directory fails",
 			objs: []ast.FileObject{
-				fake.Repo(),
-				fake.Namespace("namespaces/bar"),
-				fake.RoleAtPath("namespaces/bar/foo/rb.yaml"),
+				k8sobjects.Repo(),
+				k8sobjects.Namespace("namespaces/bar"),
+				k8sobjects.RoleAtPath("namespaces/bar/foo/rb.yaml"),
 			},
-			wantErrs: fake.Errors(validation.IllegalNamespaceSubdirectoryErrorCode),
+			wantErrs: status.FakeMultiError(validation.IllegalNamespaceSubdirectoryErrorCode),
 		},
 		{
 			name: "CR without CRD fails",
 			objs: []ast.FileObject{
-				fake.Repo(),
-				fake.Namespace("namespaces/foo"),
-				fake.AnvilAtPath("namespaces/foo/anvil.yaml",
+				k8sobjects.Repo(),
+				k8sobjects.Namespace("namespaces/foo"),
+				k8sobjects.AnvilAtPath("namespaces/foo/anvil.yaml",
 					core.Namespace("foo")),
 			},
 			want: []ast.FileObject{
-				fake.Namespace("namespaces/foo",
+				k8sobjects.Namespace("namespaces/foo",
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/namespaces/foo/namespace.yaml"),
 					core.Annotation(csmetadata.HNCManagedBy, csmetadata.ManagedByValue),
 					core.Label("foo.tree.hnc.x-k8s.io/depth", "0")),
-				fake.AnvilAtPath("namespaces/foo/anvil.yaml",
+				k8sobjects.AnvilAtPath("namespaces/foo/anvil.yaml",
 					core.Namespace("foo"),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.UnknownScopeAnnotationKey, csmetadata.UnknownScopeAnnotationValue),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/namespaces/foo/anvil.yaml"),
 				),
 			},
-			wantErrs: fake.Errors(status.UnknownKindErrorCode),
+			wantErrs: status.FakeMultiError(status.UnknownKindErrorCode),
 		},
 		{
 			name: "object in namespace directory without namespace fails",
 			objs: []ast.FileObject{
-				fake.Repo(),
-				fake.RoleAtPath("namespaces/foo/rb.yaml"),
+				k8sobjects.Repo(),
+				k8sobjects.RoleAtPath("namespaces/foo/rb.yaml"),
 			},
-			wantErrs: fake.Errors(semantic.UnsyncableResourcesErrorCode),
+			wantErrs: status.FakeMultiError(semantic.UnsyncableResourcesErrorCode),
 		},
 		{
 			name: "object with deprecated GVK fails",
 			objs: []ast.FileObject{
-				fake.Repo(),
-				fake.Namespace("namespaces/foo"),
-				fake.UnstructuredAtPath(
+				k8sobjects.Repo(),
+				k8sobjects.Namespace("namespaces/foo"),
+				k8sobjects.UnstructuredAtPath(
 					schema.GroupVersionKind{
 						Group:   "extensions",
 						Version: "v1beta1",
 						Kind:    "Deployment"},
 					"namespaces/foo/deployment.yaml"),
 			},
-			wantErrs: fake.Errors(nonhierarchical.DeprecatedGroupKindErrorCode),
+			wantErrs: status.FakeMultiError(nonhierarchical.DeprecatedGroupKindErrorCode),
 		},
 		{
 			name: "abstract resource with hierarchy mode none fails",
 			objs: []ast.FileObject{
-				fake.Repo(),
-				fake.HierarchyConfig(fake.HierarchyConfigResource(v1.HierarchyModeNone,
+				k8sobjects.Repo(),
+				k8sobjects.HierarchyConfig(k8sobjects.HierarchyConfigResource(v1.HierarchyModeNone,
 					kinds.RoleBinding().GroupVersion(),
 					kinds.RoleBinding().Kind)),
-				fake.RoleBindingAtPath("namespaces/rb.yaml"),
-				fake.Namespace("namespaces/foo"),
+				k8sobjects.RoleBindingAtPath("namespaces/rb.yaml"),
+				k8sobjects.Namespace("namespaces/foo"),
 			},
-			wantErrs: fake.Errors(validation.IllegalAbstractNamespaceObjectKindErrorCode),
+			wantErrs: status.FakeMultiError(validation.IllegalAbstractNamespaceObjectKindErrorCode),
 		},
 		{
 			name: "cluster-scoped objects with same name fails",
 			objs: []ast.FileObject{
-				fake.Repo(),
-				fake.ClusterRoleAtPath("cluster/cr1.yaml",
+				k8sobjects.Repo(),
+				k8sobjects.ClusterRoleAtPath("cluster/cr1.yaml",
 					core.Name("reader")),
-				fake.ClusterRoleAtPath("cluster/cr2.yaml",
+				k8sobjects.ClusterRoleAtPath("cluster/cr2.yaml",
 					core.Name("reader")),
 			},
-			wantErrs: fake.Errors(nonhierarchical.NameCollisionErrorCode),
+			wantErrs: status.FakeMultiError(nonhierarchical.NameCollisionErrorCode),
 		},
 		{
 			name: "namespaces with same name fails",
 			objs: []ast.FileObject{
-				fake.Repo(),
-				fake.Namespace("namespaces/bar/foo"),
-				fake.Namespace("namespaces/qux/foo"),
+				k8sobjects.Repo(),
+				k8sobjects.Namespace("namespaces/bar/foo"),
+				k8sobjects.Namespace("namespaces/qux/foo"),
 			},
-			wantErrs: fake.Errors(nonhierarchical.NameCollisionErrorCode),
+			wantErrs: status.FakeMultiError(nonhierarchical.NameCollisionErrorCode),
 		},
 		{
 			name: "invalid namespace name/directory fails",
 			objs: []ast.FileObject{
-				fake.Repo(),
-				fake.Namespace("namespaces/foo bar"),
+				k8sobjects.Repo(),
+				k8sobjects.Namespace("namespaces/foo bar"),
 			},
-			wantErrs: fake.Errors(
+			wantErrs: status.FakeMultiError(
 				nonhierarchical.InvalidMetadataNameErrorCode,
 				nonhierarchical.InvalidDirectoryNameErrorCode),
 		},
 		{
 			name: "NamespaceSelector in namespace directory fails",
 			objs: []ast.FileObject{
-				fake.Repo(),
-				fake.NamespaceSelectorAtPath("namespaces/foo/bar/nss.yaml"),
-				fake.Namespace("namespaces/foo/bar"),
+				k8sobjects.Repo(),
+				k8sobjects.NamespaceSelectorAtPath("namespaces/foo/bar/nss.yaml"),
+				k8sobjects.Namespace("namespaces/foo/bar"),
 			},
-			wantErrs: fake.Errors(syntax.IllegalKindInNamespacesErrorCode),
+			wantErrs: status.FakeMultiError(syntax.IllegalKindInNamespacesErrorCode),
 		},
 		{
 			name: "NamespaceSelectors with cluster selector annotations fails",
 			objs: []ast.FileObject{
-				fake.Repo(),
-				fake.NamespaceSelector(
+				k8sobjects.Repo(),
+				k8sobjects.NamespaceSelector(
 					core.Name("legacy-selected"),
 					core.Annotation(csmetadata.LegacyClusterSelectorAnnotationKey, "prod-only")),
-				fake.NamespaceSelector(
+				k8sobjects.NamespaceSelector(
 					core.Name("inline-selected"),
 					core.Annotation(csmetadata.ClusterNameSelectorAnnotationKey, "prod-cluster")),
 			},
-			wantErrs: fake.Errors(
+			wantErrs: status.FakeMultiError(
 				nonhierarchical.IllegalSelectorAnnotationErrorCode,
 				nonhierarchical.IllegalSelectorAnnotationErrorCode),
 		},
 		{
 			name: "cluster-scoped object with namespace selector fails",
 			objs: []ast.FileObject{
-				fake.Repo(),
-				fake.Namespace("namespaces/bar",
+				k8sobjects.Repo(),
+				k8sobjects.Namespace("namespaces/bar",
 					core.Annotation(csmetadata.NamespaceSelectorAnnotationKey, "prod")),
 			},
-			wantErrs: fake.Errors(nonhierarchical.IllegalSelectorAnnotationErrorCode),
+			wantErrs: status.FakeMultiError(nonhierarchical.IllegalSelectorAnnotationErrorCode),
 		},
 		{
 			name: "namespace-scoped objects under incorrect directory fails",
 			objs: []ast.FileObject{
-				fake.Repo(),
-				fake.RoleBindingAtPath("cluster/rb.yaml",
+				k8sobjects.Repo(),
+				k8sobjects.RoleBindingAtPath("cluster/rb.yaml",
 					core.Name("cluster-is-wrong")),
-				fake.RoleBindingAtPath("clusterregistry/rb.yaml",
+				k8sobjects.RoleBindingAtPath("clusterregistry/rb.yaml",
 					core.Name("clusterregistry-is-wrong")),
-				fake.RoleBindingAtPath("system/rb.yaml",
+				k8sobjects.RoleBindingAtPath("system/rb.yaml",
 					core.Name("system-is-wrong")),
 			},
-			wantErrs: fake.Errors(
+			wantErrs: status.FakeMultiError(
 				validation.IncorrectTopLevelDirectoryErrorCode,
 				validation.IncorrectTopLevelDirectoryErrorCode,
 				validation.IncorrectTopLevelDirectoryErrorCode),
@@ -750,15 +750,15 @@ func TestHierarchical(t *testing.T) {
 		{
 			name: "cluster-scoped objects under incorrect directory fails",
 			objs: []ast.FileObject{
-				fake.Repo(),
-				fake.ClusterRoleBindingAtPath("namespaces/foo/crb.yaml",
+				k8sobjects.Repo(),
+				k8sobjects.ClusterRoleBindingAtPath("namespaces/foo/crb.yaml",
 					core.Name("namespaces-is-wrong")),
-				fake.ClusterRoleBindingAtPath("clusterregistry/rb.yaml",
+				k8sobjects.ClusterRoleBindingAtPath("clusterregistry/rb.yaml",
 					core.Name("clusterregistry-is-wrong")),
-				fake.ClusterRoleBindingAtPath("system/rb.yaml",
+				k8sobjects.ClusterRoleBindingAtPath("system/rb.yaml",
 					core.Name("system-is-wrong")),
 			},
-			wantErrs: fake.Errors(
+			wantErrs: status.FakeMultiError(
 				validation.IncorrectTopLevelDirectoryErrorCode,
 				validation.IncorrectTopLevelDirectoryErrorCode,
 				validation.IncorrectTopLevelDirectoryErrorCode),
@@ -766,15 +766,15 @@ func TestHierarchical(t *testing.T) {
 		{
 			name: "cluster registry objects under incorrect directory fails",
 			objs: []ast.FileObject{
-				fake.Repo(),
-				fake.ClusterAtPath("namespaces/foo/cluster.yaml",
+				k8sobjects.Repo(),
+				k8sobjects.ClusterAtPath("namespaces/foo/cluster.yaml",
 					core.Name("namespaces-is-wrong")),
-				fake.ClusterAtPath("cluster/cluster.yaml",
+				k8sobjects.ClusterAtPath("cluster/cluster.yaml",
 					core.Name("cluster-is-wrong")),
-				fake.ClusterAtPath("system/cluster.yaml",
+				k8sobjects.ClusterAtPath("system/cluster.yaml",
 					core.Name("system-is-wrong")),
 			},
-			wantErrs: fake.Errors(
+			wantErrs: status.FakeMultiError(
 				validation.IncorrectTopLevelDirectoryErrorCode,
 				validation.IncorrectTopLevelDirectoryErrorCode,
 				validation.IncorrectTopLevelDirectoryErrorCode),
@@ -782,15 +782,15 @@ func TestHierarchical(t *testing.T) {
 		{
 			name: "system objects under incorrect directory fails",
 			objs: []ast.FileObject{
-				fake.Repo(),
-				fake.HierarchyConfigAtPath("namespaces/foo/hc.yaml",
+				k8sobjects.Repo(),
+				k8sobjects.HierarchyConfigAtPath("namespaces/foo/hc.yaml",
 					core.Name("namespaces-is-wrong")),
-				fake.HierarchyConfigAtPath("cluster/hc.yaml",
+				k8sobjects.HierarchyConfigAtPath("cluster/hc.yaml",
 					core.Name("cluster-is-wrong")),
-				fake.HierarchyConfigAtPath("clusterregistry/hc.yaml",
+				k8sobjects.HierarchyConfigAtPath("clusterregistry/hc.yaml",
 					core.Name("clusterregistry-is-wrong")),
 			},
-			wantErrs: fake.Errors(
+			wantErrs: status.FakeMultiError(
 				validation.IncorrectTopLevelDirectoryErrorCode,
 				validation.IncorrectTopLevelDirectoryErrorCode,
 				validation.IncorrectTopLevelDirectoryErrorCode),
@@ -798,17 +798,17 @@ func TestHierarchical(t *testing.T) {
 		{
 			name: "illegal metadata on objects fails",
 			objs: []ast.FileObject{
-				fake.Repo(),
-				fake.Namespace("namesapces/foo",
+				k8sobjects.Repo(),
+				k8sobjects.Namespace("namesapces/foo",
 					core.Label("foo.tree.hnc.x-k8s.io/depth", "0")),
-				fake.Role(
+				k8sobjects.Role(
 					core.Name("first"),
 					core.Annotation(csmetadata.ClusterNameAnnotationKey, "hello")),
-				fake.Role(
+				k8sobjects.Role(
 					core.Name("second"),
 					core.Annotation(csmetadata.DeclaredFieldsKey, "hello")),
 			},
-			wantErrs: fake.Errors(
+			wantErrs: status.FakeMultiError(
 				metadata.IllegalAnnotationDefinitionErrorCode,
 				metadata.IllegalAnnotationDefinitionErrorCode,
 				hnc.IllegalDepthLabelErrorCode),
@@ -816,61 +816,61 @@ func TestHierarchical(t *testing.T) {
 		{
 			name: "duplicate object names from object inheritance fails",
 			objs: []ast.FileObject{
-				fake.Repo(),
-				fake.Namespace("namespaces/foo/bar/qux"),
-				fake.RoleAtPath("namespaces/rb-1.yaml",
+				k8sobjects.Repo(),
+				k8sobjects.Namespace("namespaces/foo/bar/qux"),
+				k8sobjects.RoleAtPath("namespaces/rb-1.yaml",
 					core.Name("alice")),
-				fake.RoleAtPath("namespaces/foo/bar/qux/rb-2.yaml",
+				k8sobjects.RoleAtPath("namespaces/foo/bar/qux/rb-2.yaml",
 					core.Name("alice")),
 			},
-			wantErrs: fake.Errors(nonhierarchical.NameCollisionErrorCode),
+			wantErrs: status.FakeMultiError(nonhierarchical.NameCollisionErrorCode),
 		},
 		{
 			name: "objects with invalid names fails",
 			objs: []ast.FileObject{
-				fake.Repo(),
-				fake.ClusterRole(
+				k8sobjects.Repo(),
+				k8sobjects.ClusterRole(
 					core.Name("")),
-				fake.ClusterRole(
+				k8sobjects.ClusterRole(
 					core.Name("a/b")),
 			},
-			wantErrs: fake.Errors(
+			wantErrs: status.FakeMultiError(
 				nonhierarchical.MissingObjectNameErrorCode,
 				nonhierarchical.InvalidMetadataNameErrorCode),
 		},
 		{
 			name: "objects with disallowed fields fails",
 			objs: []ast.FileObject{
-				fake.Repo(),
-				fake.ClusterRole(
+				k8sobjects.Repo(),
+				k8sobjects.ClusterRole(
 					core.ResourceVersion("123")),
-				fake.ClusterRole(
+				k8sobjects.ClusterRole(
 					core.CreationTimeStamp(metav1.NewTime(time.Now()))),
 			},
-			wantErrs: fake.Errors(
+			wantErrs: status.FakeMultiError(
 				syntax.IllegalFieldsInConfigErrorCode,
 				syntax.IllegalFieldsInConfigErrorCode),
 		},
 		{
 			name: "HierarchyConfigs with invalid resource kinds fails",
 			objs: []ast.FileObject{
-				fake.Repo(),
-				fake.HierarchyConfig(
-					fake.HierarchyConfigResource(v1.HierarchyModeInherit,
+				k8sobjects.Repo(),
+				k8sobjects.HierarchyConfig(
+					k8sobjects.HierarchyConfigResource(v1.HierarchyModeInherit,
 						kinds.CustomResourceDefinitionV1Beta1().GroupVersion(), kinds.CustomResourceDefinitionV1Beta1().Kind),
 					core.Name("crd-hc")),
-				fake.HierarchyConfig(
-					fake.HierarchyConfigResource(v1.HierarchyModeInherit,
+				k8sobjects.HierarchyConfig(
+					k8sobjects.HierarchyConfigResource(v1.HierarchyModeInherit,
 						kinds.Namespace().GroupVersion(), kinds.Namespace().Kind),
 					core.Name("namespace-hc")),
-				fake.HierarchyConfig(
-					fake.HierarchyConfigResource(v1.HierarchyModeInherit,
+				k8sobjects.HierarchyConfig(
+					k8sobjects.HierarchyConfigResource(v1.HierarchyModeInherit,
 						kinds.Sync().GroupVersion(), kinds.Sync().Kind),
 					core.Name("sync-hc")),
-				fake.FileObject(crdUnstructured(t, kinds.Anvil()), "cluster/crd.yaml"),
-				fake.Namespace("namespaces/foo"),
+				k8sobjects.FileObject(crdUnstructured(t, kinds.Anvil()), "cluster/crd.yaml"),
+				k8sobjects.Namespace("namespaces/foo"),
 			},
-			wantErrs: fake.Errors(
+			wantErrs: status.FakeMultiError(
 				hierarchyconfig.ClusterScopedResourceInHierarchyConfigErrorCode,
 				hierarchyconfig.UnsupportedResourceInHierarchyConfigErrorCode,
 				hierarchyconfig.UnsupportedResourceInHierarchyConfigErrorCode),
@@ -878,21 +878,21 @@ func TestHierarchical(t *testing.T) {
 		{
 			name: "managed object in unmanaged namespace fails",
 			objs: []ast.FileObject{
-				fake.Repo(),
-				fake.Namespace("namespaces/foo",
+				k8sobjects.Repo(),
+				k8sobjects.Namespace("namespaces/foo",
 					core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementDisabled)),
-				fake.RoleAtPath("namespaces/foo/role.yaml",
+				k8sobjects.RoleAtPath("namespaces/foo/role.yaml",
 					core.Namespace("foo")),
 			},
-			wantErrs: fake.Errors(nonhierarchical.ManagedResourceInUnmanagedNamespaceErrorCode),
+			wantErrs: status.FakeMultiError(nonhierarchical.ManagedResourceInUnmanagedNamespaceErrorCode),
 		},
 		{
 			name: "RepoSync with invalid fields fails",
 			objs: []ast.FileObject{
-				fake.Repo(),
-				fake.FileObject(fake.RepoSyncObjectV1Beta1("foo", "invalid"), "namespaces/foo/rs.yamo"),
+				k8sobjects.Repo(),
+				k8sobjects.FileObject(k8sobjects.RepoSyncObjectV1Beta1("foo", "invalid"), "namespaces/foo/rs.yamo"),
 			},
-			wantErrs: fake.Errors(validate.InvalidSyncCode),
+			wantErrs: status.FakeMultiError(validate.InvalidSyncCode),
 		},
 		{
 			name: "RepoSync manages itself",
@@ -901,11 +901,11 @@ func TestHierarchical(t *testing.T) {
 				SyncName: "repo-sync",
 			},
 			objs: []ast.FileObject{
-				fake.NamespaceAtPath("namespaces/bookstore/ns.yaml"),
-				fake.Repo(),
+				k8sobjects.NamespaceAtPath("namespaces/bookstore/ns.yaml"),
+				k8sobjects.Repo(),
 				validRepoSync("bookstore", "repo-sync", "namespaces/bookstore/rs.yaml"),
 			},
-			wantErrs: fake.Errors(validate.SelfReconcileErrorCode),
+			wantErrs: status.FakeMultiError(validate.SelfReconcileErrorCode),
 		},
 		{
 			name: "RepoSync manages other RepoSync object",
@@ -914,12 +914,12 @@ func TestHierarchical(t *testing.T) {
 				SyncName: "repo-sync",
 			},
 			objs: []ast.FileObject{
-				fake.NamespaceAtPath("namespaces/bookstore/ns.yaml"),
-				fake.Repo(),
+				k8sobjects.NamespaceAtPath("namespaces/bookstore/ns.yaml"),
+				k8sobjects.Repo(),
 				validRepoSync("bookstore", "repo-sync-1", "namespaces/bookstore/rs.yaml"),
 			},
 			want: []ast.FileObject{
-				fake.NamespaceAtPath("namespaces/bookstore/ns.yaml",
+				k8sobjects.NamespaceAtPath("namespaces/bookstore/ns.yaml",
 					core.Annotation(csmetadata.SourcePathAnnotationKey, "acme/namespaces/bookstore/ns.yaml"),
 					core.Annotation(csmetadata.HNCManagedBy, configmanagement.GroupName),
 					core.Label("bookstore"+csmetadata.DepthSuffix, "0"),
@@ -974,10 +974,10 @@ func TestUnstructured(t *testing.T) {
 			name:    "cluster-scoped object",
 			options: Options{Scope: declared.RootScope},
 			objs: []ast.FileObject{
-				fake.ClusterRoleAtPath("cluster/cr.yaml"),
+				k8sobjects.ClusterRoleAtPath("cluster/cr.yaml"),
 			},
 			want: []ast.FileObject{
-				fake.ClusterRoleAtPath("cluster/cr.yaml",
+				k8sobjects.ClusterRoleAtPath("cluster/cr.yaml",
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/cluster/cr.yaml")),
 			},
@@ -986,17 +986,17 @@ func TestUnstructured(t *testing.T) {
 			name:    "namespace-scoped objects",
 			options: Options{Scope: declared.Scope("foo")},
 			objs: []ast.FileObject{
-				fake.RoleAtPath("role.yaml",
+				k8sobjects.RoleAtPath("role.yaml",
 					core.Namespace("foo")),
-				fake.RoleBindingAtPath("rb.yaml",
+				k8sobjects.RoleBindingAtPath("rb.yaml",
 					core.Namespace("bar")),
 			},
 			want: []ast.FileObject{
-				fake.RoleAtPath("role.yaml",
+				k8sobjects.RoleAtPath("role.yaml",
 					core.Namespace("foo"),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/role.yaml")),
-				fake.RoleBindingAtPath("rb.yaml",
+				k8sobjects.RoleBindingAtPath("rb.yaml",
 					core.Namespace("bar"),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/rb.yaml")),
@@ -1006,14 +1006,14 @@ func TestUnstructured(t *testing.T) {
 			name:    "CRD and CR",
 			options: Options{Scope: declared.RootScope},
 			objs: []ast.FileObject{
-				fake.FileObject(crdUnstructured(t, kinds.Anvil()), "crd.yaml"),
-				fake.AnvilAtPath("anvil.yaml"),
+				k8sobjects.FileObject(crdUnstructured(t, kinds.Anvil()), "crd.yaml"),
+				k8sobjects.AnvilAtPath("anvil.yaml"),
 			},
 			want: []ast.FileObject{
-				fake.FileObject(crdUnstructured(t, kinds.Anvil(),
+				k8sobjects.FileObject(crdUnstructured(t, kinds.Anvil(),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1beta1"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/crd.yaml")), "crd.yaml"),
-				fake.AnvilAtPath("anvil.yaml",
+				k8sobjects.AnvilAtPath("anvil.yaml",
 					core.Namespace(metav1.NamespaceDefault),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/anvil.yaml")),
@@ -1022,14 +1022,14 @@ func TestUnstructured(t *testing.T) {
 		{
 			name: "namespace without declared-fields annotation when webhook is enabled",
 			objs: []ast.FileObject{
-				fake.Namespace("test-namespace"),
+				k8sobjects.Namespace("test-namespace"),
 			},
 			options: Options{
 				Scope:          declared.RootScope,
 				WebhookEnabled: true,
 			},
 			want: []ast.FileObject{
-				fake.Namespace("test-namespace",
+				k8sobjects.Namespace("test-namespace",
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/test-namespace/namespace.yaml"),
 					core.Annotation(csmetadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{"f:configmanagement.gke.io/source-path":{}},"f:labels":{"f:configsync.gke.io/declared-version":{}}},"f:spec":{},"f:status":{}}`)),
@@ -1042,77 +1042,77 @@ func TestUnstructured(t *testing.T) {
 				Scope:       declared.RootScope,
 			},
 			objs: []ast.FileObject{
-				fake.Cluster(
+				k8sobjects.Cluster(
 					core.Name("prod"),
 					core.Label("environment", "prod")),
-				fake.FileObject(clusterSelector("prod-only", "environment", "prod"), "prod-only_cs.yaml"),
-				fake.FileObject(clusterSelector("dev-only", "environment", "dev"), "dev-only_cs.yaml"),
-				fake.ClusterRoleAtPath("cluster/prod-admin_cr.yaml",
+				k8sobjects.FileObject(clusterSelector("prod-only", "environment", "prod"), "prod-only_cs.yaml"),
+				k8sobjects.FileObject(clusterSelector("dev-only", "environment", "dev"), "dev-only_cs.yaml"),
+				k8sobjects.ClusterRoleAtPath("cluster/prod-admin_cr.yaml",
 					core.Name("admin"),
 					core.Annotation(csmetadata.LegacyClusterSelectorAnnotationKey, "prod-only")),
-				fake.ClusterRole(
+				k8sobjects.ClusterRole(
 					core.Name("admin"),
 					core.Annotation(csmetadata.LegacyClusterSelectorAnnotationKey, "dev-only")),
-				fake.ClusterRoleAtPath("cluster/prod-owner_cr.yaml",
+				k8sobjects.ClusterRoleAtPath("cluster/prod-owner_cr.yaml",
 					core.Name("prod-owner"),
 					core.Annotation(csmetadata.ClusterNameSelectorAnnotationKey, "prod")),
-				fake.ClusterRole(
+				k8sobjects.ClusterRole(
 					core.Name("dev-owner"),
 					core.Annotation(csmetadata.ClusterNameSelectorAnnotationKey, "dev")),
-				fake.Namespace("namespaces/bookstore",
+				k8sobjects.Namespace("namespaces/bookstore",
 					core.Annotation(csmetadata.ClusterNameSelectorAnnotationKey, "prod")),
-				fake.RoleAtPath("namespaces/bookstore/role-prod.yaml",
+				k8sobjects.RoleAtPath("namespaces/bookstore/role-prod.yaml",
 					core.Name("role"),
 					core.Annotation(csmetadata.LegacyClusterSelectorAnnotationKey, "prod-only"),
 					core.Namespace("bookstore")),
-				fake.Namespace("namespaces/bookstore",
+				k8sobjects.Namespace("namespaces/bookstore",
 					core.Annotation(csmetadata.LegacyClusterSelectorAnnotationKey, "dev-only")),
-				fake.RoleAtPath("namespaces/bookstore/role-dev.yaml",
+				k8sobjects.RoleAtPath("namespaces/bookstore/role-dev.yaml",
 					core.Name("role"),
 					core.Annotation(csmetadata.LegacyClusterSelectorAnnotationKey, "dev-only"),
 					core.Namespace("bookstore")),
-				fake.Namespace("prod-shipping",
+				k8sobjects.Namespace("prod-shipping",
 					core.Annotation(csmetadata.ClusterNameSelectorAnnotationKey, "prod")),
-				fake.RoleAtPath("prod-sre.yaml",
+				k8sobjects.RoleAtPath("prod-sre.yaml",
 					core.Name("prod-sre"),
 					core.Namespace("prod-shipping")),
-				fake.Namespace("dev-shipping",
+				k8sobjects.Namespace("dev-shipping",
 					core.Annotation(csmetadata.LegacyClusterSelectorAnnotationKey, "dev-only")),
-				fake.Role(
+				k8sobjects.Role(
 					core.Name("dev-sre"),
 					core.Namespace("dev-shipping")),
 			},
 			want: []ast.FileObject{
-				fake.Namespace("namespaces/bookstore",
+				k8sobjects.Namespace("namespaces/bookstore",
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.ClusterNameAnnotationKey, "prod"),
 					core.Annotation(csmetadata.ClusterNameSelectorAnnotationKey, "prod"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/namespaces/bookstore/namespace.yaml")),
-				fake.Namespace("prod-shipping",
+				k8sobjects.Namespace("prod-shipping",
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.ClusterNameAnnotationKey, "prod"),
 					core.Annotation(csmetadata.ClusterNameSelectorAnnotationKey, "prod"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/prod-shipping/namespace.yaml")),
-				fake.ClusterRoleAtPath("cluster/prod-admin_cr.yaml",
+				k8sobjects.ClusterRoleAtPath("cluster/prod-admin_cr.yaml",
 					core.Name("admin"),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.ClusterNameAnnotationKey, "prod"),
 					core.Annotation(csmetadata.LegacyClusterSelectorAnnotationKey, "prod-only"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/cluster/prod-admin_cr.yaml")),
-				fake.ClusterRoleAtPath("cluster/prod-owner_cr.yaml",
+				k8sobjects.ClusterRoleAtPath("cluster/prod-owner_cr.yaml",
 					core.Name("prod-owner"),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.ClusterNameAnnotationKey, "prod"),
 					core.Annotation(csmetadata.ClusterNameSelectorAnnotationKey, "prod"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/cluster/prod-owner_cr.yaml")),
-				fake.RoleAtPath("namespaces/bookstore/role-prod.yaml",
+				k8sobjects.RoleAtPath("namespaces/bookstore/role-prod.yaml",
 					core.Name("role"),
 					core.Namespace("bookstore"),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.ClusterNameAnnotationKey, "prod"),
 					core.Annotation(csmetadata.LegacyClusterSelectorAnnotationKey, "prod-only"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/namespaces/bookstore/role-prod.yaml")),
-				fake.RoleAtPath("prod-sre.yaml",
+				k8sobjects.RoleAtPath("prod-sre.yaml",
 					core.Name("prod-sre"),
 					core.Namespace("prod-shipping"),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
@@ -1124,35 +1124,35 @@ func TestUnstructured(t *testing.T) {
 			name:    "objects with namespace selectors (static mode)",
 			options: Options{Scope: declared.RootScope, SyncName: configsync.RootSyncName},
 			objs: []ast.FileObject{
-				fake.FileObject(namespaceSelector("sre", "sre-supported", "true", v1.NSSelectorStaticMode), "sre_nss.yaml"),
-				fake.FileObject(namespaceSelector("dev", "dev-supported", "true", v1.NSSelectorStaticMode), "dev_nss.yaml"),
-				fake.Namespace("prod-shipping",
+				k8sobjects.FileObject(namespaceSelector("sre", "sre-supported", "true", v1.NSSelectorStaticMode), "sre_nss.yaml"),
+				k8sobjects.FileObject(namespaceSelector("dev", "dev-supported", "true", v1.NSSelectorStaticMode), "dev_nss.yaml"),
+				k8sobjects.Namespace("prod-shipping",
 					core.Label("sre-supported", "true")),
-				fake.Namespace("dev-shipping",
+				k8sobjects.Namespace("dev-shipping",
 					core.Label("dev-supported", "true")),
-				fake.RoleAtPath("sre-role.yaml",
+				k8sobjects.RoleAtPath("sre-role.yaml",
 					core.Name("role"),
 					core.Annotation(csmetadata.NamespaceSelectorAnnotationKey, "sre")),
-				fake.RoleAtPath("dev-role.yaml",
+				k8sobjects.RoleAtPath("dev-role.yaml",
 					core.Name("role"),
 					core.Annotation(csmetadata.NamespaceSelectorAnnotationKey, "dev")),
 			},
 			want: []ast.FileObject{
-				fake.Namespace("prod-shipping",
+				k8sobjects.Namespace("prod-shipping",
 					core.Label("sre-supported", "true"),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/prod-shipping/namespace.yaml")),
-				fake.Namespace("dev-shipping",
+				k8sobjects.Namespace("dev-shipping",
 					core.Label("dev-supported", "true"),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/dev-shipping/namespace.yaml")),
-				fake.RoleAtPath("sre-role.yaml",
+				k8sobjects.RoleAtPath("sre-role.yaml",
 					core.Name("role"),
 					core.Namespace("prod-shipping"),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.NamespaceSelectorAnnotationKey, "sre"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/sre-role.yaml")),
-				fake.RoleAtPath("dev-role.yaml",
+				k8sobjects.RoleAtPath("dev-role.yaml",
 					core.Name("role"),
 					core.Namespace("dev-shipping"),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
@@ -1164,32 +1164,32 @@ func TestUnstructured(t *testing.T) {
 			name:    "objects with namespace selectors (dynamic mode)",
 			options: Options{Scope: declared.RootScope, SyncName: configsync.RootSyncName},
 			objs: []ast.FileObject{
-				fake.FileObject(namespaceSelector("sre", "sre-supported", "true", v1.NSSelectorDynamicMode), "sre_nss.yaml"),
-				fake.FileObject(namespaceSelector("dev", "dev-supported", "true", v1.NSSelectorDynamicMode), "dev_nss.yaml"),
-				fake.Namespace("prod-shipping",
+				k8sobjects.FileObject(namespaceSelector("sre", "sre-supported", "true", v1.NSSelectorDynamicMode), "sre_nss.yaml"),
+				k8sobjects.FileObject(namespaceSelector("dev", "dev-supported", "true", v1.NSSelectorDynamicMode), "dev_nss.yaml"),
+				k8sobjects.Namespace("prod-shipping",
 					core.Label("sre-supported", "true")),
-				fake.RoleAtPath("sre-role.yaml",
+				k8sobjects.RoleAtPath("sre-role.yaml",
 					core.Name("role"),
 					core.Annotation(csmetadata.NamespaceSelectorAnnotationKey, "sre")),
-				fake.RoleAtPath("dev-role.yaml",
+				k8sobjects.RoleAtPath("dev-role.yaml",
 					core.Name("role"),
 					core.Annotation(csmetadata.NamespaceSelectorAnnotationKey, "dev")),
 			},
 			onClusterObjects: []client.Object{
-				fake.NamespaceObject("dev-shipping", core.Label("dev-supported", "true")),
+				k8sobjects.NamespaceObject("dev-shipping", core.Label("dev-supported", "true")),
 			},
 			want: []ast.FileObject{
-				fake.Namespace("prod-shipping",
+				k8sobjects.Namespace("prod-shipping",
 					core.Label("sre-supported", "true"),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/prod-shipping/namespace.yaml")),
-				fake.RoleAtPath("sre-role.yaml",
+				k8sobjects.RoleAtPath("sre-role.yaml",
 					core.Name("role"),
 					core.Namespace("prod-shipping"),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.NamespaceSelectorAnnotationKey, "sre"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/sre-role.yaml")),
-				fake.RoleAtPath("dev-role.yaml",
+				k8sobjects.RoleAtPath("dev-role.yaml",
 					core.Name("role"),
 					core.Namespace("dev-shipping"),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
@@ -1205,12 +1205,12 @@ func TestUnstructured(t *testing.T) {
 				SyncName: "repo-sync",
 			},
 			objs: []ast.FileObject{
-				fake.RoleAtPath("sre-role.yaml",
+				k8sobjects.RoleAtPath("sre-role.yaml",
 					core.Name("sre-role"),
 					core.Namespace("")),
 			},
 			want: []ast.FileObject{
-				fake.RoleAtPath("sre-role.yaml",
+				k8sobjects.RoleAtPath("sre-role.yaml",
 					core.Name("sre-role"),
 					core.Namespace("shipping"),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
@@ -1221,8 +1221,8 @@ func TestUnstructured(t *testing.T) {
 			name:    "CR with management disabled that is missing its CRD",
 			options: Options{Scope: declared.RootScope},
 			objs: []ast.FileObject{
-				fake.Namespace("namespaces/foo"),
-				fake.UnstructuredAtPath(
+				k8sobjects.Namespace("namespaces/foo"),
+				k8sobjects.UnstructuredAtPath(
 					schema.GroupVersionKind{
 						Group:   "anthos.cloud.google.com",
 						Version: "v1alpha1",
@@ -1233,10 +1233,10 @@ func TestUnstructured(t *testing.T) {
 					core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementDisabled)),
 			},
 			want: []ast.FileObject{
-				fake.Namespace("namespaces/foo",
+				k8sobjects.Namespace("namespaces/foo",
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/namespaces/foo/namespace.yaml")),
-				fake.UnstructuredAtPath(
+				k8sobjects.UnstructuredAtPath(
 					schema.GroupVersionKind{
 						Group:   "anthos.cloud.google.com",
 						Version: "v1alpha1",
@@ -1253,14 +1253,14 @@ func TestUnstructured(t *testing.T) {
 			name:    "duplicate objects fails",
 			options: Options{Scope: declared.Scope("shipping")},
 			objs: []ast.FileObject{
-				fake.Role(
+				k8sobjects.Role(
 					core.Name("alice"),
 					core.Namespace("shipping")),
-				fake.Role(
+				k8sobjects.Role(
 					core.Name("alice"),
 					core.Namespace("shipping")),
 			},
-			wantErrs: fake.Errors(nonhierarchical.NameCollisionErrorCode),
+			wantErrs: status.FakeMultiError(nonhierarchical.NameCollisionErrorCode),
 		},
 		{
 			name: "removing CRD while in-use fails",
@@ -1271,9 +1271,9 @@ func TestUnstructured(t *testing.T) {
 				Scope: declared.RootScope,
 			},
 			objs: []ast.FileObject{
-				fake.AnvilAtPath("anvil.yaml"),
+				k8sobjects.AnvilAtPath("anvil.yaml"),
 			},
-			wantErrs: fake.Errors(nonhierarchical.UnsupportedCRDRemovalErrorCode),
+			wantErrs: status.FakeMultiError(nonhierarchical.UnsupportedCRDRemovalErrorCode),
 		},
 		{
 			name: "RootSync manages itself",
@@ -1284,7 +1284,7 @@ func TestUnstructured(t *testing.T) {
 			objs: []ast.FileObject{
 				validRootSync("root-sync", "rs.yaml"),
 			},
-			wantErrs: fake.Errors(validate.SelfReconcileErrorCode),
+			wantErrs: status.FakeMultiError(validate.SelfReconcileErrorCode),
 		},
 		{
 			name: "RootSync manages other RootSync object",
@@ -1309,7 +1309,7 @@ func TestUnstructured(t *testing.T) {
 			objs: []ast.FileObject{
 				validRepoSync("bookstore", "repo-sync", "rs.yaml"),
 			},
-			wantErrs: fake.Errors(validate.SelfReconcileErrorCode),
+			wantErrs: status.FakeMultiError(validate.SelfReconcileErrorCode),
 		},
 		{
 			name: "RepoSync manages other RepoSync object",
@@ -1351,7 +1351,7 @@ func TestUnstructured(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName,
+			rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName,
 				core.Annotation(csmetadata.DynamicNSSelectorEnabledAnnotationKey, strconv.FormatBool(tc.originalDynamicNSSelectorEnabled)))
 			tc.onClusterObjects = append(tc.onClusterObjects, rs)
 			fakeClient := syncerFake.NewClient(t, s, tc.onClusterObjects...)

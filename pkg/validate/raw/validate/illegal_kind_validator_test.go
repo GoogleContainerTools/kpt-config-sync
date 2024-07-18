@@ -18,11 +18,11 @@ import (
 	"errors"
 	"testing"
 
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 func TestIllegalKindsForHierarchical(t *testing.T) {
@@ -33,16 +33,16 @@ func TestIllegalKindsForHierarchical(t *testing.T) {
 	}{
 		{
 			name: "Non-hierarchical object passes",
-			obj:  fake.ClusterSelector(),
+			obj:  k8sobjects.ClusterSelector(),
 		},
 		{
 			name: "Hiearchical object passes",
-			obj:  fake.HierarchyConfig(),
+			obj:  k8sobjects.HierarchyConfig(),
 		},
 		{
 			name:    "Sync object fails",
-			obj:     fake.FileObject(fake.SyncObject(kinds.Role().GroupKind()), "sync.yaml"),
-			wantErr: nonhierarchical.UnsupportedObjectError(fake.SyncObject(kinds.Role().GroupKind())),
+			obj:     k8sobjects.FileObject(k8sobjects.SyncObject(kinds.Role().GroupKind()), "sync.yaml"),
+			wantErr: nonhierarchical.UnsupportedObjectError(k8sobjects.SyncObject(kinds.Role().GroupKind())),
 		},
 	}
 
@@ -64,22 +64,22 @@ func TestIllegalKindsForUnstructured(t *testing.T) {
 	}{
 		{
 			name: "Non-hierarchical object passes",
-			obj:  fake.ClusterSelector(),
+			obj:  k8sobjects.ClusterSelector(),
 		},
 		{
 			name:    "HierarchyConfig object fails",
-			obj:     fake.HierarchyConfig(),
-			wantErr: nonhierarchical.IllegalHierarchicalKind(fake.HierarchyConfig()),
+			obj:     k8sobjects.HierarchyConfig(),
+			wantErr: nonhierarchical.IllegalHierarchicalKind(k8sobjects.HierarchyConfig()),
 		},
 		{
 			name:    "Repo object fails",
-			obj:     fake.Repo(),
-			wantErr: nonhierarchical.IllegalHierarchicalKind(fake.Repo()),
+			obj:     k8sobjects.Repo(),
+			wantErr: nonhierarchical.IllegalHierarchicalKind(k8sobjects.Repo()),
 		},
 		{
 			name:    "Sync object fails",
-			obj:     fake.FileObject(fake.SyncObject(kinds.Role().GroupKind()), "sync.yaml"),
-			wantErr: nonhierarchical.UnsupportedObjectError(fake.SyncObject(kinds.Role().GroupKind())),
+			obj:     k8sobjects.FileObject(k8sobjects.SyncObject(kinds.Role().GroupKind()), "sync.yaml"),
+			wantErr: nonhierarchical.UnsupportedObjectError(k8sobjects.SyncObject(kinds.Role().GroupKind())),
 		},
 	}
 

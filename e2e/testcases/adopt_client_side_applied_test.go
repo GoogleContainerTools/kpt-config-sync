@@ -24,7 +24,7 @@ import (
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 )
 
 func TestAdoptClientSideAppliedResource(t *testing.T) {
@@ -32,7 +32,7 @@ func TestAdoptClientSideAppliedResource(t *testing.T) {
 
 	// Declare a ClusterRole and `kubectl apply -f` it to the cluster.
 	nsViewerName := "ns-viewer"
-	nsViewer := fake.ClusterRoleObject(core.Name(nsViewerName),
+	nsViewer := k8sobjects.ClusterRoleObject(core.Name(nsViewerName),
 		core.Label("permissions", "viewer"))
 	nsViewer.Rules = []rbacv1.PolicyRule{{
 		APIGroups: []string{""},

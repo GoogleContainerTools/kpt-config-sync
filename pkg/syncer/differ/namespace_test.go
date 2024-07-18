@@ -22,14 +22,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/syncer/syncertest"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/cli-utils/pkg/common"
 )
 
 func namespaceConfig(opts ...core.MetaMutator) *v1.NamespaceConfig {
-	result := fake.NamespaceConfigObject(opts...)
+	result := k8sobjects.NamespaceConfigObject(opts...)
 	return result
 }
 
@@ -70,63 +70,63 @@ func TestNamespaceDiffType(t *testing.T) {
 		{
 			name:       "in both, update",
 			declared:   namespaceConfig(),
-			actual:     fake.NamespaceObject("foo"),
+			actual:     k8sobjects.NamespaceObject("foo"),
 			expectType: Update,
 		},
 		{
 			name:       "in both, update even though cluster has invalid annotation",
 			declared:   namespaceConfig(),
-			actual:     fake.NamespaceObject("foo", managementInvalid),
+			actual:     k8sobjects.NamespaceObject("foo", managementInvalid),
 			expectType: Update,
 		},
 		{
 			name:     "in both, management disabled unmanage",
 			declared: namespaceConfig(disableManaged),
-			actual:   fake.NamespaceObject("foo", syncertest.ManagementEnabled),
+			actual:   k8sobjects.NamespaceObject("foo", syncertest.ManagementEnabled),
 
 			expectType: Unmanage,
 		},
 		{
 			name:       "in both, management disabled noop",
 			declared:   namespaceConfig(disableManaged),
-			actual:     fake.NamespaceObject("foo"),
+			actual:     k8sobjects.NamespaceObject("foo"),
 			expectType: NoOp,
 		},
 		{
 			name:       "if not in repo but managed in cluster, noop",
-			actual:     fake.NamespaceObject("foo", syncertest.ManagementEnabled),
+			actual:     k8sobjects.NamespaceObject("foo", syncertest.ManagementEnabled),
 			expectType: NoOp,
 		},
 		{
 			name:       "delete",
 			declared:   markForDeletion(namespaceConfig()),
-			actual:     fake.NamespaceObject("foo", syncertest.ManagementEnabled),
+			actual:     k8sobjects.NamespaceObject("foo", syncertest.ManagementEnabled),
 			expectType: Delete,
 		},
 		{
 			name:       "marked for deletion, unmanage if deletion: prevent",
 			declared:   markForDeletion(namespaceConfig()),
-			actual:     fake.NamespaceObject("foo", syncertest.ManagementEnabled, preventDeletion),
+			actual:     k8sobjects.NamespaceObject("foo", syncertest.ManagementEnabled, preventDeletion),
 			expectType: UnmanageNamespace,
 		},
 		{
 			name:       "in cluster only, unset noop",
-			actual:     fake.NamespaceObject("foo"),
+			actual:     k8sobjects.NamespaceObject("foo"),
 			expectType: NoOp,
 		},
 		{
 			name:       "in cluster only, the `configmanagement.gke.io/managed` annotation is set to empty",
-			actual:     fake.NamespaceObject("foo", managementEmpty),
+			actual:     k8sobjects.NamespaceObject("foo", managementEmpty),
 			expectType: NoOp,
 		},
 		{
 			name:       "in cluster only, has an invalid `configmanagement.gke.io/managed` annotation",
-			actual:     fake.NamespaceObject("foo", managementInvalid),
+			actual:     k8sobjects.NamespaceObject("foo", managementInvalid),
 			expectType: NoOp,
 		},
 		{
 			name:       "in cluster only, has an invalid `configmanagement.gke.io/managed` and other nomos metatdatas",
-			actual:     fake.NamespaceObject("foo", managementInvalid, syncertest.TokenAnnotation),
+			actual:     k8sobjects.NamespaceObject("foo", managementInvalid, syncertest.TokenAnnotation),
 			expectType: NoOp,
 		},
 	}

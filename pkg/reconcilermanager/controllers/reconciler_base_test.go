@@ -36,11 +36,11 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -239,7 +239,7 @@ func TestAdjustContainerResources(t *testing.T) {
 			adjusted:                   false,
 			declaredContainerResources: containerResources1,
 			currentContainerResources:  containerResources1,
-			expectedDeclaredDeployment: fake.DeploymentObject(addContainerWithResources(containerResources1)),
+			expectedDeclaredDeployment: k8sobjects.DeploymentObject(addContainerWithResources(containerResources1)),
 		},
 		{
 			name:                       "No Autopilot, declared is different from current => declared not adjusted, current will be updated by the controller",
@@ -247,7 +247,7 @@ func TestAdjustContainerResources(t *testing.T) {
 			adjusted:                   false,
 			declaredContainerResources: containerResources1,
 			currentContainerResources:  containerResources2,
-			expectedDeclaredDeployment: fake.DeploymentObject(addContainerWithResources(containerResources1)),
+			expectedDeclaredDeployment: k8sobjects.DeploymentObject(addContainerWithResources(containerResources1)),
 		},
 		{
 			name:                       "Autopilot enabled, not adjusted by Autopilot yet, declared is same as current => declared not adjusted, current won't be updated",
@@ -255,7 +255,7 @@ func TestAdjustContainerResources(t *testing.T) {
 			adjusted:                   false,
 			declaredContainerResources: containerResources1,
 			currentContainerResources:  containerResources1,
-			expectedDeclaredDeployment: fake.DeploymentObject(addContainerWithResources(containerResources1)),
+			expectedDeclaredDeployment: k8sobjects.DeploymentObject(addContainerWithResources(containerResources1)),
 		},
 		{
 			// The declared resources can be higher or lower than the current.
@@ -266,7 +266,7 @@ func TestAdjustContainerResources(t *testing.T) {
 			adjusted:                   false,
 			declaredContainerResources: containerResources1,
 			currentContainerResources:  containerResources2,
-			expectedDeclaredDeployment: fake.DeploymentObject(addContainerWithResources(containerResources1)),
+			expectedDeclaredDeployment: k8sobjects.DeploymentObject(addContainerWithResources(containerResources1)),
 		},
 		// Mimic the case of increasing the resources.
 		{
@@ -276,7 +276,7 @@ func TestAdjustContainerResources(t *testing.T) {
 			declaredContainerResources: containerResources2,
 			currentContainerResources:  containerResources1,
 			currentAnnotations:         map[string]string{metadata.AutoPilotAnnotation: adjust3To1},
-			expectedDeclaredDeployment: fake.DeploymentObject(addContainerWithResources(containerResources2)),
+			expectedDeclaredDeployment: k8sobjects.DeploymentObject(addContainerWithResources(containerResources2)),
 		},
 		// Autopilot further increases the resources to meet the constraints, so no more update is needed.
 		{
@@ -286,7 +286,7 @@ func TestAdjustContainerResources(t *testing.T) {
 			declaredContainerResources: containerResources4,
 			currentContainerResources:  containerResources1,
 			currentAnnotations:         map[string]string{metadata.AutoPilotAnnotation: adjust3To1},
-			expectedDeclaredDeployment: fake.DeploymentObject(addContainerWithResources(containerResources1)),
+			expectedDeclaredDeployment: k8sobjects.DeploymentObject(addContainerWithResources(containerResources1)),
 		},
 		// Mimic the case of decreasing the resource.
 		{
@@ -296,7 +296,7 @@ func TestAdjustContainerResources(t *testing.T) {
 			declaredContainerResources: containerResources7,
 			currentContainerResources:  containerResources6,
 			currentAnnotations:         map[string]string{metadata.AutoPilotAnnotation: adjust5To6},
-			expectedDeclaredDeployment: fake.DeploymentObject(addContainerWithResources(containerResources7)),
+			expectedDeclaredDeployment: k8sobjects.DeploymentObject(addContainerWithResources(containerResources7)),
 		},
 		{
 			name:                       "Autopilot enabled, adjusted annotation is empty string => declared not adjusted, current won't be updated",
@@ -305,7 +305,7 @@ func TestAdjustContainerResources(t *testing.T) {
 			declaredContainerResources: containerResources7,
 			currentContainerResources:  containerResources7,
 			currentAnnotations:         map[string]string{metadata.AutoPilotAnnotation: ""},
-			expectedDeclaredDeployment: fake.DeploymentObject(addContainerWithResources(containerResources7)),
+			expectedDeclaredDeployment: k8sobjects.DeploymentObject(addContainerWithResources(containerResources7)),
 		},
 		{
 			name:                       "Autopilot enabled, adjusted annotation is empty JSON => declared not adjusted, current won't be updated",
@@ -314,14 +314,14 @@ func TestAdjustContainerResources(t *testing.T) {
 			declaredContainerResources: containerResources7,
 			currentContainerResources:  containerResources7,
 			currentAnnotations:         map[string]string{metadata.AutoPilotAnnotation: "{}"},
-			expectedDeclaredDeployment: fake.DeploymentObject(addContainerWithResources(containerResources7)),
+			expectedDeclaredDeployment: k8sobjects.DeploymentObject(addContainerWithResources(containerResources7)),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			declared := fake.DeploymentObject()
-			current := fake.DeploymentObject()
+			declared := k8sobjects.DeploymentObject()
+			current := k8sobjects.DeploymentObject()
 
 			for containerName, resources := range tc.declaredContainerResources {
 				declared.Spec.Template.Spec.Containers = append(declared.Spec.Template.Spec.Containers, corev1.Container{Name: containerName, Resources: resources})
@@ -982,26 +982,26 @@ func TestSetupAndTeardown(t *testing.T) {
 		expectedServerObjs []client.Object
 	}{
 		"Active RepoSync should have recociler-manager finalizer injected": {
-			rsync: fake.RepoSyncObjectV1Beta1("test-ns", "rs"),
+			rsync: k8sobjects.RepoSyncObjectV1Beta1("test-ns", "rs"),
 			expectedServerObjs: []client.Object{
-				fake.RepoSyncObjectV1Beta1("test-ns", "rs",
+				k8sobjects.RepoSyncObjectV1Beta1("test-ns", "rs",
 					withFinalizer(metadata.ReconcilerManagerFinalizer),
 					core.Generation(1), core.UID("1"), core.ResourceVersion("2"), // ResourceVersion is updated
 				),
 			},
 		},
 		"Active RepoSync with the recociler-manager finalizer should remain the same": {
-			rsync: fake.RepoSyncObjectV1Beta1("test-ns", "rs",
+			rsync: k8sobjects.RepoSyncObjectV1Beta1("test-ns", "rs",
 				withFinalizer(metadata.ReconcilerManagerFinalizer)),
 			expectedServerObjs: []client.Object{
-				fake.RepoSyncObjectV1Beta1("test-ns", "rs",
+				k8sobjects.RepoSyncObjectV1Beta1("test-ns", "rs",
 					withFinalizer(metadata.ReconcilerManagerFinalizer),
 					core.Generation(1), core.UID("1"), core.ResourceVersion("1"), // ResourceVersion remains the same
 				),
 			},
 		},
 		"Terminating RepoSync's reconciler-manager finalizer should be removed": {
-			rsync: fake.RepoSyncObjectV1Beta1("test-ns", "rs",
+			rsync: k8sobjects.RepoSyncObjectV1Beta1("test-ns", "rs",
 				withFinalizer(metadata.ReconcilerManagerFinalizer),
 				core.DeletionTimestamp(metav1.Time{Time: time.Now()})),
 			expectedServerObjs: nil, // RepoSync should be deleted after reconciler-manager finalizer is removed.
@@ -1009,12 +1009,12 @@ func TestSetupAndTeardown(t *testing.T) {
 		// This won't happen because RepoSync can't exist without the Namespace
 		// The test uses it to simulate a k8s-apiserver GET failure.
 		"Terminating RepoSync's reconciler finalizer removal should fail if its Namespace does not exist": {
-			rsync: fake.RepoSyncObjectV1Beta1("test-ns", "rs",
+			rsync: k8sobjects.RepoSyncObjectV1Beta1("test-ns", "rs",
 				withFinalizer(metadata.ReconcilerFinalizer),
 				withFinalizer(metadata.ReconcilerManagerFinalizer),
 				core.DeletionTimestamp(metav1.Time{Time: time.Now()})),
 			expectedServerObjs: []client.Object{
-				fake.RepoSyncObjectV1Beta1("test-ns", "rs",
+				k8sobjects.RepoSyncObjectV1Beta1("test-ns", "rs",
 					withFinalizer(metadata.ReconcilerFinalizer),
 					withFinalizer(metadata.ReconcilerManagerFinalizer), // reconciler-manager finalizer should not be removed
 					core.Generation(1), core.UID("1"), core.ResourceVersion("1"),
@@ -1023,72 +1023,72 @@ func TestSetupAndTeardown(t *testing.T) {
 			expectedErrMsg: "Namespace \"/test-ns\" not found",
 		},
 		"Terminating RootSync's reconciler & reconciler-manager finalizers should be kept if its Namespace is not terminating": {
-			rsync: fake.RootSyncObjectV1Beta1("rs",
+			rsync: k8sobjects.RootSyncObjectV1Beta1("rs",
 				withFinalizer(metadata.ReconcilerFinalizer),
 				withFinalizer(metadata.ReconcilerManagerFinalizer),
 				core.DeletionTimestamp(metav1.Time{Time: time.Now()})),
-			serverObjs: []client.Object{fake.NamespaceObject(configsync.ControllerNamespace)},
+			serverObjs: []client.Object{k8sobjects.NamespaceObject(configsync.ControllerNamespace)},
 			expectedServerObjs: []client.Object{
-				fake.RootSyncObjectV1Beta1("rs",
+				k8sobjects.RootSyncObjectV1Beta1("rs",
 					withFinalizer(metadata.ReconcilerFinalizer),        // wait for the reconciler finalizer to complete
 					withFinalizer(metadata.ReconcilerManagerFinalizer), // reconciler-manager finalizer should not be removed
 					core.Generation(1), core.UID("1"), core.ResourceVersion("1"),
 					core.DeletionTimestamp(metav1.Time{Time: time.Now()})),
-				fake.NamespaceObject(configsync.ControllerNamespace,
+				k8sobjects.NamespaceObject(configsync.ControllerNamespace,
 					core.Generation(1), core.UID("1"), core.ResourceVersion("1"),
 				),
 			},
 		},
 		"Terminating RepoSync's reconciler finalizer should be kept if its Namespace is not terminating": {
-			rsync: fake.RepoSyncObjectV1Beta1("test-ns", "rs",
+			rsync: k8sobjects.RepoSyncObjectV1Beta1("test-ns", "rs",
 				withFinalizer(metadata.ReconcilerFinalizer),
 				withFinalizer(metadata.ReconcilerManagerFinalizer),
 				core.DeletionTimestamp(metav1.Time{Time: time.Now()})),
-			serverObjs: []client.Object{fake.NamespaceObject("test-ns")},
+			serverObjs: []client.Object{k8sobjects.NamespaceObject("test-ns")},
 			expectedServerObjs: []client.Object{
-				fake.RepoSyncObjectV1Beta1("test-ns", "rs",
+				k8sobjects.RepoSyncObjectV1Beta1("test-ns", "rs",
 					withFinalizer(metadata.ReconcilerFinalizer),        // wait for the reconciler finalizer to complete
 					withFinalizer(metadata.ReconcilerManagerFinalizer), // reconciler-manager finalizer should not be removed
 					core.Generation(1), core.UID("1"), core.ResourceVersion("1"),
 					core.DeletionTimestamp(metav1.Time{Time: time.Now()})),
-				fake.NamespaceObject("test-ns",
+				k8sobjects.NamespaceObject("test-ns",
 					core.Generation(1), core.UID("1"), core.ResourceVersion("1"),
 				),
 			},
 		},
 		"Terminating RootSync's reconciler finalizer is kept even if its Namespace is terminating": {
-			rsync: fake.RootSyncObjectV1Beta1("rs",
+			rsync: k8sobjects.RootSyncObjectV1Beta1("rs",
 				withFinalizer(metadata.ReconcilerFinalizer),
 				withFinalizer(metadata.ReconcilerManagerFinalizer),
 				core.DeletionTimestamp(metav1.Time{Time: time.Now()})),
-			serverObjs: []client.Object{fake.NamespaceObject(configsync.ControllerNamespace,
+			serverObjs: []client.Object{k8sobjects.NamespaceObject(configsync.ControllerNamespace,
 				withNamespacePhase(corev1.NamespaceTerminating),
 				withFinalizer("kubernetes"), // The finalizer prevents the Namespace from being deleted
 				core.DeletionTimestamp(metav1.Time{Time: time.Now()}))},
 			expectedServerObjs: []client.Object{
-				fake.RootSyncObjectV1Beta1("rs",
+				k8sobjects.RootSyncObjectV1Beta1("rs",
 					withFinalizer(metadata.ReconcilerFinalizer),
 					withFinalizer(metadata.ReconcilerManagerFinalizer), // reconciler-manager finalizer should not be removed
 					core.Generation(1), core.UID("1"), core.ResourceVersion("1"),
 					core.DeletionTimestamp(metav1.Time{Time: time.Now()})),
-				fake.NamespaceObject(configsync.ControllerNamespace,
+				k8sobjects.NamespaceObject(configsync.ControllerNamespace,
 					withNamespacePhase(corev1.NamespaceTerminating),
 					withFinalizer("kubernetes"), // The finalizer prevents the Namespace from being deleted
 					core.Generation(1), core.UID("1"), core.ResourceVersion("1"),
 					core.DeletionTimestamp(metav1.Time{Time: time.Now()}))},
 		},
 		"Terminating RepoSync's reconciler & reconciler-manager finalizers should be removed if its Namespace is terminating": {
-			rsync: fake.RepoSyncObjectV1Beta1("test-ns", "rs",
+			rsync: k8sobjects.RepoSyncObjectV1Beta1("test-ns", "rs",
 				withFinalizer(metadata.ReconcilerFinalizer),
 				withFinalizer(metadata.ReconcilerManagerFinalizer),
 				core.DeletionTimestamp(metav1.Time{Time: time.Now()})),
-			serverObjs: []client.Object{fake.NamespaceObject("test-ns",
+			serverObjs: []client.Object{k8sobjects.NamespaceObject("test-ns",
 				withNamespacePhase(corev1.NamespaceTerminating),
 				withFinalizer("kubernetes"), // The finalizer prevents the Namespace from being deleted
 				core.DeletionTimestamp(metav1.Time{Time: time.Now()}))},
 			expectedServerObjs: []client.Object{
 				// RepoSync should be deleted after reconciler finalizer is removed.
-				fake.NamespaceObject("test-ns",
+				k8sobjects.NamespaceObject("test-ns",
 					withNamespacePhase(corev1.NamespaceTerminating),
 					withFinalizer("kubernetes"), // The finalizer prevents the Namespace from being deleted
 					core.Generation(1), core.UID("1"), core.ResourceVersion("1"),

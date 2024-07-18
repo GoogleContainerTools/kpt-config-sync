@@ -22,12 +22,12 @@ import (
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/hierarchyconfig"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 )
 
 // HierarchyConfig verifies that all HierarchyConfig objects specify valid
 // namespace-scoped resource kinds and valid inheritance modes.
-func HierarchyConfig(tree *objects.Tree) status.MultiError {
+func HierarchyConfig(tree *fileobjects.Tree) status.MultiError {
 	clusterGKs := make(map[schema.GroupKind]bool)
 	for _, obj := range tree.Cluster {
 		clusterGKs[obj.GetObjectKind().GroupVersionKind().GroupKind()] = true

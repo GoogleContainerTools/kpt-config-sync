@@ -19,11 +19,11 @@ import (
 	"testing"
 
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/syncer/syncertest"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 func TestUnmanagedNamespaces(t *testing.T) {
@@ -35,32 +35,32 @@ func TestUnmanagedNamespaces(t *testing.T) {
 		{
 			name: "Cluster-scoped objects pass",
 			objs: []ast.FileObject{
-				fake.ClusterRole(),
-				fake.ClusterRole(syncertest.ManagementDisabled),
+				k8sobjects.ClusterRole(),
+				k8sobjects.ClusterRole(syncertest.ManagementDisabled),
 			},
 		},
 		{
 			name: "Namespace-scoped objects in managed namespace pass",
 			objs: []ast.FileObject{
-				fake.Namespace("namespaces/foo"),
-				fake.Role(core.Namespace("foo")),
-				fake.Role(core.Namespace("foo"), syncertest.ManagementDisabled),
+				k8sobjects.Namespace("namespaces/foo"),
+				k8sobjects.Role(core.Namespace("foo")),
+				k8sobjects.Role(core.Namespace("foo"), syncertest.ManagementDisabled),
 			},
 		},
 		{
 			name: "Unmanaged namespace-scoped object in unmanaged namespace passes",
 			objs: []ast.FileObject{
-				fake.Namespace("namespaces/foo", syncertest.ManagementDisabled),
-				fake.Role(core.Namespace("foo"), syncertest.ManagementDisabled),
+				k8sobjects.Namespace("namespaces/foo", syncertest.ManagementDisabled),
+				k8sobjects.Role(core.Namespace("foo"), syncertest.ManagementDisabled),
 			},
 		},
 		{
 			name: "Unmanaged namespace-scoped object in managed namespace fails",
 			objs: []ast.FileObject{
-				fake.Namespace("namespaces/foo", syncertest.ManagementDisabled),
-				fake.Role(core.Namespace("foo")),
+				k8sobjects.Namespace("namespaces/foo", syncertest.ManagementDisabled),
+				k8sobjects.Role(core.Namespace("foo")),
 			},
-			wantErrs: fake.Errors(nonhierarchical.ManagedResourceInUnmanagedNamespaceErrorCode),
+			wantErrs: status.FakeMultiError(nonhierarchical.ManagedResourceInUnmanagedNamespaceErrorCode),
 		},
 	}
 

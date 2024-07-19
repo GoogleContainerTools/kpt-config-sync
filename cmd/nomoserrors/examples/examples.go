@@ -345,8 +345,10 @@ func Generate() AllExamples {
 
 	// 2008
 	result.add(client.ConflictCreateAlreadyExists(errors.New("already exists"), k8sobjects.RoleObject()))
+	result.add(client.ConflictCreateResourceDoesNotExist(errors.New("no resource match"), k8sobjects.RoleObject()))
 	result.add(client.ConflictUpdateOldVersion(errors.New("old version"), k8sobjects.RoleObject()))
-	result.add(client.ConflictUpdateDoesNotExist(errors.New("does not exist"), k8sobjects.RoleObject()))
+	result.add(client.ConflictUpdateObjectDoesNotExist(errors.New("does not exist"), k8sobjects.RoleObject()))
+	result.add(client.ConflictUpdateResourceDoesNotExist(errors.New("no resource match"), k8sobjects.RoleObject()))
 
 	// 2009
 	result.add(applier.Error(errors.New("failed to initialize an error")))

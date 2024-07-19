@@ -84,7 +84,7 @@ func TestClient_Apply(t *testing.T) {
 			declared: k8sobjects.RoleObject(core.Name("admin"), core.Namespace("billing")),
 			client: syncertestfake.NewErrorClient(
 				apierrors.NewNotFound(rbacv1.Resource("Role"), "billing/admin")),
-			wantErr: syncerclient.ConflictUpdateDoesNotExist(
+			wantErr: syncerclient.ConflictUpdateObjectDoesNotExist(
 				apierrors.NewNotFound(rbacv1.Resource("Role"), "billing/admin"),
 				k8sobjects.RoleObject(core.Name("admin"), core.Namespace("billing"))),
 		},
@@ -128,7 +128,7 @@ func TestClient_Update(t *testing.T) {
 			declared: k8sobjects.RoleObject(core.Name("admin"), core.Namespace("billing")),
 			client: syncertestfake.NewErrorClient(
 				apierrors.NewNotFound(rbacv1.Resource("Role"), "admin")),
-			wantErr: syncerclient.ConflictUpdateDoesNotExist(
+			wantErr: syncerclient.ConflictUpdateObjectDoesNotExist(
 				apierrors.NewNotFound(rbacv1.Resource("Role"), "admin"),
 				k8sobjects.RoleObject(core.Name("admin"), core.Namespace("billing"))),
 		},

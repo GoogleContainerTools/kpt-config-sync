@@ -22,6 +22,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -111,7 +112,12 @@ func (c *clientApplier) Create(ctx context.Context, intendedState *unstructured.
 		err = c.create(ctx, intendedState)
 	} else {
 		if err1 := c.client.Patch(ctx, intendedState, client.Apply, client.FieldOwner(configsync.FieldManager)); err1 != nil {
-			err = status.ResourceWrap(err1, "unable to apply resource", intendedState)
+			switch {
+			case meta.IsNoMatchError(err1):
+				err = syncerclient.ConflictCreateResourceDoesNotExist(err1, intendedState)
+			default:
+				err = status.ResourceWrap(err1, "unable to apply resource", intendedState)
+			}
 		}
 	}
 	metrics.Operations.WithLabelValues("create", metrics.StatusLabel(err)).Inc()
@@ -141,7 +147,9 @@ func (c *clientApplier) Update(ctx context.Context, intendedState, currentState 
 	case apierrors.IsConflict(err):
 		return syncerclient.ConflictUpdateOldVersion(err, intendedState)
 	case apierrors.IsNotFound(err):
-		return syncerclient.ConflictUpdateDoesNotExist(err, intendedState)
+		return syncerclient.ConflictUpdateObjectDoesNotExist(err, intendedState)
+	case meta.IsNoMatchError(err):
+		return syncerclient.ConflictUpdateResourceDoesNotExist(err, intendedState)
 	case err != nil:
 		return status.ResourceWrap(err, "unable to update resource", intendedState)
 	}

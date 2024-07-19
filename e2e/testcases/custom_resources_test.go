@@ -99,6 +99,7 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 
 	// Remove CRD
 	// This will garbage collect the CR too and block until both are deleted.
+	nt.T.Log("Deleting Anvil CRD")
 	_, err = nt.Shell.Kubectl("delete", "-f", crdFile)
 	if err != nil {
 		nt.T.Fatal(err)
@@ -109,16 +110,27 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	// Wait for remediator to detect the drift (managed Anvil CR was deleted)
-	// and record it as a conflict.
-	// TODO: distinguish between management conflict (spec/generation drift) and concurrent status update conflict (resource version change)
-	err = nomostest.ValidateMetrics(nt,
+	// Resource Conflict errors from the remediator are not exposed as errors
+	// in the RootSync status. Instead, the error is recorded as a metric and
+	// logged as a warning. Then the object is refreshed from the server and
+	// re-enqueued for remediation.
+	//
+	// Validate that deleting the CRD of a managed CR causes at least of of the
+	// following errors:
+	// - NoResourceMatchError
+	// - NoKindMatchError
+	// - ObjectNotFound
+	// - ResourceVersionConflict
+	// Which error depends on race conditions between the remediator and the
+	// Kubernetes custom resource controller.
+	//
+	// Note: This is NOT a "management conflict", just a "resource conflict".
+	// But both types of conflict both share the same metric.
+	// TODO: distinguish between management conflict (unexpected manager annotation) and resource conflict (resource version change)
+	nt.Must(nomostest.ValidateMetrics(nt,
 		nomostest.ReconcilerErrorMetrics(nt, rootSyncLabels, firstCommitHash, metrics.ErrorSummary{
 			Conflicts: 1,
-		}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		})))
 
 	// Reset discovery client to invalidate the cached Anvil CRD
 	nt.RenewClient()

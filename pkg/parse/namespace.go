@@ -197,10 +197,10 @@ func (p *namespace) setRenderingStatus(ctx context.Context, oldStatus, newStatus
 
 	p.mux.Lock()
 	defer p.mux.Unlock()
-	return p.setRenderingStatusWithRetires(ctx, newStatus, defaultDenominator)
+	return p.setRenderingStatusWithRetries(ctx, newStatus, defaultDenominator)
 }
 
-func (p *namespace) setRenderingStatusWithRetires(ctx context.Context, newStatus *RenderingStatus, denominator int) error {
+func (p *namespace) setRenderingStatusWithRetries(ctx context.Context, newStatus *RenderingStatus, denominator int) error {
 	if denominator <= 0 {
 		return fmt.Errorf("The denominator must be a positive number")
 	}
@@ -244,7 +244,7 @@ func (p *namespace) setRenderingStatusWithRetires(ctx context.Context, newStatus
 		// If the update failure was caused by the size of the RepoSync object, we would truncate the errors and retry.
 		if isRequestTooLargeError(err) {
 			klog.Infof("Failed to update RepoSync rendering status (total error count: %d, denominator: %d): %s.", rs.Status.Rendering.ErrorSummary.TotalCount, denominator, err)
-			return p.setRenderingStatusWithRetires(ctx, newStatus, denominator*2)
+			return p.setRenderingStatusWithRetries(ctx, newStatus, denominator*2)
 		}
 		return status.APIServerError(err, "failed to update RepoSync rendering status from parser")
 	}

@@ -284,10 +284,10 @@ func (p *root) setRenderingStatus(ctx context.Context, oldStatus, newStatus *Ren
 
 	p.mux.Lock()
 	defer p.mux.Unlock()
-	return p.setRenderingStatusWithRetires(ctx, newStatus, defaultDenominator)
+	return p.setRenderingStatusWithRetries(ctx, newStatus, defaultDenominator)
 }
 
-func (p *root) setRenderingStatusWithRetires(ctx context.Context, newStatus *RenderingStatus, denominator int) error {
+func (p *root) setRenderingStatusWithRetries(ctx context.Context, newStatus *RenderingStatus, denominator int) error {
 	if denominator <= 0 {
 		return fmt.Errorf("The denominator must be a positive number")
 	}
@@ -331,7 +331,7 @@ func (p *root) setRenderingStatusWithRetires(ctx context.Context, newStatus *Ren
 		// If the update failure was caused by the size of the RootSync object, we would truncate the errors and retry.
 		if isRequestTooLargeError(err) {
 			klog.Infof("Failed to update RootSync rendering status (total error count: %d, denominator: %d): %s.", rs.Status.Rendering.ErrorSummary.TotalCount, denominator, err)
-			return p.setRenderingStatusWithRetires(ctx, newStatus, denominator*2)
+			return p.setRenderingStatusWithRetries(ctx, newStatus, denominator*2)
 		}
 		return status.APIServerError(err, "failed to update RootSync rendering status from parser")
 	}

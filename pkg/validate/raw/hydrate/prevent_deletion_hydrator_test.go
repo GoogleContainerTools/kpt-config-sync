@@ -19,34 +19,34 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
-	"kpt.dev/configsync/pkg/testing/fake"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 	"sigs.k8s.io/cli-utils/pkg/common"
 )
 
 func TestPreventDeletion(t *testing.T) {
-	objs := &objects.Raw{
+	objs := &fileobjects.Raw{
 		Objects: []ast.FileObject{
-			fake.ClusterRoleAtPath("cluster/clusterrole.yaml", core.Name("reader")),
-			fake.Namespace("namespaces/default"),
-			fake.Namespace("namespaces/kube-system"),
-			fake.Namespace("namespaces/kube-public"),
-			fake.Namespace("namespaces/kube-node-lease"),
-			fake.Namespace("namespaces/gatekeeper-system"),
-			fake.Namespace("namespaces/bookstore"),
+			k8sobjects.ClusterRoleAtPath("cluster/clusterrole.yaml", core.Name("reader")),
+			k8sobjects.Namespace("namespaces/default"),
+			k8sobjects.Namespace("namespaces/kube-system"),
+			k8sobjects.Namespace("namespaces/kube-public"),
+			k8sobjects.Namespace("namespaces/kube-node-lease"),
+			k8sobjects.Namespace("namespaces/gatekeeper-system"),
+			k8sobjects.Namespace("namespaces/bookstore"),
 		},
 	}
-	want := &objects.Raw{
+	want := &fileobjects.Raw{
 		Objects: []ast.FileObject{
-			fake.ClusterRoleAtPath("cluster/clusterrole.yaml",
+			k8sobjects.ClusterRoleAtPath("cluster/clusterrole.yaml",
 				core.Name("reader")),
-			fake.Namespace("namespaces/default", core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion)),
-			fake.Namespace("namespaces/kube-system", core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion)),
-			fake.Namespace("namespaces/kube-public", core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion)),
-			fake.Namespace("namespaces/kube-node-lease", core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion)),
-			fake.Namespace("namespaces/gatekeeper-system", core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion)),
-			fake.Namespace("namespaces/bookstore"),
+			k8sobjects.Namespace("namespaces/default", core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion)),
+			k8sobjects.Namespace("namespaces/kube-system", core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion)),
+			k8sobjects.Namespace("namespaces/kube-public", core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion)),
+			k8sobjects.Namespace("namespaces/kube-node-lease", core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion)),
+			k8sobjects.Namespace("namespaces/gatekeeper-system", core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion)),
+			k8sobjects.Namespace("namespaces/bookstore"),
 		},
 	}
 

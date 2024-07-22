@@ -28,8 +28,8 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	resourcegroupv1alpha1 "kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
-	"kpt.dev/configsync/pkg/testing/fake"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -37,7 +37,7 @@ import (
 // TestOverrideReconcileTimeout tests that a misconfigured pod will never reconcile (timeout).
 func TestOverrideReconcileTimeout(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.Unstructured)
-	rootSync := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rootSync := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 
 	// Override reconcileTimeout to a short time 30s, only actuation should succeed, reconcile should time out.
 	if err := nt.KubeClient.MergePatch(rootSync,
@@ -90,11 +90,11 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 			PeriodSeconds:       10,
 		},
 	}
-	pod1 := fake.PodObject(pod1Name, []corev1.Container{container}, core.Namespace(namespaceName))
+	pod1 := k8sobjects.PodObject(pod1Name, []corev1.Container{container}, core.Namespace(namespaceName))
 	idToVerify := core.IDOf(pod1)
 
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/pod-1.yaml", pod1))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns-1.yaml", fake.NamespaceObject(namespaceName)))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns-1.yaml", k8sobjects.NamespaceObject(namespaceName)))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("Add namespace/%s & pod/%s (never ready)", namespaceName, pod1Name)))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)

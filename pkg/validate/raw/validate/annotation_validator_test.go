@@ -20,11 +20,11 @@ import (
 
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/metadata"
 	csmetadata "kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 const (
@@ -41,37 +41,37 @@ func TestAnnotations(t *testing.T) {
 	}{
 		{
 			name: "no annotations",
-			obj:  fake.Role(),
+			obj:  k8sobjects.Role(),
 		},
 		{
 			name: "legal annotation",
-			obj:  fake.Role(core.Annotation(legalAnnotation, "a")),
+			obj:  k8sobjects.Role(core.Annotation(legalAnnotation, "a")),
 		},
 		{
 			name: "legal namespace selector annotation",
-			obj:  fake.Role(core.Annotation(csmetadata.NamespaceSelectorAnnotationKey, "a")),
+			obj:  k8sobjects.Role(core.Annotation(csmetadata.NamespaceSelectorAnnotationKey, "a")),
 		},
 		{
 			name: "legal legacy cluster selector annotation",
-			obj:  fake.Role(core.Annotation(csmetadata.LegacyClusterSelectorAnnotationKey, "a")),
+			obj:  k8sobjects.Role(core.Annotation(csmetadata.LegacyClusterSelectorAnnotationKey, "a")),
 		},
 		{
 			name: "legal inline cluster selector annotation",
-			obj:  fake.Role(core.Annotation(csmetadata.ClusterNameSelectorAnnotationKey, "a")),
+			obj:  k8sobjects.Role(core.Annotation(csmetadata.ClusterNameSelectorAnnotationKey, "a")),
 		},
 		{
 			name: "legal management annotation",
-			obj:  fake.RoleBinding(core.Annotation(csmetadata.ResourceManagementKey, "a")),
+			obj:  k8sobjects.RoleBinding(core.Annotation(csmetadata.ResourceManagementKey, "a")),
 		},
 		{
 			name:    "illegal ConfigManagement annotation",
-			obj:     fake.Role(core.Annotation(cmAnnotation, "a")),
-			wantErr: metadata.IllegalAnnotationDefinitionError(fake.Role(), []string{cmAnnotation}),
+			obj:     k8sobjects.Role(core.Annotation(cmAnnotation, "a")),
+			wantErr: metadata.IllegalAnnotationDefinitionError(k8sobjects.Role(), []string{cmAnnotation}),
 		},
 		{
 			name:    "illegal ConfigSync annotation",
-			obj:     fake.RoleBinding(core.Annotation(csAnnotation, "a")),
-			wantErr: metadata.IllegalAnnotationDefinitionError(fake.RoleBinding(), []string{csAnnotation}),
+			obj:     k8sobjects.RoleBinding(core.Annotation(csAnnotation, "a")),
+			wantErr: metadata.IllegalAnnotationDefinitionError(k8sobjects.RoleBinding(), []string{csAnnotation}),
 		},
 	}
 

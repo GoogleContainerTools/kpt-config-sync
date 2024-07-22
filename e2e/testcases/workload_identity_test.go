@@ -38,11 +38,11 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -307,8 +307,8 @@ func TestWorkloadIdentity(t *testing.T) {
 			testutils.ClearMembershipInfo(nt, fleetMembership, *e2e.GCPProject, gkeURI)
 			testutils.ClearMembershipInfo(nt, fleetMembership, testutils.TestCrossProjectFleetProjectID, gkeURI)
 
-			rootSync := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
-			repoSync := fake.RepoSyncObjectV1Beta1(testNs, configsync.RepoSyncName)
+			rootSync := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
+			repoSync := k8sobjects.RepoSyncObjectV1Beta1(testNs, configsync.RepoSyncName)
 			rsRef := nomostest.RootSyncNN(rootSync.Name)
 			nsRef := nomostest.RepoSyncNN(repoSync.Namespace, repoSync.Name)
 			nt.T.Cleanup(func() {

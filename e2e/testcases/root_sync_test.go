@@ -34,11 +34,11 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/system"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/validate/raw/validate"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -59,17 +59,17 @@ func TestDeleteRootSyncAndRootSyncV1Alpha1(t *testing.T) {
 	// Verify Root Reconciler deployment no longer present.
 	_, err = retry.Retry(40*time.Second, func() error {
 		var errs error
-		errs = multierr.Append(errs, nt.ValidateNotFound(nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace, fake.DeploymentObject()))
+		errs = multierr.Append(errs, nt.ValidateNotFound(nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace, k8sobjects.DeploymentObject()))
 		// validate Root Reconciler configmaps are no longer present.
-		errs = multierr.Append(errs, nt.ValidateNotFound("root-reconciler-git-sync", configsync.ControllerNamespace, fake.ConfigMapObject()))
-		errs = multierr.Append(errs, nt.ValidateNotFound("root-reconciler-reconciler", configsync.ControllerNamespace, fake.ConfigMapObject()))
-		errs = multierr.Append(errs, nt.ValidateNotFound("root-reconciler-hydration-controller", configsync.ControllerNamespace, fake.ConfigMapObject()))
-		errs = multierr.Append(errs, nt.ValidateNotFound("root-reconciler-source-format", configsync.ControllerNamespace, fake.ConfigMapObject()))
+		errs = multierr.Append(errs, nt.ValidateNotFound("root-reconciler-git-sync", configsync.ControllerNamespace, k8sobjects.ConfigMapObject()))
+		errs = multierr.Append(errs, nt.ValidateNotFound("root-reconciler-reconciler", configsync.ControllerNamespace, k8sobjects.ConfigMapObject()))
+		errs = multierr.Append(errs, nt.ValidateNotFound("root-reconciler-hydration-controller", configsync.ControllerNamespace, k8sobjects.ConfigMapObject()))
+		errs = multierr.Append(errs, nt.ValidateNotFound("root-reconciler-source-format", configsync.ControllerNamespace, k8sobjects.ConfigMapObject()))
 		// validate Root Reconciler ServiceAccount is no longer present.
 		saName := core.RootReconcilerName(rs.Name)
-		errs = multierr.Append(errs, nt.ValidateNotFound(saName, configsync.ControllerNamespace, fake.ServiceAccountObject(saName)))
+		errs = multierr.Append(errs, nt.ValidateNotFound(saName, configsync.ControllerNamespace, k8sobjects.ServiceAccountObject(saName)))
 		// validate Root Reconciler ClusterRoleBinding is no longer present.
-		errs = multierr.Append(errs, nt.ValidateNotFound(controllers.RootSyncLegacyClusterRoleBindingName, configsync.ControllerNamespace, fake.ClusterRoleBindingObject()))
+		errs = multierr.Append(errs, nt.ValidateNotFound(controllers.RootSyncLegacyClusterRoleBindingName, configsync.ControllerNamespace, k8sobjects.ClusterRoleBindingObject()))
 		return errs
 	})
 	if err != nil {
@@ -99,7 +99,7 @@ func TestUpdateRootSyncGitDirectory(t *testing.T) {
 
 	// Add audit namespace in policy directory acme.
 	auditNS := "audit"
-	auditNSObj := fake.NamespaceObject(auditNS)
+	auditNSObj := k8sobjects.NamespaceObject(auditNS)
 	auditNSPath := fmt.Sprintf("%s/namespaces/%s/ns.yaml", rs.Spec.Git.Dir, auditNS)
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(auditNSPath, auditNSObj))
 
@@ -107,13 +107,13 @@ func TestUpdateRootSyncGitDirectory(t *testing.T) {
 	fooDir := "foo"
 	fooNS := "shipping"
 	fooNSPath := fmt.Sprintf("%s/namespaces/%s/ns.yaml", fooDir, fooNS)
-	fooNSObj := fake.NamespaceObject(fooNS)
+	fooNSObj := k8sobjects.NamespaceObject(fooNS)
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fooNSPath, fooNSObj))
 
 	// Add repo resource in policy directory 'foo'.
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
 		fmt.Sprintf("%s/system/repo.yaml", fooDir),
-		fake.RepoObject()))
+		k8sobjects.RepoObject()))
 
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add namespace to acme directory"))
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -182,8 +182,8 @@ func TestUpdateRootSyncGitBranch(t *testing.T) {
 
 	nsA := "ns-a"
 	nsB := "ns-b"
-	nsAObj := fake.NamespaceObject(nsA)
-	nsBObj := fake.NamespaceObject(nsB)
+	nsAObj := k8sobjects.NamespaceObject(nsA)
+	nsBObj := k8sobjects.NamespaceObject(nsB)
 	branchA := gitproviders.MainBranch
 	branchB := "test-branch"
 
@@ -372,7 +372,7 @@ func TestManageSelfRootSync(t *testing.T) {
 	if err := nt.KubeClient.Get(configsync.RootSyncName, configsync.ControllerNamespace, rs); err != nil {
 		nt.T.Fatal(err)
 	}
-	sanitizedRs := fake.RootSyncObjectV1Beta1(rs.Name)
+	sanitizedRs := k8sobjects.RootSyncObjectV1Beta1(rs.Name)
 	sanitizedRs.Spec = rs.Spec
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/root-sync.yaml", sanitizedRs))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add the root-sync object that configures the reconciler"))

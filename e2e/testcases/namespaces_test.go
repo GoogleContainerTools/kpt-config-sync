@@ -32,10 +32,10 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/cli-utils/pkg/common"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -50,7 +50,7 @@ func TestDeclareNamespace(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nsObj := fake.NamespaceObject("foo")
+	nsObj := k8sobjects.NamespaceObject("foo")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", nsObj))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add Namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -78,7 +78,7 @@ func TestNamespaceLabelAndAnnotationLifecycle(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
 	// Create foo namespace without any labels or annotations.
-	nsObj := fake.NamespaceObject("foo")
+	nsObj := k8sobjects.NamespaceObject("foo")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", nsObj))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Create foo namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -178,7 +178,7 @@ func TestNamespaceExistsAndDeclared(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
 	// Create nsObj using kubectl first then commit.
-	nsObj := fake.NamespaceObject("decl-namespace-annotation-none")
+	nsObj := k8sobjects.NamespaceObject("decl-namespace-annotation-none")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/decl-namespace-annotation-none/ns.yaml", nsObj))
 	nt.MustKubectl("apply", "-f", filepath.Join(nt.RootRepos[configsync.RootSyncName].Root, "acme/namespaces/decl-namespace-annotation-none/ns.yaml"))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add namespace"))
@@ -208,7 +208,7 @@ func TestNamespaceEnabledAnnotationNotDeclared(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
 	// Create nsObj with managed annotation using kubectl.
-	nsObj := fake.NamespaceObject("undeclared-annotation-enabled")
+	nsObj := k8sobjects.NamespaceObject("undeclared-annotation-enabled")
 	nsObj.Annotations["configmanagement.gke.io/managed"] = "enabled"
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("ns.yaml", nsObj))
 	nt.MustKubectl("apply", "-f", filepath.Join(nt.RootRepos[configsync.RootSyncName].Root, "ns.yaml"))
@@ -244,8 +244,8 @@ func TestManagementDisabledNamespace(t *testing.T) {
 	namespacesToTest := []string{"foo", metav1.NamespaceDefault}
 	for _, nsName := range namespacesToTest {
 		// Create nsObj.
-		nsObj := fake.NamespaceObject(nsName)
-		cm1 := fake.ConfigMapObject(core.Namespace(nsName), core.Name("cm1"))
+		nsObj := k8sobjects.NamespaceObject(nsName)
+		cm1 := k8sobjects.ConfigMapObject(core.Namespace(nsName), core.Name("cm1"))
 		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/ns.yaml", nsName), nsObj))
 		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/cm1.yaml", nsName), cm1))
 		nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Create a namespace and a configmap"))
@@ -341,11 +341,11 @@ func TestManagementDisabledNamespace(t *testing.T) {
 // TestManagementDisabledConfigMap tests https://cloud.google.com/anthos-config-management/docs/how-to/managing-objects#stop-managing.
 func TestManagementDisabledConfigMap(t *testing.T) {
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
-	fooNamespace := fake.NamespaceObject("foo")
-	cm1 := fake.ConfigMapObject(core.Namespace("foo"), core.Name("cm1"))
+	fooNamespace := k8sobjects.NamespaceObject("foo")
+	cm1 := k8sobjects.ConfigMapObject(core.Namespace("foo"), core.Name("cm1"))
 	// Initialize repo with disabled resource to test initial sync w/ unmanaged resources
-	cm2 := fake.ConfigMapObject(core.Namespace("foo"), core.Name("cm2"), core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementDisabled))
-	cm3 := fake.ConfigMapObject(core.Namespace("foo"), core.Name("cm3"))
+	cm2 := k8sobjects.ConfigMapObject(core.Namespace("foo"), core.Name("cm2"), core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementDisabled))
+	cm3 := k8sobjects.ConfigMapObject(core.Namespace("foo"), core.Name("cm3"))
 
 	nt := nomostest.New(t, nomostesting.Reconciliation2, ntopts.WithInitialCommit(ntopts.Commit{
 		Message: "Create namespace and configmaps",
@@ -473,7 +473,7 @@ func TestSyncLabelsAndAnnotationsOnKubeSystem(t *testing.T) {
 	checkpointProtectedNamespace(nt, metav1.NamespaceSystem)
 
 	// Update kube-system namespace to be managed.
-	kubeSystemNamespace := fake.NamespaceObject(metav1.NamespaceSystem)
+	kubeSystemNamespace := k8sobjects.NamespaceObject(metav1.NamespaceSystem)
 	kubeSystemNamespace.Labels["test-corp.com/awesome-controller-flavour"] = "fuzzy"
 	kubeSystemNamespace.Annotations["test-corp.com/awesome-controller-mixin"] = "green"
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/kube-system/ns.yaml", kubeSystemNamespace))
@@ -554,7 +554,7 @@ func TestDoNotRemoveManagedByLabelExceptForConfigManagement(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
 
 	// Create namespace using kubectl with managed by helm label.
-	helmManagedNamespace := fake.NamespaceObject("helm-managed-namespace")
+	helmManagedNamespace := k8sobjects.NamespaceObject("helm-managed-namespace")
 	helmManagedNamespace.Labels["app.kubernetes.io/managed-by"] = "helm"
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("ns.yaml", helmManagedNamespace))
 	nt.MustKubectl("apply", "-f", filepath.Join(nt.RootRepos[configsync.RootSyncName].Root, "ns.yaml"))
@@ -595,7 +595,7 @@ func TestDeclareImplicitNamespace(t *testing.T) {
 
 	// Phase 1: Declare a Role in a Namespace that doesn't exist, and ensure it
 	// gets created.
-	roleObj := fake.RoleObject(core.Name("admin"), core.Namespace(implicitNamespace))
+	roleObj := k8sobjects.RoleObject(core.Name("admin"), core.Namespace(implicitNamespace))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/role.yaml", roleObj))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add Role in implicit Namespace " + implicitNamespace))
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -613,7 +613,7 @@ func TestDeclareImplicitNamespace(t *testing.T) {
 	}
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
-	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, fake.NamespaceObject(implicitNamespace)) // implicit
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, k8sobjects.NamespaceObject(implicitNamespace)) // implicit
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, roleObj)
 
 	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
@@ -639,7 +639,7 @@ func TestDeclareImplicitNamespace(t *testing.T) {
 		nt.T.Error(err)
 	}
 
-	nt.MetricsExpectations.RemoveObject(configsync.RootSyncKind, rootSyncNN, fake.NamespaceObject(implicitNamespace)) // abandoned
+	nt.MetricsExpectations.RemoveObject(configsync.RootSyncKind, rootSyncNN, k8sobjects.NamespaceObject(implicitNamespace)) // abandoned
 	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, roleObj)
 
 	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
@@ -661,10 +661,10 @@ func TestDontDeleteAllNamespaces(t *testing.T) {
 
 	// Test Setup + Preconditions.
 	// Declare two Namespaces.
-	fooNS := fake.NamespaceObject("foo")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", fake.NamespaceObject("foo")))
-	barNS := fake.NamespaceObject("bar")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/bar/ns.yaml", fake.NamespaceObject("bar")))
+	fooNS := k8sobjects.NamespaceObject("foo")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", k8sobjects.NamespaceObject("foo")))
+	barNS := k8sobjects.NamespaceObject("bar")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/bar/ns.yaml", k8sobjects.NamespaceObject("bar")))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("declare multiple Namespaces"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -721,7 +721,7 @@ func TestDontDeleteAllNamespaces(t *testing.T) {
 	// we do expect them to have been removed from the declared_resources metric.
 	nt.MetricsExpectations.RemoveObject(configsync.RootSyncKind, rootSyncNN, fooNS)
 	nt.MetricsExpectations.RemoveObject(configsync.RootSyncKind, rootSyncNN, barNS)
-	safetyNSObj := fake.NamespaceObject(nt.RootRepos[configsync.RootSyncName].SafetyNSName)
+	safetyNSObj := k8sobjects.NamespaceObject(nt.RootRepos[configsync.RootSyncName].SafetyNSName)
 	nt.MetricsExpectations.RemoveObject(configsync.RootSyncKind, rootSyncNN, safetyNSObj)
 
 	rootSyncLabels, err := nomostest.MetricLabelsForRootSync(nt, rootSyncNN)
@@ -811,7 +811,7 @@ func TestDontDeleteAllNamespaces(t *testing.T) {
 // checkpointProtectedNamespace stores the current state of the specified
 // namespace and registers a test Cleanup to restore it.
 func checkpointProtectedNamespace(nt *nomostest.NT, namespace string) {
-	nsObj := fake.NamespaceObject(namespace)
+	nsObj := k8sobjects.NamespaceObject(namespace)
 
 	if err := nt.KubeClient.Get(nsObj.Name, "", nsObj); err != nil {
 		if apierrors.IsNotFound(err) {

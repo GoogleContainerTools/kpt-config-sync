@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/metadata"
@@ -35,7 +36,6 @@ import (
 	syncerclient "kpt.dev/configsync/pkg/syncer/client"
 	"kpt.dev/configsync/pkg/syncer/syncertest"
 	testingfake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/testing/testerrors"
 	"kpt.dev/configsync/pkg/testing/testmetrics"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -61,9 +61,9 @@ func TestRemediator_Reconcile(t *testing.T) {
 		{
 			name:     "create added object",
 			version:  "v1",
-			declared: fake.ClusterRoleBindingObject(syncertest.ManagementEnabled),
+			declared: k8sobjects.ClusterRoleBindingObject(syncertest.ManagementEnabled),
 			actual:   nil,
-			want: fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+			want: k8sobjects.ClusterRoleBindingObject(syncertest.ManagementEnabled,
 				core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 			),
 			wantError: nil,
@@ -71,10 +71,10 @@ func TestRemediator_Reconcile(t *testing.T) {
 		{
 			name:    "update declared object",
 			version: "v1",
-			declared: fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+			declared: k8sobjects.ClusterRoleBindingObject(syncertest.ManagementEnabled,
 				core.Label("new-label", "one")),
-			actual: fake.ClusterRoleBindingObject(),
-			want: fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+			actual: k8sobjects.ClusterRoleBindingObject(),
+			want: k8sobjects.ClusterRoleBindingObject(syncertest.ManagementEnabled,
 				core.UID("1"), core.ResourceVersion("2"), core.Generation(1),
 				core.Label("new-label", "one"),
 			),
@@ -84,7 +84,7 @@ func TestRemediator_Reconcile(t *testing.T) {
 			name:     "delete removed object",
 			version:  "v1",
 			declared: nil,
-			actual: fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+			actual: k8sobjects.ClusterRoleBindingObject(syncertest.ManagementEnabled,
 				core.Annotation(metadata.ResourceIDKey, "rbac.authorization.k8s.io_clusterrolebinding_default-name")),
 			want:      nil,
 			wantError: nil,
@@ -93,7 +93,7 @@ func TestRemediator_Reconcile(t *testing.T) {
 		{
 			name:    "don't create unmanaged object",
 			version: "v1",
-			declared: fake.ClusterRoleBindingObject(syncertest.ManagementDisabled,
+			declared: k8sobjects.ClusterRoleBindingObject(syncertest.ManagementDisabled,
 				core.Label("declared-label", "foo")),
 			actual:    nil,
 			want:      nil,
@@ -102,10 +102,10 @@ func TestRemediator_Reconcile(t *testing.T) {
 		{
 			name:    "don't update unmanaged object",
 			version: "v1",
-			declared: fake.ClusterRoleBindingObject(syncertest.ManagementDisabled,
+			declared: k8sobjects.ClusterRoleBindingObject(syncertest.ManagementDisabled,
 				core.Label("declared-label", "foo")),
-			actual: fake.ClusterRoleBindingObject(core.Label("actual-label", "bar")),
-			want: fake.ClusterRoleBindingObject(core.Label("actual-label", "bar"),
+			actual: k8sobjects.ClusterRoleBindingObject(core.Label("actual-label", "bar")),
+			want: k8sobjects.ClusterRoleBindingObject(core.Label("actual-label", "bar"),
 				core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 			),
 			wantError: nil,
@@ -114,8 +114,8 @@ func TestRemediator_Reconcile(t *testing.T) {
 			name:     "don't delete unmanaged object",
 			version:  "v1",
 			declared: nil,
-			actual:   fake.ClusterRoleBindingObject(),
-			want: fake.ClusterRoleBindingObject(
+			actual:   k8sobjects.ClusterRoleBindingObject(),
+			want: k8sobjects.ClusterRoleBindingObject(
 				core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 			),
 			wantError: nil,
@@ -124,9 +124,9 @@ func TestRemediator_Reconcile(t *testing.T) {
 			name:     "don't delete unmanaged object (the configsync.gke.io/resource-id annotation is incorrect)",
 			version:  "v1",
 			declared: nil,
-			actual: fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+			actual: k8sobjects.ClusterRoleBindingObject(syncertest.ManagementEnabled,
 				core.Annotation(metadata.ResourceIDKey, "rbac.authorization.k8s.io_clusterrolebinding_wrong-name")),
-			want: fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+			want: k8sobjects.ClusterRoleBindingObject(syncertest.ManagementEnabled,
 				core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 				core.Annotation(metadata.ResourceIDKey, "rbac.authorization.k8s.io_clusterrolebinding_wrong-name")),
 			wantError: nil,
@@ -135,34 +135,34 @@ func TestRemediator_Reconcile(t *testing.T) {
 		{
 			name:     "don't create, and error on bad declared management annotation",
 			version:  "v1",
-			declared: fake.ClusterRoleBindingObject(core.Label("declared-label", "foo"), syncertest.ManagementInvalid),
+			declared: k8sobjects.ClusterRoleBindingObject(core.Label("declared-label", "foo"), syncertest.ManagementInvalid),
 			actual:   nil,
 			want:     nil,
 			wantError: nonhierarchical.IllegalManagementAnnotationError(
-				fake.ClusterRoleBindingObject(core.Label("declared-label", "foo"), syncertest.ManagementInvalid),
+				k8sobjects.ClusterRoleBindingObject(core.Label("declared-label", "foo"), syncertest.ManagementInvalid),
 				"invalid"),
 		},
 		{
 			name:     "don't update, and error on bad declared management annotation",
 			version:  "v1",
-			declared: fake.ClusterRoleBindingObject(core.Label("declared-label", "foo"), syncertest.ManagementInvalid),
-			actual:   fake.ClusterRoleBindingObject(core.Label("actual-label", "bar")),
-			want: fake.ClusterRoleBindingObject(core.Label("actual-label", "bar"),
+			declared: k8sobjects.ClusterRoleBindingObject(core.Label("declared-label", "foo"), syncertest.ManagementInvalid),
+			actual:   k8sobjects.ClusterRoleBindingObject(core.Label("actual-label", "bar")),
+			want: k8sobjects.ClusterRoleBindingObject(core.Label("actual-label", "bar"),
 				core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 			),
 			wantError: nonhierarchical.IllegalManagementAnnotationError(
-				fake.ClusterRoleBindingObject(core.Label("declared-label", "foo"), syncertest.ManagementInvalid),
+				k8sobjects.ClusterRoleBindingObject(core.Label("declared-label", "foo"), syncertest.ManagementInvalid),
 				"invalid"),
 		},
 		// bad in-cluster management annotation paths.
 		{
 			name:    "remove bad actual management annotation",
 			version: "v1",
-			declared: fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+			declared: k8sobjects.ClusterRoleBindingObject(syncertest.ManagementEnabled,
 				core.Label("declared-label", "foo")),
-			actual: fake.ClusterRoleBindingObject(syncertest.ManagementInvalid,
+			actual: k8sobjects.ClusterRoleBindingObject(syncertest.ManagementInvalid,
 				core.Label("declared-label", "foo")),
-			want: fake.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+			want: k8sobjects.ClusterRoleBindingObject(syncertest.ManagementEnabled,
 				core.UID("1"), core.ResourceVersion("2"), core.Generation(1),
 				core.Label("declared-label", "foo")),
 			wantError: nil,
@@ -171,8 +171,8 @@ func TestRemediator_Reconcile(t *testing.T) {
 			name:     "don't update non-Config-Sync-managed-objects with invalid management annotation",
 			version:  "v1",
 			declared: nil,
-			actual:   fake.ClusterRoleBindingObject(core.Label("declared-label", "foo"), syncertest.ManagementInvalid),
-			want: fake.ClusterRoleBindingObject(core.Label("declared-label", "foo"), syncertest.ManagementInvalid,
+			actual:   k8sobjects.ClusterRoleBindingObject(core.Label("declared-label", "foo"), syncertest.ManagementInvalid),
+			want: k8sobjects.ClusterRoleBindingObject(core.Label("declared-label", "foo"), syncertest.ManagementInvalid,
 				core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 			),
 			wantError: nil,
@@ -182,9 +182,9 @@ func TestRemediator_Reconcile(t *testing.T) {
 			name:     "don't delete kube-system Namespace",
 			version:  "v1",
 			declared: nil,
-			actual: fake.NamespaceObject(metav1.NamespaceSystem, syncertest.ManagementEnabled,
+			actual: k8sobjects.NamespaceObject(metav1.NamespaceSystem, syncertest.ManagementEnabled,
 				core.Annotation(metadata.ResourceIDKey, "_namespace_kube-system")),
-			want: fake.NamespaceObject(metav1.NamespaceSystem,
+			want: k8sobjects.NamespaceObject(metav1.NamespaceSystem,
 				core.UID("1"), core.ResourceVersion("2"), core.Generation(1),
 			),
 		},
@@ -192,9 +192,9 @@ func TestRemediator_Reconcile(t *testing.T) {
 			name:     "don't delete kube-public Namespace",
 			version:  "v1",
 			declared: nil,
-			actual: fake.NamespaceObject(metav1.NamespacePublic, syncertest.ManagementEnabled,
+			actual: k8sobjects.NamespaceObject(metav1.NamespacePublic, syncertest.ManagementEnabled,
 				core.Annotation(metadata.ResourceIDKey, "_namespace_kube-public")),
-			want: fake.NamespaceObject(metav1.NamespacePublic,
+			want: k8sobjects.NamespaceObject(metav1.NamespacePublic,
 				core.UID("1"), core.ResourceVersion("2"), core.Generation(1),
 			),
 		},
@@ -202,9 +202,9 @@ func TestRemediator_Reconcile(t *testing.T) {
 			name:     "don't delete default Namespace",
 			version:  "v1",
 			declared: nil,
-			actual: fake.NamespaceObject(metav1.NamespaceDefault, syncertest.ManagementEnabled,
+			actual: k8sobjects.NamespaceObject(metav1.NamespaceDefault, syncertest.ManagementEnabled,
 				core.Annotation(metadata.ResourceIDKey, "_namespace_default")),
-			want: fake.NamespaceObject(metav1.NamespaceDefault,
+			want: k8sobjects.NamespaceObject(metav1.NamespaceDefault,
 				core.UID("1"), core.ResourceVersion("2"), core.Generation(1),
 			),
 		},
@@ -212,20 +212,20 @@ func TestRemediator_Reconcile(t *testing.T) {
 			name:     "don't delete gatekeeper-system Namespace",
 			version:  "v1",
 			declared: nil,
-			actual: fake.NamespaceObject(policycontroller.NamespaceSystem, syncertest.ManagementEnabled,
+			actual: k8sobjects.NamespaceObject(policycontroller.NamespaceSystem, syncertest.ManagementEnabled,
 				core.Annotation(metadata.ResourceIDKey, "_namespace_gatekeeper-system")),
-			want: fake.NamespaceObject(policycontroller.NamespaceSystem,
+			want: k8sobjects.NamespaceObject(policycontroller.NamespaceSystem,
 				core.UID("1"), core.ResourceVersion("2"), core.Generation(1),
 			),
 		},
 		// Version difference paths.
 		{
 			name: "update actual object with different version",
-			declared: fake.ClusterRoleBindingV1Beta1Object(syncertest.ManagementEnabled,
+			declared: k8sobjects.ClusterRoleBindingV1Beta1Object(syncertest.ManagementEnabled,
 				core.Label("new-label", "one")),
-			actual: fake.ClusterRoleBindingObject(),
+			actual: k8sobjects.ClusterRoleBindingObject(),
 			// Metadata change increments ResourceVersion, but not Generation
-			want: fake.ClusterRoleBindingV1Beta1Object(syncertest.ManagementEnabled,
+			want: k8sobjects.ClusterRoleBindingV1Beta1Object(syncertest.ManagementEnabled,
 				core.UID("1"), core.ResourceVersion("2"), core.Generation(1),
 				core.Label("new-label", "one")),
 			wantError: nil,
@@ -289,22 +289,22 @@ func TestRemediator_Reconcile_Metrics(t *testing.T) {
 		{
 			name: "ConflictUpdateDoesNotExist",
 			// Object declared with label
-			declared: fake.RoleObject(core.Namespace("example"), core.Name("example"),
+			declared: k8sobjects.RoleObject(core.Namespace("example"), core.Name("example"),
 				syncertest.ManagementEnabled,
 				core.Label("new-label", "one")),
 			// Object on cluster has no label and is unmanaged
-			actual: fake.RoleObject(core.Namespace("example"), core.Name("example")),
+			actual: k8sobjects.RoleObject(core.Namespace("example"), core.Name("example")),
 			// Object update fails, because it was deleted by another client
 			updateError: syncerclient.ConflictUpdateDoesNotExist(
 				apierrors.NewNotFound(schema.GroupResource{Group: "rbac", Resource: "roles"}, "example"),
-				fake.RoleObject(core.Namespace("example"), core.Name("example"))),
+				k8sobjects.RoleObject(core.Namespace("example"), core.Name("example"))),
 			// Object NOT updated on cluster, because update failed with conflict error
-			want: fake.RoleObject(core.Namespace("example"), core.Name("example"),
+			want: k8sobjects.RoleObject(core.Namespace("example"), core.Name("example"),
 				core.UID("1"), core.ResourceVersion("1"), core.Generation(1)),
 			// Expect update error returned from Remediate
 			wantError: syncerclient.ConflictUpdateDoesNotExist(
 				apierrors.NewNotFound(schema.GroupResource{Group: "rbac", Resource: "roles"}, "example"),
-				fake.RoleObject(core.Namespace("example"), core.Name("example"))),
+				k8sobjects.RoleObject(core.Namespace("example"), core.Name("example"))),
 			// Expect resource conflict error
 			wantMetrics: map[*view.View][]*view.Row{
 				metrics.ResourceConflictsView: {
@@ -319,7 +319,7 @@ func TestRemediator_Reconcile_Metrics(t *testing.T) {
 		{
 			name: "ConflictCreateAlreadyExists",
 			// Object declared with label
-			declared: fake.RoleObject(core.Namespace("example"), core.Name("example"),
+			declared: k8sobjects.RoleObject(core.Namespace("example"), core.Name("example"),
 				syncertest.ManagementEnabled,
 				core.Label("new-label", "one")),
 			// Object on cluster does not exist yet
@@ -327,13 +327,13 @@ func TestRemediator_Reconcile_Metrics(t *testing.T) {
 			// Object create fails, because it was already created by another client
 			createError: syncerclient.ConflictCreateAlreadyExists(
 				apierrors.NewNotFound(schema.GroupResource{Group: "rbac", Resource: "roles"}, "example"),
-				fake.RoleObject(core.Namespace("example"), core.Name("example"))),
+				k8sobjects.RoleObject(core.Namespace("example"), core.Name("example"))),
 			// Object NOT created on cluster, because update failed with conflict error
 			want: nil,
 			// Expect create error returned from Remediate
 			wantError: syncerclient.ConflictCreateAlreadyExists(
 				apierrors.NewNotFound(schema.GroupResource{Group: "rbac", Resource: "roles"}, "example"),
-				fake.RoleObject(core.Namespace("example"), core.Name("example"))),
+				k8sobjects.RoleObject(core.Namespace("example"), core.Name("example"))),
 			// Expect resource conflict error
 			wantMetrics: map[*view.View][]*view.Row{
 				metrics.ResourceConflictsView: {

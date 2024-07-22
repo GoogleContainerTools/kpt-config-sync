@@ -1,4 +1,4 @@
-// Copyright 2022 Google LLC
+// Copyright 2023 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,13 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package fake
+package fileobjects
 
 import (
-	v1 "k8s.io/api/core/v1"
+	"os"
+	"testing"
+
+	"k8s.io/klog/v2"
 )
 
-// ContainerObject returns an initialized Container.
-func ContainerObject(name string) *v1.Container {
-	return &v1.Container{Name: name}
+// TestMain executes the tests for this package, with optional logging.
+// To see all logs, use:
+// go test kpt.dev/configsync/pkg/validate/objects -v -args -v=5
+func TestMain(m *testing.M) {
+	klog.InitFlags(nil)
+	os.Exit(m.Run())
 }

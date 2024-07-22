@@ -18,7 +18,7 @@ import (
 	"testing"
 
 	v1 "k8s.io/api/core/v1"
-	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 )
 
 func TestLogSourceGetPathName(t *testing.T) {
@@ -30,9 +30,9 @@ func TestLogSourceGetPathName(t *testing.T) {
 		{
 			name: "valid loggable produces hyphenated name",
 			source: logSource{
-				ns:   *fake.NamespaceObject("myNamespace"),
-				pod:  *fake.PodObject("myPod", make([]v1.Container, 0)),
-				cont: *fake.ContainerObject("myContainer"),
+				ns:   *k8sobjects.NamespaceObject("myNamespace"),
+				pod:  *k8sobjects.PodObject("myPod", make([]v1.Container, 0)),
+				cont: *k8sobjects.ContainerObject("myContainer"),
 			},
 			expectedName: "namespaces/myNamespace/myPod/myContainer",
 		},

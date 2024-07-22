@@ -30,13 +30,13 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 var expectedBuiltinOrigin = "configuredIn: kustomization.yaml\nconfiguredBy:\n  apiVersion: builtin\n  kind: HelmChartInflationGenerator\n"
@@ -77,7 +77,7 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add DRY configs to the repository"))
 
 	nt.T.Log("Update RootSync to sync from the kustomize-components directory")
-	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "kustomize-components"}}}`)
 	nt.Must(nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(syncDirMap)))
 
@@ -181,7 +181,7 @@ func TestHydrateHelmComponents(t *testing.T) {
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add DRY configs to the repository"))
 
 	nt.T.Log("Update RootSync to sync from the helm-components directory")
-	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	if nt.IsGKEAutopilot {
 		// b/209458334: set a higher memory of the hydration-controller on Autopilot clusters to avoid the kustomize build failure
 		nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "helm-components"}, "override": {"resources": [{"containerName": "hydration-controller", "memoryRequest": "200Mi"}]}}}`)
@@ -241,7 +241,7 @@ func TestHydrateHelmOverlay(t *testing.T) {
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add DRY configs to the repository"))
 
 	nt.T.Log("Update RootSync to sync from the helm-overlay directory")
-	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	if nt.IsGKEAutopilot {
 		// b/209458334: set a higher memory of the hydration-controller on Autopilot clusters to avoid the kustomize build failure
 		nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "helm-overlay"}, "override": {"resources": [{"containerName": "hydration-controller", "memoryRequest": "200Mi"}]}}}`)
@@ -296,7 +296,7 @@ func TestHydrateRemoteResources(t *testing.T) {
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/remote-base", "."))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add DRY configs to the repository"))
 	nt.T.Log("Update RootSync to sync from the remote-base directory without enable shell in hydration controller")
-	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "remote-base"}}}`)
 	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
 		[]testpredicates.Predicate{
@@ -369,7 +369,7 @@ func TestHydrateResourcesInRelativePath(t *testing.T) {
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add DRY configs to the repository"))
 
 	nt.T.Log("Update RootSync to sync from the relative-path directory")
-	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "relative-path/overlays/dev"}}}`)
 
 	nt.Must(nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "relative-path/overlays/dev"})))

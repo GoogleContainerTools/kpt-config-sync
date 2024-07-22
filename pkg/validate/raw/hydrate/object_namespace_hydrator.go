@@ -20,13 +20,13 @@ import (
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 )
 
 // ObjectNamespaces hydrates the given raw Objects by setting the metadata
 // namespace field for objects that are located in a namespace directory but do
 // not have their namespace specified yet.
-func ObjectNamespaces(objs *objects.Raw) status.MultiError {
+func ObjectNamespaces(objs *fileobjects.Raw) status.MultiError {
 	namespaces := make(map[string]bool)
 	for _, obj := range objs.Objects {
 		if isValidHierarchicalNamespace(obj) {

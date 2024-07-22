@@ -16,7 +16,7 @@ package tree
 
 import (
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 	"kpt.dev/configsync/pkg/validate/tree/hydrate"
 	"kpt.dev/configsync/pkg/validate/tree/validate"
 )
@@ -24,10 +24,10 @@ import (
 // Hierarchical performs validation and hydration for a structured hierarchical
 // repo against the given Tree objects. Note that this will modify the Tree
 // objects in-place.
-func Hierarchical(objs *objects.Tree) status.MultiError {
+func Hierarchical(objs *fileobjects.Tree) status.MultiError {
 	var errs status.MultiError
 	// See the note about ordering in raw.Hierarchical().
-	validators := []objects.TreeVisitor{
+	validators := []fileobjects.TreeVisitor{
 		validate.HierarchyConfig,
 		validate.Inheritance,
 		validate.NamespaceSelector,
@@ -42,7 +42,7 @@ func Hierarchical(objs *objects.Tree) status.MultiError {
 	// We perform inheritance first so that we copy all abstract objects into
 	// their potential namespaces, and then we perform namespace selection to
 	// filter out the copies which are not selected.
-	hydrators := []objects.TreeVisitor{
+	hydrators := []fileobjects.TreeVisitor{
 		hydrate.Inheritance,
 		hydrate.NamespaceSelectors,
 	}

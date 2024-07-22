@@ -27,6 +27,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/transform/selectors"
@@ -34,8 +35,7 @@ import (
 	"kpt.dev/configsync/pkg/reconciler/namespacecontroller"
 	"kpt.dev/configsync/pkg/status"
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
-	"kpt.dev/configsync/pkg/testing/fake"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -45,7 +45,7 @@ func nsSelector(nssName, mode, path string, labels map[string]string) ast.FileOb
 		nss.Spec.Selector.MatchLabels = labels
 		nss.Spec.Mode = mode
 	}
-	return fake.NamespaceSelectorAtPath(path, core.Name(nssName), mutFunc)
+	return k8sobjects.NamespaceSelectorAtPath(path, core.Name(nssName), mutFunc)
 }
 
 func withNamespacePhase(phase corev1.NamespacePhase) core.MetaMutator {
@@ -59,7 +59,7 @@ var (
 	devOnlyNSS = nsSelector("dev-only", v1.NSSelectorStaticMode,
 		"dev-only-nss.yaml", map[string]string{"environment": "dev"})
 
-	emptyNss   = fake.NamespaceSelector(core.Name("empty"))
+	emptyNss   = k8sobjects.NamespaceSelector(core.Name("empty"))
 	invalidNSS = nsSelector("invalid", v1.NSSelectorStaticMode,
 		"invalid-nss.yaml", map[string]string{"environment": "xin prod"})
 
@@ -73,62 +73,62 @@ var (
 func TestNamespaceSelectors(t *testing.T) {
 	testCases := []struct {
 		name                                   string
-		objs                                   *objects.Scoped
+		objs                                   *fileobjects.Scoped
 		onClusterObjects                       []client.Object
 		originalDynamicNSSelectorEnabled       bool
-		want                                   *objects.Scoped
+		want                                   *fileobjects.Scoped
 		wantErrs                               status.MultiError
 		wantDynamicNSSelectorEnabledAnnotation bool
 	}{
 		{
 			name: "No objects",
-			objs: &objects.Scoped{},
-			want: &objects.Scoped{},
+			objs: &fileobjects.Scoped{},
+			want: &fileobjects.Scoped{},
 		},
 		{
 			name: "Keep object with no namespace selector",
-			objs: &objects.Scoped{
+			objs: &fileobjects.Scoped{
 				Cluster: []ast.FileObject{
 					devOnlyNSS,
-					fake.Namespace("namespaces/prod", core.Label("environment", "prod")),
+					k8sobjects.Namespace("namespaces/prod", core.Label("environment", "prod")),
 				},
 				Namespace: []ast.FileObject{
-					fake.Role(core.Namespace("prod")),
+					k8sobjects.Role(core.Namespace("prod")),
 				},
 			},
-			want: &objects.Scoped{
+			want: &fileobjects.Scoped{
 				Cluster: []ast.FileObject{
-					fake.Namespace("namespaces/prod", core.Label("environment", "prod")),
+					k8sobjects.Namespace("namespaces/prod", core.Label("environment", "prod")),
 				},
 				Namespace: []ast.FileObject{
-					fake.Role(core.Namespace("prod")),
+					k8sobjects.Role(core.Namespace("prod")),
 				},
 			},
 		},
 		{
 			name: "Copy object with active namespace selector",
-			objs: &objects.Scoped{
+			objs: &fileobjects.Scoped{
 				Cluster: []ast.FileObject{
 					devOnlyNSS,
-					fake.Namespace("namespaces/prod", core.Label("environment", "prod")),
-					fake.Namespace("namespaces/dev1", core.Label("environment", "dev")),
-					fake.Namespace("namespaces/dev2", core.Label("environment", "dev")),
+					k8sobjects.Namespace("namespaces/prod", core.Label("environment", "prod")),
+					k8sobjects.Namespace("namespaces/dev1", core.Label("environment", "dev")),
+					k8sobjects.Namespace("namespaces/dev2", core.Label("environment", "dev")),
 				},
 				Namespace: []ast.FileObject{
-					fake.Role(core.Annotation(metadata.NamespaceSelectorAnnotationKey, devOnlyNSS.Unstructured.GetName())),
+					k8sobjects.Role(core.Annotation(metadata.NamespaceSelectorAnnotationKey, devOnlyNSS.Unstructured.GetName())),
 				},
 			},
-			want: &objects.Scoped{
+			want: &fileobjects.Scoped{
 				Cluster: []ast.FileObject{
-					fake.Namespace("namespaces/prod", core.Label("environment", "prod")),
-					fake.Namespace("namespaces/dev1", core.Label("environment", "dev")),
-					fake.Namespace("namespaces/dev2", core.Label("environment", "dev")),
+					k8sobjects.Namespace("namespaces/prod", core.Label("environment", "prod")),
+					k8sobjects.Namespace("namespaces/dev1", core.Label("environment", "dev")),
+					k8sobjects.Namespace("namespaces/dev2", core.Label("environment", "dev")),
 				},
 				Namespace: []ast.FileObject{
-					fake.Role(
+					k8sobjects.Role(
 						core.Namespace("dev1"),
 						core.Annotation(metadata.NamespaceSelectorAnnotationKey, devOnlyNSS.Unstructured.GetName())),
-					fake.Role(
+					k8sobjects.Role(
 						core.Namespace("dev2"),
 						core.Annotation(metadata.NamespaceSelectorAnnotationKey, devOnlyNSS.Unstructured.GetName())),
 				},
@@ -136,73 +136,73 @@ func TestNamespaceSelectors(t *testing.T) {
 		},
 		{
 			name: "Remove object with inactive namespace selector",
-			objs: &objects.Scoped{
+			objs: &fileobjects.Scoped{
 				Cluster: []ast.FileObject{
 					devOnlyNSS,
-					fake.Namespace("namespaces/prod", core.Label("environment", "prod")),
+					k8sobjects.Namespace("namespaces/prod", core.Label("environment", "prod")),
 				},
 				Namespace: []ast.FileObject{
-					fake.Role(core.Annotation(metadata.NamespaceSelectorAnnotationKey, devOnlyNSS.Unstructured.GetName())),
+					k8sobjects.Role(core.Annotation(metadata.NamespaceSelectorAnnotationKey, devOnlyNSS.Unstructured.GetName())),
 				},
 			},
-			want: &objects.Scoped{
+			want: &fileobjects.Scoped{
 				Cluster: []ast.FileObject{
-					fake.Namespace("namespaces/prod", core.Label("environment", "prod")),
+					k8sobjects.Namespace("namespaces/prod", core.Label("environment", "prod")),
 				},
 			},
 		},
 		{
 			name: "Set default namespace on namespaced object without namespace or NamespaceSelector",
-			objs: &objects.Scoped{
+			objs: &fileobjects.Scoped{
 				Scope: "hello",
 				Cluster: []ast.FileObject{
-					fake.ClusterRole(),
+					k8sobjects.ClusterRole(),
 				},
 				Namespace: []ast.FileObject{
-					fake.Role(),
-					fake.Role(core.Namespace("world")),
+					k8sobjects.Role(),
+					k8sobjects.Role(core.Namespace("world")),
 				},
 			},
-			want: &objects.Scoped{
+			want: &fileobjects.Scoped{
 				Scope: "hello",
 				Cluster: []ast.FileObject{
-					fake.ClusterRole(),
+					k8sobjects.ClusterRole(),
 				},
 				Namespace: []ast.FileObject{
-					fake.Role(core.Namespace("hello")),
-					fake.Role(core.Namespace("world")),
+					k8sobjects.Role(core.Namespace("hello")),
+					k8sobjects.Role(core.Namespace("world")),
 				},
 			},
 		},
 		{
 			name: "Select namespace-scoped resources in both static namespaces and on-cluster namespaces",
-			objs: &objects.Scoped{
+			objs: &fileobjects.Scoped{
 				Scope:    declared.RootScope,
 				SyncName: configsync.RootSyncName,
 				Cluster: []ast.FileObject{
 					devOnlyDynamicNSS,
-					fake.Namespace("namespaces/prod", core.Label("environment", "prod")),
-					fake.Namespace("namespaces/dev1", core.Label("environment", "dev")),
+					k8sobjects.Namespace("namespaces/prod", core.Label("environment", "prod")),
+					k8sobjects.Namespace("namespaces/dev1", core.Label("environment", "dev")),
 				},
 				Namespace: []ast.FileObject{
-					fake.Role(core.Annotation(metadata.NamespaceSelectorAnnotationKey, devOnlyNSS.Unstructured.GetName())),
+					k8sobjects.Role(core.Annotation(metadata.NamespaceSelectorAnnotationKey, devOnlyNSS.Unstructured.GetName())),
 				},
 			},
 			onClusterObjects: []client.Object{
-				fake.NamespaceObject("dev2", core.Label("environment", "dev")),
+				k8sobjects.NamespaceObject("dev2", core.Label("environment", "dev")),
 			},
-			want: &objects.Scoped{
+			want: &fileobjects.Scoped{
 				Scope:    declared.RootScope,
 				SyncName: configsync.RootSyncName,
 				Cluster: []ast.FileObject{
-					fake.Namespace("namespaces/prod", core.Label("environment", "prod")),
-					fake.Namespace("namespaces/dev1", core.Label("environment", "dev")),
+					k8sobjects.Namespace("namespaces/prod", core.Label("environment", "prod")),
+					k8sobjects.Namespace("namespaces/dev1", core.Label("environment", "dev")),
 				},
 				Namespace: []ast.FileObject{
-					fake.Role(
+					k8sobjects.Role(
 						core.Namespace("dev2"),
 						core.Annotation(metadata.NamespaceSelectorAnnotationKey, devOnlyNSS.Unstructured.GetName())),
-					fake.Role(
+					k8sobjects.Role(
 						core.Namespace("dev1"),
 						core.Annotation(metadata.NamespaceSelectorAnnotationKey, devOnlyNSS.Unstructured.GetName())),
 				},
@@ -211,26 +211,26 @@ func TestNamespaceSelectors(t *testing.T) {
 		},
 		{
 			name: "namespace-scoped resources should NOT be selected in matching but terminating Namespaces",
-			objs: &objects.Scoped{
+			objs: &fileobjects.Scoped{
 				Scope:    declared.RootScope,
 				SyncName: configsync.RootSyncName,
 				Cluster: []ast.FileObject{
 					devOnlyDynamicNSS,
 				},
 				Namespace: []ast.FileObject{
-					fake.Role(core.Annotation(metadata.NamespaceSelectorAnnotationKey, devOnlyNSS.Unstructured.GetName())),
+					k8sobjects.Role(core.Annotation(metadata.NamespaceSelectorAnnotationKey, devOnlyNSS.Unstructured.GetName())),
 				},
 			},
 			onClusterObjects: []client.Object{
-				fake.NamespaceObject("dev1", core.Label("environment", "dev"), withNamespacePhase(corev1.NamespaceTerminating)),
-				fake.NamespaceObject("dev2", core.Label("environment", "dev")),
+				k8sobjects.NamespaceObject("dev1", core.Label("environment", "dev"), withNamespacePhase(corev1.NamespaceTerminating)),
+				k8sobjects.NamespaceObject("dev2", core.Label("environment", "dev")),
 			},
-			want: &objects.Scoped{
+			want: &fileobjects.Scoped{
 				Scope:    declared.RootScope,
 				SyncName: configsync.RootSyncName,
 				Namespace: []ast.FileObject{
 					// Role on `dev1` Namespace is not selected because `dev1` is terminating
-					fake.Role(
+					k8sobjects.Role(
 						core.Namespace("dev2"),
 						core.Annotation(metadata.NamespaceSelectorAnnotationKey, devOnlyNSS.Unstructured.GetName())),
 				},
@@ -239,34 +239,34 @@ func TestNamespaceSelectors(t *testing.T) {
 		},
 		{
 			name: "Select namespace-scoped resources in both static namespaces and on-cluster namespaces, but they should not be double selected",
-			objs: &objects.Scoped{
+			objs: &fileobjects.Scoped{
 				Scope:    declared.RootScope,
 				SyncName: configsync.RootSyncName,
 				Cluster: []ast.FileObject{
 					devOnlyDynamicNSS,
-					fake.Namespace("namespaces/prod", core.Label("environment", "prod")),
-					fake.Namespace("namespaces/dev1", core.Label("environment", "dev")),
+					k8sobjects.Namespace("namespaces/prod", core.Label("environment", "prod")),
+					k8sobjects.Namespace("namespaces/dev1", core.Label("environment", "dev")),
 				},
 				Namespace: []ast.FileObject{
-					fake.Role(core.Annotation(metadata.NamespaceSelectorAnnotationKey, devOnlyNSS.Unstructured.GetName())),
+					k8sobjects.Role(core.Annotation(metadata.NamespaceSelectorAnnotationKey, devOnlyNSS.Unstructured.GetName())),
 				},
 			},
 			onClusterObjects: []client.Object{
-				fake.NamespaceObject("dev1", core.Label("environment", "dev")),
-				fake.NamespaceObject("dev2", core.Label("environment", "dev")),
+				k8sobjects.NamespaceObject("dev1", core.Label("environment", "dev")),
+				k8sobjects.NamespaceObject("dev2", core.Label("environment", "dev")),
 			},
-			want: &objects.Scoped{
+			want: &fileobjects.Scoped{
 				Scope:    declared.RootScope,
 				SyncName: configsync.RootSyncName,
 				Cluster: []ast.FileObject{
-					fake.Namespace("namespaces/prod", core.Label("environment", "prod")),
-					fake.Namespace("namespaces/dev1", core.Label("environment", "dev")),
+					k8sobjects.Namespace("namespaces/prod", core.Label("environment", "prod")),
+					k8sobjects.Namespace("namespaces/dev1", core.Label("environment", "dev")),
 				},
 				Namespace: []ast.FileObject{
-					fake.Role(
+					k8sobjects.Role(
 						core.Namespace("dev1"),
 						core.Annotation(metadata.NamespaceSelectorAnnotationKey, devOnlyNSS.Unstructured.GetName())),
-					fake.Role(
+					k8sobjects.Role(
 						core.Namespace("dev2"),
 						core.Annotation(metadata.NamespaceSelectorAnnotationKey, devOnlyNSS.Unstructured.GetName())),
 				},
@@ -275,31 +275,31 @@ func TestNamespaceSelectors(t *testing.T) {
 		},
 		{
 			name: "Unselect namespace-scoped resources in on-cluster namespaces",
-			objs: &objects.Scoped{
+			objs: &fileobjects.Scoped{
 				Scope:    declared.RootScope,
 				SyncName: configsync.RootSyncName,
 				Cluster: []ast.FileObject{
 					devOnlyNSS,
-					fake.Namespace("namespaces/prod", core.Label("environment", "prod")),
-					fake.Namespace("namespaces/dev1", core.Label("environment", "dev")),
+					k8sobjects.Namespace("namespaces/prod", core.Label("environment", "prod")),
+					k8sobjects.Namespace("namespaces/dev1", core.Label("environment", "dev")),
 				},
 				Namespace: []ast.FileObject{
-					fake.Role(core.Annotation(metadata.NamespaceSelectorAnnotationKey, devOnlyNSS.Unstructured.GetName())),
+					k8sobjects.Role(core.Annotation(metadata.NamespaceSelectorAnnotationKey, devOnlyNSS.Unstructured.GetName())),
 				},
 			},
 			onClusterObjects: []client.Object{
-				fake.NamespaceObject("dev2", core.Label("environment", "dev")),
+				k8sobjects.NamespaceObject("dev2", core.Label("environment", "dev")),
 			},
 			originalDynamicNSSelectorEnabled: true,
-			want: &objects.Scoped{
+			want: &fileobjects.Scoped{
 				Scope:    declared.RootScope,
 				SyncName: configsync.RootSyncName,
 				Cluster: []ast.FileObject{
-					fake.Namespace("namespaces/prod", core.Label("environment", "prod")),
-					fake.Namespace("namespaces/dev1", core.Label("environment", "dev")),
+					k8sobjects.Namespace("namespaces/prod", core.Label("environment", "prod")),
+					k8sobjects.Namespace("namespaces/dev1", core.Label("environment", "dev")),
 				},
 				Namespace: []ast.FileObject{
-					fake.Role(
+					k8sobjects.Role(
 						core.Namespace("dev1"),
 						core.Annotation(metadata.NamespaceSelectorAnnotationKey, devOnlyNSS.Unstructured.GetName())),
 				},
@@ -308,90 +308,90 @@ func TestNamespaceSelectors(t *testing.T) {
 		},
 		{
 			name: "Error for missing namespace selector",
-			objs: &objects.Scoped{
+			objs: &fileobjects.Scoped{
 				Cluster: []ast.FileObject{
-					fake.Namespace("namespaces/prod", core.Label("environment", "prod")),
+					k8sobjects.Namespace("namespaces/prod", core.Label("environment", "prod")),
 				},
 				Namespace: []ast.FileObject{
-					fake.Role(core.Annotation(metadata.NamespaceSelectorAnnotationKey, "dev-only")),
+					k8sobjects.Role(core.Annotation(metadata.NamespaceSelectorAnnotationKey, "dev-only")),
 				},
 			},
-			want: &objects.Scoped{
+			want: &fileobjects.Scoped{
 				Cluster: []ast.FileObject{
-					fake.Namespace("namespaces/prod", core.Label("environment", "prod")),
+					k8sobjects.Namespace("namespaces/prod", core.Label("environment", "prod")),
 				},
 				Namespace: []ast.FileObject{
-					fake.Role(core.Annotation(metadata.NamespaceSelectorAnnotationKey, "dev-only")),
+					k8sobjects.Role(core.Annotation(metadata.NamespaceSelectorAnnotationKey, "dev-only")),
 				},
 			},
-			wantErrs: selectors.ObjectHasUnknownNamespaceSelector(fake.Role(), "dev-only"),
+			wantErrs: selectors.ObjectHasUnknownNamespaceSelector(k8sobjects.Role(), "dev-only"),
 		},
 		{
 			name: "Error for empty namespace selector",
-			objs: &objects.Scoped{
+			objs: &fileobjects.Scoped{
 				Cluster: []ast.FileObject{
 					emptyNss,
-					fake.Namespace("namespaces/prod", core.Label("environment", "prod")),
+					k8sobjects.Namespace("namespaces/prod", core.Label("environment", "prod")),
 				},
 				Namespace: []ast.FileObject{
-					fake.Role(core.Annotation(metadata.NamespaceSelectorAnnotationKey, "empty")),
+					k8sobjects.Role(core.Annotation(metadata.NamespaceSelectorAnnotationKey, "empty")),
 				},
 			},
-			want: &objects.Scoped{
+			want: &fileobjects.Scoped{
 				Cluster: []ast.FileObject{
 					emptyNss,
-					fake.Namespace("namespaces/prod", core.Label("environment", "prod")),
+					k8sobjects.Namespace("namespaces/prod", core.Label("environment", "prod")),
 				},
 				Namespace: []ast.FileObject{
-					fake.Role(core.Annotation(metadata.NamespaceSelectorAnnotationKey, "empty")),
+					k8sobjects.Role(core.Annotation(metadata.NamespaceSelectorAnnotationKey, "empty")),
 				},
 			},
 			wantErrs: selectors.EmptySelectorError(emptyNss),
 		},
 		{
 			name: "Error for invalid namespace selector",
-			objs: &objects.Scoped{
+			objs: &fileobjects.Scoped{
 				Cluster: []ast.FileObject{
 					invalidNSS,
-					fake.Namespace("namespaces/prod", core.Label("environment", "prod")),
+					k8sobjects.Namespace("namespaces/prod", core.Label("environment", "prod")),
 				},
 				Namespace: []ast.FileObject{
-					fake.Role(core.Annotation(metadata.NamespaceSelectorAnnotationKey, "invalid")),
+					k8sobjects.Role(core.Annotation(metadata.NamespaceSelectorAnnotationKey, "invalid")),
 				},
 			},
-			want: &objects.Scoped{
+			want: &fileobjects.Scoped{
 				Cluster: []ast.FileObject{
 					invalidNSS,
-					fake.Namespace("namespaces/prod", core.Label("environment", "prod")),
+					k8sobjects.Namespace("namespaces/prod", core.Label("environment", "prod")),
 				},
 				Namespace: []ast.FileObject{
-					fake.Role(core.Annotation(metadata.NamespaceSelectorAnnotationKey, "invalid")),
+					k8sobjects.Role(core.Annotation(metadata.NamespaceSelectorAnnotationKey, "invalid")),
 				},
 			},
 			wantErrs: selectors.InvalidSelectorError(invalidNSS, errors.New("")),
 		},
 		{
 			name: "unknown namespace selector mode",
-			objs: &objects.Scoped{
+			objs: &fileobjects.Scoped{
 				Scope:    declared.RootScope,
 				SyncName: configsync.RootSyncName,
 				Cluster: []ast.FileObject{
 					unknownModeNSS,
-					fake.Namespace("namespaces/prod", core.Label("environment", "prod")),
+					k8sobjects.Namespace("namespaces/prod", core.Label("environment", "prod")),
 				},
 				Namespace: []ast.FileObject{
-					fake.Role(core.Annotation(metadata.NamespaceSelectorAnnotationKey, "invalid")),
+					k8sobjects.Role(core.Annotation(metadata.NamespaceSelectorAnnotationKey, "invalid")),
 				},
 			},
-			want: &objects.Scoped{
+			want: &fileobjects.Scoped{
 				Scope:    declared.RootScope,
 				SyncName: configsync.RootSyncName,
 				Cluster: []ast.FileObject{
 					unknownModeNSS,
-					fake.Namespace("namespaces/prod", core.Label("environment", "prod")),
+					k8sobjects.Namespace("namespaces/prod", core.Label("environment", "prod")),
 				},
 				Namespace: []ast.FileObject{
-					fake.Role(core.Annotation(metadata.NamespaceSelectorAnnotationKey, "invalid")),
+					k8sobjects.Role(core.Annotation(metadata.NamespaceSelectorAnnotationKey, "invalid")),
 				},
 			},
 			wantErrs:                               selectors.UnknownNamespaceSelectorModeError(unknownModeNSS),
@@ -410,7 +410,7 @@ func TestNamespaceSelectors(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName,
+			rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName,
 				core.Annotation(metadata.DynamicNSSelectorEnabledAnnotationKey, strconv.FormatBool(tc.originalDynamicNSSelectorEnabled)))
 			tc.onClusterObjects = append(tc.onClusterObjects, rs)
 			fakeClient := syncerFake.NewClient(t, s, tc.onClusterObjects...)

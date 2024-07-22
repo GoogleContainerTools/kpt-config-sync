@@ -38,13 +38,13 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/oci"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -81,7 +81,7 @@ func gsaGCRReaderEmail() string {
 func TestPublicOCI(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured)
 
-	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.T.Log("Update RootSync to sync from a public OCI image in AR")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"image": "%s", "auth": "none"}, "git": null}}`,
 		configsync.OciSource, publicARImage))
@@ -127,12 +127,12 @@ func TestSwitchFromGitToOciCentralized(t *testing.T) {
 	}
 
 	// Remote git branch will only contain the bookinfo-sa ServiceAccount
-	bookinfoSA := fake.ServiceAccountObject("bookinfo-sa", core.Namespace(namespace))
+	bookinfoSA := k8sobjects.ServiceAccountObject("bookinfo-sa", core.Namespace(namespace))
 	nt.Must(nt.NonRootRepos[rsNN].Add("acme/sa.yaml", bookinfoSA))
 	nt.Must(nt.NonRootRepos[rsNN].CommitAndPush("Add ServiceAccount"))
 
 	// OCI image will only contain the bookinfo-admin role
-	bookinfoRole := fake.RoleObject(core.Name("bookinfo-admin"))
+	bookinfoRole := k8sobjects.RoleObject(core.Name("bookinfo-admin"))
 	image, err := nt.BuildAndPushOCIImage(rsNN, registryproviders.ImageInputObjects(nt.Scheme, bookinfoRole))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -189,12 +189,12 @@ func TestSwitchFromGitToOciDelegated(t *testing.T) {
 	}
 
 	// Remote git branch will only contain the bookinfo-sa ServiceAccount
-	bookinfoSA := fake.ServiceAccountObject("bookinfo-sa", core.Namespace(namespace))
+	bookinfoSA := k8sobjects.ServiceAccountObject("bookinfo-sa", core.Namespace(namespace))
 	nt.Must(nt.NonRootRepos[rsNN].Add("acme/sa.yaml", bookinfoSA))
 	nt.Must(nt.NonRootRepos[rsNN].CommitAndPush("Add ServiceAccount"))
 
 	// OCI image will only contain the bookinfo-admin role
-	bookinfoRole := fake.RoleObject(core.Name("bookinfo-admin"))
+	bookinfoRole := k8sobjects.RoleObject(core.Name("bookinfo-admin"))
 	image, err := nt.BuildAndPushOCIImage(rsNN, registryproviders.ImageInputObjects(nt.Scheme, bookinfoRole))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -238,7 +238,7 @@ func TestSwitchFromGitToOciDelegated(t *testing.T) {
 	}
 
 	// Invalid cases
-	rs := fake.RepoSyncObjectV1Beta1(namespace, configsync.RepoSyncName)
+	rs := k8sobjects.RepoSyncObjectV1Beta1(namespace, configsync.RepoSyncName)
 	nt.T.Log("Manually patch RepoSync object to miss Git spec when sourceType is git")
 	nt.MustMergePatch(rs, `{"spec":{"sourceType":"git", "git":null, "oci": null}}`)
 	nt.WaitForRepoSyncStalledError(namespace, configsync.RepoSyncName, "Validation", `KNV1061: RepoSyncs must specify spec.git when spec.sourceType is "git"`)
@@ -272,7 +272,7 @@ func TestOciSyncWithDigest(t *testing.T) {
 	)
 	var err error
 	// OCI image will only contain the bookinfo-admin role
-	bookinfoRole := fake.RoleObject(core.Name("bookinfo-admin"))
+	bookinfoRole := k8sobjects.RoleObject(core.Name("bookinfo-admin"))
 	image, err := nt.BuildAndPushOCIImage(rootSyncNN, registryproviders.ImageInputObjects(nt.Scheme, bookinfoRole))
 	if err != nil {
 		nt.T.Fatal(err)

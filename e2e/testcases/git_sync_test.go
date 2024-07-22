@@ -22,13 +22,13 @@ import (
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
-	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 )
 
 func TestMultipleRemoteBranchesOutOfSync(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.ACMController)
 
-	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	if err := nt.KubeClient.Get(configsync.RootSyncName, configmanagement.ControllerNamespace, rs); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -37,7 +37,7 @@ func TestMultipleRemoteBranchesOutOfSync(t *testing.T) {
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Push("HEAD:upstream/main"))
 
 	nt.T.Logf("Update the remote main branch by adding a test namespace")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/hello/ns.yaml", fake.NamespaceObject("hello")))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/hello/ns.yaml", k8sobjects.NamespaceObject("hello")))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add Namespace"))
 
 	nt.T.Logf("Verify git-sync can pull the latest commit with the default branch and revision")

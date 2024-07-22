@@ -24,8 +24,8 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 func TestInvalidRootSyncBranchStatus(t *testing.T) {
@@ -144,7 +144,7 @@ func TestSyncFailureAfterSuccessfulSyncs(t *testing.T) {
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CheckoutBranch(devBranch))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
 		fmt.Sprintf("acme/namespaces/%s/ns.yaml", auditNS),
-		fake.NamespaceObject(auditNS)))
+		k8sobjects.NamespaceObject(auditNS)))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPushBranch("add namespace to acme directory", devBranch))
 
 	// Update RootSync to sync from the dev branch
@@ -154,7 +154,7 @@ func TestSyncFailureAfterSuccessfulSyncs(t *testing.T) {
 	}
 
 	// Validate namespace 'acme' created.
-	err := nt.Validate(auditNS, "", fake.NamespaceObject(auditNS))
+	err := nt.Validate(auditNS, "", k8sobjects.NamespaceObject(auditNS))
 	if err != nil {
 		nt.T.Error(err)
 	}

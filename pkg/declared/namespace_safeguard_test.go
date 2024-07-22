@@ -21,9 +21,9 @@ import (
 	"github.com/elliotchance/orderedmap/v2"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 func TestDontDeleteAllNamespaces(t *testing.T) {
@@ -85,12 +85,12 @@ func TestDontDeleteAllNamespaces(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			previous := orderedmap.NewOrderedMap[core.ID, *unstructured.Unstructured]()
 			for _, p := range tc.previous {
-				u := fake.UnstructuredObject(kinds.Namespace(), core.Name(p))
+				u := k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name(p))
 				previous.Set(core.IDOf(u), u)
 			}
 			current := orderedmap.NewOrderedMap[core.ID, *unstructured.Unstructured]()
 			for _, c := range tc.current {
-				u := fake.UnstructuredObject(kinds.Namespace(), core.Name(c))
+				u := k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name(c))
 				current.Set(core.IDOf(u), u)
 			}
 

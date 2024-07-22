@@ -23,9 +23,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/cli-utils/pkg/testutil"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -53,7 +53,7 @@ var nsReconcilerKey = types.NamespacedName{
 }
 
 func repoSyncWithAuth(ns, name string, auth configsync.AuthType, sourceType configsync.SourceType, opts ...core.MetaMutator) *v1beta1.RepoSync {
-	result := fake.RepoSyncObjectV1Beta1(ns, name, opts...)
+	result := k8sobjects.RepoSyncObjectV1Beta1(ns, name, opts...)
 	result.Spec.SourceType = sourceType
 	if sourceType == configsync.GitSource {
 		result.Spec.Git = &v1beta1.Git{
@@ -71,7 +71,7 @@ func repoSyncWithAuth(ns, name string, auth configsync.AuthType, sourceType conf
 
 func secret(t *testing.T, name, data string, auth configsync.AuthType, sourceType configsync.SourceType, opts ...core.MetaMutator) *corev1.Secret {
 	t.Helper()
-	result := fake.SecretObject(name, opts...)
+	result := k8sobjects.SecretObject(name, opts...)
 	result.Data = secretData(t, data, auth, sourceType)
 	result.SetLabels(map[string]string{
 		metadata.SyncNamespaceLabel:       reposyncNs,

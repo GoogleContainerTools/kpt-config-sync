@@ -42,8 +42,8 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testshell"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/util"
 	"kpt.dev/configsync/pkg/util/log"
 
@@ -908,7 +908,7 @@ func (nt *NT) detectClusterVersion() {
 
 // RepoSyncClusterRole returns the NS reconciler ClusterRole
 func (nt *NT) RepoSyncClusterRole() *rbacv1.ClusterRole {
-	cr := fake.ClusterRoleObject(core.Name(clusterRoleName))
+	cr := k8sobjects.ClusterRoleObject(core.Name(clusterRoleName))
 	cr.Rules = append(cr.Rules, nt.repoSyncPermissions...)
 	return cr
 }

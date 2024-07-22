@@ -19,38 +19,38 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
-	"kpt.dev/configsync/pkg/testing/fake"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 )
 
 func TestObjectNamespaces(t *testing.T) {
 	testCases := []struct {
 		name string
-		objs *objects.Raw
-		want *objects.Raw
+		objs *fileobjects.Raw
+		want *fileobjects.Raw
 	}{
 		{
 			name: "Set namespace on object in namespace directory",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.Repo(),
-					fake.Namespace("namespaces/foo"),
-					fake.RoleAtPath("namespaces/foo/role.yaml",
+					k8sobjects.Repo(),
+					k8sobjects.Namespace("namespaces/foo"),
+					k8sobjects.RoleAtPath("namespaces/foo/role.yaml",
 						core.Name("reader"),
 						core.Namespace("foo")),
-					fake.RoleBindingAtPath("namespaces/foo/rb.yaml",
+					k8sobjects.RoleBindingAtPath("namespaces/foo/rb.yaml",
 						core.Name("reader-binding")),
 				},
 			},
-			want: &objects.Raw{
+			want: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.Repo(),
-					fake.Namespace("namespaces/foo"),
-					fake.RoleAtPath("namespaces/foo/role.yaml",
+					k8sobjects.Repo(),
+					k8sobjects.Namespace("namespaces/foo"),
+					k8sobjects.RoleAtPath("namespaces/foo/role.yaml",
 						core.Name("reader"),
 						core.Namespace("foo")),
-					fake.RoleBindingAtPath("namespaces/foo/rb.yaml",
+					k8sobjects.RoleBindingAtPath("namespaces/foo/rb.yaml",
 						core.Name("reader-binding"),
 						core.Namespace("foo")),
 				},
@@ -61,20 +61,20 @@ func TestObjectNamespaces(t *testing.T) {
 			// it later. So the main thing here is to make sure that we don't
 			// accidentally change an incorrect namespace to the correct namespace.
 			name: "Ignore object with incorrect namespace already set",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.Repo(),
-					fake.Namespace("namespaces/foo"),
-					fake.RoleAtPath("namespaces/foo/role.yaml",
+					k8sobjects.Repo(),
+					k8sobjects.Namespace("namespaces/foo"),
+					k8sobjects.RoleAtPath("namespaces/foo/role.yaml",
 						core.Name("reader"),
 						core.Namespace("bar")),
 				},
 			},
-			want: &objects.Raw{
+			want: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.Repo(),
-					fake.Namespace("namespaces/foo"),
-					fake.RoleAtPath("namespaces/foo/role.yaml",
+					k8sobjects.Repo(),
+					k8sobjects.Namespace("namespaces/foo"),
+					k8sobjects.RoleAtPath("namespaces/foo/role.yaml",
 						core.Name("reader"),
 						core.Namespace("bar")),
 				},
@@ -82,37 +82,37 @@ func TestObjectNamespaces(t *testing.T) {
 		},
 		{
 			name: "Ignore object in abstract namespace directory",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.Repo(),
-					fake.Namespace("namespaces/foo/bar"),
-					fake.RoleAtPath("namespaces/foo/role.yaml",
+					k8sobjects.Repo(),
+					k8sobjects.Namespace("namespaces/foo/bar"),
+					k8sobjects.RoleAtPath("namespaces/foo/role.yaml",
 						core.Name("reader")),
 				},
 			},
-			want: &objects.Raw{
+			want: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.Repo(),
-					fake.Namespace("namespaces/foo/bar"),
-					fake.RoleAtPath("namespaces/foo/role.yaml",
+					k8sobjects.Repo(),
+					k8sobjects.Namespace("namespaces/foo/bar"),
+					k8sobjects.RoleAtPath("namespaces/foo/role.yaml",
 						core.Name("reader")),
 				},
 			},
 		},
 		{
 			name: "Ignore objects in non-namespaced directories",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.Repo(),
-					fake.ClusterAtPath("clusterregistry/cluster.yaml"),
-					fake.ClusterRoleAtPath("cluster/cr.yaml"),
+					k8sobjects.Repo(),
+					k8sobjects.ClusterAtPath("clusterregistry/cluster.yaml"),
+					k8sobjects.ClusterRoleAtPath("cluster/cr.yaml"),
 				},
 			},
-			want: &objects.Raw{
+			want: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.Repo(),
-					fake.ClusterAtPath("clusterregistry/cluster.yaml"),
-					fake.ClusterRoleAtPath("cluster/cr.yaml"),
+					k8sobjects.Repo(),
+					k8sobjects.ClusterAtPath("clusterregistry/cluster.yaml"),
+					k8sobjects.ClusterRoleAtPath("cluster/cr.yaml"),
 				},
 			},
 		},
@@ -121,24 +121,24 @@ func TestObjectNamespaces(t *testing.T) {
 			// expected under the namespace/ directory, so we want to make sure we
 			// don't accidentally assign them a namespace.
 			name: "Ignore NamespaceSelector in namespace directory",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.Repo(),
-					fake.Namespace("namespaces/foo"),
-					fake.RoleAtPath("namespaces/foo/role.yaml",
+					k8sobjects.Repo(),
+					k8sobjects.Namespace("namespaces/foo"),
+					k8sobjects.RoleAtPath("namespaces/foo/role.yaml",
 						core.Name("reader"),
 						core.Namespace("foo")),
-					fake.NamespaceSelectorAtPath("namespaces/foo/nss.yaml"),
+					k8sobjects.NamespaceSelectorAtPath("namespaces/foo/nss.yaml"),
 				},
 			},
-			want: &objects.Raw{
+			want: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.Repo(),
-					fake.Namespace("namespaces/foo"),
-					fake.RoleAtPath("namespaces/foo/role.yaml",
+					k8sobjects.Repo(),
+					k8sobjects.Namespace("namespaces/foo"),
+					k8sobjects.RoleAtPath("namespaces/foo/role.yaml",
 						core.Name("reader"),
 						core.Namespace("foo")),
-					fake.NamespaceSelectorAtPath("namespaces/foo/nss.yaml"),
+					k8sobjects.NamespaceSelectorAtPath("namespaces/foo/nss.yaml"),
 				},
 			},
 		},

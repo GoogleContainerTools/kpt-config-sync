@@ -40,10 +40,10 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/reconcilermanager"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/cli-utils/pkg/object/mutation"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -151,7 +151,7 @@ func TestComposition(t *testing.T) {
 	})
 
 	nt.T.Logf("Adding Namespace & RoleBindings for RepoSyncs")
-	nt.Must(lvl0Repo.Add(filepath.Join(lvl0SubDir, fmt.Sprintf("ns-%s.yaml", testNs)), fake.NamespaceObject(testNs)))
+	nt.Must(lvl0Repo.Add(filepath.Join(lvl0SubDir, fmt.Sprintf("ns-%s.yaml", testNs)), k8sobjects.NamespaceObject(testNs)))
 	nt.Must(lvl0Repo.Add(filepath.Join(lvl0SubDir, fmt.Sprintf("rb-%s-%s.yaml", testNs, lvl2NN.Name)), lvl2RB))
 	nt.Must(lvl0Repo.Add(filepath.Join(lvl0SubDir, fmt.Sprintf("rb-%s-%s.yaml", testNs, lvl3NN.Name)), lvl3RB))
 	nt.Must(lvl0Repo.CommitAndPush("Adding Namespace & RoleBindings for RepoSyncs"))

@@ -19,37 +19,37 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/metadata"
-	"kpt.dev/configsync/pkg/testing/fake"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 )
 
 func TestBuilderVisitor(t *testing.T) {
 	testCases := []struct {
 		name string
-		objs *objects.Raw
-		want *objects.Raw
+		objs *fileobjects.Raw
+		want *fileobjects.Raw
 	}{
 		{
 			name: "label and annotate namespace",
-			objs: &objects.Raw{
+			objs: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.Namespace("namespaces/foo/bar"),
-					fake.Namespace("namespaces/qux"),
-					fake.Role(),
+					k8sobjects.Namespace("namespaces/foo/bar"),
+					k8sobjects.Namespace("namespaces/qux"),
+					k8sobjects.Role(),
 				},
 			},
-			want: &objects.Raw{
+			want: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					fake.Namespace("namespaces/foo/bar",
+					k8sobjects.Namespace("namespaces/foo/bar",
 						core.Annotation(metadata.HNCManagedBy, metadata.ManagedByValue),
 						core.Label("foo.tree.hnc.x-k8s.io/depth", "1"),
 						core.Label("bar.tree.hnc.x-k8s.io/depth", "0")),
-					fake.Namespace("namespaces/qux",
+					k8sobjects.Namespace("namespaces/qux",
 						core.Annotation(metadata.HNCManagedBy, metadata.ManagedByValue),
 						core.Label("qux.tree.hnc.x-k8s.io/depth", "0")),
-					fake.Role(),
+					k8sobjects.Role(),
 				},
 			},
 		},

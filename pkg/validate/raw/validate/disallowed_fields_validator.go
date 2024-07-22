@@ -18,12 +18,12 @@ import (
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/syntax"
 	"kpt.dev/configsync/pkg/importer/id"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 )
 
 // DisallowedFields verifies if the given Raw objects contain any fields which
 // are not allowed to be declared in Git.
-func DisallowedFields(objs *objects.Raw) status.MultiError {
+func DisallowedFields(objs *fileobjects.Raw) status.MultiError {
 	var errs status.MultiError
 	for _, obj := range objs.Objects {
 		if len(obj.GetOwnerReferences()) > 0 {

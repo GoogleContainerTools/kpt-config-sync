@@ -34,11 +34,11 @@ import (
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/transform/selectors"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -62,17 +62,17 @@ var (
 )
 
 func clusterObject(name, label, value string) *clusterregistry.Cluster {
-	return fake.ClusterObject(core.Name(name), core.Label(label, value))
+	return k8sobjects.ClusterObject(core.Name(name), core.Label(label, value))
 }
 
 func clusterSelector(name, label, value string) *v1.ClusterSelector {
-	cs := fake.ClusterSelectorObject(core.Name(name))
+	cs := k8sobjects.ClusterSelectorObject(core.Name(name))
 	cs.Spec.Selector.MatchLabels = map[string]string{label: value}
 	return cs
 }
 
 func resourceQuota(name, namespace, pods string, annotations map[string]string) *corev1.ResourceQuota {
-	rq := fake.ResourceQuotaObject(
+	rq := k8sobjects.ResourceQuotaObject(
 		core.Name(name),
 		core.Namespace(namespace),
 		core.Annotations(annotations))
@@ -81,7 +81,7 @@ func resourceQuota(name, namespace, pods string, annotations map[string]string) 
 }
 
 func roleBinding(name, namespace string, annotations map[string]string) *rbacv1.RoleBinding {
-	rb := fake.RoleBindingObject(
+	rb := k8sobjects.RoleBindingObject(
 		core.Name(name),
 		core.Namespace(namespace),
 		core.Annotations(annotations))
@@ -97,7 +97,7 @@ func roleBinding(name, namespace string, annotations map[string]string) *rbacv1.
 }
 
 func namespaceObject(name string, annotations map[string]string) *corev1.Namespace {
-	return fake.NamespaceObject(name, core.Annotations(annotations))
+	return k8sobjects.NamespaceObject(name, core.Annotations(annotations))
 }
 
 func TestTargetingDifferentResourceQuotasToDifferentClusters(t *testing.T) {

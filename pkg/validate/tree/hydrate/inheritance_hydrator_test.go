@@ -21,76 +21,76 @@ import (
 	"github.com/google/go-cmp/cmp"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast/node"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 )
 
 func TestInheritance(t *testing.T) {
 	testCases := []struct {
 		name     string
-		objs     *objects.Tree
-		want     *objects.Tree
+		objs     *fileobjects.Tree
+		want     *fileobjects.Tree
 		wantErrs status.MultiError
 	}{
 		{
 			name: "Preserve non-namespace objects",
-			objs: &objects.Tree{
-				Repo: fake.Repo(),
+			objs: &fileobjects.Tree{
+				Repo: k8sobjects.Repo(),
 				Cluster: []ast.FileObject{
-					fake.ClusterRole(core.Name("hello-reader")),
-					fake.ClusterRoleBinding(core.Name("hello-binding")),
+					k8sobjects.ClusterRole(core.Name("hello-reader")),
+					k8sobjects.ClusterRoleBinding(core.Name("hello-binding")),
 				},
 			},
-			want: &objects.Tree{
-				Repo: fake.Repo(),
+			want: &fileobjects.Tree{
+				Repo: k8sobjects.Repo(),
 				Cluster: []ast.FileObject{
-					fake.ClusterRole(core.Name("hello-reader")),
-					fake.ClusterRoleBinding(core.Name("hello-binding")),
+					k8sobjects.ClusterRole(core.Name("hello-reader")),
+					k8sobjects.ClusterRoleBinding(core.Name("hello-binding")),
 				},
 			},
 		},
 		{
 			name: "Propagate abstract namespace objects",
-			objs: &objects.Tree{
-				Repo: fake.Repo(),
+			objs: &fileobjects.Tree{
+				Repo: k8sobjects.Repo(),
 				HierarchyConfigs: []ast.FileObject{
-					fake.HierarchyConfig(
-						fake.HierarchyConfigResource(v1.HierarchyModeDefault, kinds.Role().GroupVersion(), kinds.Role().Kind),
+					k8sobjects.HierarchyConfig(
+						k8sobjects.HierarchyConfigResource(v1.HierarchyModeDefault, kinds.Role().GroupVersion(), kinds.Role().Kind),
 					),
 				},
 				Tree: &ast.TreeNode{
 					Relative: cmpath.RelativeSlash("namespaces"),
 					Type:     node.AbstractNamespace,
 					Objects: []ast.FileObject{
-						fake.RoleAtPath("namespaces/role.yaml", core.Name("reader")),
+						k8sobjects.RoleAtPath("namespaces/role.yaml", core.Name("reader")),
 					},
 					Children: []*ast.TreeNode{
 						{
 							Relative: cmpath.RelativeSlash("namespaces/hello"),
 							Type:     node.AbstractNamespace,
 							Objects: []ast.FileObject{
-								fake.RoleAtPath("namespaces/hello/role.yaml", core.Name("writer")),
+								k8sobjects.RoleAtPath("namespaces/hello/role.yaml", core.Name("writer")),
 							},
 							Children: []*ast.TreeNode{
 								{
 									Relative: cmpath.RelativeSlash("namespaces/hello/world"),
 									Type:     node.Namespace,
 									Objects: []ast.FileObject{
-										fake.Namespace("namespaces/hello/world"),
+										k8sobjects.Namespace("namespaces/hello/world"),
 									},
 								},
 								{
 									Relative: cmpath.RelativeSlash("namespaces/hello/moon"),
 									Type:     node.Namespace,
 									Objects: []ast.FileObject{
-										fake.Namespace("namespaces/hello/moon"),
-										fake.Deployment("namespaces/hello/moon"),
+										k8sobjects.Namespace("namespaces/hello/moon"),
+										k8sobjects.Deployment("namespaces/hello/moon"),
 									},
 								},
 							},
@@ -99,51 +99,51 @@ func TestInheritance(t *testing.T) {
 							Relative: cmpath.RelativeSlash("namespaces/goodbye"),
 							Type:     node.Namespace,
 							Objects: []ast.FileObject{
-								fake.Namespace("namespaces/goodbye"),
-								fake.Deployment("namespaces/goodbye"),
+								k8sobjects.Namespace("namespaces/goodbye"),
+								k8sobjects.Deployment("namespaces/goodbye"),
 							},
 						},
 					},
 				},
 			},
-			want: &objects.Tree{
-				Repo: fake.Repo(),
+			want: &fileobjects.Tree{
+				Repo: k8sobjects.Repo(),
 				HierarchyConfigs: []ast.FileObject{
-					fake.HierarchyConfig(
-						fake.HierarchyConfigResource(v1.HierarchyModeDefault, kinds.Role().GroupVersion(), kinds.Role().Kind),
+					k8sobjects.HierarchyConfig(
+						k8sobjects.HierarchyConfigResource(v1.HierarchyModeDefault, kinds.Role().GroupVersion(), kinds.Role().Kind),
 					),
 				},
 				Tree: &ast.TreeNode{
 					Relative: cmpath.RelativeSlash("namespaces"),
 					Type:     node.AbstractNamespace,
 					Objects: []ast.FileObject{
-						fake.RoleAtPath("namespaces/role.yaml", core.Name("reader")),
+						k8sobjects.RoleAtPath("namespaces/role.yaml", core.Name("reader")),
 					},
 					Children: []*ast.TreeNode{
 						{
 							Relative: cmpath.RelativeSlash("namespaces/hello"),
 							Type:     node.AbstractNamespace,
 							Objects: []ast.FileObject{
-								fake.RoleAtPath("namespaces/hello/role.yaml", core.Name("writer")),
+								k8sobjects.RoleAtPath("namespaces/hello/role.yaml", core.Name("writer")),
 							},
 							Children: []*ast.TreeNode{
 								{
 									Relative: cmpath.RelativeSlash("namespaces/hello/world"),
 									Type:     node.Namespace,
 									Objects: []ast.FileObject{
-										fake.Namespace("namespaces/hello/world"),
-										fake.RoleAtPath("namespaces/role.yaml", core.Name("reader")),
-										fake.RoleAtPath("namespaces/hello/role.yaml", core.Name("writer")),
+										k8sobjects.Namespace("namespaces/hello/world"),
+										k8sobjects.RoleAtPath("namespaces/role.yaml", core.Name("reader")),
+										k8sobjects.RoleAtPath("namespaces/hello/role.yaml", core.Name("writer")),
 									},
 								},
 								{
 									Relative: cmpath.RelativeSlash("namespaces/hello/moon"),
 									Type:     node.Namespace,
 									Objects: []ast.FileObject{
-										fake.Namespace("namespaces/hello/moon"),
-										fake.Deployment("namespaces/hello/moon"),
-										fake.RoleAtPath("namespaces/role.yaml", core.Name("reader")),
-										fake.RoleAtPath("namespaces/hello/role.yaml", core.Name("writer")),
+										k8sobjects.Namespace("namespaces/hello/moon"),
+										k8sobjects.Deployment("namespaces/hello/moon"),
+										k8sobjects.RoleAtPath("namespaces/role.yaml", core.Name("reader")),
+										k8sobjects.RoleAtPath("namespaces/hello/role.yaml", core.Name("writer")),
 									},
 								},
 							},
@@ -152,9 +152,9 @@ func TestInheritance(t *testing.T) {
 							Relative: cmpath.RelativeSlash("namespaces/goodbye"),
 							Type:     node.Namespace,
 							Objects: []ast.FileObject{
-								fake.Namespace("namespaces/goodbye"),
-								fake.Deployment("namespaces/goodbye"),
-								fake.RoleAtPath("namespaces/role.yaml", core.Name("reader")),
+								k8sobjects.Namespace("namespaces/goodbye"),
+								k8sobjects.Deployment("namespaces/goodbye"),
+								k8sobjects.RoleAtPath("namespaces/role.yaml", core.Name("reader")),
 							},
 						},
 					},
@@ -163,7 +163,7 @@ func TestInheritance(t *testing.T) {
 		},
 		{
 			name: "Validate Namespace can not have child Namespaces",
-			objs: &objects.Tree{
+			objs: &fileobjects.Tree{
 				Tree: &ast.TreeNode{
 					Relative: cmpath.RelativeSlash("namespaces"),
 					Type:     node.AbstractNamespace,
@@ -172,21 +172,21 @@ func TestInheritance(t *testing.T) {
 							Relative: cmpath.RelativeSlash("namespaces/hello"),
 							Type:     node.Namespace,
 							Objects: []ast.FileObject{
-								fake.Namespace("namespaces/hello"),
+								k8sobjects.Namespace("namespaces/hello"),
 							},
 							Children: []*ast.TreeNode{
 								{
 									Relative: cmpath.RelativeSlash("namespaces/hello/world"),
 									Type:     node.Namespace,
 									Objects: []ast.FileObject{
-										fake.Namespace("namespaces/hello/world"),
+										k8sobjects.Namespace("namespaces/hello/world"),
 									},
 								},
 								{
 									Relative: cmpath.RelativeSlash("namespaces/hello/moon"),
 									Type:     node.Namespace,
 									Objects: []ast.FileObject{
-										fake.Namespace("namespaces/hello/moon"),
+										k8sobjects.Namespace("namespaces/hello/moon"),
 									},
 								},
 							},
@@ -207,11 +207,11 @@ func TestInheritance(t *testing.T) {
 		},
 		{
 			name: "Validate abstract namespace can not have invalid objects",
-			objs: &objects.Tree{
-				Repo: fake.Repo(),
+			objs: &fileobjects.Tree{
+				Repo: k8sobjects.Repo(),
 				HierarchyConfigs: []ast.FileObject{
-					fake.HierarchyConfig(
-						fake.HierarchyConfigResource(v1.HierarchyModeNone, kinds.Role().GroupVersion(), kinds.Role().Kind),
+					k8sobjects.HierarchyConfig(
+						k8sobjects.HierarchyConfigResource(v1.HierarchyModeNone, kinds.Role().GroupVersion(), kinds.Role().Kind),
 					),
 				},
 				Tree: &ast.TreeNode{
@@ -222,14 +222,14 @@ func TestInheritance(t *testing.T) {
 							Relative: cmpath.RelativeSlash("namespaces/hello"),
 							Type:     node.AbstractNamespace,
 							Objects: []ast.FileObject{
-								fake.RoleAtPath("namespaces/hello/role.yaml", core.Name("writer")),
+								k8sobjects.RoleAtPath("namespaces/hello/role.yaml", core.Name("writer")),
 							},
 							Children: []*ast.TreeNode{
 								{
 									Relative: cmpath.RelativeSlash("namespaces/hello/world"),
 									Type:     node.Namespace,
 									Objects: []ast.FileObject{
-										fake.Namespace("namespaces/hello/world"),
+										k8sobjects.Namespace("namespaces/hello/world"),
 									},
 								},
 							},
@@ -237,7 +237,7 @@ func TestInheritance(t *testing.T) {
 					},
 				},
 			},
-			wantErrs: validation.IllegalAbstractNamespaceObjectKindError(fake.RoleAtPath("namespaces/hello/role.yaml", core.Name("writer"))),
+			wantErrs: validation.IllegalAbstractNamespaceObjectKindError(k8sobjects.RoleAtPath("namespaces/hello/role.yaml", core.Name("writer"))),
 		},
 	}
 

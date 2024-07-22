@@ -36,6 +36,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	applierfake "kpt.dev/configsync/pkg/applier/fake"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/hydrate"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
@@ -51,7 +52,6 @@ import (
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/syncer/reconcile/fight"
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/testing/openapitest"
 	"kpt.dev/configsync/pkg/util"
 	"sigs.k8s.io/cli-utils/pkg/testutil"
@@ -129,29 +129,29 @@ func TestSplitObjects(t *testing.T) {
 		{
 			name: "no unknown scope objects",
 			objs: []ast.FileObject{
-				fake.Namespace("namespaces/prod", core.Label("environment", "prod")),
-				fake.Role(core.Namespace("prod")),
+				k8sobjects.Namespace("namespaces/prod", core.Label("environment", "prod")),
+				k8sobjects.Role(core.Namespace("prod")),
 			},
 			knownScopeObjs: []ast.FileObject{
-				fake.Namespace("namespaces/prod", core.Label("environment", "prod")),
-				fake.Role(core.Namespace("prod")),
+				k8sobjects.Namespace("namespaces/prod", core.Label("environment", "prod")),
+				k8sobjects.Role(core.Namespace("prod")),
 			},
 		},
 		{
 			name: "has unknown scope objects",
 			objs: []ast.FileObject{
-				fake.ClusterRole(
+				k8sobjects.ClusterRole(
 					core.Annotation(metadata.UnknownScopeAnnotationKey, metadata.UnknownScopeAnnotationValue),
 				),
-				fake.Namespace("namespaces/prod", core.Label("environment", "prod")),
-				fake.Role(core.Namespace("prod")),
+				k8sobjects.Namespace("namespaces/prod", core.Label("environment", "prod")),
+				k8sobjects.Role(core.Namespace("prod")),
 			},
 			knownScopeObjs: []ast.FileObject{
-				fake.Namespace("namespaces/prod", core.Label("environment", "prod")),
-				fake.Role(core.Namespace("prod")),
+				k8sobjects.Namespace("namespaces/prod", core.Label("environment", "prod")),
+				k8sobjects.Role(core.Namespace("prod")),
 			},
 			unknownScopeObjs: []ast.FileObject{
-				fake.ClusterRole(
+				k8sobjects.ClusterRole(
 					core.Annotation(metadata.UnknownScopeAnnotationKey, metadata.UnknownScopeAnnotationValue),
 				),
 			},
@@ -745,7 +745,7 @@ func TestRun(t *testing.T) {
 				SourceRepo:   fileSource.SourceRepo,
 				SourceBranch: fileSource.SourceBranch,
 			}
-			fakeClient := syncerFake.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName))
+			fakeClient := syncerFake.NewClient(t, core.Scheme, k8sobjects.RootSyncObjectV1Beta1(rootSyncName))
 			parser := newParser(t, fakeClock, fakeClient, fs, tc.renderingEnabled, configsync.DefaultReconcilerRetryPeriod, configsync.DefaultReconcilerPollingPeriod)
 			state := &reconcilerState{
 				backoff:     defaultBackoff(),
@@ -770,7 +770,7 @@ func TestRun(t *testing.T) {
 
 func TestBackoffRetryCount(t *testing.T) {
 	realClock := clock.RealClock{}
-	fakeClient := syncerFake.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName))
+	fakeClient := syncerFake.NewClient(t, core.Scheme, k8sobjects.RootSyncObjectV1Beta1(rootSyncName))
 	parser := newParser(t, realClock, fakeClient, FileSource{}, false, 10*time.Microsecond, 150*time.Microsecond)
 	testState := &namespacecontroller.State{}
 	reimportCount := 0

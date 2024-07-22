@@ -26,8 +26,8 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -111,11 +111,11 @@ func gitServer() []client.Object {
 }
 
 func gitNamespace() *corev1.Namespace {
-	return fake.NamespaceObject(testGitNamespace)
+	return k8sobjects.NamespaceObject(testGitNamespace)
 }
 
 func gitService() *corev1.Service {
-	service := fake.ServiceObject(
+	service := k8sobjects.ServiceObject(
 		core.Name(testGitServer),
 		core.Namespace(testGitNamespace),
 	)
@@ -126,7 +126,7 @@ func gitService() *corev1.Service {
 }
 
 func gitDeployment() *appsv1.Deployment {
-	deployment := fake.DeploymentObject(core.Name(testGitServer),
+	deployment := k8sobjects.DeploymentObject(core.Name(testGitServer),
 		core.Namespace(testGitNamespace),
 		core.Labels(testGitServerSelector()),
 	)

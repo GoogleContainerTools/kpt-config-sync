@@ -48,10 +48,10 @@ import (
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/util/log"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -99,9 +99,9 @@ func TestStressCRD(t *testing.T) {
 	labelValue := "TestStressCRD"
 	for i := 1; i <= 1000; i++ {
 		ns := fmt.Sprintf("foo%d", i)
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/ns-%d.yaml", syncPath, i), fake.NamespaceObject(
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/ns-%d.yaml", syncPath, i), k8sobjects.NamespaceObject(
 			ns, core.Label(labelKey, labelValue))))
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/cm-%d.yaml", syncPath, i), fake.ConfigMapObject(
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/cm-%d.yaml", syncPath, i), k8sobjects.ConfigMapObject(
 			core.Name("cm1"), core.Namespace(ns), core.Label(labelKey, labelValue))))
 
 		cr, err := crontabCR(ns, "cr1")
@@ -117,7 +117,7 @@ func TestStressCRD(t *testing.T) {
 	}
 
 	nt.T.Logf("Verify that the CronTab CRD is installed on the cluster")
-	if err := nt.Validate(crdName, "", fake.CustomResourceDefinitionV1Object()); err != nil {
+	if err := nt.Validate(crdName, "", k8sobjects.CustomResourceDefinitionV1Object()); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -146,18 +146,18 @@ func TestStressLargeNamespace(t *testing.T) {
 	nomostest.StopWebhook(nt)
 
 	nt.T.Log("Override the memory limit of the reconciler container of root-reconciler to 800MiB")
-	rootSync := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rootSync := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.MustMergePatch(rootSync, `{"spec": {"override": {"resources": [{"containerName": "reconciler", "memoryLimit": "800Mi"}]}}}`)
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
 
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/ns-%s.yaml", syncPath, ns), fake.NamespaceObject(ns)))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/ns-%s.yaml", syncPath, ns), k8sobjects.NamespaceObject(ns)))
 
 	labelKey := "StressTestName"
 	labelValue := "TestStressLargeNamespace"
 	for i := 1; i <= 5000; i++ {
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/cm-%d.yaml", syncPath, i), fake.ConfigMapObject(
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/cm-%d.yaml", syncPath, i), k8sobjects.ConfigMapObject(
 			core.Name(fmt.Sprintf("cm-%d", i)), core.Namespace(ns), core.Label(labelKey, labelValue))))
 	}
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add configs (5000 ConfigMaps and 1 Namespace"))
@@ -183,7 +183,7 @@ func TestStressFrequentGitCommits(t *testing.T) {
 	nt.T.Log("Stop the CS webhook by removing the webhook configuration")
 	nomostest.StopWebhook(nt)
 
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/ns-%s.yaml", syncPath, ns), fake.NamespaceObject(ns)))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/ns-%s.yaml", syncPath, ns), k8sobjects.NamespaceObject(ns)))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("add a namespace: %s", ns)))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -195,7 +195,7 @@ func TestStressFrequentGitCommits(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		cmName := fmt.Sprintf("cm-%v", i)
 		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/%s.yaml", syncPath, cmName),
-			fake.ConfigMapObject(core.Name(cmName), core.Namespace(ns), core.Label(labelKey, labelValue))))
+			k8sobjects.ConfigMapObject(core.Name(cmName), core.Namespace(ns), core.Label(labelKey, labelValue))))
 		nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("add %s", cmName)))
 	}
 	err := nt.WatchForAllSyncs(nomostest.WithTimeout(10 * time.Minute))
@@ -228,7 +228,7 @@ func TestStressLargeRequest(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	rootSync := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rootSync := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	reconcilerOverride := v1beta1.ContainerResourcesSpec{
 		ContainerName: reconcilermanager.Reconciler,
 		MemoryLimit:   resource.MustParse("1500Mi"),
@@ -319,7 +319,7 @@ func TestStress100CRDs(t *testing.T) {
 	nomostest.DeletePodByLabel(nt, "app", reconcilermanager.Reconciler, true)
 
 	nt.T.Log("Adding a test namespace to the repo to trigger a new sync")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/ns-%s.yaml", syncPath, ns), fake.NamespaceObject(ns)))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/ns-%s.yaml", syncPath, ns), k8sobjects.NamespaceObject(ns)))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add a test namespace to trigger a new sync"))
 
 	nt.T.Logf("Waiting for the sync to complete")
@@ -353,7 +353,7 @@ func TestStressManyDeployments(t *testing.T) {
 	deployCount := 1000
 
 	nt.T.Logf("Adding a test namespace and %d deployments", deployCount)
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/ns-%s.yaml", syncPath, ns), fake.NamespaceObject(ns)))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/ns-%s.yaml", syncPath, ns), k8sobjects.NamespaceObject(ns)))
 
 	for i := 1; i <= deployCount; i++ {
 		name := fmt.Sprintf("pause-%d", i)
@@ -432,7 +432,7 @@ func TestStressMemoryUsageGit(t *testing.T) {
 	crCount := 50
 
 	nt.T.Logf("Adding a test namespace, %d crds, and %d objects per crd", crdCount, crCount)
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/ns-%s.yaml", syncPath, ns), fake.NamespaceObject(ns)))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/ns-%s.yaml", syncPath, ns), k8sobjects.NamespaceObject(ns)))
 
 	for i := 1; i <= crdCount; i++ {
 		group := fmt.Sprintf("acme-%d.com", i)
@@ -514,7 +514,7 @@ func TestStressMemoryUsageOCI(t *testing.T) {
 
 	nt.T.Logf("Adding a test namespace, %d crds, and %d objects per crd", crdCount, crCount)
 	var packageObjs []client.Object
-	packageObjs = append(packageObjs, fake.NamespaceObject(ns))
+	packageObjs = append(packageObjs, k8sobjects.NamespaceObject(ns))
 
 	for i := 1; i <= crdCount; i++ {
 		group := fmt.Sprintf("acme-%d.com", i)
@@ -689,11 +689,11 @@ func TestStressResourceGroup(t *testing.T) {
 	namespace := "resourcegroup-e2e"
 	nt.T.Cleanup(func() {
 		// all test resources are created in this namespace
-		if err := nt.KubeClient.Delete(fake.NamespaceObject(namespace)); err != nil {
+		if err := nt.KubeClient.Delete(k8sobjects.NamespaceObject(namespace)); err != nil {
 			nt.T.Error(err)
 		}
 	})
-	if err := nt.KubeClient.Create(fake.NamespaceObject(namespace)); err != nil {
+	if err := nt.KubeClient.Create(k8sobjects.NamespaceObject(namespace)); err != nil {
 		nt.T.Fatal(err)
 	}
 	rgNN := types.NamespacedName{
@@ -790,7 +790,7 @@ func TestStressResourceGroup(t *testing.T) {
 func fakeCRD(kind, group string) *apiextensionsv1.CustomResourceDefinition {
 	singular := strings.ToLower(kind)
 	plural := fmt.Sprintf("%ss", singular)
-	crd := fake.CustomResourceDefinitionV1Object(core.Name(fmt.Sprintf("%s.%s", plural, group)))
+	crd := k8sobjects.CustomResourceDefinitionV1Object(core.Name(fmt.Sprintf("%s.%s", plural, group)))
 	crd.Spec.Group = group
 	crd.Spec.Names = apiextensionsv1.CustomResourceDefinitionNames{
 		Plural:   plural,

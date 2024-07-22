@@ -22,9 +22,9 @@ import (
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/syncer/syncertest"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 var LocalConfigValue = "true"
@@ -35,11 +35,11 @@ func TestLocalConfig(t *testing.T) {
 	ns := "local-config"
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
 		"acme/namespaces/local-config/ns.yaml",
-		fake.NamespaceObject(ns)))
+		k8sobjects.NamespaceObject(ns)))
 
 	cmName := "e2e-test-configmap"
 	cmPath := "acme/namespaces/local-config/configmap.yaml"
-	cm := fake.ConfigMapObject(core.Name(cmName), core.Annotation(metadata.LocalConfigAnnotationKey, LocalConfigValue))
+	cm := k8sobjects.ConfigMapObject(core.Name(cmName), core.Annotation(metadata.LocalConfigAnnotationKey, LocalConfigValue))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding ConfigMap as local config"))
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -53,7 +53,7 @@ func TestLocalConfig(t *testing.T) {
 	}
 
 	// Remove the local-config annotation
-	cm = fake.ConfigMapObject(core.Name(cmName))
+	cm = k8sobjects.ConfigMapObject(core.Name(cmName))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding ConfigMap without local-config annotation"))
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -68,7 +68,7 @@ func TestLocalConfig(t *testing.T) {
 
 	// Add the local-config annotation again.
 	// This will make the object pruned.
-	cm = fake.ConfigMapObject(core.Name(cmName), core.Annotation(metadata.LocalConfigAnnotationKey, LocalConfigValue))
+	cm = k8sobjects.ConfigMapObject(core.Name(cmName), core.Annotation(metadata.LocalConfigAnnotationKey, LocalConfigValue))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Changing ConfigMap to local config"))
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -88,11 +88,11 @@ func TestLocalConfigWithManagementDisabled(t *testing.T) {
 	ns := "local-config"
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
 		"acme/namespaces/local-config/ns.yaml",
-		fake.NamespaceObject(ns)))
+		k8sobjects.NamespaceObject(ns)))
 
 	cmName := "e2e-test-configmap"
 	cmPath := "acme/namespaces/local-config/configmap.yaml"
-	cm := fake.ConfigMapObject(core.Name(cmName))
+	cm := k8sobjects.ConfigMapObject(core.Name(cmName))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding ConfigMap"))
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -106,7 +106,7 @@ func TestLocalConfigWithManagementDisabled(t *testing.T) {
 	}
 
 	// Add the management disabled annotation.
-	cm = fake.ConfigMapObject(core.Name(cmName), syncertest.ManagementDisabled)
+	cm = k8sobjects.ConfigMapObject(core.Name(cmName), syncertest.ManagementDisabled)
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Disable the management of ConfigMap"))
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -120,7 +120,7 @@ func TestLocalConfigWithManagementDisabled(t *testing.T) {
 	}
 
 	// Add the local-config annotation to the unmanaged configmap
-	cm = fake.ConfigMapObject(core.Name(cmName), syncertest.ManagementDisabled,
+	cm = k8sobjects.ConfigMapObject(core.Name(cmName), syncertest.ManagementDisabled,
 		core.Annotation(metadata.LocalConfigAnnotationKey, LocalConfigValue))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Change the ConfigMap to local config"))
@@ -135,7 +135,7 @@ func TestLocalConfigWithManagementDisabled(t *testing.T) {
 	}
 
 	// Remove the management disabled annotation
-	cm = fake.ConfigMapObject(core.Name(cmName), core.Annotation(metadata.LocalConfigAnnotationKey, LocalConfigValue))
+	cm = k8sobjects.ConfigMapObject(core.Name(cmName), core.Annotation(metadata.LocalConfigAnnotationKey, LocalConfigValue))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove the managed disabled annotation and keep the local-config annotation"))
 	if err := nt.WatchForAllSyncs(); err != nil {

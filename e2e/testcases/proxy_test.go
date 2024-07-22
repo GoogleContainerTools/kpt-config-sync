@@ -26,9 +26,9 @@ import (
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -50,7 +50,7 @@ func TestSyncingThroughAProxy(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	nt.T.Log("Verify the NoOpProxyError")
-	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", `KNV1061: RootSyncs which specify spec.git.proxy must also specify spec.git.auth as one of "none", "cookiefile" or "token"`)
 
 	nt.T.Log("Set auth type to cookiefile")

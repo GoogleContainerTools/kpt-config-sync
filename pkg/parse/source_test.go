@@ -27,6 +27,7 @@ import (
 	"k8s.io/utils/clock"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/hydrate"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
@@ -34,7 +35,6 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
 	syncertest "kpt.dev/configsync/pkg/syncer/syncertest/fake"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 var originCommit = "1234567890abcde"
@@ -111,7 +111,7 @@ func TestReadConfigFiles(t *testing.T) {
 					Clock:              clock.RealClock{}, // TODO: Test with fake clock
 					SyncName:           rootSyncName,
 					ReconcilerName:     rootReconcilerName,
-					Client:             syncertest.NewClient(t, core.Scheme, fake.RootSyncObjectV1Beta1(rootSyncName)),
+					Client:             syncertest.NewClient(t, core.Scheme, k8sobjects.RootSyncObjectV1Beta1(rootSyncName)),
 					DiscoveryInterface: syncertest.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
 					Updater: Updater{
 						Scope:     declared.RootScope,

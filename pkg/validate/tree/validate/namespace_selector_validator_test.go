@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast/node"
 	"kpt.dev/configsync/pkg/importer/analyzer/transform/selectors"
@@ -26,21 +27,20 @@ import (
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 )
 
 func TestNamespaceSelector(t *testing.T) {
 	testCases := []struct {
 		name     string
-		objs     *objects.Tree
+		objs     *fileobjects.Tree
 		wantErrs status.MultiError
 	}{
 		{
 			name: "NamespaceSelector in abstract namespace",
-			objs: &objects.Tree{
+			objs: &fileobjects.Tree{
 				NamespaceSelectors: map[string]ast.FileObject{
-					"dev": fake.NamespaceSelectorAtPath("namespaces/sel.yaml",
+					"dev": k8sobjects.NamespaceSelectorAtPath("namespaces/sel.yaml",
 						core.Name("dev")),
 				},
 				Tree: &ast.TreeNode{
@@ -51,7 +51,7 @@ func TestNamespaceSelector(t *testing.T) {
 							Relative: cmpath.RelativeSlash("namespaces/hello"),
 							Type:     node.Namespace,
 							Objects: []ast.FileObject{
-								fake.Namespace("namespaces/hello"),
+								k8sobjects.Namespace("namespaces/hello"),
 							},
 						},
 					},
@@ -60,9 +60,9 @@ func TestNamespaceSelector(t *testing.T) {
 		},
 		{
 			name: "NamespaceSelector in Namespace",
-			objs: &objects.Tree{
+			objs: &fileobjects.Tree{
 				NamespaceSelectors: map[string]ast.FileObject{
-					"dev": fake.NamespaceSelectorAtPath("namespaces/hello/sel.yaml",
+					"dev": k8sobjects.NamespaceSelectorAtPath("namespaces/hello/sel.yaml",
 						core.Name("dev")),
 				},
 				Tree: &ast.TreeNode{
@@ -73,19 +73,19 @@ func TestNamespaceSelector(t *testing.T) {
 							Relative: cmpath.RelativeSlash("namespaces/hello"),
 							Type:     node.Namespace,
 							Objects: []ast.FileObject{
-								fake.Namespace("namespaces/hello"),
+								k8sobjects.Namespace("namespaces/hello"),
 							},
 						},
 					},
 				},
 			},
-			wantErrs: fake.Errors(syntax.IllegalKindInNamespacesErrorCode),
+			wantErrs: status.FakeMultiError(syntax.IllegalKindInNamespacesErrorCode),
 		},
 		{
 			name: "Object references ancestor NamespaceSelector",
-			objs: &objects.Tree{
+			objs: &fileobjects.Tree{
 				NamespaceSelectors: map[string]ast.FileObject{
-					"dev": fake.NamespaceSelectorAtPath("namespaces/hello/sel.yaml",
+					"dev": k8sobjects.NamespaceSelectorAtPath("namespaces/hello/sel.yaml",
 						core.Name("dev")),
 				},
 				Tree: &ast.TreeNode{
@@ -100,8 +100,8 @@ func TestNamespaceSelector(t *testing.T) {
 									Relative: cmpath.RelativeSlash("namespaces/hello/world"),
 									Type:     node.Namespace,
 									Objects: []ast.FileObject{
-										fake.Namespace("namespaces/hello/world"),
-										fake.RoleAtPath("namespaces/hello/world/role.yaml",
+										k8sobjects.Namespace("namespaces/hello/world"),
+										k8sobjects.RoleAtPath("namespaces/hello/world/role.yaml",
 											core.Annotation(metadata.NamespaceSelectorAnnotationKey, "dev")),
 									},
 								},
@@ -113,9 +113,9 @@ func TestNamespaceSelector(t *testing.T) {
 		},
 		{
 			name: "Object references non-ancestor NamespaceSelector",
-			objs: &objects.Tree{
+			objs: &fileobjects.Tree{
 				NamespaceSelectors: map[string]ast.FileObject{
-					"dev": fake.NamespaceSelectorAtPath("namespaces/goodbye/sel.yaml",
+					"dev": k8sobjects.NamespaceSelectorAtPath("namespaces/goodbye/sel.yaml",
 						core.Name("dev")),
 				},
 				Tree: &ast.TreeNode{
@@ -130,8 +130,8 @@ func TestNamespaceSelector(t *testing.T) {
 									Relative: cmpath.RelativeSlash("namespaces/hello/world"),
 									Type:     node.Namespace,
 									Objects: []ast.FileObject{
-										fake.Namespace("namespaces/hello/world"),
-										fake.RoleAtPath("namespaces/hello/world/role.yaml",
+										k8sobjects.Namespace("namespaces/hello/world"),
+										k8sobjects.RoleAtPath("namespaces/hello/world/role.yaml",
 											core.Annotation(metadata.NamespaceSelectorAnnotationKey, "dev")),
 									},
 								},
@@ -145,8 +145,8 @@ func TestNamespaceSelector(t *testing.T) {
 									Relative: cmpath.RelativeSlash("namespaces/goodbye/moon"),
 									Type:     node.Namespace,
 									Objects: []ast.FileObject{
-										fake.Namespace("namespaces/goodbye/moon"),
-										fake.RoleAtPath("namespaces/goodbye/moon/role.yaml"),
+										k8sobjects.Namespace("namespaces/goodbye/moon"),
+										k8sobjects.RoleAtPath("namespaces/goodbye/moon/role.yaml"),
 									},
 								},
 							},
@@ -154,7 +154,7 @@ func TestNamespaceSelector(t *testing.T) {
 					},
 				},
 			},
-			wantErrs: fake.Errors(selectors.ObjectHasUnknownSelectorCode),
+			wantErrs: status.FakeMultiError(selectors.ObjectHasUnknownSelectorCode),
 		},
 	}
 

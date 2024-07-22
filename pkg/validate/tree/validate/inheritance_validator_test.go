@@ -18,24 +18,24 @@ import (
 	"errors"
 	"testing"
 
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast/node"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/semantic"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 )
 
 func TestInheritance(t *testing.T) {
 	testCases := []struct {
 		name     string
-		objs     *objects.Tree
+		objs     *fileobjects.Tree
 		wantErrs status.MultiError
 	}{
 		{
 			name: "empty tree",
-			objs: &objects.Tree{
+			objs: &fileobjects.Tree{
 				Tree: &ast.TreeNode{
 					Relative: cmpath.RelativeSlash("namespaces"),
 					Type:     node.AbstractNamespace,
@@ -44,7 +44,7 @@ func TestInheritance(t *testing.T) {
 		},
 		{
 			name: "Namespace without resources",
-			objs: &objects.Tree{
+			objs: &fileobjects.Tree{
 				Tree: &ast.TreeNode{
 					Relative: cmpath.RelativeSlash("namespaces"),
 					Type:     node.AbstractNamespace,
@@ -53,7 +53,7 @@ func TestInheritance(t *testing.T) {
 							Relative: cmpath.RelativeSlash("namespaces/hello"),
 							Type:     node.Namespace,
 							Objects: []ast.FileObject{
-								fake.Namespace("namespaces/hello"),
+								k8sobjects.Namespace("namespaces/hello"),
 							},
 						},
 					},
@@ -62,7 +62,7 @@ func TestInheritance(t *testing.T) {
 		},
 		{
 			name: "Namespace with resource",
-			objs: &objects.Tree{
+			objs: &fileobjects.Tree{
 				Tree: &ast.TreeNode{
 					Relative: cmpath.RelativeSlash("namespaces"),
 					Type:     node.AbstractNamespace,
@@ -71,8 +71,8 @@ func TestInheritance(t *testing.T) {
 							Relative: cmpath.RelativeSlash("namespaces/hello"),
 							Type:     node.Namespace,
 							Objects: []ast.FileObject{
-								fake.Namespace("namespaces/hello"),
-								fake.RoleAtPath("namespaces/hello"),
+								k8sobjects.Namespace("namespaces/hello"),
+								k8sobjects.RoleAtPath("namespaces/hello"),
 							},
 						},
 					},
@@ -81,7 +81,7 @@ func TestInheritance(t *testing.T) {
 		},
 		{
 			name: "abstract namespace with ephemeral resource",
-			objs: &objects.Tree{
+			objs: &fileobjects.Tree{
 				Tree: &ast.TreeNode{
 					Relative: cmpath.RelativeSlash("namespaces"),
 					Type:     node.AbstractNamespace,
@@ -90,7 +90,7 @@ func TestInheritance(t *testing.T) {
 							Relative: cmpath.RelativeSlash("namespaces/hello"),
 							Type:     node.AbstractNamespace,
 							Objects: []ast.FileObject{
-								fake.NamespaceSelector(),
+								k8sobjects.NamespaceSelector(),
 							},
 						},
 					},
@@ -99,7 +99,7 @@ func TestInheritance(t *testing.T) {
 		},
 		{
 			name: "abstract namespace with resource and child namespace",
-			objs: &objects.Tree{
+			objs: &fileobjects.Tree{
 				Tree: &ast.TreeNode{
 					Relative: cmpath.RelativeSlash("namespaces"),
 					Type:     node.AbstractNamespace,
@@ -108,14 +108,14 @@ func TestInheritance(t *testing.T) {
 							Relative: cmpath.RelativeSlash("namespaces/hello"),
 							Type:     node.AbstractNamespace,
 							Objects: []ast.FileObject{
-								fake.RoleAtPath("namespaces/hello"),
+								k8sobjects.RoleAtPath("namespaces/hello"),
 							},
 							Children: []*ast.TreeNode{
 								{
 									Relative: cmpath.RelativeSlash("namespaces/hello/world"),
 									Type:     node.Namespace,
 									Objects: []ast.FileObject{
-										fake.Namespace("namespaces/hello/world"),
+										k8sobjects.Namespace("namespaces/hello/world"),
 									},
 								},
 							},
@@ -126,7 +126,7 @@ func TestInheritance(t *testing.T) {
 		},
 		{
 			name: "abstract namespace with resource and descendant namespace",
-			objs: &objects.Tree{
+			objs: &fileobjects.Tree{
 				Tree: &ast.TreeNode{
 					Relative: cmpath.RelativeSlash("namespaces"),
 					Type:     node.AbstractNamespace,
@@ -135,7 +135,7 @@ func TestInheritance(t *testing.T) {
 							Relative: cmpath.RelativeSlash("namespaces/hello"),
 							Type:     node.AbstractNamespace,
 							Objects: []ast.FileObject{
-								fake.RoleAtPath("namespaces/hello"),
+								k8sobjects.RoleAtPath("namespaces/hello"),
 							},
 							Children: []*ast.TreeNode{
 								{
@@ -146,7 +146,7 @@ func TestInheritance(t *testing.T) {
 											Relative: cmpath.RelativeSlash("namespaces/hello/world/end"),
 											Type:     node.Namespace,
 											Objects: []ast.FileObject{
-												fake.Namespace("namespaces/hello/world/end"),
+												k8sobjects.Namespace("namespaces/hello/world/end"),
 											},
 										},
 									},
@@ -159,7 +159,7 @@ func TestInheritance(t *testing.T) {
 		},
 		{
 			name: "abstract namespace with resource and no namespace child",
-			objs: &objects.Tree{
+			objs: &fileobjects.Tree{
 				Tree: &ast.TreeNode{
 					Relative: cmpath.RelativeSlash("namespaces"),
 					Type:     node.AbstractNamespace,
@@ -168,17 +168,17 @@ func TestInheritance(t *testing.T) {
 							Relative: cmpath.RelativeSlash("namespaces/hello"),
 							Type:     node.AbstractNamespace,
 							Objects: []ast.FileObject{
-								fake.RoleAtPath("namespaces/hello"),
+								k8sobjects.RoleAtPath("namespaces/hello"),
 							},
 						},
 					},
 				},
 			},
-			wantErrs: fake.Errors(semantic.UnsyncableResourcesErrorCode),
+			wantErrs: status.FakeMultiError(semantic.UnsyncableResourcesErrorCode),
 		},
 		{
 			name: "abstract namespace with resource and abstract child",
-			objs: &objects.Tree{
+			objs: &fileobjects.Tree{
 				Tree: &ast.TreeNode{
 					Relative: cmpath.RelativeSlash("namespaces"),
 					Type:     node.AbstractNamespace,
@@ -187,7 +187,7 @@ func TestInheritance(t *testing.T) {
 							Relative: cmpath.RelativeSlash("namespaces/hello"),
 							Type:     node.AbstractNamespace,
 							Objects: []ast.FileObject{
-								fake.RoleAtPath("namespaces/hello"),
+								k8sobjects.RoleAtPath("namespaces/hello"),
 							},
 							Children: []*ast.TreeNode{
 								{
@@ -199,11 +199,11 @@ func TestInheritance(t *testing.T) {
 					},
 				},
 			},
-			wantErrs: fake.Errors(semantic.UnsyncableResourcesErrorCode),
+			wantErrs: status.FakeMultiError(semantic.UnsyncableResourcesErrorCode),
 		},
 		{
 			name: "abstract namespace with resource and duplicated descendant namespace",
-			objs: &objects.Tree{
+			objs: &fileobjects.Tree{
 				Tree: &ast.TreeNode{
 					Relative: cmpath.RelativeSlash("namespaces"),
 					Type:     node.AbstractNamespace,
@@ -212,7 +212,7 @@ func TestInheritance(t *testing.T) {
 							Relative: cmpath.RelativeSlash("namespaces/hello"),
 							Type:     node.AbstractNamespace,
 							Objects: []ast.FileObject{
-								fake.RoleAtPath("namespaces/hello"),
+								k8sobjects.RoleAtPath("namespaces/hello"),
 							},
 							Children: []*ast.TreeNode{
 								{
@@ -223,8 +223,8 @@ func TestInheritance(t *testing.T) {
 											Relative: cmpath.RelativeSlash("namespaces/hello/world/end"),
 											Type:     node.Namespace,
 											Objects: []ast.FileObject{
-												fake.Namespace("namespaces/hello/world/end"),
-												fake.Namespace("namespaces/hello/world/end"),
+												k8sobjects.Namespace("namespaces/hello/world/end"),
+												k8sobjects.Namespace("namespaces/hello/world/end"),
 											},
 										},
 									},
@@ -234,7 +234,7 @@ func TestInheritance(t *testing.T) {
 					},
 				},
 			},
-			wantErrs: fake.Errors(status.MultipleSingletonsErrorCode),
+			wantErrs: status.FakeMultiError(status.MultipleSingletonsErrorCode),
 		},
 	}
 

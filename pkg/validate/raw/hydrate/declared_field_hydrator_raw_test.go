@@ -21,7 +21,7 @@ import (
 	"kpt.dev/configsync/clientgen/apis/scheme"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/testing/openapitest"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 )
 
 func TestRawYAML(t *testing.T) {
@@ -384,7 +384,7 @@ spec:
 				t.Fatal(err)
 			}
 
-			objs := &objects.Raw{
+			objs := &fileobjects.Raw{
 				Converter: converter,
 				Objects: []ast.FileObject{{
 					Unstructured: u,

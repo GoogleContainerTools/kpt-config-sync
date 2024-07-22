@@ -21,8 +21,8 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/webhook/configuration"
 )
 
@@ -43,7 +43,7 @@ func StopWebhook(nt *NT) {
 		return
 	}
 	webhookName := configuration.Name
-	err := nt.KubeClient.Delete(fake.AdmissionWebhookObject(webhookName))
+	err := nt.KubeClient.Delete(k8sobjects.AdmissionWebhookObject(webhookName))
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return

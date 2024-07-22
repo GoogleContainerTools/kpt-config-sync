@@ -21,8 +21,8 @@ import (
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/metrics"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/testing/testmetrics"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -34,15 +34,15 @@ func TestWasDeleted(t *testing.T) {
 	}{
 		{
 			"object with no annotations",
-			fake.ConfigMapObject(),
+			k8sobjects.ConfigMapObject(),
 		},
 		{
 			"object with an annotation",
-			fake.ConfigMapObject(core.Annotation("hello", "world")),
+			k8sobjects.ConfigMapObject(core.Annotation("hello", "world")),
 		},
 		{
 			"object with explicitly empty annotations",
-			fake.ConfigMapObject(core.Annotations(map[string]string{})),
+			k8sobjects.ConfigMapObject(core.Annotations(map[string]string{})),
 		},
 	}
 

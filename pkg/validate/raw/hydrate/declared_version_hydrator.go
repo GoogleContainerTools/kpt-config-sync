@@ -18,12 +18,12 @@ import (
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 )
 
 // DeclaredVersion annotates the given Raw objects with the API Version the
 // object was declared in the repository.
-func DeclaredVersion(objs *objects.Raw) status.MultiError {
+func DeclaredVersion(objs *fileobjects.Raw) status.MultiError {
 	for _, obj := range objs.Objects {
 		core.Label(metadata.DeclaredVersionLabel, obj.GetObjectKind().GroupVersionKind().Version)(obj)
 	}

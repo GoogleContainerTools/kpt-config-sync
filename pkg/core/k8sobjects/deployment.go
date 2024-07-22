@@ -12,28 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package fake
+package k8sobjects
 
 import (
-	v1 "k8s.io/api/admissionregistration/v1"
+	appsv1 "k8s.io/api/apps/v1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/kinds"
 )
 
-// AdmissionWebhookObject initializes a AdmissionWebhook object.
-func AdmissionWebhookObject(name string, opts ...core.MetaMutator) *v1.ValidatingWebhookConfiguration {
-	result := &v1.ValidatingWebhookConfiguration{TypeMeta: ToTypeMeta(kinds.ValidatingWebhookConfiguration())}
+// DeploymentObject initializes a Deployment.
+func DeploymentObject(opts ...core.MetaMutator) *appsv1.Deployment {
+	result := &appsv1.Deployment{TypeMeta: ToTypeMeta(kinds.Deployment())}
 	defaultMutate(result)
-	mutate(result, core.Name(name))
 	mutate(result, opts...)
 
 	return result
 }
 
-// AdmissionWebhook returns a AdmissionWebhook in a FileObject.
-func AdmissionWebhook(name, dir string, opts ...core.MetaMutator) ast.FileObject {
-	relative := cmpath.RelativeSlash(dir).Join(cmpath.RelativeSlash("admission_webhook.yaml"))
-	return FileObject(AdmissionWebhookObject(name, opts...), relative.SlashPath())
+// Deployment returns a Deployment in a FileObject.
+func Deployment(dir string, opts ...core.MetaMutator) ast.FileObject {
+	relative := cmpath.RelativeSlash(dir).Join(cmpath.RelativeSlash("deployment.yaml"))
+	return FileObject(DeploymentObject(opts...), relative.SlashPath())
 }

@@ -20,9 +20,9 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/metadata"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 func TestAddAnnotationsAndLabels(t *testing.T) {
@@ -46,8 +46,8 @@ func TestAddAnnotationsAndLabels(t *testing.T) {
 				Rev:    "HEAD",
 			},
 			commitHash: "1234567",
-			actual:     []ast.FileObject{fake.Role(core.Namespace("foo"))},
-			expected: []ast.FileObject{fake.Role(
+			actual:     []ast.FileObject{k8sobjects.Role(core.Namespace("foo"))},
+			expected: []ast.FileObject{k8sobjects.Role(
 				core.Namespace("foo"),
 				core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 				core.Annotation(metadata.ResourceManagementKey, "enabled"),

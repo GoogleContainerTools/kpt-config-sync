@@ -19,10 +19,10 @@ import (
 	"testing"
 
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 func TestName(t *testing.T) {
@@ -33,26 +33,26 @@ func TestName(t *testing.T) {
 	}{
 		{
 			name: "object with name",
-			obj:  fake.Deployment("/", core.Name("foo")),
+			obj:  k8sobjects.Deployment("/", core.Name("foo")),
 		},
 		{
 			name:    "object with empty name fails",
-			obj:     fake.Deployment("/", core.Name("")),
-			wantErr: fake.Error(nonhierarchical.MissingObjectNameErrorCode),
+			obj:     k8sobjects.Deployment("/", core.Name("")),
+			wantErr: status.FakeError(nonhierarchical.MissingObjectNameErrorCode),
 		},
 		{
 			name:    "object with invalid name fails",
-			obj:     fake.Deployment("/", core.Name("FOO:BAR")),
-			wantErr: fake.Error(nonhierarchical.InvalidMetadataNameErrorCode),
+			obj:     k8sobjects.Deployment("/", core.Name("FOO:BAR")),
+			wantErr: status.FakeError(nonhierarchical.InvalidMetadataNameErrorCode),
 		},
 		{
 			name: "object with valid name for RBAC",
-			obj:  fake.Role(core.Name("FOO:BAR")),
+			obj:  k8sobjects.Role(core.Name("FOO:BAR")),
 		},
 		{
 			name:    "object with invalid name for RBAC fails",
-			obj:     fake.Role(core.Name("FOO/BAR")),
-			wantErr: fake.Error(nonhierarchical.InvalidMetadataNameErrorCode),
+			obj:     k8sobjects.Role(core.Name("FOO/BAR")),
+			wantErr: status.FakeError(nonhierarchical.InvalidMetadataNameErrorCode),
 		},
 	}
 

@@ -1,4 +1,4 @@
-// Copyright 2023 Google LLC
+// Copyright 2022 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,19 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package objects
+package k8sobjects
 
 import (
-	"os"
-	"testing"
-
-	"k8s.io/klog/v2"
+	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/kinds"
 )
 
-// TestMain executes the tests for this package, with optional logging.
-// To see all logs, use:
-// go test kpt.dev/configsync/pkg/validate/objects -v -args -v=5
-func TestMain(m *testing.M) {
-	klog.InitFlags(nil)
-	os.Exit(m.Run())
+// NamespaceConfigObject initializes a NamespaceConfig.
+func NamespaceConfigObject(opts ...core.MetaMutator) *v1.NamespaceConfig {
+	result := &v1.NamespaceConfig{TypeMeta: ToTypeMeta(kinds.NamespaceConfig())}
+	defaultMutate(result)
+	for _, opt := range opts {
+		opt(result)
+	}
+
+	return result
 }

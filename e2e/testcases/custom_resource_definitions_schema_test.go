@@ -24,7 +24,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
-	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 )
 
 func TestChangeCustomResourceDefinitionSchema(t *testing.T) {
@@ -45,7 +45,7 @@ func TestChangeCustomResourceDefinitionSchema(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile("acme/cluster/crd.yaml", crdContent))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", fake.NamespaceObject("foo")))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", k8sobjects.NamespaceObject("foo")))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile("acme/namespaces/foo/cr.yaml", crContent))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding a CRD and CR"))
 	if err := nt.WatchForAllSyncs(); err != nil {

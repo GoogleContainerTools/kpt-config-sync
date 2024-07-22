@@ -20,11 +20,11 @@ import (
 
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/metadata"
 	csmetadata "kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 const (
@@ -41,21 +41,21 @@ func TestLabels(t *testing.T) {
 	}{
 		{
 			name: "no labels",
-			obj:  fake.Role(),
+			obj:  k8sobjects.Role(),
 		},
 		{
 			name: "legal label",
-			obj:  fake.Role(core.Label(legalLabel, "a")),
+			obj:  k8sobjects.Role(core.Label(legalLabel, "a")),
 		},
 		{
 			name:    "illegal ConfigManagement label",
-			obj:     fake.Role(core.Label(cmLabel, "a")),
-			wantErr: metadata.IllegalLabelDefinitionError(fake.Role(), []string{cmLabel}),
+			obj:     k8sobjects.Role(core.Label(cmLabel, "a")),
+			wantErr: metadata.IllegalLabelDefinitionError(k8sobjects.Role(), []string{cmLabel}),
 		},
 		{
 			name:    "illegal ConfigSync label",
-			obj:     fake.RoleBinding(core.Label(csLabel, "a")),
-			wantErr: metadata.IllegalLabelDefinitionError(fake.RoleBinding(), []string{csLabel}),
+			obj:     k8sobjects.RoleBinding(core.Label(csLabel, "a")),
+			wantErr: metadata.IllegalLabelDefinitionError(k8sobjects.RoleBinding(), []string{csLabel}),
 		},
 	}
 

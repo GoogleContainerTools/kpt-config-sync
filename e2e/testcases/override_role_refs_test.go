@@ -28,9 +28,9 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 func TestRootSyncRoleRefs(t *testing.T) {
@@ -68,8 +68,8 @@ func TestRootSyncRoleRefs(t *testing.T) {
 			Namespace: "foo",
 		},
 	}
-	roleObject := fake.RoleObject(core.Name("foo-role"), core.Namespace("foo"))
-	clusterRoleObject := fake.ClusterRoleObject(core.Name("foo-role"))
+	roleObject := k8sobjects.RoleObject(core.Name("foo-role"), core.Namespace("foo"))
+	clusterRoleObject := k8sobjects.ClusterRoleObject(core.Name("foo-role"))
 	clusterRoleObject.Rules = []rbacv1.PolicyRule{
 		{ // permission to manage the "safety clusterrole"
 			Verbs:     []string{"*"},
@@ -82,7 +82,7 @@ func TestRootSyncRoleRefs(t *testing.T) {
 			Resources: []string{"namespaces"},
 		},
 	}
-	clusterRoleObject2 := fake.ClusterRoleObject(core.Name("bar-role"))
+	clusterRoleObject2 := k8sobjects.ClusterRoleObject(core.Name("bar-role"))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
 		nomostest.StructuredNSPath(rootSyncA.Namespace, rootSyncA.Name),
 		rootSyncA,

@@ -44,10 +44,10 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/reconcilermanager"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 const (
@@ -63,7 +63,7 @@ const (
 func TestPublicHelm(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured)
 
-	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	rs.Spec = v1beta1.RootSyncSpec{
 		SourceFormat: configsync.SourceFormatUnstructured,
 		SourceType:   configsync.HelmSource,
@@ -211,7 +211,7 @@ func TestPublicHelm(t *testing.T) {
 func TestHelmWatchConfigMap(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured)
 
-	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.MustMergePatch(rs, `{
 		"spec": {
 		  "sourceFormat": "unstructured",
@@ -249,7 +249,7 @@ func TestHelmWatchConfigMap(t *testing.T) {
 
 	cmName := "helm-watch-config-map"
 	nt.T.Log("Apply valid ConfigMap that is not immutable (which should not be allowed)")
-	cm0 := fake.ConfigMapObject(core.Name(cmName), core.Namespace(configsync.ControllerNamespace))
+	cm0 := k8sobjects.ConfigMapObject(core.Name(cmName), core.Namespace(configsync.ControllerNamespace))
 	cm0.Immutable = ptr.To(false)
 	cm0.Data = map[string]string{"something-else.yaml": `
 image:
@@ -268,7 +268,7 @@ image:
 	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap \"helm-watch-config-map\" in namespace \"config-management-system\" is not immutable")
 
 	nt.T.Log("Apply the ConfigMap with values to the cluster with incorrect data key")
-	cm1 := fake.ConfigMapObject(core.Name(cmName), core.Namespace(configsync.ControllerNamespace))
+	cm1 := k8sobjects.ConfigMapObject(core.Name(cmName), core.Namespace(configsync.ControllerNamespace))
 	cm1.Immutable = ptr.To(true)
 	cm1.Data = map[string]string{"something-else.yaml": `
 image:
@@ -288,7 +288,7 @@ image:
 	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap \"helm-watch-config-map\" not found")
 
 	nt.T.Log("Apply valid ConfigMap with values: imagePullPolicy: Always; wordpressUserName: test-user-1")
-	cm2 := fake.ConfigMapObject(core.Name(cmName), core.Namespace(configsync.ControllerNamespace))
+	cm2 := k8sobjects.ConfigMapObject(core.Name(cmName), core.Namespace(configsync.ControllerNamespace))
 	cm2.Immutable = ptr.To(true)
 	cm2.Data = map[string]string{"values.yaml": `
 image:
@@ -363,7 +363,7 @@ func TestHelmConfigMapOverride(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured)
 	cmName := "helm-config-map-override"
 
-	cm := fake.ConfigMapObject(core.Name(cmName), core.Namespace(configsync.ControllerNamespace))
+	cm := k8sobjects.ConfigMapObject(core.Name(cmName), core.Namespace(configsync.ControllerNamespace))
 	cm.Immutable = ptr.To(true)
 	cm.Data = map[string]string{
 		"first": `
@@ -389,7 +389,7 @@ image:
 		nt.T.Fatal(err)
 	}
 
-	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.MustMergePatch(rs, `{
 		"spec": {
 		  "sourceFormat": "unstructured",
@@ -587,7 +587,7 @@ func TestHelmNamespaceRepo(t *testing.T) {
 
 	nt.T.Log("Build a Helm chart with cluster-scoped resources")
 	chart, err := nt.BuildAndPushHelmPackage(repoSyncNN,
-		registryproviders.HelmChartObjects(nt.Scheme, fake.NamespaceObject("foo-ns")))
+		registryproviders.HelmChartObjects(nt.Scheme, k8sobjects.NamespaceObject("foo-ns")))
 	if err != nil {
 		nt.T.Fatalf("failed to push helm chart: %v", err)
 	}
@@ -600,7 +600,7 @@ func TestHelmNamespaceRepo(t *testing.T) {
 
 	nt.T.Log("Update the helm chart with only a namespace-scope resource")
 	validChart, err := nt.BuildAndPushHelmPackage(repoSyncNN,
-		registryproviders.HelmChartObjects(nt.Scheme, fake.ConfigMapObject(core.Name("foo-cm"))),
+		registryproviders.HelmChartObjects(nt.Scheme, k8sobjects.ConfigMapObject(core.Name("foo-cm"))),
 		registryproviders.HelmChartVersion("v1.1.0"))
 	if err != nil {
 		nt.T.Fatalf("failed to push helm chart: %v", err)
@@ -646,12 +646,12 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap \"helm-cm-ns-repo-1\" not found")
 
 	nt.T.Log("Create a ConfigMap that is not immutable (which should not be allowed)")
-	cm1 := fake.ConfigMapObject(core.Name(cmName), core.Namespace(testNs))
+	cm1 := k8sobjects.ConfigMapObject(core.Name(cmName), core.Namespace(testNs))
 	cm1.Data = map[string]string{
 		"foo.yaml": `label: foo`,
 	}
 	nt.T.Cleanup(func() {
-		cm1 := fake.ConfigMapObject(core.Name(cmName), core.Namespace(testNs))
+		cm1 := k8sobjects.ConfigMapObject(core.Name(cmName), core.Namespace(testNs))
 		if err := nt.KubeClient.Delete(cm1); err != nil {
 			if !apierrors.IsNotFound(err) {
 				nt.T.Log(err)
@@ -664,7 +664,7 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap \"helm-cm-ns-repo-1\" in namespace \"test-ns\" is not immutable")
 
 	nt.T.Log("Update the ConfigMap to be immutable but to have the incorrect data key")
-	cm1 = fake.ConfigMapObject(core.Name(cmName), core.Namespace(testNs))
+	cm1 = k8sobjects.ConfigMapObject(core.Name(cmName), core.Namespace(testNs))
 	if err := nt.KubeClient.Get(cmName, testNs, cm1); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -685,13 +685,13 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 
 	nt.T.Log("Create new valid ConfigMap with values: `label: foo`")
 	cmName2 := "helm-cm-ns-repo-2"
-	cm2 := fake.ConfigMapObject(core.Name(cmName2), core.Namespace(testNs))
+	cm2 := k8sobjects.ConfigMapObject(core.Name(cmName2), core.Namespace(testNs))
 	cm2.Data = map[string]string{
 		"foo.yaml": `label: foo`,
 	}
 	cm2.Immutable = ptr.To(true)
 	nt.T.Cleanup(func() {
-		cm2 := fake.ConfigMapObject(core.Name(cmName2), core.Namespace(testNs))
+		cm2 := k8sobjects.ConfigMapObject(core.Name(cmName2), core.Namespace(testNs))
 		if err := nt.KubeClient.Delete(cm2); err != nil {
 			if !apierrors.IsNotFound(err) {
 				nt.T.Log(err)
@@ -784,7 +784,7 @@ func TestHelmARTokenAuth(t *testing.T) {
 	}
 
 	nt.T.Log("Update RootSync to sync from a private Artifact Registry")
-	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "git": null, "helm": {"repo": "%s", "chart": "%s", "auth": "token", "version": "%s", "releaseName": "my-coredns", "namespace": "coredns", "secretRef": {"name" : "foo"}}}}`,
 		configsync.HelmSource, chartRepoURL, chart.Name, chart.Version))
 	err = nt.WatchForAllSyncs(

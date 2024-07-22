@@ -26,8 +26,8 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -72,19 +72,19 @@ func TestIsReconciling(t *testing.T) {
 	}{
 		{
 			name: "Missing condition is false",
-			rs:   fake.RootSyncObjectV1Beta1(configsync.RootSyncName),
+			rs:   k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName),
 			want: false,
 		},
 		{
 			name: "False condition is false",
-			rs: fake.RootSyncObjectV1Beta1(configsync.RootSyncName,
+			rs: k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName,
 				withConditions(
 					fakeCondition(v1beta1.RootSyncReconciling, metav1.ConditionFalse, initialNow, initialNow))),
 			want: false,
 		},
 		{
 			name: "True condition is true",
-			rs: fake.RootSyncObjectV1Beta1(configsync.RootSyncName,
+			rs: k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName,
 				withConditions(
 					fakeCondition(v1beta1.RootSyncReconciling, metav1.ConditionTrue, initialNow, initialNow),
 					fakeCondition(v1beta1.RootSyncStalled, metav1.ConditionFalse, initialNow, initialNow))),
@@ -109,19 +109,19 @@ func TestIsStalled(t *testing.T) {
 	}{
 		{
 			name: "Missing condition is false",
-			rs:   fake.RootSyncObjectV1Beta1(configsync.RootSyncName),
+			rs:   k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName),
 			want: false,
 		},
 		{
 			name: "False condition is false",
-			rs: fake.RootSyncObjectV1Beta1(configsync.RootSyncName,
+			rs: k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName,
 				withConditions(
 					fakeCondition(v1beta1.RootSyncStalled, metav1.ConditionFalse, initialNow, initialNow))),
 			want: false,
 		},
 		{
 			name: "True condition is true",
-			rs: fake.RootSyncObjectV1Beta1(configsync.RootSyncName,
+			rs: k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName,
 				withConditions(
 					fakeCondition(v1beta1.RootSyncReconciling, metav1.ConditionFalse, initialNow, initialNow),
 					fakeCondition(v1beta1.RootSyncStalled, metav1.ConditionTrue, initialNow, initialNow))),
@@ -146,19 +146,19 @@ func TestReconcilingMessage(t *testing.T) {
 	}{
 		{
 			name: "Missing condition is empty",
-			rs:   fake.RootSyncObjectV1Beta1(configsync.RootSyncName),
+			rs:   k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName),
 			want: "",
 		},
 		{
 			name: "False condition is empty",
-			rs: fake.RootSyncObjectV1Beta1(configsync.RootSyncName,
+			rs: k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName,
 				withConditions(
 					fakeCondition(v1beta1.RootSyncReconciling, metav1.ConditionFalse, initialNow, initialNow))),
 			want: "",
 		},
 		{
 			name: "True condition is its message",
-			rs: fake.RootSyncObjectV1Beta1(configsync.RootSyncName,
+			rs: k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName,
 				withConditions(
 					fakeCondition(v1beta1.RootSyncReconciling, metav1.ConditionTrue, initialNow, initialNow),
 					fakeCondition(v1beta1.RootSyncStalled, metav1.ConditionFalse, initialNow, initialNow))),
@@ -183,19 +183,19 @@ func TestStalledMessage(t *testing.T) {
 	}{
 		{
 			name: "Missing condition is empty",
-			rs:   fake.RootSyncObjectV1Beta1(configsync.RootSyncName),
+			rs:   k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName),
 			want: "",
 		},
 		{
 			name: "False condition is empty",
-			rs: fake.RootSyncObjectV1Beta1(configsync.RootSyncName,
+			rs: k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName,
 				withConditions(
 					fakeCondition(v1beta1.RootSyncStalled, metav1.ConditionFalse, initialNow, initialNow))),
 			want: "",
 		},
 		{
 			name: "True condition is its message",
-			rs: fake.RootSyncObjectV1Beta1(configsync.RootSyncName,
+			rs: k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName,
 				withConditions(
 					fakeCondition(v1beta1.RootSyncReconciling, metav1.ConditionFalse, initialNow, initialNow),
 					fakeCondition(v1beta1.RootSyncStalled, metav1.ConditionTrue, initialNow, initialNow))),
@@ -224,7 +224,7 @@ func TestClearCondition(t *testing.T) {
 	}{
 		{
 			name: "Clear existing true condition",
-			rs: fake.RootSyncObjectV1Beta1(configsync.RootSyncName,
+			rs: k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName,
 				withConditions(
 					fakeCondition(v1beta1.RootSyncReconciling, metav1.ConditionTrue, initialNow, initialNow),
 					fakeCondition(v1beta1.RootSyncStalled, metav1.ConditionTrue, initialNow, initialNow))),
@@ -238,7 +238,7 @@ func TestClearCondition(t *testing.T) {
 		},
 		{
 			name: "Ignore existing false condition",
-			rs: fake.RootSyncObjectV1Beta1(configsync.RootSyncName,
+			rs: k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName,
 				withConditions(
 					fakeCondition(v1beta1.RootSyncReconciling, metav1.ConditionTrue, initialNow, initialNow),
 					fakeCondition(v1beta1.RootSyncStalled, metav1.ConditionFalse, initialNow, initialNow))),
@@ -252,7 +252,7 @@ func TestClearCondition(t *testing.T) {
 		},
 		{
 			name:    "Handle empty conditions",
-			rs:      fake.RootSyncObjectV1Beta1(configsync.RootSyncName),
+			rs:      k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName),
 			toClear: v1beta1.RootSyncStalled,
 			want:    nil,
 		},
@@ -285,7 +285,7 @@ func TestSetReconciling(t *testing.T) {
 	}{
 		{
 			name: "Set new reconciling condition",
-			rs: fake.RootSyncObjectV1Beta1(configsync.RootSyncName,
+			rs: k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName,
 				withConditions(
 					fakeCondition(v1beta1.RootSyncReconciling, metav1.ConditionTrue, initialNow, initialNow))),
 			reason:  "Test1",
@@ -299,7 +299,7 @@ func TestSetReconciling(t *testing.T) {
 		},
 		{
 			name: "Update existing reconciling condition",
-			rs: fake.RootSyncObjectV1Beta1(configsync.RootSyncName,
+			rs: k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName,
 				withConditions(
 					fakeCondition(v1beta1.RootSyncReconciling, metav1.ConditionTrue, initialNow, initialNow),
 					fakeCondition(v1beta1.RootSyncStalled, metav1.ConditionFalse, initialNow, initialNow))),
@@ -345,7 +345,7 @@ func TestSetStalled(t *testing.T) {
 	}{
 		{
 			name:   "Set new stalled condition",
-			rs:     fake.RootSyncObjectV1Beta1(configsync.RootSyncName),
+			rs:     k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName),
 			reason: "Error1",
 			err:    errors.New("this is error 1"),
 			want: []v1beta1.RootSyncCondition{
@@ -357,7 +357,7 @@ func TestSetStalled(t *testing.T) {
 		},
 		{
 			name: "Update existing stalled condition",
-			rs: fake.RootSyncObjectV1Beta1(configsync.RootSyncName,
+			rs: k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName,
 				withConditions(
 					fakeCondition(v1beta1.RootSyncReconciling, metav1.ConditionTrue, initialNow, initialNow),
 					fakeCondition(v1beta1.RootSyncStalled, metav1.ConditionFalse, initialNow, initialNow))),
@@ -405,7 +405,7 @@ func TestSetSyncing(t *testing.T) {
 	}{
 		{
 			name:         "Set new syncing condition without error",
-			rs:           fake.RootSyncObjectV1Beta1(configsync.RootSyncName),
+			rs:           k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName),
 			status:       true,
 			reason:       "Syncing",
 			message:      "",
@@ -432,7 +432,7 @@ func TestSetSyncing(t *testing.T) {
 		},
 		{
 			name: "Update to add syncing error",
-			rs: fake.RootSyncObjectV1Beta1(configsync.RootSyncName,
+			rs: k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName,
 				withConditions(
 					v1beta1.RootSyncCondition{
 						Type:               v1beta1.RootSyncSyncing,
@@ -479,7 +479,7 @@ func TestSetSyncing(t *testing.T) {
 		},
 		{
 			name: "Transition to completed",
-			rs: fake.RootSyncObjectV1Beta1(configsync.RootSyncName,
+			rs: k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName,
 				withConditions(
 					v1beta1.RootSyncCondition{
 						Type:    v1beta1.RootSyncSyncing,
@@ -547,7 +547,7 @@ func TestSetReconcilerFinalizing(t *testing.T) {
 	}{
 		{
 			name:    "Set new finalizing condition without error",
-			rs:      fake.RootSyncObjectV1Beta1(configsync.RootSyncName),
+			rs:      k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName),
 			reason:  "Finalizing",
 			message: "",
 			want: []v1beta1.RootSyncCondition{
@@ -565,7 +565,7 @@ func TestSetReconcilerFinalizing(t *testing.T) {
 		},
 		{
 			name: "Update to add change message",
-			rs: fake.RootSyncObjectV1Beta1(configsync.RootSyncName,
+			rs: k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName,
 				withConditions(
 					v1beta1.RootSyncCondition{
 						Type:               v1beta1.RootSyncReconcilerFinalizing,
@@ -606,7 +606,7 @@ func TestSetReconcilerFinalizing(t *testing.T) {
 }
 
 func TestSetReconcilerFinalizerFailure(t *testing.T) {
-	deployment1 := fake.DeploymentObject()
+	deployment1 := k8sobjects.DeploymentObject()
 	deployment1ID := core.IDOf(deployment1)
 
 	now = func() metav1.Time {
@@ -621,7 +621,7 @@ func TestSetReconcilerFinalizerFailure(t *testing.T) {
 	}{
 		{
 			name: "Set new finalizer failure condition without error",
-			rs:   fake.RootSyncObjectV1Beta1(configsync.RootSyncName),
+			rs:   k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName),
 			errs: nil,
 			want: []v1beta1.RootSyncCondition{
 				// Update and transition
@@ -638,7 +638,7 @@ func TestSetReconcilerFinalizerFailure(t *testing.T) {
 		},
 		{
 			name: "Set new finalizer failure condition with error",
-			rs:   fake.RootSyncObjectV1Beta1(configsync.RootSyncName),
+			rs:   k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName),
 			errs: applier.DeleteErrorForResource(errors.New("fake error"), deployment1ID),
 			want: []v1beta1.RootSyncCondition{
 				// Update and transition
@@ -661,7 +661,7 @@ func TestSetReconcilerFinalizerFailure(t *testing.T) {
 		},
 		{
 			name: "Update to change status",
-			rs: fake.RootSyncObjectV1Beta1(configsync.RootSyncName,
+			rs: k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName,
 				withConditions(
 					v1beta1.RootSyncCondition{
 						Type:    v1beta1.RootSyncReconcilerFinalizerFailure,
@@ -693,7 +693,7 @@ func TestSetReconcilerFinalizerFailure(t *testing.T) {
 		},
 		{
 			name: "Update to change error message",
-			rs: fake.RootSyncObjectV1Beta1(configsync.RootSyncName,
+			rs: k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName,
 				withConditions(
 					v1beta1.RootSyncCondition{
 						Type:    v1beta1.RootSyncReconcilerFinalizerFailure,
@@ -755,7 +755,7 @@ func TestRemoveCondition(t *testing.T) {
 	}{
 		{
 			name: "Remove Reconciling condition",
-			rs: fake.RootSyncObjectV1Beta1(configsync.RootSyncName,
+			rs: k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName,
 				withConditions(
 					v1beta1.RootSyncCondition{
 						Type:               v1beta1.RootSyncReconciling,
@@ -772,7 +772,7 @@ func TestRemoveCondition(t *testing.T) {
 		},
 		{
 			name: "Remove Syncing condition when Reconciling",
-			rs: fake.RootSyncObjectV1Beta1(configsync.RootSyncName,
+			rs: k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName,
 				withConditions(
 					v1beta1.RootSyncCondition{
 						Type:               v1beta1.RootSyncSyncing,
@@ -808,7 +808,7 @@ func TestRemoveCondition(t *testing.T) {
 		},
 		{
 			name: "Remove missing condition",
-			rs: fake.RootSyncObjectV1Beta1(configsync.RootSyncName,
+			rs: k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName,
 				withConditions(
 					v1beta1.RootSyncCondition{
 						Type:               v1beta1.RootSyncReconcilerFinalizing,

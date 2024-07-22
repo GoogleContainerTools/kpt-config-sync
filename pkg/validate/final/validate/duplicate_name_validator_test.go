@@ -20,11 +20,11 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 func customResource(group, kind, name, namespace string) ast.FileObject {
@@ -33,7 +33,7 @@ func customResource(group, kind, name, namespace string) ast.FileObject {
 		Version: "v1",
 		Kind:    kind,
 	}
-	return fake.Unstructured(gvk, core.Name(name), core.Namespace(namespace))
+	return k8sobjects.Unstructured(gvk, core.Name(name), core.Namespace(namespace))
 }
 
 func TestDuplicateNames(t *testing.T) {
@@ -45,57 +45,57 @@ func TestDuplicateNames(t *testing.T) {
 		{
 			name: "Two objects with different names pass",
 			objs: []ast.FileObject{
-				fake.Role(core.Name("alice"), core.Namespace("shipping")),
-				fake.Role(core.Name("bob"), core.Namespace("shipping")),
+				k8sobjects.Role(core.Name("alice"), core.Namespace("shipping")),
+				k8sobjects.Role(core.Name("bob"), core.Namespace("shipping")),
 			},
 		},
 		{
 			name: "Two objects with different namespaces pass",
 			objs: []ast.FileObject{
-				fake.Role(core.Name("alice"), core.Namespace("shipping")),
-				fake.Role(core.Name("alice"), core.Namespace("production")),
+				k8sobjects.Role(core.Name("alice"), core.Namespace("shipping")),
+				k8sobjects.Role(core.Name("alice"), core.Namespace("production")),
 			},
 		},
 		{
 			name: "Two objects with different kinds pass",
 			objs: []ast.FileObject{
-				fake.Role(core.Name("alice"), core.Namespace("shipping")),
-				fake.RoleBinding(core.Name("alice"), core.Namespace("shipping")),
+				k8sobjects.Role(core.Name("alice"), core.Namespace("shipping")),
+				k8sobjects.RoleBinding(core.Name("alice"), core.Namespace("shipping")),
 			},
 		},
 		{
 			name: "Two objects with different groups pass",
 			objs: []ast.FileObject{
-				fake.Role(core.Name("alice"), core.Namespace("shipping")),
+				k8sobjects.Role(core.Name("alice"), core.Namespace("shipping")),
 				customResource("acme", "Role", "alice", "shipping"),
 			},
 		},
 		{
 			name: "Two duplicate namespaced objects fail",
 			objs: []ast.FileObject{
-				fake.Role(core.Name("alice"), core.Namespace("shipping")),
-				fake.Role(core.Name("alice"), core.Namespace("shipping")),
+				k8sobjects.Role(core.Name("alice"), core.Namespace("shipping")),
+				k8sobjects.Role(core.Name("alice"), core.Namespace("shipping")),
 			},
 			wantErrs: nonhierarchical.NamespaceMetadataNameCollisionError(
-				kinds.Role().GroupKind(), "shipping", "alice", fake.Role()),
+				kinds.Role().GroupKind(), "shipping", "alice", k8sobjects.Role()),
 		},
 		{
 			name: "Two duplicate cluster-scoped objects fail",
 			objs: []ast.FileObject{
-				fake.ClusterRole(core.Name("alice")),
-				fake.ClusterRole(core.Name("alice")),
+				k8sobjects.ClusterRole(core.Name("alice")),
+				k8sobjects.ClusterRole(core.Name("alice")),
 			},
 			wantErrs: nonhierarchical.ClusterMetadataNameCollisionError(
-				kinds.ClusterRole().GroupKind(), "alice", fake.ClusterRole()),
+				kinds.ClusterRole().GroupKind(), "alice", k8sobjects.ClusterRole()),
 		},
 		{
 			name: "Two duplicate namespaces fail",
 			objs: []ast.FileObject{
-				fake.Namespace("namespaces/hello"),
-				fake.Namespace("namespaces/hello"),
+				k8sobjects.Namespace("namespaces/hello"),
+				k8sobjects.Namespace("namespaces/hello"),
 			},
 			wantErrs: nonhierarchical.NamespaceCollisionError(
-				"hello", fake.Namespace("hamespaces/hello")),
+				"hello", k8sobjects.Namespace("hamespaces/hello")),
 		},
 	}
 

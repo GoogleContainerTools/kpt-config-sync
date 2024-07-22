@@ -20,12 +20,12 @@ import (
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/importer/customresources"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 )
 
 // RemovedCRDs verifies that the Raw objects do not remove any CRDs that still
 // have CRs using them.
-func RemovedCRDs(objs *objects.Raw) status.MultiError {
+func RemovedCRDs(objs *fileobjects.Raw) status.MultiError {
 	current, errs := customresources.GetCRDs(objs.Objects)
 	if errs != nil {
 		return errs

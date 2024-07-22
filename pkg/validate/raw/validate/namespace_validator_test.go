@@ -20,10 +20,10 @@ import (
 
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 func TestNamespace(t *testing.T) {
@@ -34,39 +34,39 @@ func TestNamespace(t *testing.T) {
 	}{
 		{
 			name: "Role with unspecified namespace",
-			obj:  fake.Role(core.Namespace("")),
+			obj:  k8sobjects.Role(core.Namespace("")),
 		},
 		{
 			name: "Role with valid namespace",
-			obj:  fake.Role(core.Namespace("hello")),
+			obj:  k8sobjects.Role(core.Namespace("hello")),
 		},
 		{
 			name:    "Role with invalid namespace",
-			obj:     fake.Role(core.Namespace("..invalid..")),
-			wantErr: nonhierarchical.InvalidNamespaceError(fake.Role()),
+			obj:     k8sobjects.Role(core.Namespace("..invalid..")),
+			wantErr: nonhierarchical.InvalidNamespaceError(k8sobjects.Role()),
 		},
 		{
 			name: "RootSync with config-management-system namespace",
-			obj:  fake.RootSyncV1Beta1("foo"),
+			obj:  k8sobjects.RootSyncV1Beta1("foo"),
 		},
 		{
 			name: "Valid namespace",
-			obj:  fake.Namespace("hello"),
+			obj:  k8sobjects.Namespace("hello"),
 		},
 		{
 			name:    "Illegal namespace " + configmanagement.ControllerNamespace,
-			obj:     fake.Namespace(configmanagement.ControllerNamespace),
-			wantErr: nonhierarchical.IllegalNamespace(fake.Namespace(configmanagement.ControllerNamespace)),
+			obj:     k8sobjects.Namespace(configmanagement.ControllerNamespace),
+			wantErr: nonhierarchical.IllegalNamespace(k8sobjects.Namespace(configmanagement.ControllerNamespace)),
 		},
 		{
 			name:    "Illegal namespace " + configmanagement.RGControllerNamespace,
-			obj:     fake.Namespace(configmanagement.RGControllerNamespace),
-			wantErr: nonhierarchical.IllegalNamespace(fake.Namespace(configmanagement.RGControllerNamespace)),
+			obj:     k8sobjects.Namespace(configmanagement.RGControllerNamespace),
+			wantErr: nonhierarchical.IllegalNamespace(k8sobjects.Namespace(configmanagement.RGControllerNamespace)),
 		},
 		{
 			name:    "Illegal namespace " + configmanagement.MonitoringNamespace,
-			obj:     fake.Namespace(configmanagement.MonitoringNamespace),
-			wantErr: nonhierarchical.IllegalNamespace(fake.Namespace(configmanagement.MonitoringNamespace)),
+			obj:     k8sobjects.Namespace(configmanagement.MonitoringNamespace),
+			wantErr: nonhierarchical.IllegalNamespace(k8sobjects.Namespace(configmanagement.MonitoringNamespace)),
 		},
 	}
 

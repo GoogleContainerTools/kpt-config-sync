@@ -21,7 +21,7 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/util/repo"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -35,7 +35,7 @@ var allowedRepoVersions = map[string]bool{
 
 // Repo verifies that there is exactly one Repo object and that it has the
 // correct version.
-func Repo(objs *objects.Raw) status.MultiError {
+func Repo(objs *fileobjects.Raw) status.MultiError {
 	var found []client.Object
 	for _, obj := range objs.Objects {
 		if obj.GetObjectKind().GroupVersionKind().GroupKind() == kinds.Repo().GroupKind() {

@@ -27,9 +27,9 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/syncer/differ"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/util"
 	"sigs.k8s.io/cli-utils/pkg/common"
 )
@@ -46,7 +46,7 @@ func TestPreventDeletionNamespace(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	role := fake.RoleObject(core.Name("shipping-admin"))
+	role := k8sobjects.RoleObject(core.Name("shipping-admin"))
 	role.Rules = []rbacv1.PolicyRule{{
 		APIGroups: []string{""},
 		Resources: []string{"configmaps"},
@@ -54,7 +54,7 @@ func TestPreventDeletionNamespace(t *testing.T) {
 	}}
 
 	// Declare the Namespace with the lifecycle annotation, and ensure it is created.
-	nsObj := fake.NamespaceObject("shipping", preventDeletion)
+	nsObj := k8sobjects.NamespaceObject("shipping", preventDeletion)
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/shipping/ns.yaml", nsObj))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/shipping/role.yaml", role))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("declare Namespace with prevent deletion lifecycle annotation"))
@@ -113,7 +113,7 @@ func TestPreventDeletionNamespace(t *testing.T) {
 	}
 
 	// Remove the lifecycle annotation from the namespace so that the namespace can be deleted after the test case.
-	nsObj = fake.NamespaceObject("shipping")
+	nsObj = k8sobjects.NamespaceObject("shipping")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/shipping/ns.yaml", nsObj))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove the lifecycle annotation from Namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -142,13 +142,13 @@ func TestPreventDeletionRole(t *testing.T) {
 	}
 
 	// Declare the Role with the lifecycle annotation, and ensure it is created.
-	role := fake.RoleObject(core.Name("shipping-admin"), preventDeletion)
+	role := k8sobjects.RoleObject(core.Name("shipping-admin"), preventDeletion)
 	role.Rules = []rbacv1.PolicyRule{{
 		APIGroups: []string{""},
 		Resources: []string{"configmaps"},
 		Verbs:     []string{"get"},
 	}}
-	nsObj := fake.NamespaceObject("shipping")
+	nsObj := k8sobjects.NamespaceObject("shipping")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/shipping/ns.yaml", nsObj))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/shipping/role.yaml", role))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("declare Role with prevent deletion lifecycle annotation"))
@@ -244,7 +244,7 @@ func TestPreventDeletionClusterRole(t *testing.T) {
 	}
 
 	// Declare the ClusterRole with the lifecycle annotation, and ensure it is created.
-	clusterRole := fake.ClusterRoleObject(core.Name("test-admin"), preventDeletion)
+	clusterRole := k8sobjects.ClusterRoleObject(core.Name("test-admin"), preventDeletion)
 	clusterRole.Rules = []rbacv1.PolicyRule{{
 		APIGroups: []string{""},
 		Resources: []string{"configmaps"},
@@ -325,9 +325,9 @@ func TestPreventDeletionSpecialNamespaces(t *testing.T) {
 
 	for ns := range specialNamespaces {
 		checkpointProtectedNamespace(nt, ns)
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/ns-%s.yaml", ns), fake.NamespaceObject(ns)))
+		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/ns-%s.yaml", ns), k8sobjects.NamespaceObject(ns)))
 	}
-	bookstoreNS := fake.NamespaceObject("bookstore")
+	bookstoreNS := k8sobjects.NamespaceObject("bookstore")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns-bookstore.yaml", bookstoreNS))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add special namespaces and one non-special namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {

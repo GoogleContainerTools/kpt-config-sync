@@ -43,12 +43,12 @@ import (
 	hubv1 "kpt.dev/configsync/pkg/api/hub/v1"
 	"kpt.dev/configsync/pkg/client/restconfig"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reposync"
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/util"
 	"kpt.dev/configsync/pkg/validate/raw/validate"
 	webhookconfiguration "kpt.dev/configsync/pkg/webhook/configuration"
@@ -239,7 +239,7 @@ func reposyncRenderingRequired(renderingRequired bool) func(sync *v1beta1.RepoSy
 }
 
 func repoSync(ns, name string, opts ...func(*v1beta1.RepoSync)) *v1beta1.RepoSync {
-	rs := fake.RepoSyncObjectV1Beta1(ns, name)
+	rs := k8sobjects.RepoSyncObjectV1Beta1(ns, name)
 	// default to require rendering for convenience with existing tests
 	core.SetAnnotation(rs, metadata.RequiresRenderingAnnotationKey, "true")
 	for _, opt := range opts {
@@ -286,7 +286,7 @@ func repoSyncWithHelm(ns, name string, opts ...func(*v1beta1.RepoSync)) *v1beta1
 }
 
 func rolebinding(name, roleName, roleKind string, opts ...core.MetaMutator) *rbacv1.RoleBinding {
-	result := fake.RoleBindingObject(opts...)
+	result := k8sobjects.RoleBindingObject(opts...)
 	result.Name = name
 
 	result.RoleRef.Name = roleName
@@ -364,7 +364,7 @@ func TestCreateAndUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 
-	wantRs := fake.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
+	wantRs := k8sobjects.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
 	wantRs.Spec = rs.Spec
 	wantRs.Status.Reconciler = nsReconcilerName
 	reposync.SetReconciling(wantRs, "Deployment",
@@ -504,7 +504,7 @@ func TestUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 
-	wantRs := fake.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
+	wantRs := k8sobjects.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
 	wantRs.Spec = rs.Spec
 	wantRs.Status.Reconciler = nsReconcilerName
 	reposync.SetReconciling(wantRs, "Deployment",
@@ -757,7 +757,7 @@ func TestRepoSyncCreateWithNoSSLVerify(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 
-	wantRs := fake.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
+	wantRs := k8sobjects.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
 	wantRs.Spec = rs.Spec
 	wantRs.Status.Reconciler = nsReconcilerName
 	reposync.SetReconciling(wantRs, "Deployment",
@@ -800,7 +800,7 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 
-	wantRs := fake.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
+	wantRs := k8sobjects.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
 	wantRs.Spec = rs.Spec
 	wantRs.Status.Reconciler = nsReconcilerName
 	reposync.SetReconciling(wantRs, "Deployment",
@@ -1273,7 +1273,7 @@ func TestRepoSyncReconcileAdmissionWebhook(t *testing.T) {
 		{
 			name: "flag false, admission webhook enabled",
 			existingObjects: []client.Object{
-				fake.AdmissionWebhookObject(webhookconfiguration.Name),
+				k8sobjects.AdmissionWebhookObject(webhookconfiguration.Name),
 			},
 			expectedWebhookEnabled: true,
 		},
@@ -1331,7 +1331,7 @@ func TestRepoSyncReconcileWithInvalidCACertSecret(t *testing.T) {
 	for name, tc := range testCases {
 		t.Run(name, func(t *testing.T) {
 			reqNamespacedName := namespacedName(tc.repoSync.Name, tc.repoSync.Namespace)
-			certSecret := fake.SecretObject(caCertSecret, core.Namespace(tc.repoSync.Namespace))
+			certSecret := k8sobjects.SecretObject(caCertSecret, core.Namespace(tc.repoSync.Namespace))
 			fakeClient, _, testReconciler := setupNSReconciler(t, tc.repoSync, certSecret)
 
 			// reconcile
@@ -1341,7 +1341,7 @@ func TestRepoSyncReconcileWithInvalidCACertSecret(t *testing.T) {
 			}
 
 			// reposync should be in stalled status
-			wantRs := fake.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
+			wantRs := k8sobjects.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
 			reposync.SetStalled(wantRs, "Validation", fmt.Errorf("caCertSecretRef was set, but %s key is not present in %s Secret", CACertSecretKey, caCertSecret))
 			validateRepoSyncStatus(t, wantRs, fakeClient)
 		})
@@ -1359,7 +1359,7 @@ func TestRepoSyncValidateCACertSecret(t *testing.T) {
 		},
 		"caCertSecretRef set but invalid Secret": {
 			objs: []client.Object{
-				fake.SecretObject(caCertSecret, core.Namespace(reposyncNs)),
+				k8sobjects.SecretObject(caCertSecret, core.Namespace(reposyncNs)),
 			},
 			err: fmt.Sprintf("caCertSecretRef was set, but %s key is not present in %s Secret", CACertSecretKey, caCertSecret),
 		},
@@ -1893,7 +1893,7 @@ func TestRepoSyncSwitchAuthTypes(t *testing.T) {
 		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
 
-	wantServiceAccount := fake.ServiceAccountObject(
+	wantServiceAccount := k8sobjects.ServiceAccountObject(
 		nsReconcilerName,
 		core.Namespace(configsync.ControllerNamespace),
 		core.Annotation(GCPSAAnnotationKey, rs.Spec.GCPServiceAccountEmail),
@@ -2008,7 +2008,7 @@ func TestRepoSyncReconcilerRestart(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 
-	wantRs := fake.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
+	wantRs := k8sobjects.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
 	wantRs.Spec = rs.Spec
 	wantRs.Status.Reconciler = nsReconcilerName
 	reposync.SetReconciling(wantRs, "Deployment",
@@ -2127,7 +2127,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 
-	wantRs1 := fake.RepoSyncObjectV1Beta1(rs1.Namespace, rs1.Name)
+	wantRs1 := k8sobjects.RepoSyncObjectV1Beta1(rs1.Namespace, rs1.Name)
 	wantRs1.Spec = rs1.Spec
 	wantRs1.Status.Reconciler = nsReconcilerName
 	reposync.SetReconciling(wantRs1, "Deployment",
@@ -2142,7 +2142,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
 
-	serviceAccount1 := fake.ServiceAccountObject(
+	serviceAccount1 := k8sobjects.ServiceAccountObject(
 		nsReconcilerName,
 		core.Namespace(configsync.ControllerNamespace),
 		core.Labels(label1),
@@ -2190,7 +2190,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 
-	wantRs2 := fake.RepoSyncObjectV1Beta1(rs2.Namespace, rs2.Name)
+	wantRs2 := k8sobjects.RepoSyncObjectV1Beta1(rs2.Namespace, rs2.Name)
 	wantRs2.Spec = rs2.Spec
 	wantRs2.Status.Reconciler = nsReconcilerName2
 	reposync.SetReconciling(wantRs2, "Deployment",
@@ -2219,7 +2219,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 
-	serviceAccount2 := fake.ServiceAccountObject(
+	serviceAccount2 := k8sobjects.ServiceAccountObject(
 		nsReconcilerName2,
 		core.Namespace(configsync.ControllerNamespace),
 		core.Labels(label2),
@@ -2251,7 +2251,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 
-	wantRs3 := fake.RepoSyncObjectV1Beta1(rs3.Namespace, rs3.Name)
+	wantRs3 := k8sobjects.RepoSyncObjectV1Beta1(rs3.Namespace, rs3.Name)
 	wantRs3.Spec = rs3.Spec
 	wantRs3.Status.Reconciler = nsReconcilerName3
 	reposync.SetReconciling(wantRs3, "Deployment",
@@ -2280,7 +2280,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 
-	serviceAccount3 := fake.ServiceAccountObject(
+	serviceAccount3 := k8sobjects.ServiceAccountObject(
 		nsReconcilerName3,
 		core.Namespace(configsync.ControllerNamespace),
 		core.Annotation(GCPSAAnnotationKey, rs3.Spec.GCPServiceAccountEmail),
@@ -2311,7 +2311,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 
-	wantRs4 := fake.RepoSyncObjectV1Beta1(rs4.Namespace, rs4.Name)
+	wantRs4 := k8sobjects.RepoSyncObjectV1Beta1(rs4.Namespace, rs4.Name)
 	wantRs4.Spec = rs4.Spec
 	wantRs4.Status.Reconciler = nsReconcilerName4
 	reposync.SetReconciling(wantRs4, "Deployment",
@@ -2341,7 +2341,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
 
-	serviceAccount4 := fake.ServiceAccountObject(
+	serviceAccount4 := k8sobjects.ServiceAccountObject(
 		nsReconcilerName4,
 		core.Namespace(configsync.ControllerNamespace),
 		core.Labels(label4),
@@ -2371,7 +2371,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 
-	wantRs5 := fake.RepoSyncObjectV1Beta1(rs5.Namespace, rs5.Name)
+	wantRs5 := k8sobjects.RepoSyncObjectV1Beta1(rs5.Namespace, rs5.Name)
 	wantRs5.Spec = rs5.Spec
 	wantRs5.Status.Reconciler = nsReconcilerName5
 	reposync.SetReconciling(wantRs5, "Deployment",
@@ -2402,7 +2402,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
 	}
-	serviceAccount5 := fake.ServiceAccountObject(
+	serviceAccount5 := k8sobjects.ServiceAccountObject(
 		nsReconcilerName5,
 		core.Namespace(configsync.ControllerNamespace),
 		core.Labels(label5),
@@ -2635,20 +2635,20 @@ func validateRepoGeneratedResourcesDeleted(t *testing.T, fakeClient *syncerFake.
 	t.Helper()
 
 	// Verify deployment is deleted.
-	deployment := fake.DeploymentObject(core.Namespace(nsReconcilerKey.Namespace), core.Name(reconcilerName))
+	deployment := k8sobjects.DeploymentObject(core.Namespace(nsReconcilerKey.Namespace), core.Name(reconcilerName))
 	if err := validateResourceDeleted(core.IDOf(deployment), fakeClient); err != nil {
 		t.Error(err)
 	}
 
 	// Verify service account is deleted.
-	serviceAccount := fake.ServiceAccountObject(reconcilerName, core.Namespace(nsReconcilerKey.Namespace))
+	serviceAccount := k8sobjects.ServiceAccountObject(reconcilerName, core.Namespace(nsReconcilerKey.Namespace))
 	if err := validateResourceDeleted(core.IDOf(serviceAccount), fakeClient); err != nil {
 		t.Error(err)
 	}
 
 	// Verify the copied secret is deleted for RepoSync.
 	if strings.HasPrefix(reconcilerName, core.NsReconcilerPrefix) {
-		s := fake.SecretObject(ReconcilerResourceName(reconcilerName, secretRefName), core.Namespace(nsReconcilerKey.Namespace))
+		s := k8sobjects.SecretObject(ReconcilerResourceName(reconcilerName, secretRefName), core.Namespace(nsReconcilerKey.Namespace))
 		if err := validateResourceDeleted(core.IDOf(s), fakeClient); err != nil {
 			t.Error(err)
 		}
@@ -2670,7 +2670,7 @@ func TestMapSecretToRepoSyncs(t *testing.T) {
 	ns1rs5ReconcilerName := core.NsReconcilerName(rs5.Namespace, rs5.Name)
 	ns1rs6ReconcilerName := core.NsReconcilerName(rs6.Namespace, rs6.Name)
 	serviceAccountToken := ns1rs1ReconcilerName + "-token-p29b5"
-	serviceAccount := fake.ServiceAccountObject(ns1rs1ReconcilerName, core.Namespace(nsReconcilerKey.Namespace))
+	serviceAccount := k8sobjects.ServiceAccountObject(ns1rs1ReconcilerName, core.Namespace(nsReconcilerKey.Namespace))
 	serviceAccount.Secrets = []corev1.ObjectReference{{Name: serviceAccountToken}}
 
 	testCases := []struct {
@@ -2680,18 +2680,18 @@ func TestMapSecretToRepoSyncs(t *testing.T) {
 	}{
 		{
 			name:   "A secret from a namespace that has no RepoSync",
-			secret: fake.SecretObject("s1", core.Namespace("default")),
+			secret: k8sobjects.SecretObject("s1", core.Namespace("default")),
 			want:   nil,
 		},
 		{
 			name:   fmt.Sprintf("A secret from the %s namespace NOT starting with %s", nsReconcilerKey.Namespace, core.NsReconcilerPrefix+"-"),
-			secret: fake.SecretObject("s1", core.Namespace(nsReconcilerKey.Namespace)),
+			secret: k8sobjects.SecretObject("s1", core.Namespace(nsReconcilerKey.Namespace)),
 			want:   nil,
 		},
 		{
 			name: fmt.Sprintf("A secret from the %s namespace starting with %s, but no corresponding RepoSync",
 				nsReconcilerKey.Namespace, core.NsReconcilerPrefix+"-"),
-			secret: fake.SecretObject(ReconcilerResourceName(core.NsReconcilerName("any-ns", "any-rs"), reposyncSSHKey),
+			secret: k8sobjects.SecretObject(ReconcilerResourceName(core.NsReconcilerName("any-ns", "any-rs"), reposyncSSHKey),
 				core.Namespace(nsReconcilerKey.Namespace),
 			),
 			want: nil,
@@ -2699,7 +2699,7 @@ func TestMapSecretToRepoSyncs(t *testing.T) {
 		{
 			name: fmt.Sprintf("A secret from the %s namespace starting with %s, with a mapping RepoSync",
 				nsReconcilerKey.Namespace, core.NsReconcilerPrefix+"-"),
-			secret: fake.SecretObject(ReconcilerResourceName(ns1rs1ReconcilerName, reposyncSSHKey),
+			secret: k8sobjects.SecretObject(ReconcilerResourceName(ns1rs1ReconcilerName, reposyncSSHKey),
 				core.Namespace(nsReconcilerKey.Namespace),
 			),
 			want: []reconcile.Request{
@@ -2714,7 +2714,7 @@ func TestMapSecretToRepoSyncs(t *testing.T) {
 		{
 			name: fmt.Sprintf("A git caCertSecretRef from the %s namespace starting with %s, with a mapping RepoSync",
 				configsync.ControllerNamespace, core.NsReconcilerPrefix+"-"),
-			secret: fake.SecretObject(ReconcilerResourceName(ns1rs4ReconcilerName, caCertSecret),
+			secret: k8sobjects.SecretObject(ReconcilerResourceName(ns1rs4ReconcilerName, caCertSecret),
 				core.Namespace(configsync.ControllerNamespace),
 			),
 			want: []reconcile.Request{
@@ -2729,7 +2729,7 @@ func TestMapSecretToRepoSyncs(t *testing.T) {
 		{
 			name: fmt.Sprintf("An OCI caCertSecretRef from the %s namespace starting with %s, with a mapping RepoSync",
 				configsync.ControllerNamespace, core.NsReconcilerPrefix+"-"),
-			secret: fake.SecretObject(ReconcilerResourceName(ns1rs5ReconcilerName, caCertSecret),
+			secret: k8sobjects.SecretObject(ReconcilerResourceName(ns1rs5ReconcilerName, caCertSecret),
 				core.Namespace(configsync.ControllerNamespace),
 			),
 			want: []reconcile.Request{
@@ -2744,7 +2744,7 @@ func TestMapSecretToRepoSyncs(t *testing.T) {
 		{
 			name: fmt.Sprintf("A helm caCertSecretRef from the %s namespace starting with %s, with a mapping RepoSync",
 				configsync.ControllerNamespace, core.NsReconcilerPrefix+"-"),
-			secret: fake.SecretObject(ReconcilerResourceName(ns1rs6ReconcilerName, caCertSecret),
+			secret: k8sobjects.SecretObject(ReconcilerResourceName(ns1rs6ReconcilerName, caCertSecret),
 				core.Namespace(configsync.ControllerNamespace),
 			),
 			want: []reconcile.Request{
@@ -2759,7 +2759,7 @@ func TestMapSecretToRepoSyncs(t *testing.T) {
 		{
 			name: fmt.Sprintf("A secret from the %s namespace starting with %s, including `-token-`, but no service account",
 				configsync.ControllerNamespace, core.NsReconcilerPrefix+"-"),
-			secret: fake.SecretObject(ns1rs1ReconcilerName+"-token-123456",
+			secret: k8sobjects.SecretObject(ns1rs1ReconcilerName+"-token-123456",
 				core.Namespace(nsReconcilerKey.Namespace),
 			),
 			want: nil,
@@ -2767,7 +2767,7 @@ func TestMapSecretToRepoSyncs(t *testing.T) {
 		{
 			name: fmt.Sprintf("A secret from the %s namespace starting with %s, including `-token-`, with a mapping service account",
 				nsReconcilerKey.Namespace, core.NsReconcilerPrefix+"-"),
-			secret: fake.SecretObject(serviceAccountToken, core.Namespace(nsReconcilerKey.Namespace)),
+			secret: k8sobjects.SecretObject(serviceAccountToken, core.Namespace(nsReconcilerKey.Namespace)),
 			want: []reconcile.Request{
 				{
 					NamespacedName: types.NamespacedName{
@@ -2779,12 +2779,12 @@ func TestMapSecretToRepoSyncs(t *testing.T) {
 		},
 		{
 			name:   "A secret from the ns1 namespace with no RepoSync found",
-			secret: fake.SecretObject(reposyncSSHKey, core.Namespace("any-ns")),
+			secret: k8sobjects.SecretObject(reposyncSSHKey, core.Namespace("any-ns")),
 			want:   nil,
 		},
 		{
 			name:   fmt.Sprintf("A secret %s from the ns1 namespace with mapping RepoSyncs", reposyncSSHKey),
-			secret: fake.SecretObject(reposyncSSHKey, core.Namespace("ns1")),
+			secret: k8sobjects.SecretObject(reposyncSSHKey, core.Namespace("ns1")),
 			want: []reconcile.Request{
 				{
 					NamespacedName: types.NamespacedName{
@@ -2802,7 +2802,7 @@ func TestMapSecretToRepoSyncs(t *testing.T) {
 		},
 		{
 			name:   fmt.Sprintf("A secret %s from the ns1 namespace with mapping RepoSyncs", testSecretName),
-			secret: fake.SecretObject(testSecretName, core.Namespace("ns1")),
+			secret: k8sobjects.SecretObject(testSecretName, core.Namespace("ns1")),
 			want: []reconcile.Request{
 				{
 					NamespacedName: types.NamespacedName{
@@ -2814,7 +2814,7 @@ func TestMapSecretToRepoSyncs(t *testing.T) {
 		},
 		{
 			name:   fmt.Sprintf("A caCertSecretRef %s from the ns1 namespace with mapping RepoSyncs", caCertSecret),
-			secret: fake.SecretObject(caCertSecret, core.Namespace("ns1")),
+			secret: k8sobjects.SecretObject(caCertSecret, core.Namespace("ns1")),
 			want: []reconcile.Request{
 				{
 					NamespacedName: types.NamespacedName{
@@ -2876,22 +2876,22 @@ func TestMapObjectToRepoSync(t *testing.T) {
 		// Deployment
 		{
 			name:   "A deployment from the default namespace",
-			object: fake.DeploymentObject(core.Name("deploy1"), core.Namespace("default")),
+			object: k8sobjects.DeploymentObject(core.Name("deploy1"), core.Namespace("default")),
 			want:   nil,
 		},
 		{
 			name:   fmt.Sprintf("A deployment from the %s namespace NOT starting with %s", nsReconcilerKey.Namespace, core.NsReconcilerPrefix+"-"),
-			object: fake.DeploymentObject(core.Name("deploy1"), core.Namespace(nsReconcilerKey.Namespace)),
+			object: k8sobjects.DeploymentObject(core.Name("deploy1"), core.Namespace(nsReconcilerKey.Namespace)),
 			want:   nil,
 		},
 		{
 			name:   fmt.Sprintf("A deployment from the %s namespace starting with %s, no mapping RepoSync", nsReconcilerKey.Namespace, core.NsReconcilerPrefix+"-"),
-			object: fake.DeploymentObject(core.Name(core.NsReconcilerName("any", "any")), core.Namespace(nsReconcilerKey.Namespace)),
+			object: k8sobjects.DeploymentObject(core.Name(core.NsReconcilerName("any", "any")), core.Namespace(nsReconcilerKey.Namespace)),
 			want:   nil,
 		},
 		{
 			name:   fmt.Sprintf("A deployment from the %s namespace starting with %s, with mapping RepoSync", nsReconcilerKey.Namespace, core.NsReconcilerPrefix+"-"),
-			object: fake.DeploymentObject(core.Name(ns1rs1ReconcilerName), core.Namespace(nsReconcilerKey.Namespace)),
+			object: k8sobjects.DeploymentObject(core.Name(ns1rs1ReconcilerName), core.Namespace(nsReconcilerKey.Namespace)),
 			want: []reconcile.Request{
 				{
 					NamespacedName: types.NamespacedName{
@@ -2904,22 +2904,22 @@ func TestMapObjectToRepoSync(t *testing.T) {
 		// ServiceAccount
 		{
 			name:   "A serviceaccount from the default namespace",
-			object: fake.ServiceAccountObject("sa1", core.Namespace("default")),
+			object: k8sobjects.ServiceAccountObject("sa1", core.Namespace("default")),
 			want:   nil,
 		},
 		{
 			name:   fmt.Sprintf("A serviceaccount from the %s namespace NOT starting with %s", nsReconcilerKey.Namespace, core.NsReconcilerPrefix+"-"),
-			object: fake.ServiceAccountObject("sa1", core.Namespace(nsReconcilerKey.Namespace)),
+			object: k8sobjects.ServiceAccountObject("sa1", core.Namespace(nsReconcilerKey.Namespace)),
 			want:   nil,
 		},
 		{
 			name:   fmt.Sprintf("A serviceaccount from the %s namespace starting with %s, no mapping RepoSync", nsReconcilerKey.Namespace, core.NsReconcilerPrefix+"-"),
-			object: fake.ServiceAccountObject(core.NsReconcilerName("any", "any"), core.Namespace(nsReconcilerKey.Namespace)),
+			object: k8sobjects.ServiceAccountObject(core.NsReconcilerName("any", "any"), core.Namespace(nsReconcilerKey.Namespace)),
 			want:   nil,
 		},
 		{
 			name:   fmt.Sprintf("A serviceaccount from the %s namespace starting with %s, with mapping RepoSync", nsReconcilerKey.Namespace, core.NsReconcilerPrefix+"-"),
-			object: fake.ServiceAccountObject(ns1rs1ReconcilerName, core.Namespace(nsReconcilerKey.Namespace)),
+			object: k8sobjects.ServiceAccountObject(ns1rs1ReconcilerName, core.Namespace(nsReconcilerKey.Namespace)),
 			want: []reconcile.Request{
 				{
 					NamespacedName: types.NamespacedName{
@@ -2932,17 +2932,17 @@ func TestMapObjectToRepoSync(t *testing.T) {
 		// RoleBinding
 		{
 			name:   "A rolebinding from the default namespace",
-			object: fake.RoleBindingObject(core.Name("rb1"), core.Namespace("default")),
+			object: k8sobjects.RoleBindingObject(core.Name("rb1"), core.Namespace("default")),
 			want:   nil,
 		},
 		{
 			name:   fmt.Sprintf("A rolebinding from the %s namespace, different from %s", rs1.Namespace, rsRoleBindingName),
-			object: fake.RoleBindingObject(core.Name("any"), core.Namespace(rs1.Namespace)),
+			object: k8sobjects.RoleBindingObject(core.Name("any"), core.Namespace(rs1.Namespace)),
 			want:   nil,
 		},
 		{
 			name:   fmt.Sprintf("A rolebinding from the %s namespace, same as %s", rs1.Namespace, rsRoleBindingName),
-			object: fake.RoleBindingObject(core.Name(rsRoleBindingName), core.Namespace(rs1.Namespace)),
+			object: k8sobjects.RoleBindingObject(core.Name(rsRoleBindingName), core.Namespace(rs1.Namespace)),
 			want: []reconcile.Request{
 				{
 					NamespacedName: types.NamespacedName{
@@ -3177,7 +3177,7 @@ func TestRepoSyncWithHelm(t *testing.T) {
 		metadata.SyncKindLabel:            testReconciler.syncKind,
 		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
-	ksaNoGSAAnnotation := fake.ServiceAccountObject(
+	ksaNoGSAAnnotation := k8sobjects.ServiceAccountObject(
 		nsReconcilerName,
 		core.Namespace(configsync.ControllerNamespace),
 		core.Labels(labels),
@@ -3253,7 +3253,7 @@ func TestRepoSyncWithHelm(t *testing.T) {
 	}
 
 	// test 3: validations
-	ksaWithGSAAnnotation := fake.ServiceAccountObject(
+	ksaWithGSAAnnotation := k8sobjects.ServiceAccountObject(
 		nsReconcilerName,
 		core.Namespace(configsync.ControllerNamespace),
 		core.Annotation(GCPSAAnnotationKey, rs.Spec.Helm.GCPServiceAccountEmail),
@@ -3428,7 +3428,7 @@ func TestRepoSyncWithOCI(t *testing.T) {
 		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
 
-	ksaNoGSAAnnotation := fake.ServiceAccountObject(
+	ksaNoGSAAnnotation := k8sobjects.ServiceAccountObject(
 		nsReconcilerName,
 		core.Namespace(configsync.ControllerNamespace),
 		core.Labels(labels),
@@ -3505,7 +3505,7 @@ func TestRepoSyncWithOCI(t *testing.T) {
 	}
 
 	// test 3: validations
-	ksaWithGSAAnnotation := fake.ServiceAccountObject(
+	ksaWithGSAAnnotation := k8sobjects.ServiceAccountObject(
 		nsReconcilerName,
 		core.Namespace(configsync.ControllerNamespace),
 		core.Annotation(GCPSAAnnotationKey, rs.Spec.Oci.GCPServiceAccountEmail),
@@ -3667,7 +3667,7 @@ func TestRepoSyncWithOCI(t *testing.T) {
 }
 
 func TestRepoSyncSpecValidation(t *testing.T) {
-	rs := fake.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
+	rs := k8sobjects.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
 	fakeClient, _, testReconciler := setupNSReconciler(t, rs)
 
@@ -3676,7 +3676,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
-	wantRs := fake.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
+	wantRs := k8sobjects.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
 	reposync.SetStalled(wantRs, "Validation", validate.InvalidSourceType(rs))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
@@ -3860,12 +3860,12 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 }
 
 func TestRepoSyncReconcileStaleClientCache(t *testing.T) {
-	rs := fake.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
+	rs := k8sobjects.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
 	fakeClient, _, testReconciler := setupNSReconciler(t, rs)
 	ctx := context.Background()
 
-	rs = fake.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
+	rs = k8sobjects.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
 	err := fakeClient.Get(ctx, core.ObjectNamespacedName(rs), rs)
 	require.NoError(t, err, "unexpected Get error")
 	oldRS := rs.DeepCopy()
@@ -3875,7 +3875,7 @@ func TestRepoSyncReconcileStaleClientCache(t *testing.T) {
 	require.NoError(t, err, "unexpected Reconcile error")
 
 	// Expect Stalled condition with True status, because the RepoSync is invalid
-	rs = fake.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
+	rs = k8sobjects.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
 	err = fakeClient.Get(ctx, core.ObjectNamespacedName(rs), rs)
 	require.NoError(t, err, "unexpected Get error")
 	reconcilingCondition := reposync.GetCondition(rs.Status.Conditions, v1beta1.RepoSyncStalled)
@@ -3900,7 +3900,7 @@ func TestRepoSyncReconcileStaleClientCache(t *testing.T) {
 	require.NoError(t, err, "unexpected Reconcile error")
 
 	// Expect the same Stalled condition error message
-	rs = fake.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
+	rs = k8sobjects.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
 	err = fakeClient.Get(ctx, core.ObjectNamespacedName(rs), rs)
 	require.NoError(t, err, "unexpected Get error")
 	reconcilingCondition = reposync.GetCondition(rs.Status.Conditions, v1beta1.RepoSyncStalled)
@@ -3909,7 +3909,7 @@ func TestRepoSyncReconcileStaleClientCache(t *testing.T) {
 	require.Contains(t, reconcilingCondition.Message, "KNV1061: RepoSyncs must specify spec.sourceType", "unexpected Stalled condition message")
 
 	// Simulate a spec update, with ResourceVersion updated by the apiserver
-	rs = fake.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
+	rs = k8sobjects.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
 	err = fakeClient.Get(ctx, core.ObjectNamespacedName(rs), rs)
 	require.NoError(t, err, "unexpected Get error")
 	rs.Spec.SourceType = configsync.GitSource
@@ -3922,7 +3922,7 @@ func TestRepoSyncReconcileStaleClientCache(t *testing.T) {
 	require.NoError(t, err, "unexpected Reconcile error")
 
 	// Expect Stalled condition with True status, because the RepoSync is differently invalid
-	rs = fake.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
+	rs = k8sobjects.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
 	err = fakeClient.Get(ctx, core.ObjectNamespacedName(rs), rs)
 	require.NoError(t, err, "unexpected Get error")
 	reconcilingCondition = reposync.GetCondition(rs.Status.Conditions, v1beta1.RepoSyncStalled)
@@ -4060,7 +4060,7 @@ func TestUpdateNamespaceReconcilerLogLevelWithOverride(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 
-	wantRs := fake.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
+	wantRs := k8sobjects.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
 	wantRs.Spec = rs.Spec
 	wantRs.Status.Reconciler = nsReconcilerName
 	reposync.SetReconciling(wantRs, "Deployment",
@@ -4168,7 +4168,7 @@ func TestCreateAndUpdateNamespaceReconcilerWithOverrideOnAutopilot(t *testing.T)
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 
-	wantRs := fake.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
+	wantRs := k8sobjects.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
 	wantRs.Spec = rs.Spec
 	wantRs.Status.Reconciler = nsReconcilerName
 	reposync.SetReconciling(wantRs, "Deployment",
@@ -4343,16 +4343,16 @@ func TestRepoSyncGarbageCollectSecrets(t *testing.T) {
 	}
 
 	reconcilerRef := core.NsReconcilerName(reposyncNs, reposyncName)
-	upsertedGitSecret1 := fake.SecretObject(
+	upsertedGitSecret1 := k8sobjects.SecretObject(
 		ReconcilerResourceName(reconcilerRef, gitSecret1Name),
 		core.Namespace(configsync.ControllerNamespace))
-	upsertedGitSecret2 := fake.SecretObject(
+	upsertedGitSecret2 := k8sobjects.SecretObject(
 		ReconcilerResourceName(reconcilerRef, gitSecret2Name),
 		core.Namespace(configsync.ControllerNamespace))
-	upsertedCertSecret1 := fake.SecretObject(
+	upsertedCertSecret1 := k8sobjects.SecretObject(
 		ReconcilerResourceName(reconcilerRef, caCertSecret1Name),
 		core.Namespace(configsync.ControllerNamespace))
-	upsertedCertSecret2 := fake.SecretObject(
+	upsertedCertSecret2 := k8sobjects.SecretObject(
 		ReconcilerResourceName(reconcilerRef, caCertSecret2Name),
 		core.Namespace(configsync.ControllerNamespace))
 
@@ -4770,7 +4770,7 @@ func namespacedName(name, namespace string) reconcile.Request {
 }
 
 func repoSyncDeployment(reconcilerName string, muts ...depMutator) *appsv1.Deployment {
-	dep := fake.DeploymentObject(
+	dep := k8sobjects.DeploymentObject(
 		core.Namespace(configsync.ControllerNamespace),
 		core.Name(reconcilerName),
 	)

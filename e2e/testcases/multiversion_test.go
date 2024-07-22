@@ -29,7 +29,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -47,7 +47,7 @@ func TestMultipleVersions_CustomResourceV1(t *testing.T) {
 	nt.RenewClient()
 
 	// Add the v1 Anvils and verify they are created.
-	nsObj := fake.NamespaceObject("foo")
+	nsObj := k8sobjects.NamespaceObject("foo")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", nsObj))
 	anvilv1Obj := anvilCR("v1", "first", 10)
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvilv1.yaml", anvilv1Obj))
@@ -101,7 +101,7 @@ func TestMultipleVersions_CustomResourceV1(t *testing.T) {
 }
 
 func anvilV1CRD() *apiextensionsv1.CustomResourceDefinition {
-	crd := fake.CustomResourceDefinitionV1Object(core.Name("anvils.acme.com"))
+	crd := k8sobjects.CustomResourceDefinitionV1Object(core.Name("anvils.acme.com"))
 	crd.Spec.Group = "acme.com"
 	crd.Spec.Names = apiextensionsv1.CustomResourceDefinitionNames{
 		Plural:   "anvils",
@@ -186,7 +186,7 @@ func TestMultipleVersions_RoleBinding(t *testing.T) {
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.Reconciliation1)
 
-	rbV1 := fake.RoleBindingObject(core.Name("v1user"))
+	rbV1 := k8sobjects.RoleBindingObject(core.Name("v1user"))
 	rbV1.RoleRef = rbacv1.RoleRef{
 		APIGroup: "rbac.authorization.k8s.io",
 		Kind:     "Role",
@@ -199,7 +199,7 @@ func TestMultipleVersions_RoleBinding(t *testing.T) {
 	})
 
 	// Add the v1 RoleBinding and verify it is created.
-	nsObj := fake.NamespaceObject("foo")
+	nsObj := k8sobjects.NamespaceObject("foo")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", nsObj))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/rbv1.yaml", rbV1))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding v1 RoleBinding"))

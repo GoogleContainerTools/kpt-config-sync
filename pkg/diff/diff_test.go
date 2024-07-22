@@ -22,12 +22,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/diff/difftest"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/policycontroller"
 	"kpt.dev/configsync/pkg/syncer/syncertest"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/cli-utils/pkg/common"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -50,81 +50,81 @@ func TestDiffType(t *testing.T) {
 		// Declared + no actual paths.
 		{
 			name:     "declared + no actual, management enabled: create",
-			declared: fake.RoleObject(syncertest.ManagementEnabled),
+			declared: k8sobjects.RoleObject(syncertest.ManagementEnabled),
 			want:     Create,
 		},
 		{
 			name:     "declared + no actual, management disabled: no op",
-			declared: fake.RoleObject(syncertest.ManagementDisabled),
+			declared: k8sobjects.RoleObject(syncertest.ManagementDisabled),
 			want:     NoOp,
 		},
 		{
 			name:     "declared + no actual, no management: error",
 			scope:    declared.RootScope,
-			declared: fake.RoleObject(),
+			declared: k8sobjects.RoleObject(),
 			want:     Error,
 		},
 		// Declared + actual paths.
 		{
 			name:     "declared + actual, management enabled, no manager annotation, root scope, can manage: update",
 			scope:    declared.RootScope,
-			declared: fake.RoleObject(syncertest.ManagementEnabled),
-			actual:   fake.RoleObject(syncertest.ManagementEnabled),
+			declared: k8sobjects.RoleObject(syncertest.ManagementEnabled),
+			actual:   k8sobjects.RoleObject(syncertest.ManagementEnabled),
 			want:     Update,
 		},
 		{
 			name:     "declared + actual, management enabled, no manager annotation, namespace scope, can manage: update",
 			scope:    "shipping",
-			declared: fake.RoleObject(syncertest.ManagementEnabled),
-			actual:   fake.RoleObject(syncertest.ManagementEnabled),
+			declared: k8sobjects.RoleObject(syncertest.ManagementEnabled),
+			actual:   k8sobjects.RoleObject(syncertest.ManagementEnabled),
 			want:     Update,
 		},
 		{
 			name:     "declared + actual, management enabled, root scope / self-owned object, can manage: update",
 			scope:    declared.RootScope,
-			declared: fake.RoleObject(syncertest.ManagementEnabled),
-			actual: fake.RoleObject(syncertest.ManagementEnabled,
+			declared: k8sobjects.RoleObject(syncertest.ManagementEnabled),
+			actual: k8sobjects.RoleObject(syncertest.ManagementEnabled,
 				difftest.ManagedBy(declared.RootScope, syncName)),
 			want: Update,
 		},
 		{
 			name:     "declared + actual, management enabled, root scope / namespace-owned object, can manage: update",
 			scope:    declared.RootScope,
-			declared: fake.RoleObject(syncertest.ManagementEnabled),
-			actual: fake.RoleObject(syncertest.ManagementEnabled,
+			declared: k8sobjects.RoleObject(syncertest.ManagementEnabled),
+			actual: k8sobjects.RoleObject(syncertest.ManagementEnabled,
 				difftest.ManagedBy("shipping", "any-rs")),
 			want: Update,
 		},
 		{
 			name:     "declared + actual, management enabled, namespace scope / self-owned object, can manage: update",
 			scope:    "shipping",
-			declared: fake.RoleObject(syncertest.ManagementEnabled),
-			actual: fake.RoleObject(syncertest.ManagementEnabled,
+			declared: k8sobjects.RoleObject(syncertest.ManagementEnabled),
+			actual: k8sobjects.RoleObject(syncertest.ManagementEnabled,
 				difftest.ManagedBy("shipping", syncName)),
 			want: Update,
 		},
 		{
 			name:     "declared + actual, management enabled, root scope / other root-owned object, can manage: conflict",
 			scope:    declared.RootScope,
-			declared: fake.RoleObject(syncertest.ManagementEnabled),
-			actual: fake.RoleObject(syncertest.ManagementEnabled,
+			declared: k8sobjects.RoleObject(syncertest.ManagementEnabled),
+			actual: k8sobjects.RoleObject(syncertest.ManagementEnabled,
 				difftest.ManagedBy(declared.RootScope, "other-rs")),
 			want: ManagementConflict,
 		},
 		{
 			name:     "declared + actual, management enabled, namespace scope / other namespace-owned object, can manage: conflict",
 			scope:    "shipping",
-			declared: fake.RoleObject(syncertest.ManagementEnabled),
-			actual: fake.RoleObject(syncertest.ManagementEnabled,
+			declared: k8sobjects.RoleObject(syncertest.ManagementEnabled),
+			actual: k8sobjects.RoleObject(syncertest.ManagementEnabled,
 				difftest.ManagedBy("shipping", "other-rs")),
 			want: ManagementConflict,
 		},
 		{
 			name:  "declared + actual, management enabled, namespace scope / root-owned object: conflict",
 			scope: "foo",
-			declared: fake.RoleObject(syncertest.ManagementEnabled,
+			declared: k8sobjects.RoleObject(syncertest.ManagementEnabled,
 				core.Namespace("foo")),
-			actual: fake.RoleObject(syncertest.ManagementEnabled,
+			actual: k8sobjects.RoleObject(syncertest.ManagementEnabled,
 				core.Namespace("foo"),
 				difftest.ManagedBy(declared.RootScope, "any-rs")),
 			want: ManagementConflict,
@@ -132,37 +132,37 @@ func TestDiffType(t *testing.T) {
 		{
 			name:     "declared + actual, management disabled, root scope, can manage, with meta, no manager: abandon",
 			scope:    declared.RootScope,
-			declared: fake.RoleObject(syncertest.ManagementDisabled),
-			actual:   fake.RoleObject(syncertest.ManagementEnabled),
+			declared: k8sobjects.RoleObject(syncertest.ManagementDisabled),
+			actual:   k8sobjects.RoleObject(syncertest.ManagementEnabled),
 			want:     Abandon,
 		},
 		{
 			name:     "declared + actual, management disabled, namespace scope, can manage, with meta, no manager: abandon",
 			scope:    "shipping",
-			declared: fake.RoleObject(syncertest.ManagementDisabled),
-			actual:   fake.RoleObject(syncertest.ManagementEnabled),
+			declared: k8sobjects.RoleObject(syncertest.ManagementDisabled),
+			actual:   k8sobjects.RoleObject(syncertest.ManagementEnabled),
 			want:     Abandon,
 		},
 		{
 			name:     "declared + actual, management disabled, root scope, can manage, no meta: no op",
 			scope:    declared.RootScope,
-			declared: fake.RoleObject(syncertest.ManagementDisabled),
-			actual:   fake.RoleObject(),
+			declared: k8sobjects.RoleObject(syncertest.ManagementDisabled),
+			actual:   k8sobjects.RoleObject(),
 			want:     NoOp,
 		},
 		{
 			name:     "declared + actual, management disabled, namespace scope, can manage, no meta: no op",
 			scope:    "shipping",
-			declared: fake.RoleObject(syncertest.ManagementDisabled),
-			actual:   fake.RoleObject(),
+			declared: k8sobjects.RoleObject(syncertest.ManagementDisabled),
+			actual:   k8sobjects.RoleObject(),
 			want:     NoOp,
 		},
 		{
 			name:  "declared + actual, management disabled, namespace scope / root-owned object: no op",
 			scope: "shipping",
-			declared: fake.RoleObject(syncertest.ManagementDisabled,
+			declared: k8sobjects.RoleObject(syncertest.ManagementDisabled,
 				core.Namespace("shipping")),
-			actual: fake.RoleObject(syncertest.ManagementEnabled,
+			actual: k8sobjects.RoleObject(syncertest.ManagementEnabled,
 				core.Namespace("shipping"),
 				difftest.ManagedBy(declared.RootScope, "any-rs")),
 			want: NoOp,
@@ -170,9 +170,9 @@ func TestDiffType(t *testing.T) {
 		{
 			name:  "declared + actual, management disabled, namespace scope / self-owned object: abandon",
 			scope: "shipping",
-			declared: fake.RoleObject(syncertest.ManagementDisabled,
+			declared: k8sobjects.RoleObject(syncertest.ManagementDisabled,
 				core.Namespace("shipping")),
-			actual: fake.RoleObject(syncertest.ManagementEnabled,
+			actual: k8sobjects.RoleObject(syncertest.ManagementEnabled,
 				core.Namespace("shipping"),
 				difftest.ManagedBy("shipping", syncName)),
 			want: Abandon,
@@ -180,45 +180,45 @@ func TestDiffType(t *testing.T) {
 		{
 			name:  "declared + actual, management disabled, namespace scope / other namespace-owned object: no op",
 			scope: "shipping",
-			declared: fake.RoleObject(syncertest.ManagementDisabled,
+			declared: k8sobjects.RoleObject(syncertest.ManagementDisabled,
 				core.Namespace("shipping")),
-			actual: fake.RoleObject(syncertest.ManagementEnabled,
+			actual: k8sobjects.RoleObject(syncertest.ManagementEnabled,
 				core.Namespace("shipping"),
 				difftest.ManagedBy("shipping", "other-rs")),
 			want: NoOp,
 		},
 		{
 			name: "declared + actual, management disabled, root scope / namespace-owned object: no op",
-			declared: fake.RoleObject(syncertest.ManagementDisabled,
+			declared: k8sobjects.RoleObject(syncertest.ManagementDisabled,
 				core.Namespace("shipping")),
-			actual: fake.RoleObject(syncertest.ManagementEnabled,
+			actual: k8sobjects.RoleObject(syncertest.ManagementEnabled,
 				core.Namespace("shipping"),
 				difftest.ManagedBy("shipping", "any-rs")),
 			want: NoOp,
 		},
 		{
 			name: "declared + actual, management disabled, root scope / self-owned object: abandon",
-			declared: fake.RoleObject(syncertest.ManagementDisabled,
+			declared: k8sobjects.RoleObject(syncertest.ManagementDisabled,
 				core.Namespace("shipping")),
-			actual: fake.RoleObject(syncertest.ManagementEnabled,
+			actual: k8sobjects.RoleObject(syncertest.ManagementEnabled,
 				core.Namespace("shipping"),
 				difftest.ManagedBy(declared.RootScope, syncName)),
 			want: Abandon,
 		},
 		{
 			name: "declared + actual, management disabled, root scope / other root-owned object: no op",
-			declared: fake.RoleObject(syncertest.ManagementDisabled,
+			declared: k8sobjects.RoleObject(syncertest.ManagementDisabled,
 				core.Namespace("shipping")),
-			actual: fake.RoleObject(syncertest.ManagementEnabled,
+			actual: k8sobjects.RoleObject(syncertest.ManagementEnabled,
 				core.Namespace("shipping"),
 				difftest.ManagedBy(declared.RootScope, "other-rs")),
 			want: NoOp,
 		},
 		{
 			name: "declared + actual, management disabled, root scope / empty management annotation object: abandon",
-			declared: fake.RoleObject(syncertest.ManagementDisabled,
+			declared: k8sobjects.RoleObject(syncertest.ManagementDisabled,
 				core.Namespace("shipping")),
-			actual: fake.RoleObject(syncertest.ManagementEnabled,
+			actual: k8sobjects.RoleObject(syncertest.ManagementEnabled,
 				core.Namespace("shipping"),
 				difftest.ManagedBy("", configsync.RepoSyncName)),
 			want: Abandon,
@@ -226,26 +226,26 @@ func TestDiffType(t *testing.T) {
 		{
 			name:     "declared + actual, declared management invalid: error",
 			scope:    declared.RootScope,
-			declared: fake.RoleObject(syncertest.ManagementInvalid),
-			actual:   fake.RoleObject(),
+			declared: k8sobjects.RoleObject(syncertest.ManagementInvalid),
+			actual:   k8sobjects.RoleObject(),
 			want:     Error,
 		},
 		{
 			name:     "declared + actual, actual management invalid: error",
 			scope:    declared.RootScope,
-			declared: fake.RoleObject(syncertest.ManagementEnabled),
-			actual:   fake.RoleObject(syncertest.ManagementInvalid),
+			declared: k8sobjects.RoleObject(syncertest.ManagementEnabled),
+			actual:   k8sobjects.RoleObject(syncertest.ManagementInvalid),
 			want:     Update,
 		},
 		// IgnoreMutation path.
 		{
 			name: "prevent mutations",
-			declared: fake.RoleObject(
+			declared: k8sobjects.RoleObject(
 				syncertest.ManagementEnabled,
 				core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation),
 				core.Annotation("foo", "bar"),
 			),
-			actual: fake.RoleObject(
+			actual: k8sobjects.RoleObject(
 				syncertest.ManagementEnabled,
 				core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation),
 				core.Annotation("foo", "qux"),
@@ -256,12 +256,12 @@ func TestDiffType(t *testing.T) {
 			name: "update if actual missing annotation",
 			// The use case where the user has added the annotation to an object. We
 			// need to update the object so the actual one has the annotation now.
-			declared: fake.RoleObject(
+			declared: k8sobjects.RoleObject(
 				syncertest.ManagementEnabled,
 				core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation),
 				core.Annotation("foo", "bar"),
 			),
-			actual: fake.RoleObject(
+			actual: k8sobjects.RoleObject(
 				syncertest.ManagementEnabled,
 				core.Annotation("foo", "qux"),
 			),
@@ -275,11 +275,11 @@ func TestDiffType(t *testing.T) {
 			// There is an edge case where users manually annotate in-cluster objects,
 			// which has no effect on our behavior; we only honor declared lifecycle
 			// annotations.
-			declared: fake.RoleObject(
+			declared: k8sobjects.RoleObject(
 				syncertest.ManagementEnabled,
 				core.Annotation("foo", "bar"),
 			),
-			actual: fake.RoleObject(
+			actual: k8sobjects.RoleObject(
 				core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation),
 				core.Annotation("foo", "qux"),
 			),
@@ -289,13 +289,13 @@ func TestDiffType(t *testing.T) {
 		{
 			name:   "actual + no declared, no meta: no-op",
 			scope:  declared.RootScope,
-			actual: fake.RoleObject(),
+			actual: k8sobjects.RoleObject(),
 			want:   NoOp,
 		},
 		{
 			name:  "actual + no declared, owned: noop",
 			scope: declared.RootScope,
-			actual: fake.RoleObject(syncertest.ManagementEnabled,
+			actual: k8sobjects.RoleObject(syncertest.ManagementEnabled,
 				core.OwnerReference([]metav1.OwnerReference{
 					{},
 				})),
@@ -304,7 +304,7 @@ func TestDiffType(t *testing.T) {
 		{
 			name:  "actual + no declared, cannot manage (actual is managed by Config Sync): noop",
 			scope: "shipping",
-			actual: fake.RoleObject(syncertest.ManagementEnabled,
+			actual: k8sobjects.RoleObject(syncertest.ManagementEnabled,
 				core.Annotation(metadata.ResourceIDKey, "rbac.authorization.k8s.io_role_default-name"),
 				difftest.ManagedBy(declared.RootScope, configsync.RootSyncName)),
 			want: NoOp,
@@ -312,7 +312,7 @@ func TestDiffType(t *testing.T) {
 		{
 			name:  "actual + no declared, cannot manage (actual is not managed by Config Sync): noop",
 			scope: "shipping",
-			actual: fake.RoleObject(syncertest.ManagementEnabled,
+			actual: k8sobjects.RoleObject(syncertest.ManagementEnabled,
 				core.Annotation(metadata.ResourceIDKey, "rbac.authorization.k8s.io_role_wrong-name"),
 				difftest.ManagedBy(declared.RootScope, configsync.RootSyncName)),
 			want: NoOp,
@@ -320,63 +320,63 @@ func TestDiffType(t *testing.T) {
 		{
 			name:  "actual + no declared, not managed by Config Sync but has other Config Sync annotations: noop",
 			scope: "shipping",
-			actual: fake.RoleObject(syncertest.TokenAnnotation,
+			actual: k8sobjects.RoleObject(syncertest.TokenAnnotation,
 				difftest.ManagedBy(declared.RootScope, configsync.RootSyncName)),
 			want: NoOp,
 		},
 		{
 			name:  "actual + no declared, not managed by Config Sync (the configsync.gke.io/resource-id annotation is unset): noop",
 			scope: "shipping",
-			actual: fake.RoleObject(syncertest.ManagementEnabled,
+			actual: k8sobjects.RoleObject(syncertest.ManagementEnabled,
 				difftest.ManagedBy(declared.RootScope, configsync.RootSyncName)),
 			want: NoOp,
 		},
 		{
 			name:  "actual + no declared, not managed by Config Sync (the configmanagement.gke.io/managed annotation is set to disabled): noop",
 			scope: "shipping",
-			actual: fake.RoleObject(syncertest.ManagementDisabled,
+			actual: k8sobjects.RoleObject(syncertest.ManagementDisabled,
 				difftest.ManagedBy(declared.RootScope, configsync.RootSyncName)),
 			want: NoOp,
 		},
 		{
 			name:  "actual + no declared, not managed by Config Sync (the configsync.gke.io/resource-id annotation is incorrect): noop",
 			scope: "shipping",
-			actual: fake.RoleObject(syncertest.ManagementEnabled,
+			actual: k8sobjects.RoleObject(syncertest.ManagementEnabled,
 				core.Annotation(metadata.ResourceIDKey, "rbac.authorization.k8s.io_role_wrong-name"),
 				difftest.ManagedBy(declared.RootScope, configsync.RootSyncName)),
 			want: NoOp,
 		},
 		{
 			name: "actual + no declared, managed by Config Sync, prevent deletion: abandon",
-			actual: fake.RoleObject(syncertest.ManagementEnabled,
+			actual: k8sobjects.RoleObject(syncertest.ManagementEnabled,
 				core.Annotation(metadata.ResourceIDKey, "rbac.authorization.k8s.io_role_default-name"),
 				core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion)),
 			want: Abandon,
 		},
 		{
 			name: "actual + no declared, system Namespace: abandon",
-			actual: fake.NamespaceObject(metav1.NamespaceSystem,
+			actual: k8sobjects.NamespaceObject(metav1.NamespaceSystem,
 				core.Annotation(metadata.ResourceIDKey, "_namespace_kube-system"),
 				syncertest.ManagementEnabled),
 			want: Abandon,
 		},
 		{
 			name: "actual + no declared, gatekeeper Namespace: abandon",
-			actual: fake.NamespaceObject(policycontroller.NamespaceSystem,
+			actual: k8sobjects.NamespaceObject(policycontroller.NamespaceSystem,
 				core.Annotation(metadata.ResourceIDKey, "_namespace_gatekeeper-system"),
 				syncertest.ManagementEnabled),
 			want: Abandon,
 		},
 		{
 			name: "actual + no declared, managed: delete",
-			actual: fake.RoleObject(syncertest.ManagementEnabled,
+			actual: k8sobjects.RoleObject(syncertest.ManagementEnabled,
 				core.Annotation(metadata.ResourceIDKey, "rbac.authorization.k8s.io_role_kube-system"),
 				core.Name(metav1.NamespaceSystem)),
 			want: Delete,
 		},
 		{
 			name:   "actual + no declared, invalid management: abandon",
-			actual: fake.RoleObject(syncertest.ManagementInvalid),
+			actual: k8sobjects.RoleObject(syncertest.ManagementInvalid),
 			want:   NoOp,
 		},
 		// Error path.
@@ -423,19 +423,19 @@ func TestThreeWay(t *testing.T) {
 		{
 			name: "Update and Create - no previously declared",
 			newDeclared: []client.Object{
-				fake.NamespaceObject("namespace/" + testNs1),
-				fake.NamespaceObject("namespace/" + testNs2),
+				k8sobjects.NamespaceObject("namespace/" + testNs1),
+				k8sobjects.NamespaceObject("namespace/" + testNs2),
 			},
 			actual: []client.Object{
-				fake.NamespaceObject("namespace/"+testNs1, syncertest.ManagementEnabled),
+				k8sobjects.NamespaceObject("namespace/"+testNs1, syncertest.ManagementEnabled),
 			},
 			want: []Diff{
 				{
-					Declared: fake.NamespaceObject("namespace/" + testNs1),
-					Actual:   fake.NamespaceObject("namespace/"+testNs1, syncertest.ManagementEnabled),
+					Declared: k8sobjects.NamespaceObject("namespace/" + testNs1),
+					Actual:   k8sobjects.NamespaceObject("namespace/"+testNs1, syncertest.ManagementEnabled),
 				},
 				{
-					Declared: fake.NamespaceObject("namespace/" + testNs2),
+					Declared: k8sobjects.NamespaceObject("namespace/" + testNs2),
 					Actual:   nil,
 				},
 			},
@@ -443,19 +443,19 @@ func TestThreeWay(t *testing.T) {
 		{
 			name: "Update and Create - no actual",
 			newDeclared: []client.Object{
-				fake.NamespaceObject("namespace/" + testNs1),
-				fake.NamespaceObject("namespace/" + testNs2),
+				k8sobjects.NamespaceObject("namespace/" + testNs1),
+				k8sobjects.NamespaceObject("namespace/" + testNs2),
 			},
 			previousDeclared: []client.Object{
-				fake.NamespaceObject("namespace/"+testNs1, syncertest.ManagementEnabled),
+				k8sobjects.NamespaceObject("namespace/"+testNs1, syncertest.ManagementEnabled),
 			},
 			want: []Diff{
 				{
-					Declared: fake.NamespaceObject("namespace/" + testNs1),
+					Declared: k8sobjects.NamespaceObject("namespace/" + testNs1),
 					Actual:   nil,
 				},
 				{
-					Declared: fake.NamespaceObject("namespace/" + testNs2),
+					Declared: k8sobjects.NamespaceObject("namespace/" + testNs2),
 					Actual:   nil,
 				},
 			},
@@ -463,23 +463,23 @@ func TestThreeWay(t *testing.T) {
 		{
 			name: "Update and Create - with previousDeclared and actual",
 			newDeclared: []client.Object{
-				fake.NamespaceObject("namespace/" + testNs1),
-				fake.NamespaceObject("namespace/" + testNs2),
+				k8sobjects.NamespaceObject("namespace/" + testNs1),
+				k8sobjects.NamespaceObject("namespace/" + testNs2),
 			},
 			previousDeclared: []client.Object{
-				fake.NamespaceObject("namespace/"+testNs1, syncertest.ManagementEnabled),
+				k8sobjects.NamespaceObject("namespace/"+testNs1, syncertest.ManagementEnabled),
 			},
 			actual: []client.Object{
-				fake.NamespaceObject("namespace/"+testNs2, syncertest.ManagementEnabled),
+				k8sobjects.NamespaceObject("namespace/"+testNs2, syncertest.ManagementEnabled),
 			},
 			want: []Diff{
 				{
-					Declared: fake.NamespaceObject("namespace/" + testNs1),
+					Declared: k8sobjects.NamespaceObject("namespace/" + testNs1),
 					Actual:   nil,
 				},
 				{
-					Declared: fake.NamespaceObject("namespace/" + testNs2),
-					Actual:   fake.NamespaceObject("namespace/"+testNs2, syncertest.ManagementEnabled),
+					Declared: k8sobjects.NamespaceObject("namespace/" + testNs2),
+					Actual:   k8sobjects.NamespaceObject("namespace/"+testNs2, syncertest.ManagementEnabled),
 				},
 			},
 		},
@@ -487,51 +487,51 @@ func TestThreeWay(t *testing.T) {
 			name:        "Noop - with actual and no declared",
 			newDeclared: []client.Object{},
 			actual: []client.Object{
-				fake.NamespaceObject("namespace/"+testNs1, syncertest.ManagementEnabled),
+				k8sobjects.NamespaceObject("namespace/"+testNs1, syncertest.ManagementEnabled),
 			},
 			want: nil,
 		},
 		{
 			name: "Delete - no actual",
 			newDeclared: []client.Object{
-				fake.NamespaceObject("namespace/" + testNs1),
+				k8sobjects.NamespaceObject("namespace/" + testNs1),
 			},
 			previousDeclared: []client.Object{
-				fake.NamespaceObject("namespace/"+testNs1, syncertest.ManagementEnabled),
-				fake.NamespaceObject("namespace/"+testNs2, syncertest.ManagementEnabled),
+				k8sobjects.NamespaceObject("namespace/"+testNs1, syncertest.ManagementEnabled),
+				k8sobjects.NamespaceObject("namespace/"+testNs2, syncertest.ManagementEnabled),
 			},
 			want: []Diff{
 				{
-					Declared: fake.NamespaceObject("namespace/" + testNs1),
+					Declared: k8sobjects.NamespaceObject("namespace/" + testNs1),
 					Actual:   nil,
 				},
 				{
 					Declared: nil,
-					Actual:   fake.NamespaceObject("namespace/"+testNs2, syncertest.ManagementEnabled),
+					Actual:   k8sobjects.NamespaceObject("namespace/"+testNs2, syncertest.ManagementEnabled),
 				},
 			},
 		},
 		{
 			name: "Delete - with previous declared and actual",
 			newDeclared: []client.Object{
-				fake.NamespaceObject("namespace/" + testNs1),
+				k8sobjects.NamespaceObject("namespace/" + testNs1),
 			},
 			previousDeclared: []client.Object{
-				fake.NamespaceObject("namespace/"+testNs1, syncertest.ManagementEnabled),
-				fake.NamespaceObject("namespace/"+testNs2, syncertest.ManagementEnabled),
+				k8sobjects.NamespaceObject("namespace/"+testNs1, syncertest.ManagementEnabled),
+				k8sobjects.NamespaceObject("namespace/"+testNs2, syncertest.ManagementEnabled),
 			},
 			actual: []client.Object{
-				fake.NamespaceObject("namespace/" + testNs1),
-				fake.NamespaceObject("namespace/" + testNs2),
+				k8sobjects.NamespaceObject("namespace/" + testNs1),
+				k8sobjects.NamespaceObject("namespace/" + testNs2),
 			},
 			want: []Diff{
 				{
-					Declared: fake.NamespaceObject("namespace/" + testNs1),
-					Actual:   fake.NamespaceObject("namespace/" + testNs1),
+					Declared: k8sobjects.NamespaceObject("namespace/" + testNs1),
+					Actual:   k8sobjects.NamespaceObject("namespace/" + testNs1),
 				},
 				{
 					Declared: nil,
-					Actual:   fake.NamespaceObject("namespace/"+testNs2, syncertest.ManagementEnabled),
+					Actual:   k8sobjects.NamespaceObject("namespace/"+testNs2, syncertest.ManagementEnabled),
 				},
 			},
 		},
@@ -563,7 +563,7 @@ func TestThreeWay(t *testing.T) {
 }
 
 func TestUnknown(t *testing.T) {
-	obj := fake.NamespaceObject("hello")
+	obj := k8sobjects.NamespaceObject("hello")
 	decl := map[core.ID]client.Object{
 		core.IDOf(obj): obj,
 	}

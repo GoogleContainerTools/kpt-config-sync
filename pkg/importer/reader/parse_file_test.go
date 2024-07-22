@@ -22,8 +22,8 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 func TestParseYAMLFile(t *testing.T) {
@@ -78,7 +78,7 @@ metadata:
   name: shipping
 `,
 			expected: []*unstructured.Unstructured{
-				fake.UnstructuredObject(kinds.Namespace(), core.Name("shipping")),
+				k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("shipping")),
 			},
 		}, {
 			name: "one document with triple-dash in a string",
@@ -90,7 +90,7 @@ metadata:
     "a": "---"
 `,
 			expected: []*unstructured.Unstructured{
-				fake.UnstructuredObject(kinds.Namespace(), core.Name("shipping"), core.Label("a", "---")),
+				k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("shipping"), core.Label("a", "---")),
 			},
 		},
 		{
@@ -110,7 +110,7 @@ rules:
   verbs: [all]
 `,
 			expected: []*unstructured.Unstructured{
-				fake.UnstructuredObject(kinds.Namespace(), core.Name("shipping")),
+				k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("shipping")),
 				{
 					Object: map[string]interface{}{
 						"apiVersion": "rbac/v1",
@@ -139,7 +139,7 @@ kind: Namespace
 metadata:
   name: foo`,
 			expected: []*unstructured.Unstructured{
-				fake.UnstructuredObject(kinds.Namespace(), core.Name("foo")),
+				k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("foo")),
 			},
 		},
 		{
@@ -156,7 +156,7 @@ metadata:
       is not a separator
 `,
 			expected: []*unstructured.Unstructured{
-				fake.UnstructuredObject(kinds.Namespace(), core.Name("foo"),
+				k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("foo"),
 					core.Label("a", "this --- is not a separator\n")),
 			},
 		},
@@ -176,8 +176,8 @@ metadata:
   name: bar
 `,
 			expected: []*unstructured.Unstructured{
-				fake.UnstructuredObject(kinds.Namespace(), core.Name("foo")),
-				fake.UnstructuredObject(kinds.Namespace(), core.Name("bar")),
+				k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("foo")),
+				k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("bar")),
 			},
 		},
 		{
@@ -400,7 +400,7 @@ metadata:
 # comment
 `,
 			expected: []*unstructured.Unstructured{
-				fake.UnstructuredObject(kinds.KptFile(), core.Name("package-name")),
+				k8sobjects.UnstructuredObject(kinds.KptFile(), core.Name("package-name")),
 			},
 		}, {
 			name: "one document with another type",

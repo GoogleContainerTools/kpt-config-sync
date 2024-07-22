@@ -23,14 +23,14 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 )
 
 // NamespaceSelectors hydrates the given Tree objects by performing namespace
 // selection to filter out inactive objects that were copied into namespaces by
 // the Inheritance hydrator. It also validates that objects only specify legacy
 // NamespaceSelectors that are defined in an ancestor abstract namespace.
-func NamespaceSelectors(objs *objects.Tree) status.MultiError {
+func NamespaceSelectors(objs *fileobjects.Tree) status.MultiError {
 	nsSelectors, errs := selectorMap(objs.NamespaceSelectors)
 	if errs != nil {
 		return errs

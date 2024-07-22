@@ -19,13 +19,13 @@ import (
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // SelfReconcile checks if the given RootSync or RepoSync is the one that
 // configures the reconciler.
-func SelfReconcile(reconcilerName string) objects.ObjectVisitor {
+func SelfReconcile(reconcilerName string) fileobjects.ObjectVisitor {
 	return func(obj ast.FileObject) status.Error {
 		switch obj.GetObjectKind().GroupVersionKind().GroupKind() {
 		case kinds.RootSyncV1Beta1().GroupKind():

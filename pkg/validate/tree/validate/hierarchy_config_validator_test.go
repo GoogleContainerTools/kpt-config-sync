@@ -20,12 +20,12 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/hierarchyconfig"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 )
 
 var (
@@ -37,84 +37,84 @@ var (
 func TestHierarchyConfig(t *testing.T) {
 	testCases := []struct {
 		name     string
-		objs     *objects.Tree
+		objs     *fileobjects.Tree
 		wantErrs status.MultiError
 	}{
 		{
 			name: "Rolebinding allowed",
-			objs: &objects.Tree{
+			objs: &fileobjects.Tree{
 				Cluster: []ast.FileObject{
-					fake.ClusterRoleBinding(),
+					k8sobjects.ClusterRoleBinding(),
 				},
 				HierarchyConfigs: []ast.FileObject{
-					fake.HierarchyConfig(
-						fake.HierarchyConfigKind(v1.HierarchyModeDefault, kinds.RoleBinding())),
+					k8sobjects.HierarchyConfig(
+						k8sobjects.HierarchyConfigKind(v1.HierarchyModeDefault, kinds.RoleBinding())),
 				},
 			},
 		},
 		{
 			name: "Missing Group allowed",
-			objs: &objects.Tree{
+			objs: &fileobjects.Tree{
 				Cluster: []ast.FileObject{
-					fake.ClusterRoleBinding(),
+					k8sobjects.ClusterRoleBinding(),
 				},
 				HierarchyConfigs: []ast.FileObject{
-					fake.HierarchyConfig(
-						fake.HierarchyConfigKind(v1.HierarchyModeDefault, missingGroup)),
+					k8sobjects.HierarchyConfig(
+						k8sobjects.HierarchyConfigKind(v1.HierarchyModeDefault, missingGroup)),
 				},
 			},
 		},
 		{
 			name: "Missing Kind not allowed",
-			objs: &objects.Tree{
+			objs: &fileobjects.Tree{
 				Cluster: []ast.FileObject{
-					fake.ClusterRoleBinding(),
+					k8sobjects.ClusterRoleBinding(),
 				},
 				HierarchyConfigs: []ast.FileObject{
-					fake.HierarchyConfig(
-						fake.HierarchyConfigKind(v1.HierarchyModeDefault, missingKind)),
+					k8sobjects.HierarchyConfig(
+						k8sobjects.HierarchyConfigKind(v1.HierarchyModeDefault, missingKind)),
 				},
 			},
-			wantErrs: fake.Errors(hierarchyconfig.UnsupportedResourceInHierarchyConfigErrorCode),
+			wantErrs: status.FakeMultiError(hierarchyconfig.UnsupportedResourceInHierarchyConfigErrorCode),
 		},
 		{
 			name: "Cluster-scoped objects not allowed",
-			objs: &objects.Tree{
+			objs: &fileobjects.Tree{
 				Cluster: []ast.FileObject{
-					fake.ClusterRoleBinding(),
+					k8sobjects.ClusterRoleBinding(),
 				},
 				HierarchyConfigs: []ast.FileObject{
-					fake.HierarchyConfig(
-						fake.HierarchyConfigKind(v1.HierarchyModeDefault, kinds.ClusterRoleBinding())),
+					k8sobjects.HierarchyConfig(
+						k8sobjects.HierarchyConfigKind(v1.HierarchyModeDefault, kinds.ClusterRoleBinding())),
 				},
 			},
-			wantErrs: fake.Errors(hierarchyconfig.ClusterScopedResourceInHierarchyConfigErrorCode),
+			wantErrs: status.FakeMultiError(hierarchyconfig.ClusterScopedResourceInHierarchyConfigErrorCode),
 		},
 		{
 			name: "ConfigManagement objects not allowed",
-			objs: &objects.Tree{
+			objs: &fileobjects.Tree{
 				Cluster: []ast.FileObject{
-					fake.ClusterRoleBinding(),
+					k8sobjects.ClusterRoleBinding(),
 				},
 				HierarchyConfigs: []ast.FileObject{
-					fake.HierarchyConfig(
-						fake.HierarchyConfigKind(v1.HierarchyModeDefault, kinds.Sync())),
+					k8sobjects.HierarchyConfig(
+						k8sobjects.HierarchyConfigKind(v1.HierarchyModeDefault, kinds.Sync())),
 				},
 			},
-			wantErrs: fake.Errors(hierarchyconfig.UnsupportedResourceInHierarchyConfigErrorCode),
+			wantErrs: status.FakeMultiError(hierarchyconfig.UnsupportedResourceInHierarchyConfigErrorCode),
 		},
 		{
 			name: "Unknown mode not allowed",
-			objs: &objects.Tree{
+			objs: &fileobjects.Tree{
 				Cluster: []ast.FileObject{
-					fake.ClusterRoleBinding(),
+					k8sobjects.ClusterRoleBinding(),
 				},
 				HierarchyConfigs: []ast.FileObject{
-					fake.HierarchyConfig(
-						fake.HierarchyConfigKind(unknownMode, kinds.Role())),
+					k8sobjects.HierarchyConfig(
+						k8sobjects.HierarchyConfigKind(unknownMode, kinds.Role())),
 				},
 			},
-			wantErrs: fake.Errors(hierarchyconfig.IllegalHierarchyModeErrorCode),
+			wantErrs: status.FakeMultiError(hierarchyconfig.IllegalHierarchyModeErrorCode),
 		},
 	}
 

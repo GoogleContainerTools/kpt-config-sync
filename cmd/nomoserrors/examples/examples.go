@@ -24,6 +24,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/analyzer/hnc"
 	"kpt.dev/configsync/pkg/importer/analyzer/transform/selectors"
@@ -42,7 +43,6 @@ import (
 	"kpt.dev/configsync/pkg/parse"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/syncer/client"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/util/clusterconfig"
 	"kpt.dev/configsync/pkg/validate/raw/validate"
 	"kpt.dev/configsync/pkg/vet"
@@ -82,44 +82,44 @@ func Generate() AllExamples {
 	result.add(validation.IllegalNamespaceSubdirectoryError(node("namespaces/foo/bar"), node("namespaces/foo")))
 
 	// 1004
-	result.add(nonhierarchical.IllegalNamespaceSelectorAnnotationError(fake.Namespace("namespaces/foo")))
-	result.add(nonhierarchical.IllegalClusterSelectorAnnotationError(fake.Cluster(), csmetadata.ClusterNameSelectorAnnotationKey))
+	result.add(nonhierarchical.IllegalNamespaceSelectorAnnotationError(k8sobjects.Namespace("namespaces/foo")))
+	result.add(nonhierarchical.IllegalClusterSelectorAnnotationError(k8sobjects.Cluster(), csmetadata.ClusterNameSelectorAnnotationKey))
 
 	// 1005
-	result.add(nonhierarchical.IllegalManagementAnnotationError(fake.Role(), "invalid"))
+	result.add(nonhierarchical.IllegalManagementAnnotationError(k8sobjects.Role(), "invalid"))
 
 	// 1006
-	result.add(status.ObjectParseError(fake.Role(), errors.New("wrong type")))
+	result.add(status.ObjectParseError(k8sobjects.Role(), errors.New("wrong type")))
 
 	// 1007
-	result.add(validation.IllegalAbstractNamespaceObjectKindError(fake.RoleAtPath("namespaces/foo/bar/role.yaml")))
+	result.add(validation.IllegalAbstractNamespaceObjectKindError(k8sobjects.RoleAtPath("namespaces/foo/bar/role.yaml")))
 
 	// 1008 is Deprecated.
 	result.markDeprecated("1008")
 
 	// 1009
 	result.add(metadata.IllegalMetadataNamespaceDeclarationError(
-		fake.RoleAtPath("namespaces/foo/r.yaml", core.Namespace("bar")), "foo"))
+		k8sobjects.RoleAtPath("namespaces/foo/r.yaml", core.Namespace("bar")), "foo"))
 
 	// 1010
-	result.add(metadata.IllegalAnnotationDefinitionError(fake.Role(), []string{csmetadata.ConfigManagementPrefix + "illegal-annotation"}))
+	result.add(metadata.IllegalAnnotationDefinitionError(k8sobjects.Role(), []string{csmetadata.ConfigManagementPrefix + "illegal-annotation"}))
 
 	// 1011
-	result.add(metadata.IllegalLabelDefinitionError(fake.Role(), []string{csmetadata.ConfigManagementPrefix + "label"}))
+	result.add(metadata.IllegalLabelDefinitionError(k8sobjects.Role(), []string{csmetadata.ConfigManagementPrefix + "label"}))
 
 	// 1012 is Deprecated.
 	result.markDeprecated("1012")
 
 	// 1013
-	result.add(selectors.ObjectHasUnknownClusterSelector(fake.Role(), "undeclared-selector"))
-	result.add(selectors.ObjectHasUnknownNamespaceSelector(fake.Role(), "undeclared-selector"))
+	result.add(selectors.ObjectHasUnknownClusterSelector(k8sobjects.Role(), "undeclared-selector"))
+	result.add(selectors.ObjectHasUnknownNamespaceSelector(k8sobjects.Role(), "undeclared-selector"))
 	result.add(selectors.ObjectNotInNamespaceSelectorSubdirectory(
-		fake.RoleAtPath("namespaces/foo/role.yaml"),
-		fake.NamespaceSelectorAtPathWithName("namespaces/bar/selector.yaml", "default-ns-selector")))
+		k8sobjects.RoleAtPath("namespaces/foo/role.yaml"),
+		k8sobjects.NamespaceSelectorAtPathWithName("namespaces/bar/selector.yaml", "default-ns-selector")))
 
 	// 1014
-	result.add(selectors.InvalidSelectorError(fake.NamespaceSelector(), errors.New("some parse error")))
-	result.add(selectors.EmptySelectorError(fake.NamespaceSelector()))
+	result.add(selectors.InvalidSelectorError(k8sobjects.NamespaceSelector(), errors.New("some parse error")))
+	result.add(selectors.EmptySelectorError(k8sobjects.NamespaceSelector()))
 
 	// 1015 is Deprecated.
 	result.markDeprecated("1015")
@@ -134,13 +134,13 @@ func Generate() AllExamples {
 	result.markDeprecated("1018")
 
 	// 1019
-	result.add(metadata.IllegalTopLevelNamespaceError(fake.Namespace("namespaces")))
+	result.add(metadata.IllegalTopLevelNamespaceError(k8sobjects.Namespace("namespaces")))
 
 	// 1020
-	result.add(metadata.InvalidNamespaceNameError(fake.Namespace("namespaces/foo", core.Name("bar")), "foo"))
+	result.add(metadata.InvalidNamespaceNameError(k8sobjects.Namespace("namespaces/foo", core.Name("bar")), "foo"))
 
 	// 1021
-	result.add(status.UnknownObjectKindError(fake.UnstructuredAtPath(schema.GroupVersionKind{
+	result.add(status.UnknownObjectKindError(k8sobjects.UnstructuredAtPath(schema.GroupVersionKind{
 		Group:   "com.me",
 		Version: "v1",
 		Kind:    "Engineer",
@@ -162,7 +162,7 @@ func Generate() AllExamples {
 	result.markDeprecated("1026")
 
 	// 1027
-	result.add(system.UnsupportedRepoSpecVersion(fake.Repo(fake.RepoVersion("")), "0.0.0"))
+	result.add(system.UnsupportedRepoSpecVersion(k8sobjects.Repo(k8sobjects.RepoVersion("")), "0.0.0"))
 
 	// 1028
 	result.add(syntax.ReservedDirectoryNameError(cmpath.RelativeSlash("namespaces/" + configmanagement.ControllerNamespace)))
@@ -170,89 +170,89 @@ func Generate() AllExamples {
 
 	// 1029
 	result.add(nonhierarchical.NamespaceCollisionError("qux",
-		fake.Namespace("namespaces/foo/qux"),
-		fake.Namespace("namespaces/bar/qux")))
+		k8sobjects.Namespace("namespaces/foo/qux"),
+		k8sobjects.Namespace("namespaces/bar/qux")))
 	result.add(nonhierarchical.NamespaceMetadataNameCollisionError(kinds.Role().GroupKind(),
 		"backend", "admin",
-		fake.RoleAtPath("namespaces/backend/admin-1.yaml", core.Namespace("backend"), core.Name("admin")),
-		fake.RoleAtPath("namespaces/backend/admin-2.yaml", core.Namespace("backend"), core.Name("admin")),
-		fake.RoleAtPath("namespaces/backend/admin-3.yaml", core.Namespace("backend"), core.Name("admin")),
+		k8sobjects.RoleAtPath("namespaces/backend/admin-1.yaml", core.Namespace("backend"), core.Name("admin")),
+		k8sobjects.RoleAtPath("namespaces/backend/admin-2.yaml", core.Namespace("backend"), core.Name("admin")),
+		k8sobjects.RoleAtPath("namespaces/backend/admin-3.yaml", core.Namespace("backend"), core.Name("admin")),
 	))
 	result.add(nonhierarchical.ClusterMetadataNameCollisionError(kinds.ClusterRole().GroupKind(),
 		"cluster-admin",
-		fake.ClusterRoleAtPath("cluster/admin-1.yaml", core.Name("cluster-admin")),
-		fake.ClusterRoleAtPath("cluster/admin-2.yaml", core.Name("cluster-admin")),
+		k8sobjects.ClusterRoleAtPath("cluster/admin-1.yaml", core.Name("cluster-admin")),
+		k8sobjects.ClusterRoleAtPath("cluster/admin-2.yaml", core.Name("cluster-admin")),
 	))
 
 	// 1030
-	result.add(semantic.MultipleSingletonsError(fake.Namespace("namespaces/foo"), fake.Namespace("namespaces/foo")))
+	result.add(semantic.MultipleSingletonsError(k8sobjects.Namespace("namespaces/foo"), k8sobjects.Namespace("namespaces/foo")))
 
 	// 1031
-	result.add(nonhierarchical.MissingObjectNameError(fake.Role(core.Name(""))))
+	result.add(nonhierarchical.MissingObjectNameError(k8sobjects.Role(core.Name(""))))
 
 	// 1032
-	result.add(nonhierarchical.IllegalHierarchicalKind(fake.Repo()))
+	result.add(nonhierarchical.IllegalHierarchicalKind(k8sobjects.Repo()))
 
 	// 1033
-	result.add(syntax.IllegalSystemResourcePlacementError(fake.RepoAtPath("namespaces/repo.yaml")))
-	result.add(syntax.IllegalSystemResourcePlacementError(fake.HierarchyConfigAtPath("system/hierarchy-config.yaml")))
+	result.add(syntax.IllegalSystemResourcePlacementError(k8sobjects.RepoAtPath("namespaces/repo.yaml")))
+	result.add(syntax.IllegalSystemResourcePlacementError(k8sobjects.HierarchyConfigAtPath("system/hierarchy-config.yaml")))
 
 	// 1034
-	result.add(nonhierarchical.IllegalNamespace(fake.Namespace("namespaces/" + configmanagement.ControllerNamespace)))
+	result.add(nonhierarchical.IllegalNamespace(k8sobjects.Namespace("namespaces/" + configmanagement.ControllerNamespace)))
 
 	// 1035 is Deprecated.
 	result.markDeprecated("1035")
 
 	// 1036
-	result.add(nonhierarchical.InvalidMetadataNameError(fake.Role(core.Name("ABC"))))
+	result.add(nonhierarchical.InvalidMetadataNameError(k8sobjects.Role(core.Name("ABC"))))
 
 	// 1037 is Deprecated.
 	result.markDeprecated("1037")
 
 	// 1038
-	result.add(syntax.IllegalKindInNamespacesError(fake.NamespaceSelectorAtPath("namespaces/foo/ns-selector.yaml")))
+	result.add(syntax.IllegalKindInNamespacesError(k8sobjects.NamespaceSelectorAtPath("namespaces/foo/ns-selector.yaml")))
 
 	// 1039
-	result.add(validation.ShouldBeInSystemError(fake.RepoAtPath("namespaces/repo.yaml")))
-	result.add(validation.ShouldBeInClusterRegistryError(fake.ClusterAtPath("namespaces/cluster.yaml")))
-	result.add(validation.ShouldBeInClusterError(fake.ClusterRoleAtPath("namespaces/clusterrole.yaml")))
-	result.add(validation.ShouldBeInNamespacesError(fake.RoleAtPath("cluster/role.yaml")))
+	result.add(validation.ShouldBeInSystemError(k8sobjects.RepoAtPath("namespaces/repo.yaml")))
+	result.add(validation.ShouldBeInClusterRegistryError(k8sobjects.ClusterAtPath("namespaces/cluster.yaml")))
+	result.add(validation.ShouldBeInClusterError(k8sobjects.ClusterRoleAtPath("namespaces/clusterrole.yaml")))
+	result.add(validation.ShouldBeInNamespacesError(k8sobjects.RoleAtPath("cluster/role.yaml")))
 
 	// 1040 is Deprecated.
 	result.markDeprecated("1040")
 
 	// 1041
-	result.add(hierarchyconfig.UnsupportedResourceInHierarchyConfigError(fake.HierarchyConfig(), kinds.Namespace().GroupKind()))
+	result.add(hierarchyconfig.UnsupportedResourceInHierarchyConfigError(k8sobjects.HierarchyConfig(), kinds.Namespace().GroupKind()))
 
 	// 1042
-	result.add(hierarchyconfig.IllegalHierarchyModeError(fake.HierarchyConfig(), kinds.Role().GroupKind(), "invalid"))
+	result.add(hierarchyconfig.IllegalHierarchyModeError(k8sobjects.HierarchyConfig(), kinds.Role().GroupKind(), "invalid"))
 
 	// 1043
-	result.add(nonhierarchical.UnsupportedObjectError(fake.CustomResourceDefinitionV1Beta1()))
-	result.add(nonhierarchical.UnsupportedObjectError(fake.CustomResourceDefinitionV1()))
+	result.add(nonhierarchical.UnsupportedObjectError(k8sobjects.CustomResourceDefinitionV1Beta1()))
+	result.add(nonhierarchical.UnsupportedObjectError(k8sobjects.CustomResourceDefinitionV1()))
 
 	// 1044
 	result.add(semantic.UnsyncableResourcesInLeaf(node("namespaces/foo")))
 	result.add(semantic.UnsyncableResourcesInNonLeaf(node("namespaces/foo")))
 
 	// 1045
-	result.add(syntax.IllegalFieldsInConfigError(fake.Role(), id.Status))
+	result.add(syntax.IllegalFieldsInConfigError(k8sobjects.Role(), id.Status))
 
 	// 1046
-	result.add(hierarchyconfig.ClusterScopedResourceInHierarchyConfigError(fake.HierarchyConfig(), kinds.ClusterRole().GroupKind()))
+	result.add(hierarchyconfig.ClusterScopedResourceInHierarchyConfigError(k8sobjects.HierarchyConfig(), kinds.ClusterRole().GroupKind()))
 
 	// 1047
-	result.add(nonhierarchical.UnsupportedCRDRemovalError(fake.CustomResourceDefinitionV1Beta1()))
+	result.add(nonhierarchical.UnsupportedCRDRemovalError(k8sobjects.CustomResourceDefinitionV1Beta1()))
 
 	// 1048
-	result.add(nonhierarchical.InvalidCRDNameError(fake.CustomResourceDefinitionV1Beta1(), "default-names.apiextensions.k8s.io"))
+	result.add(nonhierarchical.InvalidCRDNameError(k8sobjects.CustomResourceDefinitionV1Beta1(), "default-names.apiextensions.k8s.io"))
 
 	// 1049 is Deprecated.
 	result.markDeprecated("1049")
 
 	// 1050
 	result.add(nonhierarchical.DeprecatedGroupKindError(
-		fake.UnstructuredAtPath(schema.GroupVersionKind{
+		k8sobjects.UnstructuredAtPath(schema.GroupVersionKind{
 			Group:   "extensions",
 			Version: "v1beta1",
 			Kind:    kinds.Deployment().Kind,
@@ -262,34 +262,34 @@ func Generate() AllExamples {
 	result.markDeprecated("1051")
 
 	// 1052
-	result.add(nonhierarchical.IllegalNamespaceOnClusterScopedResourceError(fake.ClusterRole(core.Namespace("foo"))))
+	result.add(nonhierarchical.IllegalNamespaceOnClusterScopedResourceError(k8sobjects.ClusterRole(core.Namespace("foo"))))
 
 	// 1053
-	result.add(nonhierarchical.MissingNamespaceOnNamespacedResourceError(fake.Role(core.Namespace(""))))
+	result.add(nonhierarchical.MissingNamespaceOnNamespacedResourceError(k8sobjects.Role(core.Namespace(""))))
 
 	// 1054
-	result.add(reader.InvalidAnnotationValueError(fake.Role(), []string{"foo", "bar"}))
+	result.add(reader.InvalidAnnotationValueError(k8sobjects.Role(), []string{"foo", "bar"}))
 
 	// 1055
-	result.add(nonhierarchical.InvalidNamespaceError(fake.Repo(core.Namespace("FOO"))))
+	result.add(nonhierarchical.InvalidNamespaceError(k8sobjects.Repo(core.Namespace("FOO"))))
 
 	// 1056
-	result.add(nonhierarchical.ManagedResourceInUnmanagedNamespace("foo", fake.Role()))
+	result.add(nonhierarchical.ManagedResourceInUnmanagedNamespace("foo", k8sobjects.Role()))
 
 	// 1057
-	result.add(hnc.IllegalDepthLabelError(fake.Role(), []string{"label" + csmetadata.DepthSuffix}))
+	result.add(hnc.IllegalDepthLabelError(k8sobjects.Role(), []string{"label" + csmetadata.DepthSuffix}))
 
 	// 1058
-	result.add(parse.BadScopeErr(fake.Role(core.Namespace("shipping")), "dev"))
+	result.add(parse.BadScopeErr(k8sobjects.Role(core.Namespace("shipping")), "dev"))
 
 	// 1059 is Deprecated.
 	result.markDeprecated("1059")
 
 	// 1060
-	result.add(status.ManagementConflictErrorWrap(fake.Role(), declared.ResourceManager(declared.RootScope, configsync.RootSyncName)))
+	result.add(status.ManagementConflictErrorWrap(k8sobjects.Role(), declared.ResourceManager(declared.RootScope, configsync.RootSyncName)))
 
 	// 1061
-	result.add(validate.MissingGitRepo(fake.RepoSyncObjectV1Beta1("bookstore", configsync.RepoSyncName)))
+	result.add(validate.MissingGitRepo(k8sobjects.RepoSyncObjectV1Beta1("bookstore", configsync.RepoSyncName)))
 
 	// 1062 is Deprecated.
 	result.markDeprecated("1062")
@@ -306,20 +306,20 @@ func Generate() AllExamples {
 	// 1065
 	result.add(clusterconfig.MalformedCRDError(
 		fmt.Errorf("spec.names.shortNames accessor error: foo is of the type string, expected []interface{}"),
-		fake.CustomResourceDefinitionV1Object()))
+		k8sobjects.CustomResourceDefinitionV1Object()))
 
 	// 1066
-	result.add(selectors.ClusterSelectorAnnotationConflictError(fake.NamespaceObject("my-namespace")))
+	result.add(selectors.ClusterSelectorAnnotationConflictError(k8sobjects.NamespaceObject("my-namespace")))
 
 	// 1067
-	result.add(status.EncodeDeclaredFieldError(fake.NamespaceObject("my-namespace"),
+	result.add(status.EncodeDeclaredFieldError(k8sobjects.NamespaceObject("my-namespace"),
 		fmt.Errorf(".spec.version not defined")))
 
 	// 1068
 	result.add(status.HydrationError(status.ActionableHydrationErrorCode, errors.New("user actionable rendering error")))
 
 	// 1069
-	result.add(validate.SelfReconcileError(fake.RootSyncV1Beta1(configsync.RootSyncName)))
+	result.add(validate.SelfReconcileError(k8sobjects.RootSyncV1Beta1(configsync.RootSyncName)))
 
 	// 2001
 	result.add(status.PathWrapError(errors.New("error creating directory"), "namespaces/foo"))
@@ -334,7 +334,7 @@ func Generate() AllExamples {
 	result.add(status.SourceError.Sprint("unable to connect to Git repository").Build())
 
 	// 2005
-	result.add(status.FightError(9.5, fake.NamespaceObject("gatekeeper-system")))
+	result.add(status.FightError(9.5, k8sobjects.NamespaceObject("gatekeeper-system")))
 
 	// 2006
 	result.add(status.EmptySourceError(10, "namespaces"))
@@ -344,22 +344,22 @@ func Generate() AllExamples {
 	result.markDeprecated("2007")
 
 	// 2008
-	result.add(client.ConflictCreateAlreadyExists(errors.New("already exists"), fake.RoleObject()))
-	result.add(client.ConflictUpdateOldVersion(errors.New("old version"), fake.RoleObject()))
-	result.add(client.ConflictUpdateDoesNotExist(errors.New("does not exist"), fake.RoleObject()))
+	result.add(client.ConflictCreateAlreadyExists(errors.New("already exists"), k8sobjects.RoleObject()))
+	result.add(client.ConflictUpdateOldVersion(errors.New("old version"), k8sobjects.RoleObject()))
+	result.add(client.ConflictUpdateDoesNotExist(errors.New("does not exist"), k8sobjects.RoleObject()))
 
 	// 2009
 	result.add(applier.Error(errors.New("failed to initialize an error")))
 
 	// 2010
-	result.add(status.ResourceWrap(errors.New("specific problem with resource"), "general message", fake.Role()))
+	result.add(status.ResourceWrap(errors.New("specific problem with resource"), "general message", k8sobjects.Role()))
 
 	// 2011
 	result.add(status.MissingResourceWrap(errors.New("the Role 'foo' in Namespace 'bar' was not found"),
-		"unable to update resource", fake.Role(core.Name("foo"), core.Namespace("bar"))))
+		"unable to update resource", k8sobjects.Role(core.Name("foo"), core.Namespace("bar"))))
 
 	// 2012
-	result.add(status.MultipleSingletonsError(fake.Repo(), fake.Repo()))
+	result.add(status.MultipleSingletonsError(k8sobjects.Repo(), k8sobjects.Repo()))
 
 	// 2013
 	result.add(status.InsufficientPermissionErrorBuilder.Sprint("could not create resources").Wrap(

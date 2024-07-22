@@ -31,16 +31,16 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/kinds"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/webhook/configuration"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func mustRemoveCustomResourceWithDefinition(nt *nomostest.NT, crd client.Object) {
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/anvil-crd.yaml", crd))
-	nsObj := fake.NamespaceObject("foo")
+	nsObj := k8sobjects.NamespaceObject("foo")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", nsObj))
 	anvilObj := anvilCR("v1", "heavy", 10)
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/anvil-v1.yaml", anvilObj))
@@ -130,7 +130,7 @@ func addAndRemoveCustomResource(nt *nomostest.NT, dir string, crd string) {
 	}
 	nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile("acme/cluster/anvil-crd.yaml", crdContent))
 	crdObj := nt.RootRepos[configsync.RootSyncName].MustGet(nt.T, "acme/cluster/anvil-crd.yaml")
-	nsObj := fake.NamespaceObject("prod")
+	nsObj := k8sobjects.NamespaceObject("prod")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/prod/ns.yaml", nsObj))
 	anvilObj := anvilCR("v1", "e2e-test-anvil", 10)
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/prod/anvil.yaml", anvilObj))
@@ -183,7 +183,7 @@ func addAndRemoveCustomResource(nt *nomostest.NT, dir string, crd string) {
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
-	err = nt.ValidateNotFound("anvils.acme.com", "", fake.CustomResourceDefinitionV1Object())
+	err = nt.ValidateNotFound("anvils.acme.com", "", k8sobjects.CustomResourceDefinitionV1Object())
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -211,7 +211,7 @@ func mustRemoveUnManagedCustomResource(nt *nomostest.NT, dir string, crd string)
 	}
 	nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile("acme/cluster/anvil-crd.yaml", crdContent))
 	crdObj := nt.RootRepos[configsync.RootSyncName].MustGet(nt.T, "acme/cluster/anvil-crd.yaml")
-	nsObj := fake.NamespaceObject("prod")
+	nsObj := k8sobjects.NamespaceObject("prod")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/prod/ns.yaml", nsObj))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding Anvil CRD"))
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -230,7 +230,7 @@ func mustRemoveUnManagedCustomResource(nt *nomostest.NT, dir string, crd string)
 		nt.T.Fatal(err)
 	}
 
-	err = nt.Validate("anvils.acme.com", "", fake.CustomResourceDefinitionV1Object())
+	err = nt.Validate("anvils.acme.com", "", k8sobjects.CustomResourceDefinitionV1Object())
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -250,7 +250,7 @@ func mustRemoveUnManagedCustomResource(nt *nomostest.NT, dir string, crd string)
 		nt.T.Fatal(err)
 	}
 
-	err = nt.ValidateNotFound("anvils.acme.com", "", fake.CustomResourceDefinitionV1Object())
+	err = nt.ValidateNotFound("anvils.acme.com", "", k8sobjects.CustomResourceDefinitionV1Object())
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -313,7 +313,7 @@ func addUpdateRemoveClusterScopedCRD(nt *nomostest.NT, dir string, crd string) {
 		nt.T.Fatal(err)
 	}
 
-	err = nt.Validate("clusteranvils.acme.com", "", fake.CustomResourceDefinitionV1Object(), hasTwoVersions)
+	err = nt.Validate("clusteranvils.acme.com", "", k8sobjects.CustomResourceDefinitionV1Object(), hasTwoVersions)
 	if err != nil {
 		nt.T.Error(err)
 	}
@@ -337,7 +337,7 @@ func addUpdateRemoveClusterScopedCRD(nt *nomostest.NT, dir string, crd string) {
 	if err != nil {
 		nt.T.Error(err)
 	}
-	err = nt.ValidateNotFound("clusteranvils.acme.com", "", fake.CustomResourceDefinitionV1Object())
+	err = nt.ValidateNotFound("clusteranvils.acme.com", "", k8sobjects.CustomResourceDefinitionV1Object())
 	if err != nil {
 		nt.T.Error(err)
 	}
@@ -360,7 +360,7 @@ func addUpdateNamespaceScopedCRD(nt *nomostest.NT, dir string, crd string) {
 	crdObj := nt.RootRepos[configsync.RootSyncName].MustGet(nt.T, "acme/cluster/anvil-crd.yaml")
 	anvilObj := anvilCR("v1", "e2e-test-anvil", 10)
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/prod/anvil.yaml", anvilObj))
-	nsObj := fake.NamespaceObject("prod")
+	nsObj := k8sobjects.NamespaceObject("prod")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/prod/ns.yaml", nsObj))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding namespacescoped Anvil CRD and CR"))
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -401,7 +401,7 @@ func addUpdateNamespaceScopedCRD(nt *nomostest.NT, dir string, crd string) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	err = nt.Validate("anvils.acme.com", "", fake.CustomResourceDefinitionV1Object(), hasTwoVersions)
+	err = nt.Validate("anvils.acme.com", "", k8sobjects.CustomResourceDefinitionV1Object(), hasTwoVersions)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -419,7 +419,7 @@ func addUpdateNamespaceScopedCRD(nt *nomostest.NT, dir string, crd string) {
 		nt.T.Fatal(err)
 	}
 
-	err = nt.Validate("anvils.acme.com", "", fake.CustomResourceDefinitionV1Object(), nomostest.IsEstablished, hasTwoVersions)
+	err = nt.Validate("anvils.acme.com", "", k8sobjects.CustomResourceDefinitionV1Object(), nomostest.IsEstablished, hasTwoVersions)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -438,7 +438,7 @@ func addUpdateNamespaceScopedCRD(nt *nomostest.NT, dir string, crd string) {
 	}
 
 	// Validate the CustomResource is also deleted from cluster.
-	err = nt.ValidateNotFound("anvils.acme.com", "", fake.CustomResourceDefinitionV1Object())
+	err = nt.ValidateNotFound("anvils.acme.com", "", k8sobjects.CustomResourceDefinitionV1Object())
 	if err != nil {
 		nt.T.Fatal(err)
 	}

@@ -27,7 +27,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 )
 
 const (
@@ -178,7 +178,7 @@ func manageNamespace(nt *nomostest.NT, namespace string) {
 	}
 
 	nt.T.Cleanup(func() {
-		svcObj := fake.ServiceObject(core.Name("some-other-service"), core.Namespace(namespace))
+		svcObj := k8sobjects.ServiceObject(core.Name("some-other-service"), core.Namespace(namespace))
 		if err := nomostest.DeleteObjectsAndWait(nt, svcObj); err != nil {
 			nt.T.Fatal(err)
 		}

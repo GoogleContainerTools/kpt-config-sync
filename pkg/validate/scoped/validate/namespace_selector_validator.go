@@ -18,12 +18,12 @@ import (
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // NamespaceSelectors validates that all NamespaceSelectors have a unique name.
-func NamespaceSelectors(objs *objects.Scoped) status.MultiError {
+func NamespaceSelectors(objs *fileobjects.Scoped) status.MultiError {
 	var errs status.MultiError
 	gk := kinds.NamespaceSelector().GroupKind()
 	matches := make(map[string][]client.Object)

@@ -30,8 +30,8 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testutils"
 	"kpt.dev/configsync/e2e/nomostest/workloadidentity"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/declared"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 const (
@@ -64,7 +64,7 @@ func TestGCENodeCSR(t *testing.T) {
 	nt.T.Log("Add the kustomize-components root directory to RootSync's repo")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/kustomize-components", "."))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add DRY configs to the repository"))
-	rootSync := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rootSync := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.MustMergePatch(rootSync, `{
 		"spec": {
 			"git": {
@@ -74,7 +74,7 @@ func TestGCENodeCSR(t *testing.T) {
 	}`)
 
 	nt.T.Log("Add the namespace-repo directory to RepoSync's repo")
-	repoSync := fake.RepoSyncObjectV1Beta1(testNs, configsync.RepoSyncName)
+	repoSync := k8sobjects.RepoSyncObjectV1Beta1(testNs, configsync.RepoSyncName)
 	repoSyncRef := nomostest.RepoSyncNN(testNs, configsync.RepoSyncName)
 	nt.Must(nt.NonRootRepos[repoSyncRef].Copy("../testdata/hydration/namespace-repo", "."))
 	nt.Must(nt.NonRootRepos[repoSyncRef].CommitAndPush("add DRY configs to the repository"))
@@ -119,7 +119,7 @@ func TestGCENodeOCI(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	rootSync := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rootSync := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	rootSyncRef := nomostest.RootSyncNN(rootSync.Name)
 	rootImage, err := nt.BuildAndPushOCIImage(
 		rootSyncRef,

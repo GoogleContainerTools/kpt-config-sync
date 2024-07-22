@@ -19,7 +19,7 @@ import (
 
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 	"kpt.dev/configsync/pkg/validate/scoped/hydrate"
 	"kpt.dev/configsync/pkg/validate/scoped/validate"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -28,19 +28,19 @@ import (
 // Hierarchical performs the second round of validation and hydration for a
 // structured hierarchical repo against the given Scoped objects. Note that this
 // will modify the Scoped objects in-place.
-func Hierarchical(objs *objects.Scoped) status.MultiError {
+func Hierarchical(objs *fileobjects.Scoped) status.MultiError {
 	var errs status.MultiError
 	// See the note about ordering raw.Hierarchical().
-	validators := []objects.ScopedVisitor{
-		objects.VisitClusterScoped(validate.ClusterScoped),
-		objects.VisitNamespaceScoped(validate.NamespaceScoped),
+	validators := []fileobjects.ScopedVisitor{
+		fileobjects.VisitClusterScoped(validate.ClusterScoped),
+		fileobjects.VisitNamespaceScoped(validate.NamespaceScoped),
 		validate.NamespaceSelectors,
 	}
 	for _, validator := range validators {
 		errs = status.Append(errs, validator(objs))
 	}
 
-	hydrators := []objects.ScopedVisitor{
+	hydrators := []fileobjects.ScopedVisitor{
 		hydrate.UnknownScope,
 	}
 	for _, hydrator := range hydrators {
@@ -52,9 +52,9 @@ func Hierarchical(objs *objects.Scoped) status.MultiError {
 // Unstructured performs the second round of validation and hydration for an
 // unstructured repo against the given Scoped objects. Note that this will
 // modify the Scoped objects in-place.
-func Unstructured(ctx context.Context, c client.Client, fieldManager string, objs *objects.Scoped) status.MultiError {
+func Unstructured(ctx context.Context, c client.Client, fieldManager string, objs *fileobjects.Scoped) status.MultiError {
 	var errs status.MultiError
-	var validateClusterScoped objects.ObjectVisitor
+	var validateClusterScoped fileobjects.ObjectVisitor
 	if objs.Scope == declared.RootScope {
 		validateClusterScoped = validate.ClusterScoped
 	} else {
@@ -62,9 +62,9 @@ func Unstructured(ctx context.Context, c client.Client, fieldManager string, obj
 	}
 
 	// See the note about ordering raw.Hierarchical().
-	validators := []objects.ScopedVisitor{
-		objects.VisitClusterScoped(validateClusterScoped),
-		objects.VisitNamespaceScoped(validate.NamespaceScoped),
+	validators := []fileobjects.ScopedVisitor{
+		fileobjects.VisitClusterScoped(validateClusterScoped),
+		fileobjects.VisitNamespaceScoped(validate.NamespaceScoped),
 		validate.NamespaceSelectors,
 	}
 	for _, validator := range validators {
@@ -74,7 +74,7 @@ func Unstructured(ctx context.Context, c client.Client, fieldManager string, obj
 		return errs
 	}
 
-	hydrators := []objects.ScopedVisitor{
+	hydrators := []fileobjects.ScopedVisitor{
 		hydrate.NamespaceSelectors(ctx, c, fieldManager),
 		hydrate.UnknownScope,
 	}

@@ -39,11 +39,11 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/util/log"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -131,7 +131,7 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	nrb5 := nomostest.RepoSyncRoleBinding(nn5)
 
 	nt.T.Logf("Adding Namespace & RoleBindings for RepoSyncs")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/cluster/ns-%s.yaml", testNs), fake.NamespaceObject(testNs)))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/cluster/ns-%s.yaml", testNs), k8sobjects.NamespaceObject(testNs)))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/rb-%s.yaml", testNs, nn2.Name), nrb2))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/rb-%s.yaml", testNs, nn4.Name), nrb4))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding Namespace & RoleBindings for RepoSyncs"))
@@ -775,7 +775,7 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 func TestControllerValidationErrors(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.MultiRepos)
 
-	testNamespace := fake.NamespaceObject(testNs)
+	testNamespace := k8sobjects.NamespaceObject(testNs)
 	if err := nt.KubeClient.Create(testNamespace); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -857,7 +857,7 @@ func TestControllerValidationErrors(t *testing.T) {
 }
 
 func rootPodRole() *rbacv1.Role {
-	result := fake.RoleObject(
+	result := k8sobjects.RoleObject(
 		core.Name("pods"),
 		core.Namespace(testNs),
 	)
@@ -872,7 +872,7 @@ func rootPodRole() *rbacv1.Role {
 }
 
 func namespacePodRole() *rbacv1.Role {
-	result := fake.RoleObject(
+	result := k8sobjects.RoleObject(
 		core.Name("pods"),
 		core.Namespace(testNs),
 	)

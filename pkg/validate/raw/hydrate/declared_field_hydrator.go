@@ -28,7 +28,7 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 	"sigs.k8s.io/structured-merge-diff/v4/fieldpath"
 )
 
@@ -36,7 +36,7 @@ import (
 // its fields that are declared in Git. This annotation is what enables the
 // Config Sync admission controller webhook to protect these declared fields
 // from being changed by another controller or user.
-func DeclaredFields(objs *objects.Raw) status.MultiError {
+func DeclaredFields(objs *fileobjects.Raw) status.MultiError {
 	if objs.Converter == nil {
 		klog.Warning("Skipping declared field hydration. This should only happen for offline executions of nomos vet/hydrate/init.")
 		return nil

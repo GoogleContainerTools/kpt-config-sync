@@ -22,33 +22,33 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 func crdv1beta1(name string, gvk schema.GroupVersionKind) ast.FileObject {
-	result := fake.CustomResourceDefinitionV1Beta1Object()
+	result := k8sobjects.CustomResourceDefinitionV1Beta1Object()
 	result.Name = name
 	result.Spec.Group = gvk.Group
 	result.Spec.Names = apiextensionsv1beta1.CustomResourceDefinitionNames{
 		Plural: strings.ToLower(gvk.Kind) + "s",
 		Kind:   gvk.Kind,
 	}
-	return fake.FileObject(result, "crd.yaml")
+	return k8sobjects.FileObject(result, "crd.yaml")
 }
 
 func crdv1(name string, gvk schema.GroupVersionKind) ast.FileObject {
-	result := fake.CustomResourceDefinitionV1Object()
+	result := k8sobjects.CustomResourceDefinitionV1Object()
 	result.Name = name
 	result.Spec.Group = gvk.Group
 	result.Spec.Names = apiextensionsv1.CustomResourceDefinitionNames{
 		Plural: strings.ToLower(gvk.Kind) + "s",
 		Kind:   gvk.Kind,
 	}
-	return fake.FileObject(result, "crd.yaml")
+	return k8sobjects.FileObject(result, "crd.yaml")
 }
 
 func TestValidCRDName(t *testing.T) {
@@ -65,12 +65,12 @@ func TestValidCRDName(t *testing.T) {
 		{
 			name: "v1beta1 non plural",
 			obj:  crdv1beta1("anvil.acme.com", kinds.Anvil()),
-			want: fake.Error(nonhierarchical.InvalidCRDNameErrorCode),
+			want: status.FakeError(nonhierarchical.InvalidCRDNameErrorCode),
 		},
 		{
 			name: "v1beta1 missing group",
 			obj:  crdv1beta1("anvils", kinds.Anvil()),
-			want: fake.Error(nonhierarchical.InvalidCRDNameErrorCode),
+			want: status.FakeError(nonhierarchical.InvalidCRDNameErrorCode),
 		},
 		// v1 CRDs
 		{
@@ -80,12 +80,12 @@ func TestValidCRDName(t *testing.T) {
 		{
 			name: "v1 non plural",
 			obj:  crdv1("anvil.acme.com", kinds.Anvil()),
-			want: fake.Error(nonhierarchical.InvalidCRDNameErrorCode),
+			want: status.FakeError(nonhierarchical.InvalidCRDNameErrorCode),
 		},
 		{
 			name: "v1 missing group",
 			obj:  crdv1("anvils", kinds.Anvil()),
-			want: fake.Error(nonhierarchical.InvalidCRDNameErrorCode),
+			want: status.FakeError(nonhierarchical.InvalidCRDNameErrorCode),
 		},
 	}
 

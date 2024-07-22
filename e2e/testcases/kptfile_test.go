@@ -21,7 +21,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
-	"kpt.dev/configsync/pkg/testing/fake"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 )
 
 func TestIgnoreKptfiles(t *testing.T) {
@@ -31,7 +31,7 @@ func TestIgnoreKptfiles(t *testing.T) {
 	nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile("acme/cluster/Kptfile", []byte("random content")))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile("acme/namespaces/foo/Kptfile", nil))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile("acme/namespaces/foo/subdir/Kptfile", []byte("# some comment")))
-	nsObj := fake.NamespaceObject("foo")
+	nsObj := k8sobjects.NamespaceObject("foo")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", nsObj))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding multiple Kptfiles"))
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -39,7 +39,7 @@ func TestIgnoreKptfiles(t *testing.T) {
 	}
 	nt.RenewClient()
 
-	err := nt.Validate("foo", "", fake.NamespaceObject("foo"))
+	err := nt.Validate("foo", "", k8sobjects.NamespaceObject("foo"))
 	if err != nil {
 		nt.T.Fatal(err)
 	}

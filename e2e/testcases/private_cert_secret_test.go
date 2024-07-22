@@ -35,11 +35,11 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync/v1alpha1"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 func caCertSecretPatch(sourceType configsync.SourceType, name string) string {
@@ -85,7 +85,7 @@ func TestCACertSecretRefV1Alpha1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	rootSync := fake.RootSyncObjectV1Alpha1(configsync.RootSyncName)
+	rootSync := k8sobjects.RootSyncObjectV1Alpha1(configsync.RootSyncName)
 	nn := nomostest.RepoSyncNN(backendNamespace, configsync.RepoSyncName)
 	repoSyncBackend := nomostest.RepoSyncObjectV1Alpha1FromNonRootRepo(nt, nn)
 	reconcilerName := core.NsReconcilerName(backendNamespace, configsync.RepoSyncName)
@@ -203,7 +203,7 @@ func TestCACertSecretRefV1Beta1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	rootSync := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rootSync := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nn := nomostest.RepoSyncNN(backendNamespace, configsync.RepoSyncName)
 	repoSyncBackend := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)
 	reconcilerName := core.NsReconcilerName(backendNamespace, configsync.RepoSyncName)
@@ -397,8 +397,8 @@ func TestOCICACertSecretRefRootRepo(t *testing.T) {
 
 	caCertSecret := nomostest.PublicCertSecretName(nomostest.RegistrySyncSource)
 
-	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
-	image, err := nt.BuildAndPushOCIImage(nomostest.RootSyncNN(configsync.RootSyncName), registryproviders.ImageInputObjects(nt.Scheme, fake.NamespaceObject("foo-ns")))
+	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	image, err := nt.BuildAndPushOCIImage(nomostest.RootSyncNN(configsync.RootSyncName), registryproviders.ImageInputObjects(nt.Scheme, k8sobjects.NamespaceObject("foo-ns")))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -439,7 +439,7 @@ func TestOCICACertSecretRefNamespaceRepo(t *testing.T) {
 	upsertedSecret := controllers.ReconcilerResourceName(
 		core.NsReconcilerName(nn.Namespace, nn.Name), caCertSecret)
 
-	cm := fake.ConfigMapObject(core.Name("foo-cm"), core.Namespace(nn.Namespace))
+	cm := k8sobjects.ConfigMapObject(core.Name("foo-cm"), core.Namespace(nn.Namespace))
 	image, err := nt.BuildAndPushOCIImage(nn, registryproviders.ImageInputObjects(nt.Scheme, cm))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -510,9 +510,9 @@ func TestHelmCACertSecretRefRootRepo(t *testing.T) {
 
 	caCertSecret := nomostest.PublicCertSecretName(nomostest.RegistrySyncSource)
 
-	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	chart, err := nt.BuildAndPushHelmPackage(nomostest.RootSyncNN(configsync.RootSyncName),
-		registryproviders.HelmChartObjects(nt.Scheme, fake.NamespaceObject("foo-ns")))
+		registryproviders.HelmChartObjects(nt.Scheme, k8sobjects.NamespaceObject("foo-ns")))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -557,7 +557,7 @@ func TestHelmCACertSecretRefNamespaceRepo(t *testing.T) {
 	upsertedSecret := controllers.ReconcilerResourceName(
 		core.NsReconcilerName(nn.Namespace, nn.Name), caCertSecret)
 
-	cm := fake.ConfigMapObject(core.Name("foo-cm"), core.Namespace(nn.Namespace))
+	cm := k8sobjects.ConfigMapObject(core.Name("foo-cm"), core.Namespace(nn.Namespace))
 	chart, err := nt.BuildAndPushHelmPackage(nn, registryproviders.HelmChartObjects(nt.Scheme, cm))
 	if err != nil {
 		nt.T.Fatal(err)

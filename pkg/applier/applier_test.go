@@ -30,12 +30,12 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/applier/stats"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
 	testingfake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"kpt.dev/configsync/pkg/testing/testerrors"
 	"sigs.k8s.io/cli-utils/pkg/apis/actuation"
 	"sigs.k8s.io/cli-utils/pkg/apply"
@@ -112,7 +112,7 @@ func TestApply(t *testing.T) {
 
 	objs := []client.Object{deploymentObj, testObj1}
 
-	namespaceObj := fake.UnstructuredObject(kinds.Namespace(),
+	namespaceObj := k8sobjects.UnstructuredObject(kinds.Namespace(),
 		core.Name(syncScope.SyncNamespace()))
 	namespaceObjMeta := object.UnstructuredToObjMetadata(namespaceObj)
 	namespaceObjID := core.IDOf(namespaceObj)
@@ -721,12 +721,12 @@ func TestProcessWaitEvent(t *testing.T) {
 }
 
 func newDeploymentObj() *unstructured.Unstructured {
-	return fake.UnstructuredObject(kinds.Deployment(),
+	return k8sobjects.UnstructuredObject(kinds.Deployment(),
 		core.Namespace("test-namespace"), core.Name("random-name"), core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"))
 }
 
 func newTestObj(name string) *unstructured.Unstructured {
-	return fake.UnstructuredObject(schema.GroupVersionKind{
+	return k8sobjects.UnstructuredObject(schema.GroupVersionKind{
 		Group:   "configsync.test",
 		Version: "v1",
 		Kind:    "Test",

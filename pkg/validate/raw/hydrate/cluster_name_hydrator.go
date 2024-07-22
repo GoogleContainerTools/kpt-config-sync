@@ -18,12 +18,12 @@ import (
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/validate/objects"
+	"kpt.dev/configsync/pkg/validate/fileobjects"
 )
 
 // ClusterName annotates the given Raw objects with the name of the current
 // cluster.
-func ClusterName(objs *objects.Raw) status.MultiError {
+func ClusterName(objs *fileobjects.Raw) status.MultiError {
 	if objs.ClusterName == "" {
 		return nil
 	}

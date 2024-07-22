@@ -26,8 +26,8 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	"kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
-	"kpt.dev/configsync/pkg/testing/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -83,7 +83,7 @@ func uninstallPrometheus(nt *NT) error {
 
 func prometheusObjects() []client.Object {
 	return []client.Object{
-		fake.NamespaceObject(prometheusNamespace),
+		k8sobjects.NamespaceObject(prometheusNamespace),
 		prometheusClusterRole(),
 		prometheusClusterRoleBinding(),
 		prometheusConfigMap(),
@@ -92,7 +92,7 @@ func prometheusObjects() []client.Object {
 }
 
 func prometheusClusterRole() client.Object {
-	clusterRole := fake.ClusterRoleObject(core.Name(prometheusClusterRoleName))
+	clusterRole := k8sobjects.ClusterRoleObject(core.Name(prometheusClusterRoleName))
 	clusterRole.Rules = []rbacv1.PolicyRule{
 		{
 			Verbs:     []string{"get", "list", "watch"},
@@ -119,7 +119,7 @@ func prometheusClusterRole() client.Object {
 }
 
 func prometheusClusterRoleBinding() client.Object {
-	clusterRole := fake.ClusterRoleBindingObject(core.Name(prometheusClusterRoleName))
+	clusterRole := k8sobjects.ClusterRoleBindingObject(core.Name(prometheusClusterRoleName))
 	clusterRole.RoleRef = rbacv1.RoleRef{
 		APIGroup: "rbac.authorization.k8s.io",
 		Kind:     "ClusterRole",
@@ -136,7 +136,7 @@ func prometheusClusterRoleBinding() client.Object {
 }
 
 func prometheusConfigMap() client.Object {
-	configMap := fake.ConfigMapObject(core.Name(prometheusConfigMapName),
+	configMap := k8sobjects.ConfigMapObject(core.Name(prometheusConfigMapName),
 		core.Namespace(prometheusNamespace),
 		core.Labels(map[string]string{"name": prometheusConfigMapName}))
 	configMap.Data = map[string]string{
@@ -236,7 +236,7 @@ func prometheusServerSelector() map[string]string {
 }
 
 func prometheusDeployment() client.Object {
-	deployment := fake.DeploymentObject(core.Name(prometheusServerDeploymentName),
+	deployment := k8sobjects.DeploymentObject(core.Name(prometheusServerDeploymentName),
 		core.Namespace(prometheusNamespace),
 		core.Labels(prometheusServerSelector()),
 	)

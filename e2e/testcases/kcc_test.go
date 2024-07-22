@@ -31,8 +31,8 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 // This file includes tests for KCC resources from a cloud source repository.
@@ -43,7 +43,7 @@ import (
 func TestKCCResourcesOnCSR(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.KCCTest, ntopts.RequireGKE(t))
 
-	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.T.Log("sync to the kcc resources from a CSR repo")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "kcc", "branch": "main", "repo": "%s/p/%s/r/configsync-kcc", "auth": "gcpserviceaccount","gcpServiceAccountEmail": "e2e-test-csr-reader@%s.iam.gserviceaccount.com", "secretRef": {"name": ""}}, "sourceFormat": "unstructured"}}`,
 		nomostesting.CSRHost, *e2e.GCPProject, *e2e.GCPProject))
@@ -142,11 +142,11 @@ func TestKCCResourceGroup(t *testing.T) {
 	namespace := "resourcegroup-e2e"
 	nt.T.Cleanup(func() {
 		// all test resources are created in this namespace
-		if err := nt.KubeClient.Delete(fake.NamespaceObject(namespace)); err != nil {
+		if err := nt.KubeClient.Delete(k8sobjects.NamespaceObject(namespace)); err != nil {
 			nt.T.Error(err)
 		}
 	})
-	if err := nt.KubeClient.Create(fake.NamespaceObject(namespace)); err != nil {
+	if err := nt.KubeClient.Create(k8sobjects.NamespaceObject(namespace)); err != nil {
 		nt.T.Fatal(err)
 	}
 	rgNN := types.NamespacedName{

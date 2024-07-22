@@ -21,9 +21,9 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/metadata"
-	"kpt.dev/configsync/pkg/testing/fake"
 )
 
 func cluster(name string) core.MetaMutator {
@@ -42,39 +42,39 @@ func TestToFileObjects(t *testing.T) {
 		{
 			name: "namespaced role works",
 			objects: []ast.FileObject{
-				fake.Role(core.Name("alice"), core.Namespace("prod"), cluster("na-1")),
+				k8sobjects.Role(core.Name("alice"), core.Namespace("prod"), cluster("na-1")),
 			},
 			expected: []ast.FileObject{
-				fake.FileObject(fake.RoleObject(core.Name("alice"), core.Namespace("prod"), cluster("na-1")), "na-1/prod/role_alice.yaml"),
+				k8sobjects.FileObject(k8sobjects.RoleObject(core.Name("alice"), core.Namespace("prod"), cluster("na-1")), "na-1/prod/role_alice.yaml"),
 			},
 		},
 		{
 			name: "non-namespaced clusterrolebinding works",
 			objects: []ast.FileObject{
-				fake.ClusterRoleBinding(core.Name("alice"), cluster("eu-2")),
+				k8sobjects.ClusterRoleBinding(core.Name("alice"), cluster("eu-2")),
 			},
 			expected: []ast.FileObject{
-				fake.FileObject(fake.ClusterRoleBindingObject(core.Name("alice"), cluster("eu-2")), "eu-2/clusterrolebinding_alice.yaml"),
+				k8sobjects.FileObject(k8sobjects.ClusterRoleBindingObject(core.Name("alice"), cluster("eu-2")), "eu-2/clusterrolebinding_alice.yaml"),
 			},
 		},
 		{
 			name: "conflict resolved",
 			objects: []ast.FileObject{
-				fake.Unstructured(schema.GroupVersionKind{
+				k8sobjects.Unstructured(schema.GroupVersionKind{
 					Group: "rbac",
 					Kind:  "ClusterRole",
 				}, core.Name("alice")),
-				fake.Unstructured(schema.GroupVersionKind{
+				k8sobjects.Unstructured(schema.GroupVersionKind{
 					Group: "oauth",
 					Kind:  "ClusterRole",
 				}, core.Name("alice")),
 			},
 			expected: []ast.FileObject{
-				fake.UnstructuredAtPath(schema.GroupVersionKind{
+				k8sobjects.UnstructuredAtPath(schema.GroupVersionKind{
 					Group: "rbac",
 					Kind:  "ClusterRole",
 				}, "defaultcluster/clusterrole.rbac_alice.yaml", core.Name("alice")),
-				fake.UnstructuredAtPath(schema.GroupVersionKind{
+				k8sobjects.UnstructuredAtPath(schema.GroupVersionKind{
 					Group: "oauth",
 					Kind:  "ClusterRole",
 				}, "defaultcluster/clusterrole.oauth_alice.yaml", core.Name("alice")),

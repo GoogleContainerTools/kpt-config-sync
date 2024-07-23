@@ -973,8 +973,6 @@ func TestNomosBugreport(t *testing.T) {
 		"cluster/configmanagement/namespaceselectors.yaml",
 		"cluster/configmanagement/config-sync-validating-webhhook-configuration.json",
 		"cluster/configmanagement/config-sync-validating-webhhook-configuration.yaml",
-		"namespaces/kube-system/pods.json",
-		"namespaces/kube-system/pods.yaml",
 		"namespaces/config-management-system/pods.json",
 		"namespaces/config-management-system/pods.yaml",
 		"namespaces/config-management-system/ConfigMaps.json",

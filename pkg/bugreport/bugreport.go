@@ -39,9 +39,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	corev1Client "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -56,14 +54,6 @@ import (
 
 type coreClient interface {
 	CoreV1() corev1Client.CoreV1Interface
-}
-
-func operatorLabelSelectorOrDie() labels.Requirement {
-	ret, err := labels.NewRequirement("k8s-app", selection.Equals, []string{"config-management-operator"})
-	if err != nil {
-		panic(err)
-	}
-	return *ret
 }
 
 // Filepath for bugreport directory
@@ -177,15 +167,7 @@ func (b *BugReporter) FetchLogSources(ctx context.Context) []Readable {
 	var toBeLogged logSources
 
 	// for each namespace, generate a list of logSources
-	listOps := client.ListOptions{LabelSelector: labels.NewSelector().Add(operatorLabelSelectorOrDie())}
-	sources, err := b.logSourcesForNamespace(ctx, metav1.NamespaceSystem, listOps, nil)
-	if err != nil {
-		b.ErrorList = append(b.ErrorList, err)
-	} else {
-		toBeLogged = append(toBeLogged, sources...)
-	}
-
-	listOps = client.ListOptions{}
+	listOps := client.ListOptions{}
 	nsLabels := map[string]string{"configmanagement.gke.io/configmanagement": "config-management"}
 	productAndLabels := map[Product]map[string]string{
 		PolicyController:     nsLabels,
@@ -194,7 +176,7 @@ func (b *BugReporter) FetchLogSources(ctx context.Context) []Readable {
 		ConfigSync:           nil,
 	}
 	for product, ls := range productAndLabels {
-		sources, err = b.logSourcesForProduct(ctx, product, listOps, ls)
+		sources, err := b.logSourcesForProduct(ctx, product, listOps, ls)
 		if err != nil {
 			b.ErrorList = append(b.ErrorList, err)
 		} else {
@@ -422,11 +404,10 @@ func pathToClusterCmList(name string) string {
 }
 
 // FetchCMSystemPods provides a Readable for pods in the config-management-system,
-// kube-system, resource-group-system and config-management-monitoring namespaces.
+// resource-group-system and config-management-monitoring namespaces.
 func (b *BugReporter) FetchCMSystemPods(ctx context.Context) (rd []Readable) {
 	var namespaces = []string{
 		configmanagement.ControllerNamespace,
-		metav1.NamespaceSystem,
 		configmanagement.RGControllerNamespace,
 		configmanagement.MonitoringNamespace,
 		policycontroller.NamespaceSystem,

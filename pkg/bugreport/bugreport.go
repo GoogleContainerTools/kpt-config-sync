@@ -29,15 +29,10 @@ import (
 	"time"
 
 	"github.com/GoogleContainerTools/kpt/pkg/live"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/klog/v2"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
-	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
-	"kpt.dev/configsync/pkg/policycontroller"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -45,10 +40,13 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	corev1Client "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/klog/v2"
 	"kpt.dev/configsync/cmd/nomos/status"
 	"kpt.dev/configsync/cmd/nomos/util"
 	"kpt.dev/configsync/cmd/nomos/version"
 	"kpt.dev/configsync/pkg/api/configmanagement"
+	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/client/restconfig"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
@@ -140,9 +138,6 @@ func (b *BugReporter) EnabledServices() map[Product]bool {
 	if b.enabled == nil {
 		enabled := make(map[Product]bool)
 
-		// We can safely ignore errors here, because if this request doesn't succeed,
-		// Policy Controller is not enabled
-		enabled[PolicyController], _, _ = unstructured.NestedBool(b.cm.Object, "spec", "policyController", "enabled")
 		// Same for Config Sync, though here the "disabled" condition is if enableMultiRepo is true or if the git
 		// config is "empty", which involves looking for an empty proxy config
 		configSyncEnabled := false
@@ -188,7 +183,6 @@ func (b *BugReporter) FetchLogSources(ctx context.Context) []Readable {
 	listOps = client.ListOptions{}
 	nsLabels := map[string]string{"configmanagement.gke.io/configmanagement": "config-management"}
 	productAndLabels := map[Product]map[string]string{
-		PolicyController:     nsLabels,
 		ResourceGroup:        nsLabels,
 		ConfigSyncMonitoring: nil,
 		ConfigSync:           nil,
@@ -429,7 +423,6 @@ func (b *BugReporter) FetchCMSystemPods(ctx context.Context) (rd []Readable) {
 		metav1.NamespaceSystem,
 		configmanagement.RGControllerNamespace,
 		configmanagement.MonitoringNamespace,
-		policycontroller.NamespaceSystem,
 	}
 
 	for _, ns := range namespaces {

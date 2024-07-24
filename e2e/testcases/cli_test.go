@@ -987,8 +987,6 @@ func TestNomosBugreport(t *testing.T) {
 		"namespaces/config-management-monitoring/pods.json",
 		"namespaces/config-management-monitoring/pods.yaml",
 		"namespaces/config-management-monitoring/otel-collector.*/otel-collector.log",
-		"namespaces/gatekeeper-system/pods.json",
-		"namespaces/gatekeeper-system/pods.yaml",
 		"namespaces/resource-group-system/pods.json",
 		"namespaces/resource-group-system/pods.yaml",
 	}

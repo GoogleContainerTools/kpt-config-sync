@@ -16,15 +16,12 @@ package bugreport
 
 import (
 	"kpt.dev/configsync/pkg/api/configmanagement"
-	"kpt.dev/configsync/pkg/policycontroller"
 )
 
 // Product describes an ACM Product
 type Product string
 
 const (
-	// PolicyController policy controller
-	PolicyController = Product("Policy Controller")
 	// ConfigSync config sync, AKA Nomos, AKA original ACM
 	ConfigSync = Product("Config Sync")
 	// ConfigSyncMonitoring controller
@@ -35,7 +32,6 @@ const (
 
 var (
 	productNamespaces = map[Product]string{
-		PolicyController:     policycontroller.NamespaceSystem,
 		ConfigSync:           configmanagement.ControllerNamespace,
 		ResourceGroup:        configmanagement.RGControllerNamespace,
 		ConfigSyncMonitoring: configmanagement.MonitoringNamespace,

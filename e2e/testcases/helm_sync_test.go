@@ -63,65 +63,7 @@ const (
 func TestPublicHelm(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured)
 
-	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
-	rs.Spec = v1beta1.RootSyncSpec{
-		SourceFormat: configsync.SourceFormatUnstructured,
-		SourceType:   configsync.HelmSource,
-		Helm: &v1beta1.HelmRootSync{
-			Namespace: "wordpress",
-			HelmBase: v1beta1.HelmBase{
-				Repo:        "https://charts.bitnami.com/bitnami",
-				Chart:       "wordpress",
-				Version:     "15.2.35",
-				ReleaseName: "my-wordpress",
-				Auth:        configsync.AuthNone,
-				Values: &apiextensionsv1.JSON{
-					Raw: []byte(`{
-  "image": {
-    "digest": "sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e",
-    "pullPolicy": "Always"
-  },
-  "wordpressUsername": "test-user",
-  "wordpressEmail": "test-user@example.com",
-  "extraEnvVars": [
-    {"name": "TEST_1", "value": "val1"},
-    {"name": "TEST_2", "value": "val2"}
-  ],
-  "resources": {
-    "requests": {
-      "cpu": "150m",
-      "memory": "250Mi"
-    },
-    "limits": {
-      "cpu": "1",
-      "memory": "300Mi"
-    }
-  },
-  "mariadb": {
-    "primary": {
-      "persistence": {
-        "enabled": false
-      }
-    }
-  },
-  "service": {
-    "type": "ClusterIP"
-  }
-}`),
-				},
-			},
-		},
-	}
-	if nt.IsGKEAutopilot {
-		nt.T.Log("Increasing memory request/limit for helm-sync on Autopilot")
-		rs.Spec.SafeOverride().Resources = []v1beta1.ContainerResourcesSpec{
-			{ // This chart sometimes causes OOMKill on Autopilot with default limit
-				ContainerName: reconcilermanager.HelmSync,
-				MemoryRequest: resource.MustParse("512Mi"),
-				MemoryLimit:   resource.MustParse("512Mi"),
-			},
-		}
-	}
+	rs := rootSyncForWordpressHelmChart(nt, nil)
 	nt.T.Log("Update RootSync to sync from a public Helm Chart with specified release namespace and multiple inline values")
 	nt.Must(nt.KubeClient.Apply(rs))
 	err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn("15.2.35")),
@@ -211,39 +153,13 @@ func TestPublicHelm(t *testing.T) {
 func TestHelmWatchConfigMap(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured)
 
-	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
-	nt.MustMergePatch(rs, `{
-		"spec": {
-		  "sourceFormat": "unstructured",
-		  "sourceType": "helm",
-		  "helm": {
-			"releaseName": "my-wordpress",
-			"namespace": "wordpress",
-			"auth": "none",
-			"repo": "https://charts.bitnami.com/bitnami",
-			"chart": "wordpress",
-			"version": "15.2.35",
-			"values": {
-			  "extraEnvVars": [
-				{
-				  "name": "TEST_1",
-				  "value": "val1"
-				},
-				{
-				  "name": "TEST_2",
-				  "value": "val2"
-				}
-			  ],
-			  "wordpressEmail": "test-user@example.com"
-			},
-			"valuesFileRefs": [
-			  {
-				"name": "helm-watch-config-map"
-			  }
-			]
-		  }
-		}
-	  }`)
+	rs := rootSyncForWordpressHelmChart(nt, func(m map[string]interface{}) {
+		delete(m, "wordpressUsername") // omit username so it can be set with values file
+	})
+	rs.Spec.Helm.ValuesFileRefs = []v1beta1.ValuesFileRef{
+		{Name: "helm-watch-config-map"},
+	}
+	nt.Must(nt.KubeClient.Apply(rs))
 
 	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap \"helm-watch-config-map\" not found")
 
@@ -389,43 +305,15 @@ image:
 		nt.T.Fatal(err)
 	}
 
-	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
-	nt.MustMergePatch(rs, `{
-		"spec": {
-		  "sourceFormat": "unstructured",
-		  "sourceType": "helm",
-		  "helm": {
-			"releaseName": "my-wordpress",
-			"namespace": "wordpress",
-			"auth": "none",
-			"repo": "https://charts.bitnami.com/bitnami",
-			"chart": "wordpress",
-			"version": "15.2.35",
-			"values": {
-			  "extraEnvVars": [
-				{
-				  "name": "TEST_INLINE",
-				  "value": "inline"
-				}
-			  ],
-			  "wordpressEmail": "test-user@example.com",
-			  "service": {
-				"type": "ClusterIP"
-			  }
-			},
-			"valuesFileRefs": [
-			  {
-				"name": "helm-config-map-override",
-				"dataKey": "first"
-			  },
-			  {
-				"name": "helm-config-map-override",
-				"dataKey": "second"
-			  }
-			]
-		  }
-		}
-	  }`)
+	rs := rootSyncForWordpressHelmChart(nt, func(m map[string]interface{}) {
+		delete(m, "wordpressUsername") // omit username so it can be set with values file
+		delete(m, "image")             // omit image so it can be set with values file
+	})
+	rs.Spec.Helm.ValuesFileRefs = []v1beta1.ValuesFileRef{
+		{Name: "helm-config-map-override", DataKey: "first"},
+		{Name: "helm-config-map-override", DataKey: "second"},
+	}
+	nt.Must(nt.KubeClient.Apply(rs))
 
 	err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn("15.2.35")),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "wordpress"}))
@@ -439,7 +327,8 @@ image:
 		testpredicates.HasExactlyImage("wordpress", "bitnami/wordpress", "", "sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e"),
 		testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_USERNAME", "test-user-2"),
 		testpredicates.DeploymentHasEnvVar("wordpress", "WORDPRESS_EMAIL", "test-user@example.com"),
-		testpredicates.DeploymentHasEnvVar("wordpress", "TEST_INLINE", "inline"),
+		testpredicates.DeploymentHasEnvVar("wordpress", "TEST_1", "val1"),
+		testpredicates.DeploymentHasEnvVar("wordpress", "TEST_2", "val2"),
 		testpredicates.DeploymentMissingEnvVar("wordpress", "TEST_CM_1"),
 		testpredicates.DeploymentMissingEnvVar("wordpress", "TEST_CM_2")); err != nil {
 		nt.T.Fatal(err)
@@ -561,9 +450,10 @@ func TestHelmVersionRange(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured)
 
 	nt.T.Log("Create RootSync to sync from a public Helm Chart with specified version range")
-	rootSyncFilePath := "../testdata/root-sync-helm-chart-version-range-cr.yaml"
-	nt.T.Logf("Apply the RootSync object defined in %s", rootSyncFilePath)
-	nt.MustKubectl("apply", "-f", rootSyncFilePath)
+	rs := rootSyncForWordpressHelmChart(nt, nil)
+	rs.Spec.Helm.Version = "^15.0.0"
+	nt.T.Logf("Updating RootSync to sync from public helm chart with version range")
+	nt.Must(nt.KubeClient.Apply(rs))
 	err := nt.WatchForAllSyncs(nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn("15.4.1")),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "wordpress"}))
 	if err != nil {
@@ -993,4 +883,75 @@ func generateServiceAccountKey(nt *nomostest.NT, projectID, gsaKeySecretID, gsaE
 		return fmt.Errorf("adding secret version: %w", err)
 	}
 	return nil
+}
+
+func rootSyncForWordpressHelmChart(nt *nomostest.NT, valuesMutator func(map[string]interface{})) *v1beta1.RootSync {
+	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	values := map[string]interface{}{
+		"image": map[string]interface{}{
+			"digest":     "sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e",
+			"pullPolicy": "Always",
+		},
+		"wordpressUsername": "test-user",
+		"wordpressEmail":    "test-user@example.com",
+		"extraEnvVars": []interface{}{
+			map[string]interface{}{"name": "TEST_1", "value": "val1"},
+			map[string]interface{}{"name": "TEST_2", "value": "val2"},
+		},
+		"resources": map[string]interface{}{
+			"requests": map[string]interface{}{
+				"cpu":    "150m",
+				"memory": "250Mi",
+			},
+			"limits": map[string]interface{}{
+				"cpu":    "1",
+				"memory": "300Mi",
+			},
+		},
+		"mariadb": map[string]interface{}{
+			"primary": map[string]interface{}{
+				"persistence": map[string]interface{}{
+					"enabled": false,
+				},
+			},
+		},
+		"service": map[string]interface{}{
+			"type": "ClusterIP",
+		},
+	}
+	if valuesMutator != nil {
+		valuesMutator(values)
+	}
+	out, err := json.Marshal(values)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	rs.Spec = v1beta1.RootSyncSpec{
+		SourceFormat: configsync.SourceFormatUnstructured,
+		SourceType:   configsync.HelmSource,
+		Helm: &v1beta1.HelmRootSync{
+			Namespace: "wordpress",
+			HelmBase: v1beta1.HelmBase{
+				Repo:        "https://charts.bitnami.com/bitnami",
+				Chart:       "wordpress",
+				Version:     "15.2.35",
+				ReleaseName: "my-wordpress",
+				Auth:        configsync.AuthNone,
+				Values: &apiextensionsv1.JSON{
+					Raw: out,
+				},
+			},
+		},
+	}
+	if nt.IsGKEAutopilot {
+		nt.T.Log("Increasing memory request/limit for helm-sync on Autopilot")
+		rs.Spec.SafeOverride().Resources = []v1beta1.ContainerResourcesSpec{
+			{ // This chart sometimes causes OOMKill on Autopilot with default limit
+				ContainerName: reconcilermanager.HelmSync,
+				MemoryRequest: resource.MustParse("512Mi"),
+				MemoryLimit:   resource.MustParse("512Mi"),
+			},
+		}
+	}
+	return rs
 }

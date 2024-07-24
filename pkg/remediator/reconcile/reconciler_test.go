@@ -295,14 +295,14 @@ func TestRemediator_Reconcile_Metrics(t *testing.T) {
 			// Object on cluster has no label and is unmanaged
 			actual: k8sobjects.RoleObject(core.Namespace("example"), core.Name("example")),
 			// Object update fails, because it was deleted by another client
-			updateError: syncerclient.ConflictUpdateDoesNotExist(
+			updateError: syncerclient.ConflictUpdateObjectDoesNotExist(
 				apierrors.NewNotFound(schema.GroupResource{Group: "rbac", Resource: "roles"}, "example"),
 				k8sobjects.RoleObject(core.Namespace("example"), core.Name("example"))),
 			// Object NOT updated on cluster, because update failed with conflict error
 			want: k8sobjects.RoleObject(core.Namespace("example"), core.Name("example"),
 				core.UID("1"), core.ResourceVersion("1"), core.Generation(1)),
 			// Expect update error returned from Remediate
-			wantError: syncerclient.ConflictUpdateDoesNotExist(
+			wantError: syncerclient.ConflictUpdateObjectDoesNotExist(
 				apierrors.NewNotFound(schema.GroupResource{Group: "rbac", Resource: "roles"}, "example"),
 				k8sobjects.RoleObject(core.Namespace("example"), core.Name("example"))),
 			// Expect resource conflict error

@@ -159,7 +159,7 @@ func (c *Client) apply(ctx context.Context, obj client.Object, updateFn update,
 		err := c.Client.Get(ctx, namespacedName, workingObj)
 		switch {
 		case apierrors.IsNotFound(err):
-			return nil, ConflictUpdateDoesNotExist(err, obj)
+			return nil, ConflictUpdateObjectDoesNotExist(err, obj)
 		case err != nil:
 			return nil, status.ResourceWrap(err, "failed to get object to update", obj)
 		}
@@ -220,7 +220,7 @@ func (c *Client) Update(ctx context.Context, obj client.Object, opts ...client.U
 	m.RecordAPICallDuration(ctx, "update", m.StatusTagKey(err), start)
 	switch {
 	case apierrors.IsNotFound(err):
-		return ConflictUpdateDoesNotExist(err, obj)
+		return ConflictUpdateObjectDoesNotExist(err, obj)
 	case err != nil:
 		return status.ResourceWrap(err, "failed to update", obj)
 	}

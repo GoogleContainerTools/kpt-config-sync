@@ -30,16 +30,34 @@ var retriableConflictBuilder = status.NewErrorBuilder(ResourceConflictCode)
 func ConflictCreateAlreadyExists(err error, resource client.Object) status.Error {
 	return retriableConflictBuilder.
 		Wrap(err).
-		Sprint("tried to create resource that already exists").
+		Sprint("tried to create object that already exists").
 		BuildWithResources(resource)
 }
 
-// ConflictUpdateDoesNotExist means we tried to update an object which does not
-// exist.
-func ConflictUpdateDoesNotExist(err error, resource client.Object) status.Error {
+// ConflictCreateResourceDoesNotExist means we tried to create an object whose
+// resource group or kind does not exist.
+func ConflictCreateResourceDoesNotExist(err error, resource client.Object) status.Error {
 	return retriableConflictBuilder.
 		Wrap(err).
-		Sprint("tried to update resource which does not exist").
+		Sprint("tried to create object whose resource type does not exist").
+		BuildWithResources(resource)
+}
+
+// ConflictUpdateObjectDoesNotExist means we tried to update an object which does not
+// exist.
+func ConflictUpdateObjectDoesNotExist(err error, resource client.Object) status.Error {
+	return retriableConflictBuilder.
+		Wrap(err).
+		Sprint("tried to update object which does not exist").
+		BuildWithResources(resource)
+}
+
+// ConflictUpdateResourceDoesNotExist means we tried to update an object whose
+// resource group or kind does not exist.
+func ConflictUpdateResourceDoesNotExist(err error, resource client.Object) status.Error {
+	return retriableConflictBuilder.
+		Wrap(err).
+		Sprint("tried to update object whose resource type does not exist").
 		BuildWithResources(resource)
 }
 
@@ -48,6 +66,6 @@ func ConflictUpdateDoesNotExist(err error, resource client.Object) status.Error 
 func ConflictUpdateOldVersion(err error, resource client.Object) status.Error {
 	return retriableConflictBuilder.
 		Wrap(err).
-		Sprintf("tried to update with stale version of resource").
+		Sprintf("tried to update object with stale resource version").
 		BuildWithResources(resource)
 }

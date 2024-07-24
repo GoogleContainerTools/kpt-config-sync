@@ -322,7 +322,7 @@ func TestConflictingDefinitions_RootToNamespace(t *testing.T) {
 	nt.T.Logf("The RepoSync %s reports a problem since it can't sync the declaration.", repoSyncNN)
 	nt.WaitForRepoSyncSyncError(repoSyncNN.Namespace, repoSyncNN.Name, status.ManagementConflictErrorCode, "detected a management conflict", nil)
 
-	nt.T.Logf("Validate reconciler error metric is emitted from namespace reconciler %s", repoSyncNN)
+	nt.T.Logf("Validate conflict metric is emitted from Namespace reconciler %s", repoSyncNN)
 	repoSyncLabels, err := nomostest.MetricLabelsForRepoSync(nt, repoSyncNN)
 	if err != nil {
 		nt.T.Fatal(err)
@@ -336,7 +336,8 @@ func TestConflictingDefinitions_RootToNamespace(t *testing.T) {
 		// metric, there might not be a LastSyncTimestamp with status=error.
 		// nomostest.ReconcilerSyncError(nt, repoSyncLabels, commitHash),
 		nomostest.ReconcilerErrorMetrics(nt, repoSyncLabels, commitHash, metrics.ErrorSummary{
-			Sync: 1,
+			Conflicts: 1,
+			Sync:      1,
 		}))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -380,6 +381,11 @@ func TestConflictingDefinitions_RootToNamespace(t *testing.T) {
 
 	err = nomostest.ValidateStandardMetricsForRepoSync(nt, metrics.Summary{
 		Sync: repoSyncNN,
+		Errors: metrics.ErrorSummary{
+			// resource_conflicts_total is cumulative and ony resets whe the commit changes
+			// TODO: Fix resource_conflicts_total to reflect the actual current total number of conflicts.
+			Conflicts: 1,
+		},
 	})
 	if err != nil {
 		nt.T.Fatal(err)
@@ -453,17 +459,18 @@ func TestConflictingDefinitions_NamespaceToRoot(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	// Validate reconciler error metric is emitted from namespace reconciler.
-	rootSyncLabels, err := nomostest.MetricLabelsForRepoSync(nt, repoSyncNN)
+	nt.T.Logf("Validate conflict metric is emitted from Namespace reconciler %s", repoSyncNN)
+	repoSyncLabels, err := nomostest.MetricLabelsForRepoSync(nt, repoSyncNN)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 	commitHash := nt.NonRootRepos[repoSyncNN].MustHash(nt.T)
 
 	err = nomostest.ValidateMetrics(nt,
-		nomostest.ReconcilerSyncError(nt, rootSyncLabels, commitHash),
-		nomostest.ReconcilerErrorMetrics(nt, rootSyncLabels, commitHash, metrics.ErrorSummary{
-			Sync: 1,
+		nomostest.ReconcilerSyncError(nt, repoSyncLabels, commitHash),
+		nomostest.ReconcilerErrorMetrics(nt, repoSyncLabels, commitHash, metrics.ErrorSummary{
+			Conflicts: 1,
+			Sync:      1,
 		}))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -711,7 +718,7 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.T.Logf("Validate reconciler error metric is emitted from Namespace reconciler %s", repoSyncNN2)
+	nt.T.Logf("Validate conflict metric is emitted from Namespace reconciler %s", repoSyncNN2)
 	repoSync2Labels, err := nomostest.MetricLabelsForRepoSync(nt, repoSyncNN2)
 	if err != nil {
 		nt.T.Fatal(err)
@@ -721,7 +728,8 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 	err = nomostest.ValidateMetrics(nt,
 		nomostest.ReconcilerSyncError(nt, repoSync2Labels, commitHash),
 		nomostest.ReconcilerErrorMetrics(nt, repoSync2Labels, commitHash, metrics.ErrorSummary{
-			Sync: 1,
+			Conflicts: 1,
+			Sync:      1,
 		}))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -766,6 +774,11 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 	// Validate no errors from namespace reconciler #2.
 	err = nomostest.ValidateStandardMetricsForRepoSync(nt, metrics.Summary{
 		Sync: repoSyncNN2,
+		Errors: metrics.ErrorSummary{
+			// resource_conflicts_total is cumulative and ony resets whe the commit changes
+			// TODO: Fix resource_conflicts_total to reflect the actual current total number of conflicts.
+			Conflicts: 1,
+		},
 	})
 	if err != nil {
 		nt.T.Fatal(err)

@@ -85,8 +85,6 @@ type Interface interface {
 	// UpdateWatches starts and stops server-side watches based upon the given map
 	// of GVKs which should be watched.
 	UpdateWatches(context.Context, map[schema.GroupVersionKind]struct{}) status.MultiError
-	// ManagementConflict returns true if one of the watchers noticed a management conflict.
-	ManagementConflict() bool
 }
 
 var _ Interface = &Remediator{}
@@ -237,9 +235,4 @@ func (r *Remediator) AddWatches(ctx context.Context, gvks map[schema.GroupVersio
 // UpdateWatches implements Interface.
 func (r *Remediator) UpdateWatches(ctx context.Context, gvks map[schema.GroupVersionKind]struct{}) status.MultiError {
 	return r.watchMgr.UpdateWatches(ctx, gvks)
-}
-
-// ManagementConflict implements Interface.
-func (r *Remediator) ManagementConflict() bool {
-	return r.watchMgr.ManagementConflict()
 }

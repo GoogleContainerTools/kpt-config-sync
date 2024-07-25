@@ -142,7 +142,7 @@ func Run(ctx context.Context, p Parser, nsControllerState *namespacecontroller.S
 		// Retry if there was an error, conflict, or any watches need to be updated.
 		case <-retryTimer.C():
 			var trigger string
-			if opts.managementConflict() {
+			if opts.HasManagementConflict() {
 				// Reset the cache partially to make sure all the steps of a parse-apply-watch loop will run.
 				// The cached sourceState will not be reset to avoid reading all the source files unnecessarily.
 				// The cached needToRetry will not be reset to avoid resetting the backoff retries.
@@ -619,17 +619,8 @@ func setSyncStatus(ctx context.Context, p Parser, state *reconcilerState, spec S
 		state.status.SyncingConditionLastUpdate = newSyncStatus.LastUpdate
 	}
 
-	// Extract conflict errors from sync errors.
-	var conflictErrs []status.ManagementConflictError
-	if syncErrs != nil {
-		for _, err := range syncErrs.Errors() {
-			if conflictErr, ok := err.(status.ManagementConflictError); ok {
-				conflictErrs = append(conflictErrs, conflictErr)
-			}
-		}
-	}
 	// Report conflict errors to the remote manager, if it's a RootSync.
-	if err := reportRootSyncConflicts(ctx, p.K8sClient(), conflictErrs); err != nil {
+	if err := reportRootSyncConflicts(ctx, p.K8sClient(), options.ManagementConflicts()); err != nil {
 		return fmt.Errorf("failed to report remote conflicts: %w", err)
 	}
 	return nil

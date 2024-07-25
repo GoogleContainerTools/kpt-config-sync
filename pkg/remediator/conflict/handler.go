@@ -35,12 +35,14 @@ type Handler interface {
 
 	// ConflictErrors returns the management conflict errors (KNV1060) the remediator encounters.
 	ConflictErrors() []status.ManagementConflictError
+	// HasConflictErrors returns true when there are conflict errors
+	HasConflictErrors() bool
 }
 
 // handler implements Handler.
 type handler struct {
 	// mux guards the conflictErrs
-	mux sync.Mutex
+	mux sync.RWMutex
 	// conflictErrs tracks all the conflict errors (KNV1060) the remediator encounters,
 	// and report to RootSync|RepoSync status.
 	conflictErrs *orderedmap.OrderedMap[core.ID, status.ManagementConflictError]
@@ -94,8 +96,8 @@ func (h *handler) ClearConflictErrorsWithKind(gk schema.GroupKind) {
 }
 
 func (h *handler) ConflictErrors() []status.ManagementConflictError {
-	h.mux.Lock()
-	defer h.mux.Unlock()
+	h.mux.RLock()
+	defer h.mux.RUnlock()
 
 	// Return a copy
 	var result []status.ManagementConflictError
@@ -103,4 +105,11 @@ func (h *handler) ConflictErrors() []status.ManagementConflictError {
 		result = append(result, pair.Value)
 	}
 	return result
+}
+
+func (h *handler) HasConflictErrors() bool {
+	h.mux.RLock()
+	defer h.mux.RUnlock()
+
+	return h.conflictErrs.Len() > 0
 }

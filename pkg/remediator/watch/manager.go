@@ -122,24 +122,6 @@ func (m *Manager) NeedsUpdate() bool {
 	return m.needsUpdate
 }
 
-// ManagementConflict returns true if any watcher notices any management conflicts. This function is threadsafe.
-func (m *Manager) ManagementConflict() bool {
-	m.mux.Lock()
-	defer m.mux.Unlock()
-
-	managementConflict := false
-	// If one of the watchers noticed a management conflict, the remediator will indicate that
-	// it needs an update so that the parse-apply-watch loop can also detect the conflict and
-	//report it as an error status.
-	for _, watcher := range m.watcherMap {
-		if watcher.ManagementConflict() {
-			managementConflict = true
-			watcher.ClearManagementConflicts()
-		}
-	}
-	return managementConflict
-}
-
 // AddWatches accepts a map of GVKs that should be watched and takes the
 // following actions:
 //   - start watchers for any GroupVersionKind that is present in the given map

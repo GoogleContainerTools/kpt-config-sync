@@ -33,7 +33,6 @@ import (
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/diff"
-	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/remediator/conflict"
 	"kpt.dev/configsync/pkg/remediator/queue"
@@ -73,9 +72,6 @@ const maxWatchRetryFactor = 18
 type Runnable interface {
 	Stop()
 	Run(ctx context.Context) status.Error
-	ManagementConflict() bool
-	SetManagementConflict(object client.Object, commit string)
-	ClearManagementConflicts()
 	ClearManagementConflictsWithKind(gk schema.GroupKind)
 }
 
@@ -101,14 +97,13 @@ type filteredWatcher struct {
 	scope      declared.Scope
 	syncName   string
 	// errorTracker maps an error to the time when the same error happened last time.
-	errorTracker map[string]time.Time
+	errorTracker    map[string]time.Time
+	conflictHandler conflict.Handler
 
 	// The following fields are guarded by the mutex.
-	mux                sync.Mutex
-	base               watch.Interface
-	stopped            bool
-	managementConflict bool
-	conflictHandler    conflict.Handler
+	mux     sync.Mutex
+	base    watch.Interface
+	stopped bool
 }
 
 // filteredWatcher implements the Runnable interface.
@@ -154,59 +149,6 @@ func (w *filteredWatcher) addError(errorID string) bool {
 		return true
 	}
 	return false
-}
-
-func (w *filteredWatcher) ManagementConflict() bool {
-	w.mux.Lock()
-	defer w.mux.Unlock()
-	return w.managementConflict
-}
-
-func (w *filteredWatcher) SetManagementConflict(object client.Object, commit string) {
-	w.mux.Lock()
-	defer w.mux.Unlock()
-
-	// The resource should be managed by a namespace reconciler, but now is updated.
-	// Most likely the resource is now managed by a root reconciler.
-	// In this case, set `managementConflict` true to trigger the namespace reconciler's
-	// parse-apply-watch loop. The kpt_applier should report the ManagementConflictError (KNV1060).
-	// No need to add the conflictError to the remediator because it will be surfaced by kpt_applier.
-	if w.scope != declared.RootScope {
-		w.managementConflict = true
-		return
-	}
-
-	manager, found := object.GetAnnotations()[metadata.ResourceManagerKey]
-	// There should be no conflict if the resource manager key annotation is not found
-	// because any reconciler can manage a non-ConfigSync managed resource.
-	if !found {
-		klog.Warningf("No management conflict as the object %q is not managed by Config Sync", core.IDOf(object))
-		return
-	}
-	// Root reconciler can override resource managed by namespace reconciler.
-	// It is not a conflict in this case.
-	if !declared.IsRootManager(manager) {
-		klog.Warningf("No management conflict as the root reconciler %q should update the object %q that is managed by the namespace reconciler %q",
-			w.syncName, core.IDOf(object), manager)
-		return
-	}
-
-	// The remediator detects conflict between two root reconcilers.
-	// Add the conflict error to the remediator, and the updateStatus goroutine will surface the ManagementConflictError (KNV1060).
-	// It also sets `managementConflict` true to keep retrying the parse-apply-watch loop
-	// so that the error can auto-resolve if the resource is removed from the conflicting manager's repository.
-	w.managementConflict = true
-	newManager := declared.ResourceManager(w.scope, w.syncName)
-	klog.Warningf("The remediator detects a management conflict for object %q between root reconcilers: %q and %q",
-		core.GKNN(object), newManager, manager)
-	w.conflictHandler.AddConflictError(core.IDOf(object), status.ManagementConflictErrorWrap(object, newManager))
-	metrics.RecordResourceConflict(context.Background(), commit)
-}
-
-func (w *filteredWatcher) ClearManagementConflicts() {
-	w.mux.Lock()
-	w.managementConflict = false
-	w.mux.Unlock()
 }
 
 func (w *filteredWatcher) ClearManagementConflictsWithKind(gk schema.GroupKind) {
@@ -489,11 +431,14 @@ func (w *filteredWatcher) handle(ctx context.Context, event watch.Event) (string
 // watcher for processing.
 func (w *filteredWatcher) shouldProcess(object client.Object) bool {
 	id := core.IDOf(object)
+
 	// Process the resource if we are the manager regardless if it is declared or not.
 	if diff.IsManager(w.scope, w.syncName, object) {
+		// TODO: Remove conflict error AFTER it has been resolved, not before.
 		w.conflictHandler.RemoveConflictError(id)
 		return true
 	}
+
 	decl, commit, found := w.resources.Get(id)
 	if !found {
 		// The resource is neither declared nor managed by the same reconciler, so don't manage it.
@@ -504,14 +449,32 @@ func (w *filteredWatcher) shouldProcess(object client.Object) bool {
 	// its declaration. Otherwise we expect to get another event for the same
 	// object but with a matching GVK so we can actually compare it to its
 	// declaration.
-	if object.GetObjectKind().GroupVersionKind() != decl.GroupVersionKind() {
+	currentGVK := object.GetObjectKind().GroupVersionKind()
+	declaredGVK := decl.GroupVersionKind()
+	if currentGVK != declaredGVK {
+		klog.V(5).Infof("Received a watch event for object %q with kind %s, which does not match the declared kind %s. ",
+			id, currentGVK, declaredGVK)
 		return false
 	}
 
-	if !diff.CanManage(w.scope, w.syncName, object, diff.OperationManage) {
-		w.SetManagementConflict(object, commit)
-		return false
+	if diff.CanManage(w.scope, w.syncName, object, diff.OperationManage) {
+		// TODO: Remove conflict error AFTER it has been resolved, not before.
+		w.conflictHandler.RemoveConflictError(id)
+		return true
 	}
-	w.conflictHandler.RemoveConflictError(id)
-	return true
+
+	desiredManager := declared.ResourceManager(w.scope, w.syncName)
+	conflictErr := status.ManagementConflictErrorWrap(object, desiredManager)
+	currentManager := conflictErr.ConflictingManager()
+
+	// TODO: Move logging & metric recording into the conflict handler
+	klog.Errorf("Management conflict detected. "+
+		"Reconciler %q received a watch event for object %q, which is managed by namespace reconciler %q. ",
+		desiredManager, id, currentManager)
+	// Add the conflict error to the conflict handler.
+	// The async status updater will handle updating the RSync status.
+	w.conflictHandler.AddConflictError(id, conflictErr)
+	// TODO: Use separate metrics for management conflicts vs resource conflicts
+	metrics.RecordResourceConflict(context.Background(), commit)
+	return false
 }

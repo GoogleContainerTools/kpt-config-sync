@@ -57,8 +57,16 @@ func (u *Updater) needToUpdateWatch() bool {
 	return u.Remediator.NeedsUpdate()
 }
 
-func (u *Updater) managementConflict() bool {
-	return u.Remediator.ManagementConflict()
+// HasManagementConflict returns true when conflict errors have been encountered
+// by the Applier or Remediator for at least one currently managed object.
+func (u *Updater) HasManagementConflict() bool {
+	return u.SyncErrorCache.conflictHandler.HasConflictErrors()
+}
+
+// ManagementConflicts returns a list of conflict errors encountered by the
+// Applier or Remediator.
+func (u *Updater) ManagementConflicts() []status.ManagementConflictError {
+	return u.SyncErrorCache.conflictHandler.ConflictErrors()
 }
 
 // Remediating returns true if the Remediator is remediating.

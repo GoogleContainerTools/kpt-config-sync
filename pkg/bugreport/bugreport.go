@@ -19,7 +19,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -333,7 +332,7 @@ func (b *BugReporter) fetchConfigMaps(ctx context.Context) (rd []Readable) {
 			}
 		}
 		filePath := path.Join(Namespace, ns, "ConfigMaps")
-		rd = b.appendPrettyJSON(rd, filePath, configMapList)
+		rd = b.appendPrettyYaml(rd, filePath, configMapList)
 	}
 	return rd
 }
@@ -348,7 +347,7 @@ func (b *BugReporter) fetchConfigSyncWebhookConfig(ctx context.Context) (rd []Re
 		}
 	} else {
 		filePath := pathToClusterCmList("config-sync-validating-webhhook-configuration")
-		rd = b.appendPrettyJSON(rd, filePath, webhook)
+		rd = b.appendPrettyYaml(rd, filePath, webhook)
 	}
 	return rd
 }
@@ -357,13 +356,13 @@ func (b *BugReporter) fetchConfigSyncWebhookConfig(ctx context.Context) (rd []Re
 func (b *BugReporter) FetchResources(ctx context.Context) []Readable {
 	var rd []Readable
 	var clusterResourceToReadables = func(u *unstructured.UnstructuredList, resourceName string) (r []Readable) {
-		r = b.appendPrettyJSON(r, pathToClusterCmList(resourceName), u)
+		r = b.appendPrettyYaml(r, pathToClusterCmList(resourceName), u)
 		return r
 	}
 
 	var namespacedResourceToReadables = func(u *unstructured.UnstructuredList, _ string) (r []Readable) {
 		for _, o := range u.Items {
-			r = b.appendPrettyJSON(r, pathToNamespacedResource(o.GetNamespace(), o.GetKind(), o.GetName()), o)
+			r = b.appendPrettyYaml(r, pathToNamespacedResource(o.GetNamespace(), o.GetKind(), o.GetName()), o)
 		}
 		return r
 	}
@@ -411,7 +410,7 @@ func (b *BugReporter) FetchCMSystemPods(ctx context.Context) (rd []Readable) {
 		if err != nil {
 			b.ErrorList = append(b.ErrorList, fmt.Errorf("failed to list %s pods: %v", ns, err))
 		} else {
-			rd = b.appendPrettyJSON(rd, pathToNamespacePodList(ns), podList)
+			rd = b.appendPrettyYaml(rd, pathToNamespacePodList(ns), podList)
 		}
 	}
 
@@ -567,16 +566,7 @@ func (b *BugReporter) Open() (err error) {
 	return nil
 }
 
-func (b *BugReporter) appendPrettyJSON(rd []Readable, pathName string, object interface{}) []Readable {
-	if data, err := json.MarshalIndent(object, "", "  "); err != nil {
-		b.ErrorList = append(b.ErrorList, fmt.Errorf("invalid json response from resources %s: %v", pathName, err))
-	} else {
-		rd = append(rd, Readable{
-			ReadCloser: io.NopCloser(bytes.NewReader(data)),
-			Name:       fmt.Sprintf("%s.json", pathName),
-		})
-	}
-	// also write to yaml for easier manual readability
+func (b *BugReporter) appendPrettyYaml(rd []Readable, pathName string, object interface{}) []Readable {
 	if data, err := yaml.Marshal(object); err != nil {
 		b.ErrorList = append(b.ErrorList, fmt.Errorf("invalid yaml response from resources %s: %v", pathName, err))
 	} else {

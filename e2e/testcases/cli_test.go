@@ -35,7 +35,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/strings/slices"
 	"kpt.dev/configsync/cmd/nomos/flags"
 	"kpt.dev/configsync/cmd/nomos/util"
 	"kpt.dev/configsync/e2e"
@@ -955,48 +954,43 @@ func TestNomosBugreport(t *testing.T) {
 
 	context := strings.TrimSpace(string(out))
 
-	// gather all of the files that are generally
-	// collected by nomos bugreport.
-	// if you do add additional file extensions these need to be added here
-	extensions := []string{".txt", ".json", ".yaml", ".log"}
-	files := glob(bugReportDirName, func(s string) bool {
-		extension := filepath.Ext(s)
-		return slices.Contains(extensions, extension)
-	})
+	// gather all of the files that are collected by nomos bugreport.
+	files := glob(bugReportDirName)
 
 	generalBugReportFiles := []string{"version.txt", "status.txt"}
 
 	multiRepoBugReportFiles := []string{
-		"cluster/configmanagement/clusterselectors.json",
 		"cluster/configmanagement/clusterselectors.yaml",
-		"cluster/configmanagement/namespaceselectors.json",
 		"cluster/configmanagement/namespaceselectors.yaml",
-		"cluster/configmanagement/config-sync-validating-webhhook-configuration.json",
+		"cluster/configmanagement/hierarchyconfigs.yaml",
 		"cluster/configmanagement/config-sync-validating-webhhook-configuration.yaml",
-		"namespaces/config-management-system/pods.json",
 		"namespaces/config-management-system/pods.yaml",
-		"namespaces/config-management-system/ConfigMaps.json",
 		"namespaces/config-management-system/ConfigMaps.yaml",
-		"namespaces/config-management-system/ResourceGroup-root-sync.json",
 		"namespaces/config-management-system/ResourceGroup-root-sync.yaml",
-		"namespaces/config-management-system/RootSync-root-sync.json",
 		"namespaces/config-management-system/RootSync-root-sync.yaml",
+		"namespaces/config-management-system/admission-webhook.*/admission-webhook.log",
+		"namespaces/config-management-system/reconciler-manager.*/reconciler-manager.log",
+		"namespaces/config-management-system/reconciler-manager.*/otel-agent.log",
 		"namespaces/config-management-system/root-reconciler.*/git-sync.log",
 		"namespaces/config-management-system/root-reconciler.*/otel-agent.log",
 		"namespaces/config-management-system/root-reconciler.*/reconciler.log",
-		"namespaces/config-management-monitoring/pods.json",
 		"namespaces/config-management-monitoring/pods.yaml",
 		"namespaces/config-management-monitoring/otel-collector.*/otel-collector.log",
-		"namespaces/resource-group-system/pods.json",
 		"namespaces/resource-group-system/pods.yaml",
 	}
 
 	// check expected files exist in folder
 	var errs status.MultiError
-	errs = checkFileExists(fmt.Sprintf("%s/processed/%s", bugReportDirName, context), generalBugReportFiles, files)
-	errs = status.Append(errs, checkFileExists(fmt.Sprintf("%s/raw/%s", bugReportDirName, context), multiRepoBugReportFiles, files))
+	var expectedFiles []string
+	for _, file := range generalBugReportFiles {
+		expectedFiles = append(expectedFiles, fmt.Sprintf("%s/processed/%s/%s", bugReportDirName, context, file))
+	}
+	for _, file := range multiRepoBugReportFiles {
+		expectedFiles = append(expectedFiles, fmt.Sprintf("%s/raw/%s/%s", bugReportDirName, context, file))
+	}
+	errs = validateFiles(expectedFiles, files)
 	if errs != nil {
-		nt.T.Fatal(fmt.Sprintf("did not find all expected files in bug report zip file: %v", errs))
+		nt.T.Fatal(fmt.Sprintf("error validating bug report zip file: %v", errs))
 	}
 	nt.T.Log("Found all expected files in bugreport zip")
 }
@@ -1107,10 +1101,10 @@ func unzip(dir, zipName string) error {
 }
 
 // glob find and return all files matching given pattern
-func glob(dir string, fn func(string) bool) []string {
+func glob(dir string) []string {
 	var files []string
-	_ = filepath.WalkDir(dir, func(s string, _ fs.DirEntry, _ error) error {
-		if fn(s) {
+	_ = filepath.WalkDir(dir, func(s string, dirEnt fs.DirEntry, _ error) error {
+		if !dirEnt.IsDir() {
 			files = append(files, s)
 		}
 		return nil
@@ -1118,20 +1112,31 @@ func glob(dir string, fn func(string) bool) []string {
 	return files
 }
 
-// checkFileExists check if all files in targetFiles with path prefix can be found in allFiles
-func checkFileExists(prefix string, targetFiles, allFiles []string) status.MultiError {
+// validateFiles check if all files in targetFiles with path prefix can be found in allFiles
+func validateFiles(targetFiles, allFiles []string) status.MultiError {
 	var err status.MultiError
+	unvisitedFiles := map[string]struct{}{}
+	for _, file := range allFiles {
+		unvisitedFiles[file] = struct{}{}
+	}
 	for _, targetFile := range targetFiles {
 		found := false
 		for _, file := range allFiles {
-			if match, _ := regexp.MatchString(fmt.Sprintf("%s/%s", prefix, targetFile), file); match {
+			if match, _ := regexp.MatchString(targetFile, file); match {
+				delete(unvisitedFiles, file)
 				found = true
-				break
 			}
 		}
 		if !found {
 			err = status.Append(err, fmt.Errorf("file not found %s", targetFile))
 		}
+	}
+	if len(unvisitedFiles) > 0 {
+		var fileList []string
+		for file := range unvisitedFiles {
+			fileList = append(fileList, file)
+		}
+		err = status.Append(err, fmt.Errorf("unexpected files found in bugreport: %s", fileList))
 	}
 	return err
 }

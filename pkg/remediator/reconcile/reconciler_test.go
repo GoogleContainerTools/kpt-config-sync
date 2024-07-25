@@ -19,6 +19,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -32,6 +33,7 @@ import (
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/policycontroller"
+	"kpt.dev/configsync/pkg/remediator/conflict"
 	"kpt.dev/configsync/pkg/status"
 	syncerclient "kpt.dev/configsync/pkg/syncer/client"
 	"kpt.dev/configsync/pkg/syncer/syncertest"
@@ -46,8 +48,14 @@ func TestRemediator_Reconcile(t *testing.T) {
 		name string
 		// version is Version (from GVK) of the object to try to remediate.
 		version string
+		// conflictHandler is the initial state of the conflict handler.
+		// Nil defaults to conflict.NewHandler().
+		conflictHandler conflict.Handler
 		// declared is the state of the object as returned by the Parser.
 		declared client.Object
+		// existingConflict is true if the conflict handler has previously seen
+		// a management conflict for the declared object.
+		existingConflict bool
 		// actual is the current state of the object on the cluster.
 		actual client.Object
 		// want is the desired final state of the object on the cluster after
@@ -56,14 +64,19 @@ func TestRemediator_Reconcile(t *testing.T) {
 		// wantError is the desired error resulting from calling Reconcile, if there
 		// is one.
 		wantError error
+		// wantConflict should be true if the conflict handler reports a
+		// management conflict for the declared object after remediation.
+		wantConflict bool
 	}{
 		// Happy Paths.
 		{
-			name:     "create added object",
-			version:  "v1",
-			declared: k8sobjects.ClusterRoleBindingObject(syncertest.ManagementEnabled),
-			actual:   nil,
+			name:    "create added object",
+			version: "v1",
+			declared: k8sobjects.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+				core.Annotation(metadata.ResourceManagerKey, declared.ResourceManager(declared.RootScope, configsync.RootSyncName))),
+			actual: nil,
 			want: k8sobjects.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+				core.Annotation(metadata.ResourceManagerKey, declared.ResourceManager(declared.RootScope, configsync.RootSyncName)),
 				core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 			),
 			wantError: nil,
@@ -72,9 +85,11 @@ func TestRemediator_Reconcile(t *testing.T) {
 			name:    "update declared object",
 			version: "v1",
 			declared: k8sobjects.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+				core.Annotation(metadata.ResourceManagerKey, declared.ResourceManager(declared.RootScope, configsync.RootSyncName)),
 				core.Label("new-label", "one")),
 			actual: k8sobjects.ClusterRoleBindingObject(),
 			want: k8sobjects.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+				core.Annotation(metadata.ResourceManagerKey, declared.ResourceManager(declared.RootScope, configsync.RootSyncName)),
 				core.UID("1"), core.ResourceVersion("2"), core.Generation(1),
 				core.Label("new-label", "one"),
 			),
@@ -159,10 +174,12 @@ func TestRemediator_Reconcile(t *testing.T) {
 			name:    "remove bad actual management annotation",
 			version: "v1",
 			declared: k8sobjects.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+				core.Annotation(metadata.ResourceManagerKey, declared.ResourceManager(declared.RootScope, configsync.RootSyncName)),
 				core.Label("declared-label", "foo")),
 			actual: k8sobjects.ClusterRoleBindingObject(syncertest.ManagementInvalid,
 				core.Label("declared-label", "foo")),
 			want: k8sobjects.ClusterRoleBindingObject(syncertest.ManagementEnabled,
+				core.Annotation(metadata.ResourceManagerKey, declared.ResourceManager(declared.RootScope, configsync.RootSyncName)),
 				core.UID("1"), core.ResourceVersion("2"), core.Generation(1),
 				core.Label("declared-label", "foo")),
 			wantError: nil,
@@ -222,13 +239,75 @@ func TestRemediator_Reconcile(t *testing.T) {
 		{
 			name: "update actual object with different version",
 			declared: k8sobjects.ClusterRoleBindingV1Beta1Object(syncertest.ManagementEnabled,
+				core.Annotation(metadata.ResourceManagerKey, declared.ResourceManager(declared.RootScope, configsync.RootSyncName)),
 				core.Label("new-label", "one")),
 			actual: k8sobjects.ClusterRoleBindingObject(),
 			// Metadata change increments ResourceVersion, but not Generation
 			want: k8sobjects.ClusterRoleBindingV1Beta1Object(syncertest.ManagementEnabled,
+				core.Annotation(metadata.ResourceManagerKey, declared.ResourceManager(declared.RootScope, configsync.RootSyncName)),
 				core.UID("1"), core.ResourceVersion("2"), core.Generation(1),
 				core.Label("new-label", "one")),
 			wantError: nil,
+		},
+		{
+			// Normally, the filtered watcher handles detecting and reporting conflicts.
+			// But with watch filtering, when the selected label is removed,
+			// the object has to be retrieved from the cluster to check if it was deleted or just updated.
+			// If updated, or deleted and recreated, the management may conflict.
+			name: "management conflict error from selected label removal",
+			declared: k8sobjects.ClusterRoleBinding(syncertest.ManagementEnabled,
+				core.Annotation(metadata.ResourceManagerKey, declared.ResourceManager(declared.RootScope, configsync.RootSyncName)),
+				core.Label("selected-label", "expected-value")),
+			actual: k8sobjects.ClusterRoleBinding(syncertest.ManagementEnabled,
+				core.Annotation(metadata.ResourceManagerKey, declared.ResourceManager(declared.RootScope, "other-root-sync")),
+				core.Label("selected-label", "unexpected-value"),
+				core.UID("1"), core.ResourceVersion("2"), core.Generation(1)),
+			// No change made when a conflict is detected
+			want: k8sobjects.ClusterRoleBinding(syncertest.ManagementEnabled,
+				core.Annotation(metadata.ResourceManagerKey, declared.ResourceManager(declared.RootScope, "other-root-sync")),
+				core.Label("selected-label", "unexpected-value"),
+				core.UID("1"), core.ResourceVersion("2"), core.Generation(1)),
+			wantError: status.ManagementConflictErrorWrap(
+				k8sobjects.ClusterRoleBinding(syncertest.ManagementEnabled,
+					core.Annotation(metadata.ResourceManagerKey, declared.ResourceManager(declared.RootScope, "other-root-sync")),
+					core.Label("selected-label", "unexpected-value"),
+					core.UID("1"), core.ResourceVersion("2"), core.Generation(1)),
+				declared.ResourceManager(declared.RootScope, configsync.RootSyncName)),
+			wantConflict: true,
+		},
+		{
+			name: "management conflict resolved",
+			// Setup pre-existing conflict error
+			conflictHandler: func() conflict.Handler {
+				h := conflict.NewHandler()
+				obj := k8sobjects.ClusterRoleBinding(syncertest.ManagementEnabled,
+					core.Annotation(metadata.ResourceManagerKey, declared.ResourceManager(declared.RootScope, "other-root-sync")),
+					core.Label("selected-label", "unexpected-value"),
+					core.Label("unselected-label", "unexpected-value"),
+					core.UID("1"), core.ResourceVersion("2"), core.Generation(1))
+				h.AddConflictError(core.IDOf(obj), status.ManagementConflictErrorWrap(obj,
+					declared.ResourceManager(declared.RootScope, configsync.RootSyncName)))
+				return h
+			}(),
+			declared: k8sobjects.ClusterRoleBinding(syncertest.ManagementEnabled,
+				core.Annotation(metadata.ResourceManagerKey, declared.ResourceManager(declared.RootScope, configsync.RootSyncName)),
+				core.Label("selected-label", "expected-value"),
+				core.Label("unselected-label", "expected-value")),
+			// Find unselected label drift, but correct manager
+			actual: k8sobjects.ClusterRoleBinding(syncertest.ManagementEnabled,
+				core.Annotation(metadata.ResourceManagerKey, declared.ResourceManager(declared.RootScope, configsync.RootSyncName)),
+				core.Label("selected-label", "expected-value"),
+				core.Label("unselected-label", "unexpected-value"),
+				core.UID("1"), core.ResourceVersion("2"), core.Generation(1)),
+			// Revert unselected label drift
+			want: k8sobjects.ClusterRoleBinding(syncertest.ManagementEnabled,
+				core.Annotation(metadata.ResourceManagerKey, declared.ResourceManager(declared.RootScope, configsync.RootSyncName)),
+				core.Label("selected-label", "expected-value"),
+				core.Label("unselected-label", "expected-value"),
+				core.UID("1"), core.ResourceVersion("3"), core.Generation(1)),
+			wantError: nil,
+			// Resolve conflict
+			wantConflict: false,
 		},
 	}
 
@@ -243,7 +322,12 @@ func TestRemediator_Reconcile(t *testing.T) {
 			// Simulate the Parser having already parsed the resource and recorded it.
 			d := makeDeclared(t, "unused", tc.declared)
 
-			r := newReconciler(declared.RootScope, configsync.RootSyncName, c.Applier(configsync.FieldManager), d, testingfake.NewFightHandler())
+			if tc.conflictHandler == nil {
+				tc.conflictHandler = conflict.NewHandler()
+			}
+
+			r := newReconciler(declared.RootScope, configsync.RootSyncName, c.Applier(configsync.FieldManager), d,
+				tc.conflictHandler, testingfake.NewFightHandler())
 
 			// Get the triggering object for the reconcile event.
 			var obj client.Object
@@ -258,6 +342,10 @@ func TestRemediator_Reconcile(t *testing.T) {
 
 			err := r.Remediate(context.Background(), core.IDOf(obj), tc.actual)
 			testerrors.AssertEqual(t, tc.wantError, err)
+
+			if tc.declared != nil {
+				assert.Equal(t, tc.wantConflict, tc.conflictHandler.HasConflictError(core.IDOf(tc.declared)))
+			}
 
 			if tc.want == nil {
 				c.Check(t)
@@ -347,6 +435,43 @@ func TestRemediator_Reconcile_Metrics(t *testing.T) {
 		},
 		// ConflictUpdateOldVersion will never be reported by the remediator,
 		// because it uses server-side apply.
+		{
+			name: "ManagementConflict",
+			declared: k8sobjects.RoleObject(core.Namespace("example"), core.Name("example"),
+				syncertest.ManagementEnabled,
+				core.Annotation(metadata.ResourceManagerKey, declared.ResourceManager(declared.RootScope, configsync.RootSyncName)),
+				core.Label("expected-label", "expected-value")),
+			// Object on cluster has label drift and different manager
+			actual: k8sobjects.RoleObject(core.Namespace("example"), core.Name("example"),
+				syncertest.ManagementEnabled,
+				core.Annotation(metadata.ResourceManagerKey, declared.ResourceManager(declared.RootScope, "other-root-sync")),
+				core.Label("expected-label", "unexpected-value"),
+				core.UID("1"), core.ResourceVersion("2"), core.Generation(1)),
+			// No change on server because of conflict
+			want: k8sobjects.RoleObject(core.Namespace("example"), core.Name("example"),
+				syncertest.ManagementEnabled,
+				core.Annotation(metadata.ResourceManagerKey, declared.ResourceManager(declared.RootScope, "other-root-sync")),
+				core.Label("expected-label", "unexpected-value"),
+				core.UID("1"), core.ResourceVersion("2"), core.Generation(1)),
+			// Expect resource conflict error
+			wantError: status.ManagementConflictErrorWrap(
+				k8sobjects.RoleObject(core.Namespace("example"), core.Name("example"),
+					syncertest.ManagementEnabled,
+					core.Annotation(metadata.ResourceManagerKey, declared.ResourceManager(declared.RootScope, "other-root-sync")),
+					core.Label("selected-label", "unexpected-value"),
+					core.UID("1"), core.ResourceVersion("2"), core.Generation(1)),
+				declared.ResourceManager(declared.RootScope, configsync.RootSyncName)),
+			// Expect resource conflict metric
+			wantMetrics: map[*view.View][]*view.Row{
+				metrics.ResourceConflictsView: {
+					{Data: &view.CountData{Value: 1}, Tags: []tag.Tag{
+						// Re-enable "type" tag, if re-enabled in RecordResourceConflict
+						// {Key: metrics.KeyType, Value: kinds.Role().Kind},
+						{Key: metrics.KeyCommit, Value: "abc123"},
+					}},
+				},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -365,7 +490,8 @@ func TestRemediator_Reconcile_Metrics(t *testing.T) {
 			fakeApplier.UpdateError = tc.updateError
 			fakeApplier.DeleteError = tc.deleteError
 
-			reconciler := newReconciler(declared.RootScope, configsync.RootSyncName, fakeApplier, d, testingfake.NewFightHandler())
+			reconciler := newReconciler(declared.RootScope, configsync.RootSyncName, fakeApplier, d,
+				testingfake.NewConflictHandler(), testingfake.NewFightHandler())
 
 			// Get the triggering object for the reconcile event.
 			var obj client.Object

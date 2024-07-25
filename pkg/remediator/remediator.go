@@ -107,7 +107,7 @@ func New(
 	q := queue.New(scope.String())
 	workers := make([]*reconcile.Worker, numWorkers)
 	for i := 0; i < numWorkers; i++ {
-		workers[i] = reconcile.NewWorker(scope, syncName, applier, q, decls, fightHandler)
+		workers[i] = reconcile.NewWorker(scope, syncName, applier, q, decls, conflictHandler, fightHandler)
 	}
 
 	remediator := &Remediator{

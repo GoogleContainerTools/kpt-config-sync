@@ -25,6 +25,7 @@ import (
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
+	"kpt.dev/configsync/pkg/remediator/conflict"
 	"kpt.dev/configsync/pkg/status"
 	syncerclient "kpt.dev/configsync/pkg/syncer/client"
 	syncerreconcile "kpt.dev/configsync/pkg/syncer/reconcile"
@@ -47,7 +48,8 @@ type reconciler struct {
 	// declared is the threadsafe in-memory representation of declared configuration.
 	declared *declared.Resources
 
-	fightHandler fight.Handler
+	conflictHandler conflict.Handler
+	fightHandler    fight.Handler
 }
 
 // newReconciler instantiates a new reconciler.
@@ -56,14 +58,16 @@ func newReconciler(
 	syncName string,
 	applier syncerreconcile.Applier,
 	declared *declared.Resources,
+	conflictHandler conflict.Handler,
 	fightHandler fight.Handler,
 ) *reconciler {
 	return &reconciler{
-		scope:        scope,
-		syncName:     syncName,
-		applier:      applier,
-		declared:     declared,
-		fightHandler: fightHandler,
+		scope:           scope,
+		syncName:        syncName,
+		applier:         applier,
+		declared:        declared,
+		conflictHandler: conflictHandler,
+		fightHandler:    fightHandler,
 	}
 }
 
@@ -93,8 +97,15 @@ func (r *reconciler) Remediate(ctx context.Context, id core.ID, obj client.Objec
 	if err != nil {
 		switch err.Code() {
 		case syncerclient.ResourceConflictCode:
-			// Record conflict, if there was one
+			// Record cache conflict (create/delete/update failure due to found/not-found/resource-version)
 			metrics.RecordResourceConflict(ctx, commit)
+		case status.ManagementConflictErrorCode:
+			if mce, ok := err.(status.ManagementConflictError); ok {
+				// Record management conflict
+				r.conflictHandler.AddConflictError(id, mce)
+				// TODO: Should ResourceConflictCode &  ManagementConflictErrorCode have separate metrics?
+				metrics.RecordResourceConflict(ctx, commit)
+			}
 		case status.FightErrorCode:
 			operation := objDiff.Operation(r.scope, r.syncName)
 			metrics.RecordResourceFight(ctx, string(operation))
@@ -103,6 +114,7 @@ func (r *reconciler) Remediate(ctx context.Context, id core.ID, obj client.Objec
 		return err
 	}
 
+	r.conflictHandler.RemoveConflictError(id)
 	r.fightHandler.RemoveFightError(id)
 	return nil
 }
@@ -113,6 +125,11 @@ func (r *reconciler) remediate(ctx context.Context, id core.ID, objDiff diff.Dif
 	switch t := objDiff.Operation(r.scope, r.syncName); t {
 	case diff.NoOp:
 		return nil
+	case diff.ManagementConflict:
+		oldManager := core.GetAnnotation(objDiff.Actual, metadata.ResourceManagerKey)
+		newManager := declared.ResourceManager(r.scope, r.syncName)
+		klog.Warningf("Remediator skipping object %v: management conflict detected (current: %s, desired: %s)", id, oldManager, newManager)
+		return status.ManagementConflictErrorWrap(objDiff.Actual, newManager)
 	case diff.Create:
 		declared, err := objDiff.UnstructuredDeclared()
 		if err != nil {

@@ -1,0 +1,8 @@
+generatorOptions:
+  disableNameSuffixHash: true
+
+configMapGenerator:
+- name: default-configmap
+  namespace: default
+  files:
+    - ../external-data.txt

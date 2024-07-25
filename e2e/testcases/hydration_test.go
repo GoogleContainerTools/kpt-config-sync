@@ -170,6 +170,42 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 	nt.Must(tg.Wait())
 }
 
+func TestHydrateExternalFiles(t *testing.T) {
+	nt := nomostest.New(t,
+		nomostesting.Hydration,
+		ntopts.Unstructured,
+	)
+
+	syncDirMap := map[types.NamespacedName]string{
+		nomostest.DefaultRootRepoNamespacedName: "external-files",
+	}
+
+	nt.T.Log("Add the external files root directory")
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/external-files", "."))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add DRY configs to the repository"))
+
+	nt.T.Log("Update RootSync to sync from the external-files directory")
+	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "external-files"}}}`)
+	nt.Must(nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(syncDirMap)))
+
+	// Validate nomos status
+	latestCommit := nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
+	nt.Must(nt.Validate(configsync.RootSyncName, configsync.ControllerNamespace, &v1beta1.RootSync{},
+		testpredicates.RootSyncHasNomosStatus(latestCommit, "SYNCED")))
+
+	nt.T.Log("Validating resources are synced")
+	tg := taskgroup.New()
+	tg.Go(func() error {
+		return nt.Validate("test-configmap", "test-namespace", &corev1.ConfigMap{}, testpredicates.ConfigMapHasData("external-data.txt", "Foo"))
+	})
+
+	tg.Go(func() error {
+		return nt.Validate("test-namespace", "", &corev1.Namespace{}, testpredicates.HasAnnotation(metadata.KustomizeOrigin, "path: namespace.yaml\n"))
+	})
+	nt.Must(tg.Wait())
+}
+
 func TestHydrateHelmComponents(t *testing.T) {
 	nt := nomostest.New(t,
 		nomostesting.Hydration,
@@ -257,7 +293,8 @@ func TestHydrateHelmOverlay(t *testing.T) {
 		testpredicates.HasLabel("team", "coredns"),
 		testpredicates.HasAnnotation("client.lifecycle.config.k8s.io/mutation", "ignore"),
 		testpredicates.HasAnnotation(metadata.KustomizeOrigin, "configuredIn: base/kustomization.yaml\nconfiguredBy:\n  apiVersion: builtin\n  kind: HelmChartInflationGenerator\n"),
-		testpredicates.HasLabel("test-case", "hydration")))
+		testpredicates.HasLabel("test-case", "hydration"),
+		testpredicates.DeploymentContainerPullPolicyEquals("coredns", "Always")))
 
 	// Validate nomos status
 	latestCommit := nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)

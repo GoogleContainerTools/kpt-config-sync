@@ -1,0 +1,22 @@
+resources:
+- ../namespace.yaml
+- ../base
+
+patches:
+- target:
+    kind: Namespace
+    name: default
+  patch: |-
+    - op: replace
+      path: /metadata/name
+      value: test-namespace
+- target:
+    kind: ConfigMap
+    name: default-configmap
+  patch: |-
+    - op: replace
+      path: /metadata/name
+      value: test-configmap
+    - op: replace
+      path: /metadata/namespace
+      value: test-namespace

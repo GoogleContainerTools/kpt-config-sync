@@ -56,14 +56,22 @@ DOCKER_CLI_IMAGE := gcr.io/cloud-builders/docker:$(DOCKER_CLI_IMAGE_VERSION)
 # Directory containing installed go binaries.
 BIN_DIR := $(GO_DIR)/bin
 
-# Vendered. Use "go get github.com/google/go-licenses" to update.
+# Vendored. Use "go get <module>" to update.
 GO_LICENSES := $(BIN_DIR)/go-licenses
 
-ADDLICENSE_VERSION := v1.1.1
 ADDLICENSE := $(BIN_DIR)/addlicense
 
-GOLANGCI_LINT_VERSION := v1.59.1
 GOLANGCI_LINT := $(BIN_DIR)/golangci-lint
+
+CONTROLLER_GEN := $(BIN_DIR)/controller-gen
+
+KIND := $(BIN_DIR)/kind
+
+# crane cli version used for publishing OCI images
+# used by tests or local make targets
+CRANE := $(BIN_DIR)/crane
+
+# End vendored tools
 
 KUSTOMIZE_VERSION := v5.4.2-gke.0
 KUSTOMIZE := $(BIN_DIR)/kustomize
@@ -78,16 +86,6 @@ GIT_SYNC_IMAGE_NAME := gcr.io/config-management-release/git-sync:$(GIT_SYNC_VERS
 
 OTELCONTRIBCOL_VERSION := v0.102.0-gke.6
 OTELCONTRIBCOL_IMAGE_NAME := gcr.io/config-management-release/otelcontribcol:$(OTELCONTRIBCOL_VERSION)
-
-# Keep KIND_VERSION in sync with the version defined in go.mod
-# When upgrading, update the node image versions at e2e/nomostest/clusters/kind.go
-KIND_VERSION := v0.23.0
-KIND := $(BIN_DIR)/kind
-
-# crane cli version used for publishing OCI images
-# used by tests or local make targets
-CRANE_VERSION := v0.16.1
-CRANE := $(BIN_DIR)/crane
 
 # Directory used for staging Docker contexts.
 STAGING_DIR := $(OUTPUT_DIR)/staging
@@ -231,7 +229,6 @@ DOCKER_RUN_ARGS = \
 # Common build-arg defaults to define in one place
 DOCKER_BUILD_ARGS = \
 	--build-arg VERSION=$(VERSION) \
-	--build-arg KIND_VERSION=$(KIND_VERSION) \
 	--build-arg GOLANG_IMAGE=$(GOLANG_IMAGE) \
 	--build-arg DEBIAN_BASE_IMAGE=$(DEBIAN_BASE_IMAGE) \
 	--build-arg GCLOUD_IMAGE=$(GCLOUD_IMAGE) \
@@ -375,7 +372,7 @@ lint-license: "$(GO_LICENSES)"
 	@"$(GO_LICENSES)" check $(shell go list all)
 
 "$(GO_LICENSES)": buildenv-dirs
-	GOPATH="$(GO_DIR)" go install github.com/google/go-licenses
+	GOPATH="$(GO_DIR)" go install github.com/google/go-licenses/v2
 
 .PHONY: install-go-licenses
 # install go-licenses (user-friendly target alias)
@@ -386,7 +383,7 @@ clean-go-licenses:
 	@rm -rf $(GO_LICENSES)
 
 "$(ADDLICENSE)": buildenv-dirs
-	GOPATH="$(GO_DIR)" go install github.com/google/addlicense@$(ADDLICENSE_VERSION)
+	GOPATH="$(GO_DIR)" go install github.com/google/addlicense
 
 .PHONY: install-addlicense
 # install addlicense (user-friendly target alias)
@@ -397,7 +394,7 @@ clean-addlicense:
 	@rm -rf $(ADDLICENSE)
 
 "$(GOLANGCI_LINT)": buildenv-dirs
-	GOPATH="$(GO_DIR)" go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+	GOPATH="$(GO_DIR)" go install github.com/golangci/golangci-lint/cmd/golangci-lint
 
 .PHONY: install-golangci-lint
 # install golangci-lint (user-friendly target alias)
@@ -443,7 +440,7 @@ clean-helm:
 
 "$(GOBIN)/kind":
 	# Build kind with CGO disabled so it can be used in containers without C installed.
-	CGO_ENABLED=0 go install sigs.k8s.io/kind@$(KIND_VERSION)
+	CGO_ENABLED=0 go install sigs.k8s.io/kind
 
 "$(KIND)": "$(GOBIN)/kind" buildenv-dirs
 	cp $(GOBIN)/kind $(KIND)
@@ -454,7 +451,7 @@ install-kind: "$(KIND)"
 
 # Set CGO_ENABLED=0 for compatibility with containers missing glibc
 "$(GOBIN)/crane":
-	CGO_ENABLED=0 go install github.com/google/go-containerregistry/cmd/crane@$(CRANE_VERSION)
+	CGO_ENABLED=0 go install github.com/google/go-containerregistry/cmd/crane
 
 "$(CRANE)": "$(GOBIN)/crane" buildenv-dirs
 	cp $(GOBIN)/crane $(CRANE)

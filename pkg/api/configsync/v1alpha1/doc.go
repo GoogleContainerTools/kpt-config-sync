@@ -22,5 +22,6 @@
 // DO NOT MOVE THESE OUT OF THE PACKAGE DOCSTRING, GENERATING CODE PROPERLY DEPENDS ON THEM BEING HERE.
 // +kubebuilder:object:generate=true
 // +k8s:conversion-gen=kpt.dev/configsync/pkg/api/configsync/v1beta1
+// +k8s:deepcopy-gen=package
 // +groupName=configsync.gke.io
 package v1alpha1

@@ -27,6 +27,7 @@ import (
 // +kubebuilder:printcolumn:name="SourceErrorCount",type="integer",JSONPath=".status.source.errorSummary.totalCount"
 // +kubebuilder:printcolumn:name="SyncCommit",type="string",JSONPath=".status.sync.commit"
 // +kubebuilder:printcolumn:name="SyncErrorCount",type="integer",JSONPath=".status.sync.errorSummary.totalCount"
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // RootSync is the Schema for the rootsyncs API
 type RootSync struct {
@@ -161,6 +162,7 @@ type RootSyncCondition struct {
 }
 
 // +kubebuilder:object:root=true
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // RootSyncList contains a list of RootSync
 type RootSyncList struct {

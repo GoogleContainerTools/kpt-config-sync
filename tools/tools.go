@@ -21,8 +21,12 @@
 package tools
 
 import (
-	// for envtest install
+	_ "github.com/golangci/golangci-lint/cmd/golangci-lint"
+	_ "github.com/google/addlicense"
+	_ "github.com/google/go-containerregistry/cmd/crane"
+	_ "github.com/google/go-licenses/v2"
+	_ "k8s.io/code-generator"
 	_ "sigs.k8s.io/controller-runtime/tools/setup-envtest"
-	// for checking dependency licenses
-	_ "github.com/google/go-licenses"
+	_ "sigs.k8s.io/controller-tools/cmd/controller-gen"
+	_ "sigs.k8s.io/kind"
 )

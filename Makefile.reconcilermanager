@@ -1,8 +1,5 @@
 
 
-CONTROLLER_GEN_VERSION := v0.15.0
-CONTROLLER_GEN := $(BIN_DIR)/controller-gen
-
 .PHONY: generate
 # Generate DeepCopy and runtime.Object implementation methods.
 generate: "$(CONTROLLER_GEN)"
@@ -48,7 +45,7 @@ configsync-crds: "$(CONTROLLER_GEN)" "$(KUSTOMIZE)" "$(ADDLICENSE)"
 	&& "$(ADDLICENSE)" ./manifests
 
 "$(CONTROLLER_GEN)": buildenv-dirs
-	GOPATH="$(GO_DIR)" go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_GEN_VERSION)
+	GOPATH="$(GO_DIR)" go install sigs.k8s.io/controller-tools/cmd/controller-gen
 
 .PHONY: install-controller-gen
 # install controller-gen (user-friendly target alias)

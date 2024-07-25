@@ -38,14 +38,10 @@ GOPATH="${GOPATH:-$(go env GOPATH)}"
 
 NOMOS_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
 
-# The tool doesn't gracefully handle multiple GOPATH values, so this will get
-# the first and last values from GOPATH.
-GOBASE="${GOPATH//:.*/}"
-GOWORK="${GOPATH//.*:/}"
-REPO="$(grep "^module" "${NOMOS_ROOT}/go.mod" | cut -d' ' -f2)"
+GOMOD_NAME="$(grep "^module" "${NOMOS_ROOT}/go.mod" | cut -d' ' -f2)"
 
 # Comma separted list of APIs to generate for clientset.
-INPUT_BASE="${REPO}/pkg/api"
+INPUT_BASE="${GOMOD_NAME}/pkg/api"
 INPUT_APIS=$(
   find "$NOMOS_ROOT/pkg/api" -mindepth 2 -maxdepth 2 -type d |
     sed -e "s|^$NOMOS_ROOT/pkg/api/||" |
@@ -55,13 +51,12 @@ INPUT_APIS=$(
 echo "Found input APIs: ${INPUT_APIS}"
 
 # Where to put the generated client set
-OUTPUT_BASE="${GOPATH}/src"
-OUTPUT_CLIENT="${REPO}/clientgen"
+OUTPUT_DIR="${NOMOS_ROOT}/clientgen"
+OUTPUT_PKG="${GOMOD_NAME}/clientgen"
 
-LOGGING_FLAGS=${LOGGING_FLAGS:- --logtostderr -v 5}
-if ${SILENT:-false}; then
-  LOGGING_FLAGS=""
-fi
+LOGGING_FLAGS=()
+LOGGING_FLAGS+=("--logtostderr")
+LOGGING_FLAGS+=("-v=5")
 
 for tool in client-gen deepcopy-gen informer-gen lister-gen conversion-gen; do
   if [[ -z "$(which "${tool}")" ]]; then
@@ -69,14 +64,6 @@ for tool in client-gen deepcopy-gen informer-gen lister-gen conversion-gen; do
     exit 1
   fi
 done
-
-# If we run go mod tidy, it removes the empty code-generator declaration from
-# modules.txt which makes code generation fail silently. Forcing the empty
-# vendor declaration with this resolves the issue, but it isn't clear why.
-go mod vendor
-
-echo "Using GOPATH base ${GOBASE}"
-echo "Using GOPATH work ${GOWORK}"
 
 for i in apis informer listers; do
   echo "Removing ${NOMOS_ROOT}/clientgen/$i"
@@ -88,53 +75,48 @@ client-gen \
   --input-base "${INPUT_BASE}" \
   --input="${INPUT_APIS}" \
   --clientset-name="apis" \
-  --output-base="${OUTPUT_BASE}" \
-  --clientset-path "${OUTPUT_CLIENT}" \
+  --output-dir="${OUTPUT_DIR}" \
+  --output-pkg="${OUTPUT_PKG}" \
+  --clientset-path "${OUTPUT_PKG}" \
   --go-header-file="hack/boilerplate.txt"
 
-informer_inputs=""
+input_pkgs=()
 for api in $(echo "${INPUT_APIS}" | tr ',' ' '); do
-  if [[ "$informer_inputs" != "" ]]; then
-    informer_inputs="$informer_inputs,"
-  fi
-  informer_inputs="${informer_inputs}${INPUT_BASE}/${api}"
+  input_pkgs+=("${INPUT_BASE}/${api}")
 done
 
 echo "informer"
 informer-gen \
-  "${LOGGING_FLAGS}" \
-  --input-dirs="${informer_inputs}" \
-  --versioned-clientset-package="${OUTPUT_CLIENT}/apis" \
-  --listers-package="${OUTPUT_CLIENT}/listers" \
-  --output-base="$GOWORK/src" \
-  --output-package="${OUTPUT_CLIENT}/informer" \
+  "${LOGGING_FLAGS[@]}" \
+  --versioned-clientset-package="${OUTPUT_PKG}/apis" \
+  --listers-package="${OUTPUT_PKG}/listers" \
+  --output-dir="${OUTPUT_DIR}/informer" \
+  --output-pkg="${OUTPUT_PKG}/informer" \
   --go-header-file="hack/boilerplate.txt" \
-  --single-directory
+  --single-directory \
+  "${input_pkgs[@]}"
 
 echo "deepcopy"
 # Creates types.generated.go
 deepcopy-gen \
-  "${LOGGING_FLAGS}" \
-  --input-dirs="${informer_inputs}" \
-  --output-file-base zz_generated.deepcopy \
-  --output-base="${OUTPUT_BASE}" \
-  --go-header-file="hack/boilerplate.txt"
+  "${LOGGING_FLAGS[@]}" \
+  --output-file zz_generated.deepcopy.go \
+  --go-header-file="hack/boilerplate.txt" \
+  "${input_pkgs[@]}"
 
 echo "lister"
 lister-gen \
-  "${LOGGING_FLAGS}" \
-  --input-dirs="${informer_inputs}" \
-  --output-base="$GOWORK/src" \
-  --output-package="${OUTPUT_CLIENT}/listers" \
-  --go-header-file="hack/boilerplate.txt"
+  "${LOGGING_FLAGS[@]}" \
+  --output-dir="${OUTPUT_DIR}/listers" \
+  --output-pkg="${OUTPUT_PKG}/listers" \
+  --go-header-file="hack/boilerplate.txt" \
+  "${input_pkgs[@]}"
 
 echo "conversion"
 conversion-gen \
-  "${LOGGING_FLAGS}" \
-  --input-dirs="${informer_inputs}" \
-  --output-base="$GOWORK/src" \
-  --output-file-base zz_generated.conversion \
-  --output-package="${OUTPUT_CLIENT}/listers" \
-  --go-header-file="hack/boilerplate.txt"
+  "${LOGGING_FLAGS[@]}" \
+  --output-file zz_generated.conversion.go \
+  --go-header-file="hack/boilerplate.txt" \
+  "${input_pkgs[@]}"
 
 echo "Generation Completed!"

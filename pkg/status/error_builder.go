@@ -120,8 +120,8 @@ func (eb ErrorBuilder) BuildWithResources(resources ...client.Object) ResourceEr
 func (eb ErrorBuilder) BuildWithConflictingManagers(resource client.Object, newManager, currentManager string) ManagementConflictError {
 	return &managementConflictErrorImpl{
 		underlying:     eb.error,
-		resource:       resource,
-		newManager:     newManager,
+		object:         resource,
+		desiredManager: newManager,
 		currentManager: currentManager,
 	}
 }

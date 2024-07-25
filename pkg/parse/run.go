@@ -660,7 +660,7 @@ func reportRootSyncConflicts(ctx context.Context, k8sClient client.Client, confl
 	}
 	conflictingManagerErrors := map[string][]status.ManagementConflictError{}
 	for _, conflictError := range conflictErrs {
-		conflictingManager := conflictError.ConflictingManager()
+		conflictingManager := conflictError.CurrentManager()
 		conflictingManagerErrors[conflictingManager] = append(conflictingManagerErrors[conflictingManager], conflictError)
 	}
 

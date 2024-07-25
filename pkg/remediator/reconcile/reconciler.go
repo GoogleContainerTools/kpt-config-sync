@@ -101,10 +101,7 @@ func (r *reconciler) Remediate(ctx context.Context, id core.ID, obj client.Objec
 			metrics.RecordResourceConflict(ctx, commit)
 		case status.ManagementConflictErrorCode:
 			if mce, ok := err.(status.ManagementConflictError); ok {
-				// Record management conflict
-				r.conflictHandler.AddConflictError(id, mce)
-				// TODO: Should ResourceConflictCode &  ManagementConflictErrorCode have separate metrics?
-				metrics.RecordResourceConflict(ctx, commit)
+				conflict.Record(ctx, r.conflictHandler, mce, commit)
 			}
 		case status.FightErrorCode:
 			operation := objDiff.Operation(r.scope, r.syncName)

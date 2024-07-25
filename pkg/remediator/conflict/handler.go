@@ -15,12 +15,14 @@
 package conflict
 
 import (
+	"context"
 	"sync"
 
 	"github.com/elliotchance/orderedmap/v2"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/status"
 )
 
@@ -39,6 +41,16 @@ type Handler interface {
 	HasConflictErrors() bool
 	// HasConflictError returns true when there is a conflict for the specified object ID.
 	HasConflictError(core.ID) bool
+}
+
+// Record a management conflict error, including log and metric.
+func Record(ctx context.Context, handler Handler, err status.ManagementConflictError, commit string) {
+	klog.Errorf("Management conflict detected. "+
+		"Reconciler %q received a watch event for object %q, which is manage by namespace reconciler %q. ",
+		err.DesiredManager(), err.ObjectID(), err.CurrentManager())
+	handler.AddConflictError(err.ObjectID(), err)
+	// TODO: Use separate metrics for management conflicts vs resource conflicts
+	metrics.RecordResourceConflict(ctx, commit)
 }
 
 // handler implements Handler.
@@ -66,9 +78,9 @@ func (h *handler) AddConflictError(id core.ID, newErr status.ManagementConflictE
 	// Ignore KptManagementConflictError if a ManagementConflictError was already reported.
 	// KptManagementConflictError don't have a real ConflictingManager recorded.
 	// TODO: Remove if cli-utils supports reporting the conflicting manager in InventoryOverlapError.
-	if newErr.ConflictingManager() == UnknownManager {
+	if newErr.CurrentManager() == UnknownManager {
 		if oldErr, found := h.conflictErrs.Get(id); found {
-			if oldErr.ConflictingManager() != UnknownManager {
+			if oldErr.CurrentManager() != UnknownManager {
 				return
 			}
 		}

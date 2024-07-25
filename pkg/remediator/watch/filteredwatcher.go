@@ -461,16 +461,6 @@ func (w *filteredWatcher) shouldProcess(object client.Object) bool {
 
 	desiredManager := declared.ResourceManager(w.scope, w.syncName)
 	conflictErr := status.ManagementConflictErrorWrap(object, desiredManager)
-	currentManager := conflictErr.ConflictingManager()
-
-	// TODO: Move logging & metric recording into the conflict handler
-	klog.Errorf("Management conflict detected. "+
-		"Reconciler %q received a watch event for object %q, which is managed by namespace reconciler %q. ",
-		desiredManager, id, currentManager)
-	// Add the conflict error to the conflict handler.
-	// The async status updater will handle updating the RSync status.
-	w.conflictHandler.AddConflictError(id, conflictErr)
-	// TODO: Use separate metrics for management conflicts vs resource conflicts
-	metrics.RecordResourceConflict(context.Background(), commit)
+	conflict.Record(context.Background(), w.conflictHandler, conflictErr, commit)
 	return false
 }

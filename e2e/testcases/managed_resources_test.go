@@ -22,66 +22,65 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/applyset"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
+	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // This file includes tests for drift correction and drift prevention.
 //
-// The drift correction in the mono-repo mode utilizes the following two annotations:
-//  * configmanagement.gke.io/managed
-//  * configsync.gke.io/resource-id
+// Drift Correction uses the following metadata:
+//  * The "configmanagement.gke.io/managed" annotation must be set to "enabled".
+//  * The "configsync.gke.io/resource-id" annotation must match the object ID.
+//  * The "configsync.gke.io/manager" annotation must exists and match the RSync's ResourceManager name.
+//  * The "applyset.kubernetes.io/part-of" label must match the RSync's ApplySet ID.
 //
-// The drift correction in the multi-repo mode utilizes the following three annotations:
-//  * configmanagement.gke.io/managed
-//  * configsync.gke.io/resource-id
-//  * configsync.gke.io/manager
-//
-// The drift prevention is only supported in the multi-repo mode, and utilizes the following Config Sync metadata:
-//  * the configmanagement.gke.io/managed annotation
-//  * the configsync.gke.io/resource-id annotation
-//  * the configsync.gke.io/declared-version label
+// Drift Prevention uses the following metadata:
+//  * The "configmanagement.gke.io/managed" annotation must be set to "enabled".
+//  * The "configsync.gke.io/resource-id" annotation must match the object ID.
 
-// The reason we have both TestKubectlCreatesManagedNamespaceResourceMonoRepo and
-// TestKubectlCreatesManagedNamespaceResourceMultiRepo is that the mono-repo mode and
-// CSMR handles managed namespaces which are created by other parties differently:
-//   * the mono-repo mode does not remove these namespaces;
-//   * CSMR does remove these namespaces.
-
-// TestKubectlCreatesManagedNamespaceResourceMultiRepo tests the drift correction regarding kubectl
-// tries to create a managed namespace in the the multi-repo mode.
-func TestKubectlCreatesManagedNamespaceResourceMultiRepo(t *testing.T) {
+// TestDriftKubectlApplyClusterScoped tests drift correction after
+// cluster-scoped changes are made with kubectl.
+func TestDriftKubectlApplyClusterScoped(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
+
+	rootSync2Name := "abcdef"
+	rootSync1ApplySetID := applyset.IDFromSync(configsync.RootSyncName, declared.RootScope)
+	rootSync2ApplySetID := applyset.IDFromSync(rootSync2Name, declared.RootScope)
+	rootSync1Manager := declared.ResourceManager(declared.RootScope, configsync.RootSyncName)
+	rootSync2Manager := declared.ResourceManager(declared.RootScope, rootSync2Name)
 
 	namespace := k8sobjects.NamespaceObject("bookstore")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add a namespace"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	/* A new test */
-	ns := []byte(`
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: test-ns1
-  annotations:
-    configmanagement.gke.io/managed: enabled
-    configsync.gke.io/resource-id: _namespace_test-ns1
-    configsync.gke.io/manager: :root
-`)
+	ns1Obj := &corev1.Namespace{}
+	ns1Obj.SetName("test-ns1")
+	ns1Obj.SetAnnotations(map[string]string{
+		metadata.ResourceManagementKey: metadata.ResourceManagementEnabled,
+		metadata.ResourceIDKey:         "_namespace_test-ns1",
+		metadata.ResourceManagerKey:    rootSync1Manager,
+	})
+	ns1Obj.SetLabels(map[string]string{
+		metadata.ApplySetPartOfLabel: rootSync1ApplySetID,
+	})
 
-	if err := os.WriteFile(filepath.Join(nt.TmpDir, "test-ns1.yaml"), ns, 0644); err != nil {
-		nt.T.Fatalf("failed to create a tmp file %v", err)
+	if err := writeObjectYAMLFile(filepath.Join(nt.TmpDir, "test-ns1.yaml"), ns1Obj, nt.Scheme); err != nil {
+		nt.T.Fatal(err)
 	}
 
 	out, err := nt.Shell.Kubectl("apply", "-f", filepath.Join(nt.TmpDir, "test-ns1.yaml"))
@@ -89,7 +88,7 @@ metadata:
 		nt.T.Fatalf("got `kubectl apply -f test-ns1.yaml` error %v %s, want return nil", err, out)
 	}
 
-	// Remediator should delete `test-ns1`, because it says it's managed by the
+	// Remediator SHOULD delete `test-ns1`, because it says it's managed by the
 	// root-reconciler, but it's not in the source declared resources.
 	err = nt.Watcher.WatchForNotFound(kinds.Namespace(), "test-ns1", "")
 	if err != nil {
@@ -97,19 +96,19 @@ metadata:
 	}
 
 	/* A new test */
-	ns = []byte(`
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: test-ns2
-  annotations:
-    configmanagement.gke.io/managed: enabled
-    configsync.gke.io/resource-id: _namespace_test-ns2
-    configsync.gke.io/manager: :abcdef
-`)
+	ns2Obj := &corev1.Namespace{}
+	ns2Obj.SetName("test-ns2")
+	ns2Obj.SetAnnotations(map[string]string{
+		metadata.ResourceManagementKey: metadata.ResourceManagementEnabled,
+		metadata.ResourceIDKey:         "_namespace_test-ns2",
+		metadata.ResourceManagerKey:    rootSync2Manager,
+	})
+	ns2Obj.SetLabels(map[string]string{
+		metadata.ApplySetPartOfLabel: rootSync2ApplySetID,
+	})
 
-	if err := os.WriteFile(filepath.Join(nt.TmpDir, "test-ns2.yaml"), ns, 0644); err != nil {
-		nt.T.Fatalf("failed to create a tmp file %v", err)
+	if err := writeObjectYAMLFile(filepath.Join(nt.TmpDir, "test-ns2.yaml"), ns2Obj, nt.Scheme); err != nil {
+		nt.T.Fatal(err)
 	}
 
 	out, err = nt.Shell.Kubectl("apply", "-f", filepath.Join(nt.TmpDir, "test-ns2.yaml"))
@@ -120,8 +119,9 @@ metadata:
 	// Wait 5 seconds so that the remediator can process the event.
 	time.Sleep(5 * time.Second)
 
-	// The `configsync.gke.io/manager` annotation of `test-ns2` suggests that its manager is ':abcdef'.
-	// The root reconciler does not manage `test-ns2`, therefore should not remove `test-ns2`.
+	// Remediator SHOULD NOT delete the namespace, since its
+	// `configsync.gke.io/manager` annotation indicates it is managed by a
+	// RootSync that does not exist.
 	err = nt.Validate("test-ns2", "", &corev1.Namespace{},
 		testpredicates.HasExactlyAnnotationKeys(
 			metadata.ResourceManagementKey,
@@ -133,18 +133,18 @@ metadata:
 	}
 
 	/* A new test */
-	ns = []byte(`
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: test-ns3
-  annotations:
-    configmanagement.gke.io/managed: enabled
-    configsync.gke.io/resource-id: _namespace_test-ns3
-`)
+	ns3Obj := &corev1.Namespace{}
+	ns3Obj.SetName("test-ns3")
+	ns3Obj.SetAnnotations(map[string]string{
+		metadata.ResourceManagementKey: metadata.ResourceManagementEnabled,
+		metadata.ResourceIDKey:         "_namespace_test-ns3",
+	})
+	ns2Obj.SetLabels(map[string]string{
+		metadata.ApplySetPartOfLabel: rootSync2ApplySetID,
+	})
 
-	if err := os.WriteFile(filepath.Join(nt.TmpDir, "test-ns3.yaml"), ns, 0644); err != nil {
-		nt.T.Fatalf("failed to create a tmp file %v", err)
+	if err := writeObjectYAMLFile(filepath.Join(nt.TmpDir, "test-ns3.yaml"), ns3Obj, nt.Scheme); err != nil {
+		nt.T.Fatal(err)
 	}
 
 	out, err = nt.Shell.Kubectl("apply", "-f", filepath.Join(nt.TmpDir, "test-ns3.yaml"))
@@ -155,7 +155,8 @@ metadata:
 	// Wait 5 seconds so that the remediator can process the event.
 	time.Sleep(5 * time.Second)
 
-	// Config Sync should not modify the namespace, since it does not have a `configsync.gke.io/manager` annotation.
+	// Remediator SHOULD NOT delete the namespace, since it does not have a
+	// `configsync.gke.io/manager` annotation.
 	err = nt.Validate("test-ns3", "", &corev1.Namespace{},
 		testpredicates.HasExactlyAnnotationKeys(
 			metadata.ResourceManagementKey,
@@ -167,19 +168,19 @@ metadata:
 	}
 
 	/* A new test */
-	ns = []byte(`
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: test-ns4
-  annotations:
-    configmanagement.gke.io/managed: enabled
-    configsync.gke.io/resource-id: _namespace_wrong-ns4
-    configsync.gke.io/manager: :root
-`)
+	ns4Obj := &corev1.Namespace{}
+	ns4Obj.SetName("test-ns4")
+	ns4Obj.SetAnnotations(map[string]string{
+		metadata.ResourceManagementKey: metadata.ResourceManagementEnabled,
+		metadata.ResourceIDKey:         "_namespace_wrong-ns4",
+		metadata.ResourceManagerKey:    rootSync1Manager,
+	})
+	ns2Obj.SetLabels(map[string]string{
+		metadata.ApplySetPartOfLabel: rootSync2ApplySetID,
+	})
 
-	if err := os.WriteFile(filepath.Join(nt.TmpDir, "test-ns4.yaml"), ns, 0644); err != nil {
-		nt.T.Fatalf("failed to create a tmp file %v", err)
+	if err := writeObjectYAMLFile(filepath.Join(nt.TmpDir, "test-ns4.yaml"), ns4Obj, nt.Scheme); err != nil {
+		nt.T.Fatal(err)
 	}
 
 	out, err = nt.Shell.Kubectl("apply", "-f", filepath.Join(nt.TmpDir, "test-ns4.yaml"))
@@ -190,9 +191,45 @@ metadata:
 	// Wait 5 seconds so that the remediator can process the event.
 	time.Sleep(5 * time.Second)
 
-	// Config Sync should not modify the namespace, since its `configsync.gke.io/resource-id`
-	// annotation is incorrect.
+	// Remediator SHOULD NOT delete the namespace, since its
+	// `configsync.gke.io/resource-id` annotation is incorrect.
 	err = nt.Validate("test-ns4", "", &corev1.Namespace{},
+		testpredicates.HasExactlyAnnotationKeys(
+			metadata.ResourceManagementKey,
+			metadata.ResourceIDKey,
+			metadata.ResourceManagerKey,
+			corev1.LastAppliedConfigAnnotation))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	/* A new test */
+	ns5Obj := &corev1.Namespace{}
+	ns5Obj.SetName("test-ns5")
+	ns5Obj.SetAnnotations(map[string]string{
+		metadata.ResourceManagementKey: metadata.ResourceManagementEnabled,
+		metadata.ResourceIDKey:         "_namespace_test-ns5",
+		metadata.ResourceManagerKey:    rootSync1Manager,
+	})
+	ns2Obj.SetLabels(map[string]string{
+		metadata.ApplySetPartOfLabel: "wrong-applyset-id",
+	})
+
+	if err := writeObjectYAMLFile(filepath.Join(nt.TmpDir, "test-ns5.yaml"), ns5Obj, nt.Scheme); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	out, err = nt.Shell.Kubectl("apply", "-f", filepath.Join(nt.TmpDir, "test-ns5.yaml"))
+	if err != nil {
+		nt.T.Fatalf("got `kubectl apply -f test-ns4.yaml` error %v %s, want return nil", err, out)
+	}
+
+	// Wait 5 seconds so that the remediator can process the event.
+	time.Sleep(5 * time.Second)
+
+	// Remediator SHOULD NOT delete the namespace, since its
+	// `applyset.kubernetes.io/part-of` label is incorrect.
+	err = nt.Validate("test-ns5", "", &corev1.Namespace{},
 		testpredicates.HasExactlyAnnotationKeys(
 			metadata.ResourceManagementKey,
 			metadata.ResourceIDKey,
@@ -203,10 +240,16 @@ metadata:
 	}
 }
 
-// TestKubectlCreatesManagedConfigMapResource tests the drift correction regarding kubectl
-// tries to create a managed non-namespace resource in both the mono-repo mode and the multi-repo mode.
-func TestKubectlCreatesManagedConfigMapResource(t *testing.T) {
+// TestDriftKubectlApplyNamespaceScoped tests drift correction after
+// namespace-scoped changes are made with kubectl.
+func TestDriftKubectlApplyNamespaceScoped(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
+
+	rootSync2Name := "abcdef"
+	rootSync1ApplySetID := applyset.IDFromSync(configsync.RootSyncName, declared.RootScope)
+	rootSync2ApplySetID := applyset.IDFromSync(rootSync2Name, declared.RootScope)
+	rootSync1Manager := declared.ResourceManager(declared.RootScope, configsync.RootSyncName)
+	rootSync2Manager := declared.ResourceManager(declared.RootScope, rootSync2Name)
 
 	namespace := k8sobjects.NamespaceObject("bookstore")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace))
@@ -222,22 +265,23 @@ func TestKubectlCreatesManagedConfigMapResource(t *testing.T) {
 	}
 
 	/* A new test */
-	cm := []byte(`
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: test-cm1
-  namespace: bookstore
-  annotations:
-    configmanagement.gke.io/managed: enabled
-    configsync.gke.io/resource-id: _configmap_bookstore_test-cm1
-    configsync.gke.io/manager: :root
-data:
-  weekday: "monday"
-`)
+	cm1Obj := &corev1.ConfigMap{}
+	cm1Obj.SetName("test-cm1")
+	cm1Obj.SetNamespace("bookstore")
+	cm1Obj.SetAnnotations(map[string]string{
+		metadata.ResourceManagementKey: metadata.ResourceManagementEnabled,
+		metadata.ResourceIDKey:         "_configmap_bookstore_test-cm1",
+		metadata.ResourceManagerKey:    rootSync1Manager,
+	})
+	cm1Obj.SetLabels(map[string]string{
+		metadata.ApplySetPartOfLabel: rootSync1ApplySetID,
+	})
+	cm1Obj.Data = map[string]string{
+		"weekday": "monday",
+	}
 
-	if err := os.WriteFile(filepath.Join(nt.TmpDir, "test-cm1.yaml"), cm, 0644); err != nil {
-		nt.T.Fatalf("failed to create a tmp file %v", err)
+	if err := writeObjectYAMLFile(filepath.Join(nt.TmpDir, "test-cm1.yaml"), cm1Obj, nt.Scheme); err != nil {
+		nt.T.Fatal(err)
 	}
 
 	out, err := nt.Shell.Kubectl("apply", "-f", filepath.Join(nt.TmpDir, "test-cm1.yaml"))
@@ -245,29 +289,30 @@ data:
 		nt.T.Fatalf("got `kubectl apply -f test-cm1.yaml` error %v %s, want return nil", err, out)
 	}
 
-	// Config Sync should remove `test-ns`.
+	// Remediator SHOULD delete the configmap
 	err = nt.Watcher.WatchForNotFound(kinds.ConfigMap(), "test-cm1", "bookstore")
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
 	/* A new test */
-	cm = []byte(`
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: test-cm2
-  namespace: bookstore
-  annotations:
-    configmanagement.gke.io/managed: enabled
-    configsync.gke.io/resource-id: _configmap_bookstore_wrong-cm2
-    configsync.gke.io/manager: :root
-data:
-  weekday: "monday"
-`)
+	cm2Obj := &corev1.ConfigMap{}
+	cm2Obj.SetName("test-cm2")
+	cm2Obj.SetNamespace("bookstore")
+	cm2Obj.SetAnnotations(map[string]string{
+		metadata.ResourceManagementKey: metadata.ResourceManagementEnabled,
+		metadata.ResourceIDKey:         "_configmap_bookstore_wrong-cm2",
+		metadata.ResourceManagerKey:    rootSync1Manager,
+	})
+	cm2Obj.SetLabels(map[string]string{
+		metadata.ApplySetPartOfLabel: rootSync1ApplySetID,
+	})
+	cm2Obj.Data = map[string]string{
+		"weekday": "monday",
+	}
 
-	if err := os.WriteFile(filepath.Join(nt.TmpDir, "test-cm2.yaml"), cm, 0644); err != nil {
-		nt.T.Fatalf("failed to create a tmp file %v", err)
+	if err := writeObjectYAMLFile(filepath.Join(nt.TmpDir, "test-cm2.yaml"), cm2Obj, nt.Scheme); err != nil {
+		nt.T.Fatal(err)
 	}
 
 	out, err = nt.Shell.Kubectl("apply", "-f", filepath.Join(nt.TmpDir, "test-cm2.yaml"))
@@ -278,8 +323,8 @@ data:
 	// Wait 5 seconds so that the reconciler can process the event.
 	time.Sleep(5 * time.Second)
 
-	// Config Sync should not modify the configmap, since its `configsync.gke.io/resource-id`
-	// annotation is incorrect.
+	// Remediator SHOULD NOT delete the configmap, since its
+	// `configsync.gke.io/resource-id` annotation is incorrect.
 	err = nt.Validate("test-cm2", "bookstore", &corev1.ConfigMap{},
 		testpredicates.HasExactlyAnnotationKeys(
 			metadata.ResourceManagementKey,
@@ -291,22 +336,23 @@ data:
 	}
 
 	/* A new test */
-	cm = []byte(`
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: test-cm3
-  namespace: bookstore
-  annotations:
-    configmanagement.gke.io/managed: enabled
-    configsync.gke.io/resource-id: _configmap_bookstore_test-cm3
-    configsync.gke.io/manager: :abcdef
-data:
-  weekday: "monday"
-`)
+	cm3Obj := &corev1.ConfigMap{}
+	cm3Obj.SetName("test-cm3")
+	cm3Obj.SetNamespace("bookstore")
+	cm3Obj.SetAnnotations(map[string]string{
+		metadata.ResourceManagementKey: metadata.ResourceManagementEnabled,
+		metadata.ResourceIDKey:         "_configmap_bookstore_test-cm3",
+		metadata.ResourceManagerKey:    rootSync2Manager,
+	})
+	cm3Obj.SetLabels(map[string]string{
+		metadata.ApplySetPartOfLabel: rootSync2ApplySetID,
+	})
+	cm3Obj.Data = map[string]string{
+		"weekday": "monday",
+	}
 
-	if err := os.WriteFile(filepath.Join(nt.TmpDir, "test-cm3.yaml"), cm, 0644); err != nil {
-		nt.T.Fatalf("failed to create a tmp file %v", err)
+	if err := writeObjectYAMLFile(filepath.Join(nt.TmpDir, "test-cm3.yaml"), cm3Obj, nt.Scheme); err != nil {
+		nt.T.Fatal(err)
 	}
 
 	out, err = nt.Shell.Kubectl("apply", "-f", filepath.Join(nt.TmpDir, "test-cm3.yaml"))
@@ -317,8 +363,9 @@ data:
 	// Wait 5 seconds so that the reconciler can process the event.
 	time.Sleep(5 * time.Second)
 
-	// The `configsync.gke.io/manager` annotation of `test-ns3` suggests that its manager is ':abcdef'.
-	// The root reconciler does not manage `test-ns3`, therefore should not remove `test-ns3`.
+	// Remediator SHOULD NOT delete the configmap, since its
+	// `configsync.gke.io/manager` annotation indicates it is managed by a
+	// RootSync that does not exist.
 	err = nt.Validate("test-cm3", "bookstore", &corev1.ConfigMap{},
 		testpredicates.HasExactlyAnnotationKeys(
 			metadata.ResourceManagementKey,
@@ -330,21 +377,22 @@ data:
 	}
 
 	/* A new test */
-	cm = []byte(`
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: test-cm4
-  namespace: bookstore
-  annotations:
-    configmanagement.gke.io/managed: enabled
-    configsync.gke.io/resource-id: _configmap_bookstore_test-cm4
-data:
-  weekday: "monday"
-`)
+	cm4Obj := &corev1.ConfigMap{}
+	cm4Obj.SetName("test-cm4")
+	cm4Obj.SetNamespace("bookstore")
+	cm4Obj.SetAnnotations(map[string]string{
+		metadata.ResourceManagementKey: metadata.ResourceManagementEnabled,
+		metadata.ResourceIDKey:         "_configmap_bookstore_test-cm4",
+	})
+	cm4Obj.SetLabels(map[string]string{
+		metadata.ApplySetPartOfLabel: rootSync1ApplySetID,
+	})
+	cm4Obj.Data = map[string]string{
+		"weekday": "monday",
+	}
 
-	if err := os.WriteFile(filepath.Join(nt.TmpDir, "test-cm4.yaml"), cm, 0644); err != nil {
-		nt.T.Fatalf("failed to create a tmp file %v", err)
+	if err := writeObjectYAMLFile(filepath.Join(nt.TmpDir, "test-cm4.yaml"), cm4Obj, nt.Scheme); err != nil {
+		nt.T.Fatal(err)
 	}
 
 	out, err = nt.Shell.Kubectl("apply", "-f", filepath.Join(nt.TmpDir, "test-cm4.yaml"))
@@ -355,7 +403,8 @@ data:
 	// Wait 5 seconds so that the reconciler can process the event.
 	time.Sleep(5 * time.Second)
 
-	// Config Sync should not modify the configmap, since it does not have a `configsync.gke.io/manager` annotation.
+	// Remediator SHOULD NOT delete the configmap, since it does not have a
+	// `configsync.gke.io/manager` annotation.
 	err = nt.Validate("test-cm4", "bookstore", &corev1.ConfigMap{},
 		testpredicates.HasExactlyAnnotationKeys(
 			metadata.ResourceManagementKey,
@@ -367,20 +416,55 @@ data:
 	}
 
 	/* A new test */
-	cm = []byte(`
-apiVersion: v1
-kind: Secret
-metadata:
-  name: test-secret
-  namespace: bookstore
-  annotations:
-    configmanagement.gke.io/managed: enabled
-    configsync.gke.io/resource-id: _configmap_bookstore_test-secret
-    configsync.gke.io/manager: :root
-`)
+	cm5Obj := &corev1.ConfigMap{}
+	cm5Obj.SetName("test-cm5")
+	cm5Obj.SetNamespace("bookstore")
+	cm5Obj.SetAnnotations(map[string]string{
+		metadata.ResourceManagementKey: metadata.ResourceManagementEnabled,
+		metadata.ResourceIDKey:         "_configmap_bookstore_test-cm5",
+		metadata.ResourceManagerKey:    rootSync1Manager,
+	})
+	cm5Obj.SetLabels(map[string]string{
+		metadata.ApplySetPartOfLabel: "wrong-applyset-id",
+	})
+	cm5Obj.Data = map[string]string{
+		"weekday": "monday",
+	}
 
-	if err := os.WriteFile(filepath.Join(nt.TmpDir, "test-secret.yaml"), cm, 0644); err != nil {
-		nt.T.Fatalf("failed to create a tmp file %v", err)
+	nt.Must(writeObjectYAMLFile(filepath.Join(nt.TmpDir, "test-cm5.yaml"), cm5Obj, nt.Scheme))
+
+	out, err = nt.Shell.Kubectl("apply", "-f", filepath.Join(nt.TmpDir, "test-cm5.yaml"))
+	if err != nil {
+		nt.T.Fatalf("got `kubectl apply -f test-cm4.yaml` error %v %s, want return nil", err, out)
+	}
+
+	// Wait 5 seconds so that the reconciler can process the event.
+	time.Sleep(5 * time.Second)
+
+	// Remediator SHOULD NOT delete the configmap, since its
+	// `applyset.kubernetes.io/part-of` label is incorrect.
+	nt.Must(nt.Validate("test-cm5", "bookstore", &corev1.ConfigMap{},
+		testpredicates.HasExactlyAnnotationKeys(
+			metadata.ResourceManagementKey,
+			metadata.ResourceIDKey,
+			metadata.ResourceManagerKey,
+			corev1.LastAppliedConfigAnnotation)))
+
+	/* A new test */
+	secretObj := &corev1.Secret{}
+	secretObj.SetName("test-secret")
+	secretObj.SetNamespace("bookstore")
+	secretObj.SetAnnotations(map[string]string{
+		metadata.ResourceManagementKey: metadata.ResourceManagementEnabled,
+		metadata.ResourceIDKey:         "_configmap_bookstore_test-secret",
+		metadata.ResourceManagerKey:    rootSync1Manager,
+	})
+	secretObj.SetLabels(map[string]string{
+		metadata.ApplySetPartOfLabel: rootSync1ApplySetID,
+	})
+
+	if err := writeObjectYAMLFile(filepath.Join(nt.TmpDir, "test-secret.yaml"), secretObj, nt.Scheme); err != nil {
+		nt.T.Fatal(err)
 	}
 
 	out, err = nt.Shell.Kubectl("apply", "-f", filepath.Join(nt.TmpDir, "test-secret.yaml"))
@@ -391,8 +475,8 @@ metadata:
 	// Wait 5 seconds so that the reconciler can process the event.
 	time.Sleep(5 * time.Second)
 
-	// Config Sync should not modify the secret, since the GVKs of the resources declared in the git repository
-	// do not include the GVK for Secret.
+	// Remediator SHOULD NOT delete the secret, since the GVKs of the resources
+	// declared in the git repository do not include the GVK for Secret.
 	err = nt.Validate("test-secret", "bookstore", &corev1.Secret{},
 		testpredicates.HasExactlyAnnotationKeys(
 			metadata.ResourceManagementKey,
@@ -404,9 +488,9 @@ metadata:
 	}
 }
 
-// TestDeleteManagedResources deletes an object managed by Config Sync,
-// and verifies that Config Sync recreates the deleted object.
-func TestDeleteManagedResources(t *testing.T) {
+// TestDriftKubectlDelete deletes an object managed by Config Sync, and verifies
+// that Config Sync recreates the deleted object.
+func TestDriftKubectlDelete(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
 
 	namespace := k8sobjects.NamespaceObject("bookstore")
@@ -424,7 +508,7 @@ func TestDeleteManagedResources(t *testing.T) {
 
 	nomostest.WaitForWebhookReadiness(nt)
 
-	// At this point, the Config Sync webhook is on, and should prevent kubectl from deleting a resource managed by Config Sync.
+	// Webhook SHOULD prevent kubectl from deleting a resource managed by Config Sync.
 	_, err := nt.Shell.Kubectl("delete", "configmap", "cm-1", "-n", "bookstore")
 	if err == nil {
 		nt.T.Fatalf("got `kubectl delete configmap cm-1` success, want err")
@@ -444,7 +528,7 @@ func TestDeleteManagedResources(t *testing.T) {
 		nt.T.Fatalf("got `kubectl delete configmap cm-1` error %v %s, want return nil", err, out)
 	}
 
-	// Verify Config Sync recreates the configmap
+	// Remediator SHOULD recreate the configmap
 	err = nt.Watcher.WatchForCurrentStatus(kinds.ConfigMap(), "cm-1", "bookstore")
 	if err != nil {
 		nt.T.Fatal(err)
@@ -456,17 +540,17 @@ func TestDeleteManagedResources(t *testing.T) {
 		nt.T.Fatalf("got `kubectl delete ns bookstore` error %v %s, want return nil", err, out)
 	}
 
-	// Verify Config Sync recreates the namespace
+	// Remediator SHOULD recreate the namespace
 	err = nt.Watcher.WatchForCurrentStatus(kinds.Namespace(), "bookstore", "")
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 }
 
-// TestDeleteManagedResourcesWithIgnoreMutationAnnotation deletes an object managed by Config Sync
-// and having the `client.lifecycle.config.k8s.io/mutation` annotation,
-// and verifies that Config Sync recreates the deleted object.
-func TestDeleteManagedResourcesWithIgnoreMutationAnnotation(t *testing.T) {
+// TestDriftKubectlDeleteWithIgnoreMutationAnnotation deletes an object managed
+// by Config Sync that has the `client.lifecycle.config.k8s.io/mutation`
+// annotation, and verifies that Config Sync recreates the deleted object.
+func TestDriftKubectlDeleteWithIgnoreMutationAnnotation(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
 
 	namespace := k8sobjects.NamespaceObject("bookstore", core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation))
@@ -484,7 +568,7 @@ func TestDeleteManagedResourcesWithIgnoreMutationAnnotation(t *testing.T) {
 
 	nomostest.WaitForWebhookReadiness(nt)
 
-	// At this point, the Config Sync webhook is on, and should prevent kubectl from deleting a resource managed by Config Sync.
+	// Webhook SHOULD prevent kubectl from deleting a resource managed by Config Sync.
 	_, err := nt.Shell.Kubectl("delete", "configmap", "cm-1", "-n", "bookstore")
 	if err == nil {
 		nt.T.Fatalf("got `kubectl delete configmap cm-1` success, want err")
@@ -504,7 +588,7 @@ func TestDeleteManagedResourcesWithIgnoreMutationAnnotation(t *testing.T) {
 		nt.T.Fatalf("got `kubectl delete configmap cm-1` error %v %s, want return nil", err, out)
 	}
 
-	// Verify Config Sync recreates the configmap
+	// Remediator SHOULD recreate the configmap
 	err = nt.Watcher.WatchForCurrentStatus(kinds.ConfigMap(), "cm-1", "bookstore")
 	if err != nil {
 		nt.T.Fatal(err)
@@ -516,16 +600,17 @@ func TestDeleteManagedResourcesWithIgnoreMutationAnnotation(t *testing.T) {
 		nt.T.Fatalf("got `kubectl delete ns bookstore` error %v %s, want return nil", err, out)
 	}
 
-	// Verify Config Sync recreates the namespace
+	// Remediator SHOULD recreate the namespace
 	err = nt.Watcher.WatchForCurrentStatus(kinds.Namespace(), "bookstore", "")
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 }
 
-// TestAddFieldsIntoManagedResources adds a new field with kubectl into a resource
-// managed by Config Sync, and verifies that Config Sync does not remove this field.
-func TestAddFieldsIntoManagedResources(t *testing.T) {
+// TestDriftKubectlAnnotateUnmanagedField adds a new field with kubectl into a
+// resource managed by Config Sync, and verifies that Config Sync
+// does not remove this field.
+func TestDriftKubectlAnnotateUnmanagedField(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
 
 	namespace := k8sobjects.NamespaceObject("bookstore")
@@ -541,7 +626,7 @@ func TestAddFieldsIntoManagedResources(t *testing.T) {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore season=summer` error %v %s, want return nil", err, out)
 	}
 
-	// Verify Config Sync does not remove this field
+	// Remediator SHOULD NOT remove this field
 	err = nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
 		[]testpredicates.Predicate{
 			testpredicates.HasAnnotation("season", "summer"),
@@ -553,7 +638,7 @@ func TestAddFieldsIntoManagedResources(t *testing.T) {
 	nomostest.WaitForWebhookReadiness(nt)
 
 	// Add the `client.lifecycle.config.k8s.io/mutation` annotation into the namespace object
-	// The webhook should deny the requests since this annotation is a part of the Config Sync metadata.
+	// Webhook SHOULD deny the requests since this annotation is a part of the Config Sync metadata.
 	ignoreMutation := fmt.Sprintf("%s=%s", metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation)
 	_, err = nt.Shell.Kubectl("annotate", "namespace", "bookstore", ignoreMutation)
 	if err == nil {
@@ -570,7 +655,7 @@ func TestAddFieldsIntoManagedResources(t *testing.T) {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore %s` error %v %s, want return nil", ignoreMutation, err, out)
 	}
 
-	// Verify Config Sync does not remove this field
+	// Remediator SHOULD NOT remove this field
 	err = nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
 		[]testpredicates.Predicate{
 			testpredicates.HasAnnotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation),
@@ -581,10 +666,11 @@ func TestAddFieldsIntoManagedResources(t *testing.T) {
 	}
 }
 
-// TestAddFieldsIntoManagedResourcesWithIgnoreMutationAnnotation adds a new field with kubectl into a resource
-// managed by Config Sync and having the `client.lifecycle.config.k8s.io/mutation` annotation,
-// and verifies that Config Sync does not remove this field.
-func TestAddFieldsIntoManagedResourcesWithIgnoreMutationAnnotation(t *testing.T) {
+// TestDriftKubectlAnnotateUnmanagedFieldWithIgnoreMutationAnnotation adds a new
+// field with kubectl into a resource managed by Config Sync that has the
+// `client.lifecycle.config.k8s.io/mutation` annotation, and verifies that
+// Config Sync does not remove this field.
+func TestDriftKubectlAnnotateUnmanagedFieldWithIgnoreMutationAnnotation(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
 
 	namespace := k8sobjects.NamespaceObject("bookstore", core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation))
@@ -600,7 +686,7 @@ func TestAddFieldsIntoManagedResourcesWithIgnoreMutationAnnotation(t *testing.T)
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore season=summer` error %v %s, want return nil", err, out)
 	}
 
-	// Verify Config Sync does not remove this field
+	// Remediator SHOULD NOT remove this field
 	err = nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
 		[]testpredicates.Predicate{
 			testpredicates.HasAnnotation("season", "summer"),
@@ -611,8 +697,9 @@ func TestAddFieldsIntoManagedResourcesWithIgnoreMutationAnnotation(t *testing.T)
 	}
 }
 
-// TestModifyManagedFields modifies a managed field, and verifies that Config Sync corrects it.
-func TestModifyManagedFields(t *testing.T) {
+// TestDriftKubectlAnnotateManagedField modifies a managed field, and verifies
+// that Config Sync corrects it.
+func TestDriftKubectlAnnotateManagedField(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
 
 	namespace := k8sobjects.NamespaceObject("bookstore", core.Annotation("season", "summer"))
@@ -624,13 +711,13 @@ func TestModifyManagedFields(t *testing.T) {
 
 	nomostest.WaitForWebhookReadiness(nt)
 
-	// At this point, the Config Sync webhook is on, and should prevent kubectl from modifying a managed field.
+	// Webhook SHOULD prevent kubectl from modifying a managed field.
 	_, err := nt.Shell.Kubectl("annotate", "namespace", "bookstore", "--overwrite", "season=winter")
 	if err == nil {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore --overrite season=winter` success, want err")
 	}
 
-	// At this point, the Config Sync webhook is on, and should prevent kubectl from modifying Config Sync metadata.
+	// Webhook SHOULD prevent kubectl from modifying Config Sync metadata.
 	_, err = nt.Shell.Kubectl("annotate", "namespace", "bookstore", "--overwrite", fmt.Sprintf("%s=winter", metadata.ResourceManagementKey))
 	if err == nil {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore --overwrite %s=winter` success, want err", metadata.ResourceManagementKey)
@@ -645,7 +732,7 @@ func TestModifyManagedFields(t *testing.T) {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore --overrite season=winter` error %v %s, want return nil", err, out)
 	}
 
-	// Verify Config Sync corrects it
+	// Remediator SHOULD correct the annotation
 	err = nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
 		[]testpredicates.Predicate{
 			testpredicates.HasAnnotation("season", "summer"),
@@ -660,7 +747,7 @@ func TestModifyManagedFields(t *testing.T) {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore --overwrite %s=winter` error %v %s, want return nil", metadata.ResourceManagementKey, err, out)
 	}
 
-	// Verify Config Sync corrects it
+	// Remediator SHOULD correct the annotation
 	err = nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
 		[]testpredicates.Predicate{
 			testpredicates.HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
@@ -670,9 +757,11 @@ func TestModifyManagedFields(t *testing.T) {
 	}
 }
 
-// TestModifyManagedFieldsWithIgnoreMutationAnnotation modifies a managed field of a resource having
-// the `client.lifecycle.config.k8s.io/mutation` annotation, and verifies that Config Sync does not correct it.
-func TestModifyManagedFieldsWithIgnoreMutationAnnotation(t *testing.T) {
+// TestDriftKubectlAnnotateManagedFieldWithIgnoreMutationAnnotation modifies a
+// managed field of a resource having the
+// `client.lifecycle.config.k8s.io/mutation` annotation, and verifies that
+// Config Sync does not correct it.
+func TestDriftKubectlAnnotateManagedFieldWithIgnoreMutationAnnotation(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
 
 	namespace := k8sobjects.NamespaceObject("bookstore",
@@ -692,7 +781,7 @@ func TestModifyManagedFieldsWithIgnoreMutationAnnotation(t *testing.T) {
 
 	time.Sleep(10 * time.Second)
 
-	// Verify Config Sync does not correct it
+	// Remediator SHOULD NOT correct it
 	err = nt.Validate("bookstore", "", &corev1.Namespace{}, testpredicates.HasAnnotation("season", "winter"))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -710,15 +799,16 @@ func TestModifyManagedFieldsWithIgnoreMutationAnnotation(t *testing.T) {
 
 	time.Sleep(10 * time.Second)
 
-	// Verify Config Sync does not correct it
+	// Remediator SHOULD NOT correct it
 	err = nt.Validate("bookstore", "", &corev1.Namespace{}, testpredicates.HasAnnotation(metadata.ResourceManagementKey, "winter"))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 }
 
-// TestDeleteManagedFields deletes a managed field, and verifies that Config Sync corrects it.
-func TestDeleteManagedFields(t *testing.T) {
+// TestDriftKubectlAnnotateDeleteManagedFields deletes a managed field, and
+// verifies that Config Sync corrects it.
+func TestDriftKubectlAnnotateDeleteManagedFields(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
 
 	namespace := k8sobjects.NamespaceObject("bookstore", core.Annotation("season", "summer"))
@@ -730,13 +820,13 @@ func TestDeleteManagedFields(t *testing.T) {
 
 	nomostest.WaitForWebhookReadiness(nt)
 
-	// At this point, the Config Sync webhook is on, and should prevent kubectl from deleting a managed field.
+	// Webhook SHOULD prevent kubectl from deleting a managed field.
 	_, err := nt.Shell.Kubectl("annotate", "namespace", "bookstore", "season-")
 	if err == nil {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore season-` success, want err")
 	}
 
-	// At this point, the Config Sync webhook is on, and should prevent kubectl from deleting Config Sync metadata.
+	// Webhook SHOULD prevent kubectl from deleting Config Sync metadata.
 	_, err = nt.Shell.Kubectl("annotate", "namespace", "bookstore", fmt.Sprintf("%s-", metadata.ResourceManagementKey))
 	if err == nil {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore %s-` success, want err", metadata.ResourceManagementKey)
@@ -751,6 +841,7 @@ func TestDeleteManagedFields(t *testing.T) {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore season-` error %v %s, want return nil", err, out)
 	}
 
+	// Remediator SHOULD correct it
 	err = nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
 		[]testpredicates.Predicate{
 			testpredicates.HasAnnotation("season", "summer"),
@@ -765,6 +856,7 @@ func TestDeleteManagedFields(t *testing.T) {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore %s-` error %v %s, want return nil", metadata.ResourceManagementKey, err, out)
 	}
 
+	// Remediator SHOULD correct it
 	err = nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
 		[]testpredicates.Predicate{
 			testpredicates.HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
@@ -774,9 +866,11 @@ func TestDeleteManagedFields(t *testing.T) {
 	}
 }
 
-// TestDeleteManagedFieldsWithIgnoreMutationAnnotation deletes a managed field of a resource having
-// the `client.lifecycle.config.k8s.io/mutation` annotation, and verifies that Config Sync does not correct it.
-func TestDeleteManagedFieldsWithIgnoreMutationAnnotation(t *testing.T) {
+// TestDriftKubectlAnnotateDeleteManagedFieldsWithIgnoreMutationAnnotation
+// deletes a managed field of a resource having the
+// `client.lifecycle.config.k8s.io/mutation` annotation, and verifies that
+// Config Sync does not correct it.
+func TestDriftKubectlAnnotateDeleteManagedFieldsWithIgnoreMutationAnnotation(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
 
 	namespace := k8sobjects.NamespaceObject("bookstore",
@@ -795,7 +889,8 @@ func TestDeleteManagedFieldsWithIgnoreMutationAnnotation(t *testing.T) {
 	}
 
 	time.Sleep(10 * time.Second)
-	// Verify Config Sync does not correct it
+
+	// Remediator SHOULD NOT correct it
 	err = nt.Validate("bookstore", "", &corev1.Namespace{}, testpredicates.MissingAnnotation("season"))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -812,9 +907,67 @@ func TestDeleteManagedFieldsWithIgnoreMutationAnnotation(t *testing.T) {
 	}
 
 	time.Sleep(10 * time.Second)
-	// Verify Config Sync does not correct it
+
+	// Remediator SHOULD NOT correct it
 	err = nt.Validate("bookstore", "", &corev1.Namespace{}, testpredicates.MissingAnnotation(metadata.ResourceManagementKey))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
+}
+
+// TestDriftRemoveApplySetPartOfLabel deletes the
+// `applyset.kubernetes.io/part-of` label, and verifies that
+// Config Sync re-adds it.
+func TestDriftRemoveApplySetPartOfLabel(t *testing.T) {
+	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
+
+	rootSync1ApplySetID := applyset.IDFromSync(configsync.RootSyncName, declared.RootScope)
+
+	// Stop webhook to allow mutation of managed fields on a managed object.
+	// Stop webhook before new commit, to ensure subsequent apply completes.
+	// TODO: fix StopWebhook to wait for deployment update and subsequent apply.
+	nomostest.StopWebhook(nt)
+
+	namespace := "bookstore-2"
+
+	nsObj := k8sobjects.NamespaceObject(namespace,
+		core.Annotation("season", "summer"))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", nsObj))
+	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add a namespace"))
+	nt.Must(nt.WatchForAllSyncs())
+
+	nt.T.Log("Changing the ApplySet ID label value")
+	nsObj = k8sobjects.NamespaceObject(namespace)
+	nt.Must(nt.KubeClient.MergePatch(nsObj,
+		fmt.Sprintf(`{"metadata": {"labels": {%q: %q}, "annotations": {"season": "winter"}}}`,
+			metadata.ApplySetPartOfLabel, "wrong-applyset-id")))
+
+	// Remediator SHOULD correct it
+	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), namespace, "", []testpredicates.Predicate{
+		testpredicates.HasLabel(metadata.ApplySetPartOfLabel, rootSync1ApplySetID),
+		testpredicates.HasAnnotation("season", "summer"),
+	}, testwatcher.WatchTimeout(10*time.Second)))
+
+	nt.T.Log("Removing the ApplySet ID label")
+	nsObj = k8sobjects.NamespaceObject(namespace)
+	nt.Must(nt.KubeClient.MergePatch(nsObj,
+		fmt.Sprintf(`{"metadata": {"labels": {%q: null}, "annotations": {"season": "winter"}}}`,
+			metadata.ApplySetPartOfLabel)))
+
+	// Remediator SHOULD correct it
+	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), namespace, "", []testpredicates.Predicate{
+		testpredicates.HasLabel(metadata.ApplySetPartOfLabel, rootSync1ApplySetID),
+		testpredicates.HasAnnotation("season", "summer"),
+	}, testwatcher.WatchTimeout(10*time.Second)))
+}
+
+func writeObjectYAMLFile(path string, obj client.Object, scheme *runtime.Scheme) error {
+	nsBytes, err := testkubeclient.SerializeObject(obj, ".yaml", scheme)
+	if err != nil {
+		return fmt.Errorf("failed to format yaml: %w", err)
+	}
+	if err := os.WriteFile(path, nsBytes, 0644); err != nil {
+		return fmt.Errorf("failed to create a tmp file: %w", err)
+	}
+	return nil
 }

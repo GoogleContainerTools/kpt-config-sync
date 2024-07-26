@@ -19,6 +19,7 @@ import (
 	"fmt"
 
 	"kpt.dev/configsync/pkg/applier"
+	"kpt.dev/configsync/pkg/applyset"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
@@ -37,10 +38,12 @@ func addAnnotationsAndLabels(objs []ast.FileObject, scope declared.Scope, syncNa
 	if err != nil {
 		return fmt.Errorf("marshaling sourceContext: %w", err)
 	}
+	applySetID := applyset.IDFromSync(syncName, scope)
 	inventoryID := applier.InventoryID(syncName, scope.SyncNamespace())
 	manager := declared.ResourceManager(scope, syncName)
 	for _, obj := range objs {
 		core.SetLabel(obj, metadata.ManagedByKey, metadata.ManagedByValue)
+		core.SetLabel(obj, metadata.ApplySetPartOfLabel, applySetID)
 		core.SetAnnotation(obj, metadata.GitContextKey, string(gcVal))
 		core.SetAnnotation(obj, metadata.ResourceManagerKey, manager)
 		core.SetAnnotation(obj, metadata.SyncTokenAnnotationKey, commitHash)

@@ -16,6 +16,7 @@ package kinds
 
 import (
 	appsv1 "k8s.io/api/apps/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	configsyncv1beta1 "kpt.dev/configsync/pkg/api/configsync/v1beta1"
 )
@@ -33,4 +34,22 @@ func RootSyncResource() schema.GroupVersionResource {
 // RepoSyncResource returns the canonical RepoSync GroupVersionResource.
 func RepoSyncResource() schema.GroupVersionResource {
 	return configsyncv1beta1.SchemeGroupVersion.WithResource("reposyncs")
+}
+
+// RootSyncRESTMapping returns the canonical RootSync RESTMapping.
+func RootSyncRESTMapping() *meta.RESTMapping {
+	return &meta.RESTMapping{
+		Resource:         RootSyncResource(),
+		GroupVersionKind: RootSyncV1Beta1(),
+		Scope:            meta.RESTScopeNamespace,
+	}
+}
+
+// RepoSyncRESTMapping returns the canonical RepoSync RESTMapping.
+func RepoSyncRESTMapping() *meta.RESTMapping {
+	return &meta.RESTMapping{
+		Resource:         RepoSyncResource(),
+		GroupVersionKind: RepoSyncV1Beta1(),
+		Scope:            meta.RESTScopeNamespace,
+	}
 }

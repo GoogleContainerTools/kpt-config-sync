@@ -320,11 +320,15 @@ func (r *RepoSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 }
 
 // setup performs the following steps:
+// - Patch RepoSync to upsert ApplySet metadata
 // - Create or update managed objects
 // - Convert any error into RepoSync status conditions
 // - Update the RepoSync status
 func (r *RepoSyncReconciler) setup(ctx context.Context, reconcilerRef types.NamespacedName, rs *v1beta1.RepoSync) error {
-	err := r.upsertManagedObjects(ctx, reconcilerRef, rs)
+	_, err := r.patchSyncMetadata(ctx, rs)
+	if err == nil {
+		err = r.upsertManagedObjects(ctx, reconcilerRef, rs)
+	}
 	updated, updateErr := r.updateSyncStatus(ctx, rs, reconcilerRef, func(syncObj *v1beta1.RepoSync) error {
 		// Modify the sync status,
 		// but keep the upsert error separate from the status update error.

@@ -19,13 +19,20 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"kpt.dev/configsync/pkg/applier"
+	"kpt.dev/configsync/pkg/applyset"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
+	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/metadata"
 )
 
 func TestAddAnnotationsAndLabels(t *testing.T) {
+	syncName := "rs"
+	syncNamespace := "some-namespace"
+	syncScope := declared.ScopeFromSyncNamespace(syncNamespace)
+	applySetID := applyset.IDFromSync(syncName, syncScope)
+
 	testcases := []struct {
 		name       string
 		actual     []ast.FileObject
@@ -50,11 +57,12 @@ func TestAddAnnotationsAndLabels(t *testing.T) {
 			expected: []ast.FileObject{k8sobjects.Role(
 				core.Namespace("foo"),
 				core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+				core.Label(metadata.ApplySetPartOfLabel, applySetID),
 				core.Annotation(metadata.ResourceManagementKey, "enabled"),
 				core.Annotation(metadata.ResourceManagerKey, "some-namespace_rs"),
 				core.Annotation(metadata.SyncTokenAnnotationKey, "1234567"),
 				core.Annotation(metadata.GitContextKey, `{"repo":"git@github.com/foo","branch":"main","rev":"HEAD"}`),
-				core.Annotation(metadata.OwningInventoryKey, applier.InventoryID("rs", "some-namespace")),
+				core.Annotation(metadata.OwningInventoryKey, applier.InventoryID(syncName, syncNamespace)),
 				core.Annotation(metadata.ResourceIDKey, "rbac.authorization.k8s.io_role_foo_default-name"),
 			)},
 		},
@@ -62,7 +70,7 @@ func TestAddAnnotationsAndLabels(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := addAnnotationsAndLabels(tc.actual, "some-namespace", "rs", tc.gc, tc.commitHash); err != nil {
+			if err := addAnnotationsAndLabels(tc.actual, syncScope, syncName, tc.gc, tc.commitHash); err != nil {
 				t.Fatalf("Failed to add annotations and labels: %v", err)
 			}
 			if diff := cmp.Diff(tc.expected, tc.actual, ast.CompareFileObject); diff != "" {

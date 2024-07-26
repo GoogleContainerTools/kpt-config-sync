@@ -38,7 +38,9 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	hubv1 "kpt.dev/configsync/pkg/api/hub/v1"
+	"kpt.dev/configsync/pkg/applyset"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
@@ -710,4 +712,81 @@ func (r *reconcilerBase) isWebhookEnabled(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 	return err == nil, err
+}
+
+// patchSyncMetadata patches RSync metadata:
+// - Set label "applyset.kubernetes.io/id" (see applyset.IDFromSync for value format)
+// - Set annotation "applyset.kubernetes.io/tooling" (see applyset.FormatTooling for value format)
+//
+// This method uses a merge-patch, instead of server-side apply, because the
+// reconciler-manager does not own the RSync. No other fields should be modified.
+//
+// Returns true if changes were made, false if no changes were necessary.
+//
+// Returns an error if the tooling annotation exists with a different name or
+// an invalid value.
+func (r *reconcilerBase) patchSyncMetadata(ctx context.Context, rs client.Object) (bool, error) {
+	syncScope := declared.ScopeFromSyncNamespace(rs.GetNamespace())
+	applySetID := applyset.IDFromSync(rs.GetName(), syncScope)
+	applySetToolingValue := applyset.FormatTooling(metadata.ApplySetToolingName, metadata.ApplySetToolingVersion)
+	updateRequired := false
+
+	currentApplySetID := core.GetLabel(rs, metadata.ApplySetParentIDLabel)
+	if currentApplySetID != applySetID {
+		updateRequired = true
+
+		if r.logger(ctx).V(5).Enabled() {
+			r.logger(ctx).Info("Updating sync metadata: applyset label",
+				logFieldResourceVersion, rs.GetResourceVersion(),
+				"labelKey", metadata.ApplySetParentIDLabel,
+				"labelValueOld", currentApplySetID, "labelValue", applySetID)
+		}
+	}
+
+	currentApplySetToolingValue := core.GetAnnotation(rs, metadata.ApplySetToolingAnnotation)
+	if currentApplySetToolingValue != applySetToolingValue {
+		updateRequired = true
+
+		// If already set, validate that we can safely adopt the ApplySet
+		if currentApplySetToolingValue != "" {
+			oldTooling, err := applyset.ParseTooling(currentApplySetToolingValue)
+			if err != nil {
+				// Hypothetically, we could adopt the ApplySet if the tooling is invalid,
+				// but it's safer to error and inform the user.
+				return false, fmt.Errorf("%w: remove the %s annotation to allow adoption", err, metadata.ApplySetToolingAnnotation)
+			}
+			if oldTooling.Name != metadata.ApplySetToolingName {
+				// Some other tooling previously claimed this RSync as an ApplySet parent.
+				// According to the ApplySet KEP, we MUST error if the tooling name does not match.
+				return false, fmt.Errorf("%s applyset owned by %s: remove the %s annotation to allow adoption",
+					r.syncKind, currentApplySetToolingValue, metadata.ApplySetToolingAnnotation)
+			}
+			// Else, if the name is ours, we can adopt it and update the version.
+			// In the future we may want some version migration behavior,
+			// but for now there's only one version, so this case is unlikely.
+		}
+
+		if r.logger(ctx).V(5).Enabled() {
+			r.logger(ctx).Info("Updating sync metadata: applyset annotation",
+				logFieldResourceVersion, rs.GetResourceVersion(),
+				"annotationKey", metadata.ApplySetToolingAnnotation,
+				"annotationValueOld", currentApplySetToolingValue, "annotationValue", applySetToolingValue)
+		}
+	}
+
+	if !updateRequired {
+		r.logger(ctx).V(5).Info("Sync metadata update skipped: no change")
+		return false, nil
+	}
+
+	patch := fmt.Sprintf(`{"metadata": {"labels": {%q: %q}, "annotations": {%q: %q}}}`,
+		metadata.ApplySetParentIDLabel, applySetID,
+		metadata.ApplySetToolingAnnotation, applySetToolingValue)
+	err := r.client.Patch(ctx, rs, client.RawPatch(types.MergePatchType, []byte(patch)),
+		client.FieldOwner(reconcilermanager.FieldManager))
+	if err != nil {
+		return true, fmt.Errorf("Sync metadata update failed: %w", err)
+	}
+	r.logger(ctx).Info("Sync metadata update successful")
+	return true, nil
 }

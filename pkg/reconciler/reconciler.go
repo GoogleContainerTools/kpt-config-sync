@@ -26,6 +26,7 @@ import (
 	"k8s.io/utils/clock"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/applier"
+	"kpt.dev/configsync/pkg/applyset"
 	"kpt.dev/configsync/pkg/client/restconfig"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
@@ -195,7 +196,8 @@ func Run(opts Options) {
 	if reconcileTimeout < 0 {
 		klog.Fatalf("Invalid reconcileTimeout: %v, timeout should not be negative", reconcileTimeout)
 	}
-	clientSet, err := applier.NewClientSet(cl, configFlags, opts.StatusMode)
+	applySetID := applyset.IDFromSync(opts.SyncName, opts.ReconcilerScope)
+	clientSet, err := applier.NewClientSet(cl, configFlags, opts.StatusMode, applySetID)
 	if err != nil {
 		klog.Fatalf("Error creating clients: %v", err)
 	}

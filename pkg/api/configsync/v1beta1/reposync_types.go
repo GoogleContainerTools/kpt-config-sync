@@ -28,6 +28,7 @@ import (
 // +kubebuilder:printcolumn:name="SyncCommit",type="string",JSONPath=".status.sync.commit"
 // +kubebuilder:printcolumn:name="SyncErrorCount",type="integer",JSONPath=".status.sync.errorSummary.totalCount"
 // +kubebuilder:storageversion
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // RepoSync is the Schema for the reposyncs API
 type RepoSync struct {
@@ -166,6 +167,7 @@ type RepoSyncCondition struct {
 }
 
 // +kubebuilder:object:root=true
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // RepoSyncList contains a list of RepoSync
 type RepoSyncList struct {

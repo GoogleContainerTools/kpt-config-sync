@@ -189,7 +189,7 @@ config-sync-manifest: config-sync-manifest-no-push push-images
 
 .PHONY: docker-registry
 docker-registry: "$(KIND)"
-	@KIND_VERSION=$(KIND_VERSION) bash scripts/docker-registry.sh
+	@bash scripts/docker-registry.sh
 
 # config-sync-manifest-local builds config sync for local testing in kind.
 # starts local docker registry and pushes images to the local registry

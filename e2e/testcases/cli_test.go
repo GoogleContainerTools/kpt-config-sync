@@ -1443,6 +1443,20 @@ func TestNomosMigrateMonoRepo(t *testing.T) {
 		}
 	})
 	nt.T.Cleanup(func() {
+		crds := []string{
+			"repos.configmanagement.gke.io",
+			"syncs.configmanagement.gke.io",
+			"namespaceconfigs.configmanagement.gke.io",
+			"clusterconfigs.configmanagement.gke.io",
+		}
+		for _, crdName := range crds {
+			crd := k8sobjects.CustomResourceDefinitionV1Object(core.Name(crdName))
+			if err := nt.KubeClient.Delete(crd); err != nil && !apierrors.IsNotFound(err) {
+				nt.T.Error(err)
+			}
+		}
+	})
+	nt.T.Cleanup(func() {
 		cmObj := &unstructured.Unstructured{
 			Object: map[string]interface{}{
 				"apiVersion": "configmanagement.gke.io/v1",

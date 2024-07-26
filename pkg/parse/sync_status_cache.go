@@ -24,11 +24,12 @@ import (
 
 // SyncErrorCache is a collection of sync errors, locked for thread-safe use.
 type SyncErrorCache struct {
-	statusMux sync.RWMutex
 	// Errors from the Remediator & Updater
 	conflictHandler conflict.Handler
 	// Errors from the Remediator
 	fightHandler fight.Handler
+
+	statusMux sync.RWMutex
 	// Errors from the Updater
 	validationErrs status.MultiError
 	applyErrs      status.MultiError
@@ -41,6 +42,16 @@ func NewSyncErrorCache(conflictHandler conflict.Handler, fightHandler fight.Hand
 		conflictHandler: conflictHandler,
 		fightHandler:    fightHandler,
 	}
+}
+
+// ConflictHandler returns the thread-safe handler of resource & management fights
+func (s *SyncErrorCache) ConflictHandler() conflict.Handler {
+	return s.conflictHandler
+}
+
+// FightHandler returns the thread-safe handler of controller fights
+func (s *SyncErrorCache) FightHandler() fight.Handler {
+	return s.fightHandler
 }
 
 // Errors returns the latest known set of errors from the updater and remediator.
@@ -67,14 +78,6 @@ func (s *SyncErrorCache) SetValidationErrs(errs status.MultiError) {
 	s.statusMux.Lock()
 	defer s.statusMux.Unlock()
 	s.validationErrs = errs
-}
-
-// AddConflictError adds a conflict error to the map of cached conflict errors.
-// Conflict errors are de-duped by ConflictingObjectID.
-func (s *SyncErrorCache) AddConflictError(err status.ManagementConflictError) {
-	s.statusMux.Lock()
-	defer s.statusMux.Unlock()
-	s.conflictHandler.AddConflictError(err.ConflictingObjectID(), err)
 }
 
 // AddApplyError adds an apply error to the list of cached apply errors.

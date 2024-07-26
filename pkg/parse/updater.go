@@ -28,6 +28,7 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/remediator"
+	"kpt.dev/configsync/pkg/remediator/conflict"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/util/clusterconfig"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -202,7 +203,7 @@ func (u *Updater) apply(ctx context.Context, objs []client.Object, commit string
 				err = status.Append(err, errEvent.Error)
 			}
 			if conflictErr, ok := errEvent.Error.(status.ManagementConflictError); ok {
-				u.SyncErrorCache.AddConflictError(conflictErr)
+				conflict.Record(ctx, u.SyncErrorCache.ConflictHandler(), conflictErr, commit)
 			} else {
 				u.SyncErrorCache.AddApplyError(errEvent.Error)
 			}

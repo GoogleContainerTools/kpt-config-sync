@@ -977,6 +977,15 @@ func TestNomosBugreport(t *testing.T) {
 		"namespaces/config-management-monitoring/pods.yaml",
 		"namespaces/config-management-monitoring/otel-collector.*/otel-collector.log",
 		"namespaces/resource-group-system/pods.yaml",
+		"namespaces/resource-group-system/resource-group-controller-manager-.*/manager.log",
+		"namespaces/resource-group-system/resource-group-controller-manager-.*/otel-agent.log",
+	}
+
+	var rootSync v1beta1.RootSync
+	nt.Must(nt.KubeClient.Get(configsync.RootSyncName, configsync.ControllerNamespace, &rootSync))
+	if rootSync.Spec.Git.Auth == configsync.AuthGCENode {
+		multiRepoBugReportFiles = append(multiRepoBugReportFiles,
+			"namespaces/config-management-system/root-reconciler-.*/gcenode-askpass-sidecar.log")
 	}
 
 	// check expected files exist in folder

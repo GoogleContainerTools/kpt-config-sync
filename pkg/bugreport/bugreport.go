@@ -162,7 +162,7 @@ func (b *BugReporter) FetchLogSources(ctx context.Context) []Readable {
 
 	// for each namespace, generate a list of logSources
 	listOps := client.ListOptions{}
-	nsLabels := map[string]string{"configmanagement.gke.io/configmanagement": "config-management"}
+	nsLabels := map[string]string{"configmanagement.gke.io/system": "true"}
 	productAndLabels := map[Product]map[string]string{
 		ResourceGroup:        nsLabels,
 		ConfigSyncMonitoring: nil,

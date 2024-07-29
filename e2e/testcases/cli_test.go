@@ -54,6 +54,7 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
+	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -981,9 +982,8 @@ func TestNomosBugreport(t *testing.T) {
 		"namespaces/resource-group-system/resource-group-controller-manager-.*/otel-agent.log",
 	}
 
-	var rootSync v1beta1.RootSync
-	nt.Must(nt.KubeClient.Get(configsync.RootSyncName, configsync.ControllerNamespace, &rootSync))
-	if rootSync.Spec.Git.Auth == configsync.AuthGCENode {
+	rs := nomostest.RootSyncObjectV1Beta1FromRootRepo(nt, configsync.RootSyncName)
+	if controllers.EnableAskpassSidecar(configsync.GitSource, rs.Spec.Git.Auth) {
 		multiRepoBugReportFiles = append(multiRepoBugReportFiles,
 			"namespaces/config-management-system/root-reconciler-.*/gcenode-askpass-sidecar.log")
 	}

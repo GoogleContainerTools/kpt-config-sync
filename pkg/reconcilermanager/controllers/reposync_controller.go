@@ -920,7 +920,7 @@ func (r *RepoSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 			caCertSecretRef: v1beta1.GetSecretName(rs.Spec.Git.CACertSecretRef),
 			knownHost:       r.isKnownHostsEnabled(rs.Spec.Git.Auth),
 		})
-		if enableAskpassSidecar(rs.Spec.SourceType, rs.Spec.Git.Auth) {
+		if EnableAskpassSidecar(rs.Spec.SourceType, rs.Spec.Git.Auth) {
 			result[reconcilermanager.GCENodeAskpassSidecar] = gceNodeAskPassSidecarEnvs(rs.Spec.GCPServiceAccountEmail)
 		}
 	case configsync.OciSource:
@@ -1249,7 +1249,7 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 					container.Env = append(container.Env, gitSyncHTTPSProxyEnv(secretName, keys)...)
 				}
 			case reconcilermanager.GCENodeAskpassSidecar:
-				if !enableAskpassSidecar(rs.Spec.SourceType, auth) {
+				if !EnableAskpassSidecar(rs.Spec.SourceType, auth) {
 					addContainer = false
 				} else {
 					container.Env = append(container.Env, containerEnvs[container.Name]...)
@@ -1276,7 +1276,9 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 	}
 }
 
-func enableAskpassSidecar(sourceType configsync.SourceType, auth configsync.AuthType) bool {
+// EnableAskpassSidecar indicates whether the gcenode-askpass-sidecar container
+// is enabled.
+func EnableAskpassSidecar(sourceType configsync.SourceType, auth configsync.AuthType) bool {
 	if sourceType == configsync.GitSource &&
 		(auth == configsync.AuthGCPServiceAccount || auth == configsync.AuthGCENode) {
 		return true

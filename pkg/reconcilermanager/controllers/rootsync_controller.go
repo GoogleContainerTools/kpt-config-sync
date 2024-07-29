@@ -798,7 +798,7 @@ func (r *RootSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 			caCertSecretRef: v1beta1.GetSecretName(rs.Spec.Git.CACertSecretRef),
 			knownHost:       r.isKnownHostsEnabled(rs.Spec.Git.Auth),
 		})
-		if enableAskpassSidecar(rs.Spec.SourceType, rs.Spec.Git.Auth) {
+		if EnableAskpassSidecar(rs.Spec.SourceType, rs.Spec.Git.Auth) {
 			result[reconcilermanager.GCENodeAskpassSidecar] = gceNodeAskPassSidecarEnvs(rs.Spec.GCPServiceAccountEmail)
 		}
 	case configsync.OciSource:
@@ -1302,7 +1302,7 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 					container.Env = append(container.Env, gitSyncHTTPSProxyEnv(secretName, keys)...)
 				}
 			case reconcilermanager.GCENodeAskpassSidecar:
-				if !enableAskpassSidecar(rs.Spec.SourceType, auth) {
+				if !EnableAskpassSidecar(rs.Spec.SourceType, auth) {
 					addContainer = false
 				} else {
 					container.Env = append(container.Env, containerEnvs[container.Name]...)

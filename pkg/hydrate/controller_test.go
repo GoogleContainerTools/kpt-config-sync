@@ -105,7 +105,6 @@ func TestSourceCommitAndDirWithRetry(t *testing.T) {
 				Cap:      tc.retryCap,
 				Jitter:   0.1,
 			}
-
 			srcRootDir := filepath.Join(os.TempDir(), "test-srcCommit-syncDir", rand.String(10))
 			commitDir := filepath.Join(srcRootDir, commit)
 			if len(tc.syncDir) == 0 {
@@ -117,63 +116,66 @@ func TestSourceCommitAndDirWithRetry(t *testing.T) {
 				}
 			})
 
+			// Setup synchronization channel
+			setupDone := make(chan error)
+
 			// Simulating the creation of source configs and errors in the background
-			doneCh := make(chan struct{})
 			go func() {
-				defer close(doneCh)
-				err := func() error {
-					srcRootDirCreated := false
-					// Create the source root directory conditionally with latency
-					if tc.srcRootCreateLatency > 0 {
-						t.Logf("sleeping for %q before creating source root directory %q", tc.srcRootCreateLatency, srcRootDir)
-						time.Sleep(tc.srcRootCreateLatency)
+				defer close(setupDone)
+				srcRootDirCreated := false
+				// Logic to create source root directory and other setup
+				time.Sleep(tc.srcRootCreateLatency) // Simulate latency
+				if tc.srcRootCreateLatency <= tc.retryCap {
+					if err := os.MkdirAll(srcRootDir, 0700); err != nil {
+						setupDone <- fmt.Errorf("failed to create source root directory %q: %v", srcRootDir, err)
+						return
 					}
-					if tc.srcRootCreateLatency <= tc.retryCap {
-						if err := os.MkdirAll(srcRootDir, 0700); err != nil {
-							return fmt.Errorf("failed to create source root directory %q: %v", srcRootDir, err)
-						}
-						srcRootDirCreated = true
-						t.Logf("source root directory %q created at %v", srcRootDir, time.Now())
-					}
-
-					// Create the error file based on the test condition
-					if srcRootDirCreated && tc.errFileExists {
-						errFilePath := filepath.Join(srcRootDir, ErrorFile)
-						if err := os.WriteFile(errFilePath, []byte(tc.errFileContent), 0644); err != nil {
-							return fmt.Errorf("failed to write to error file %q: %v", errFilePath, err)
-						}
-					}
-
-					// Create the symlink conditionally with latency
-					if tc.symlinkCreateLatency > 0 {
-						t.Logf("sleeping for %q before creating the symlink %q", tc.symlinkCreateLatency, srcRootDir)
-						time.Sleep(tc.symlinkCreateLatency)
-					}
-					if srcRootDirCreated && tc.symlinkCreateLatency <= tc.retryCap {
-						if err := os.Mkdir(commitDir, os.ModePerm); err != nil {
-							return fmt.Errorf("failed to create the commit directory %q: %v", commitDir, err)
-						}
-						// Create the sync directory if syncDir is the same as tc.syncDir
-						if tc.syncDir == syncDir {
-							syncDirPath := filepath.Join(commitDir, syncDir)
-							if err := os.Mkdir(syncDirPath, os.ModePerm); err != nil {
-								return fmt.Errorf("failed to create the sync directory %q: %v", syncDirPath, err)
-							}
-							t.Logf("sync directory %q created at %v", syncDirPath, time.Now())
-						}
-						symDir := filepath.Join(srcRootDir, "rev")
-						if err := os.Symlink(commitDir, symDir); err != nil {
-							return fmt.Errorf("failed to create the symlink %q: %v", symDir, err)
-						}
-						t.Logf("symlink %q created and linked to %q at %v", symDir, commitDir, time.Now())
-					}
-					return nil
-				}()
-				if err != nil {
-					t.Log(err)
+					srcRootDirCreated = true
+					t.Logf("source root directory %q created at %v", srcRootDir, time.Now())
 				}
+
+				// Create the error file based on the test condition
+				if srcRootDirCreated && tc.errFileExists {
+					errFilePath := filepath.Join(srcRootDir, ErrorFile)
+					if err := os.WriteFile(errFilePath, []byte(tc.errFileContent), 0644); err != nil {
+						setupDone <- fmt.Errorf("failed to write to error file %q: %v", errFilePath, err)
+						return
+					}
+				}
+
+				// Create the symlink conditionally with latency
+				time.Sleep(tc.symlinkCreateLatency)
+				if srcRootDirCreated && tc.symlinkCreateLatency <= tc.retryCap {
+					if err := os.Mkdir(commitDir, os.ModePerm); err != nil {
+						setupDone <- fmt.Errorf("failed to create the commit directory %q: %v", commitDir, err)
+						return
+					}
+					// Create the sync directory if syncDir is the same as tc.syncDir
+					if tc.syncDir == syncDir {
+						syncDirPath := filepath.Join(commitDir, syncDir)
+						if err := os.Mkdir(syncDirPath, os.ModePerm); err != nil {
+							setupDone <- fmt.Errorf("failed to create the sync directory %q: %v", syncDirPath, err)
+							return
+						}
+						t.Logf("sync directory %q created at %v", syncDirPath, time.Now())
+					}
+					symDir := filepath.Join(srcRootDir, "rev")
+					if err := os.Symlink(commitDir, symDir); err != nil {
+						setupDone <- fmt.Errorf("failed to create the symlink %q: %v", symDir, err)
+						return
+					}
+					t.Logf("symlink %q created and linked to %q at %v", symDir, commitDir, time.Now())
+				}
+				// Signal successful setup
+				setupDone <- nil
 			}()
 
+			// Wait for setup to complete
+			if err := <-setupDone; err != nil {
+				t.Fatal(err)
+			}
+
+			// Perform the checks now that setup is guaranteed complete
 			t.Logf("start calling SourceCommitAndDirWithRetry at %v", time.Now())
 			srcCommit, srcSyncDir, err := SourceCommitAndDirWithRetry(backoff, configsync.GitSource, cmpath.Absolute(commitDir), cmpath.RelativeOS(tc.syncDir), "root-reconciler")
 			if tc.expectedErrMsg == "" {
@@ -184,12 +186,8 @@ func TestSourceCommitAndDirWithRetry(t *testing.T) {
 				assert.NotNil(t, err)
 				assert.Contains(t, err.Error(), tc.expectedErrMsg)
 			}
-
-			// Block and wait for the goroutine to complete.
-			<-doneCh
 		})
 	}
-
 }
 
 func TestRunHydrate(t *testing.T) {

@@ -36,6 +36,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/applier"
 	applierfake "kpt.dev/configsync/pkg/applier/fake"
+	"kpt.dev/configsync/pkg/applyset"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/declared"
@@ -69,6 +70,7 @@ const (
 	rootReconcilerName = "root-reconciler-my-rs"
 	nilGitContext      = `{"repo":""}`
 	testGitCommit      = "example-commit"
+	otherRootSyncName  = "other-root-sync"
 )
 
 func gitSpec(repo string, auth configsync.AuthType) core.MetaMutator {
@@ -86,6 +88,9 @@ func TestRoot_Parse(t *testing.T) {
 	fakeMetaTime := metav1.Now().Rfc3339Copy() // truncate to second precision
 	fakeTime := fakeMetaTime.Time
 	fakeClock := fakeclock.NewFakeClock(fakeTime)
+
+	applySetID := applyset.IDFromSync(rootSyncName, declared.RootScope)
+	otherRootSyncApplySetID := applyset.IDFromSync(otherRootSyncName, declared.RootScope)
 
 	// TODO: Test different source types and inputs
 	fileSource := FileSource{
@@ -262,6 +267,7 @@ func TestRoot_Parse(t *testing.T) {
 				k8sobjects.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, gitContextOutput),
@@ -274,6 +280,7 @@ func TestRoot_Parse(t *testing.T) {
 					"",
 					core.Name("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, gitContextOutput),
@@ -303,6 +310,7 @@ func TestRoot_Parse(t *testing.T) {
 				k8sobjects.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, gitContextOutput),
@@ -321,6 +329,7 @@ func TestRoot_Parse(t *testing.T) {
 			existingObjects: []client.Object{
 				k8sobjects.NamespaceObject("foo",
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, gitContextOutput),
@@ -341,6 +350,7 @@ func TestRoot_Parse(t *testing.T) {
 				k8sobjects.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, gitContextOutput),
@@ -353,6 +363,7 @@ func TestRoot_Parse(t *testing.T) {
 					"",
 					core.Name("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, gitContextOutput),
@@ -370,13 +381,14 @@ func TestRoot_Parse(t *testing.T) {
 			namespaceStrategy: configsync.NamespaceStrategyImplicit,
 			existingObjects: []client.Object{k8sobjects.NamespaceObject("foo",
 				core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+				core.Label(metadata.ApplySetPartOfLabel, otherRootSyncApplySetID),
 				core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
 				core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 				core.Annotation(metadata.GitContextKey, gitContextOutput),
 				core.Annotation(metadata.SyncTokenAnnotationKey, testGitCommit),
-				core.Annotation(metadata.OwningInventoryKey, applier.InventoryID(rootSyncName, configmanagement.ControllerNamespace)),
+				core.Annotation(metadata.OwningInventoryKey, applier.InventoryID(otherRootSyncName, configmanagement.ControllerNamespace)),
 				core.Annotation(metadata.ResourceIDKey, "_namespace_foo"),
-				difftest.ManagedBy(declared.RootScope, "other-root-sync")),
+				difftest.ManagedBy(declared.RootScope, otherRootSyncName)),
 				rootSyncInput.DeepCopy(),
 			},
 			parseOutputs: []fsfake.ParserOutputs{
@@ -390,6 +402,7 @@ func TestRoot_Parse(t *testing.T) {
 				k8sobjects.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, gitContextOutput),
@@ -420,6 +433,7 @@ func TestRoot_Parse(t *testing.T) {
 				k8sobjects.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, gitContextOutput),
@@ -450,6 +464,7 @@ func TestRoot_Parse(t *testing.T) {
 					k8sobjects.WithRootSyncSourceType(configsync.GitSource),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1beta1"),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Annotation(metadata.SourcePathAnnotationKey, fmt.Sprintf("namespaces/%s/test.yaml", configsync.ControllerNamespace)),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, gitContextOutput),
@@ -480,6 +495,7 @@ func TestRoot_Parse(t *testing.T) {
 				k8sobjects.Role(core.Namespace("bar"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, gitContextOutput),
@@ -491,6 +507,7 @@ func TestRoot_Parse(t *testing.T) {
 				k8sobjects.ConfigMap(core.Namespace("bar"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/configmap.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, gitContextOutput),
@@ -503,6 +520,7 @@ func TestRoot_Parse(t *testing.T) {
 					"",
 					core.Name("bar"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, gitContextOutput),
@@ -523,6 +541,7 @@ func TestRoot_Parse(t *testing.T) {
 				// bar not exists, should be added as an implicit namespace
 				k8sobjects.NamespaceObject("baz", // baz exists and self-managed, should be added as an implicit namespace
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, gitContextOutput),
@@ -547,6 +566,7 @@ func TestRoot_Parse(t *testing.T) {
 				k8sobjects.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, gitContextOutput),
@@ -558,6 +578,7 @@ func TestRoot_Parse(t *testing.T) {
 				k8sobjects.Role(core.Namespace("bar"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, gitContextOutput),
@@ -569,6 +590,7 @@ func TestRoot_Parse(t *testing.T) {
 				k8sobjects.ConfigMap(core.Namespace("bar"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/configmap.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, gitContextOutput),
@@ -580,6 +602,7 @@ func TestRoot_Parse(t *testing.T) {
 				k8sobjects.Role(core.Namespace("baz"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, gitContextOutput),
@@ -591,6 +614,7 @@ func TestRoot_Parse(t *testing.T) {
 				k8sobjects.ConfigMap(core.Namespace("baz"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/configmap.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, gitContextOutput),
@@ -603,6 +627,7 @@ func TestRoot_Parse(t *testing.T) {
 					"",
 					core.Name("bar"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, gitContextOutput),
@@ -615,6 +640,7 @@ func TestRoot_Parse(t *testing.T) {
 					"",
 					core.Name("baz"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, gitContextOutput),
@@ -729,6 +755,8 @@ func TestRoot_Parse(t *testing.T) {
 }
 
 func TestRoot_DeclaredFields(t *testing.T) {
+	applySetID := applyset.IDFromSync(rootSyncName, declared.RootScope)
+
 	testCases := []struct {
 		name                string
 		webhookEnabled      bool
@@ -741,13 +769,14 @@ func TestRoot_DeclaredFields(t *testing.T) {
 			webhookEnabled: false,
 			existingObjects: []client.Object{k8sobjects.NamespaceObject("foo",
 				core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+				core.Label(metadata.ApplySetPartOfLabel, applySetID),
 				core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 				core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:rules":{}}`),
 				core.Annotation(metadata.GitContextKey, nilGitContext),
 				core.Annotation(metadata.SyncTokenAnnotationKey, ""),
 				core.Annotation(metadata.OwningInventoryKey, applier.InventoryID(rootSyncName, configmanagement.ControllerNamespace)),
 				core.Annotation(metadata.ResourceIDKey, "_namespace_foo"),
-				difftest.ManagedBy(declared.RootScope, "other-root-sync"))},
+				difftest.ManagedBy(declared.RootScope, otherRootSyncName))},
 			parsed: []ast.FileObject{
 				k8sobjects.Role(core.Namespace("foo")),
 			},
@@ -755,6 +784,7 @@ func TestRoot_DeclaredFields(t *testing.T) {
 				k8sobjects.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -770,13 +800,14 @@ func TestRoot_DeclaredFields(t *testing.T) {
 			webhookEnabled: true,
 			existingObjects: []client.Object{k8sobjects.NamespaceObject("foo",
 				core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+				core.Label(metadata.ApplySetPartOfLabel, applySetID),
 				core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 				core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{},"f:labels":{}},"f:rules":{}}`),
 				core.Annotation(metadata.GitContextKey, nilGitContext),
 				core.Annotation(metadata.SyncTokenAnnotationKey, ""),
 				core.Annotation(metadata.OwningInventoryKey, applier.InventoryID(rootSyncName, configmanagement.ControllerNamespace)),
 				core.Annotation(metadata.ResourceIDKey, "_namespace_foo"),
-				difftest.ManagedBy(declared.RootScope, "other-root-sync")),
+				difftest.ManagedBy(declared.RootScope, otherRootSyncName)),
 			},
 			parsed: []ast.FileObject{
 				k8sobjects.Role(core.Namespace("foo")),
@@ -785,6 +816,7 @@ func TestRoot_DeclaredFields(t *testing.T) {
 				k8sobjects.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{"f:configmanagement.gke.io/source-path":{}},"f:labels":{"f:configsync.gke.io/declared-version":{}}},"f:rules":{}}`),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
@@ -802,12 +834,13 @@ func TestRoot_DeclaredFields(t *testing.T) {
 			existingObjects: []client.Object{
 				k8sobjects.NamespaceObject("foo",
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
 					core.Annotation(metadata.SyncTokenAnnotationKey, ""),
 					core.Annotation(metadata.OwningInventoryKey, applier.InventoryID(rootSyncName, configmanagement.ControllerNamespace)),
 					core.Annotation(metadata.ResourceIDKey, "_namespace_foo"),
-					difftest.ManagedBy(declared.RootScope, "other-root-sync")),
+					difftest.ManagedBy(declared.RootScope, otherRootSyncName)),
 				k8sobjects.AdmissionWebhookObject(webhookconfiguration.Name),
 			},
 			parsed: []ast.FileObject{
@@ -817,6 +850,7 @@ func TestRoot_DeclaredFields(t *testing.T) {
 				k8sobjects.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Annotation(metadata.DeclaredFieldsKey, `{"f:metadata":{"f:annotations":{"f:configmanagement.gke.io/source-path":{}},"f:labels":{"f:configsync.gke.io/declared-version":{}}},"f:rules":{}}`),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
@@ -834,12 +868,13 @@ func TestRoot_DeclaredFields(t *testing.T) {
 			existingObjects: []client.Object{
 				k8sobjects.NamespaceObject("foo",
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
 					core.Annotation(metadata.SyncTokenAnnotationKey, ""),
 					core.Annotation(metadata.OwningInventoryKey, applier.InventoryID(rootSyncName, configmanagement.ControllerNamespace)),
 					core.Annotation(metadata.ResourceIDKey, "_namespace_foo"),
-					difftest.ManagedBy(declared.RootScope, "other-root-sync")),
+					difftest.ManagedBy(declared.RootScope, otherRootSyncName)),
 			},
 			parsed: []ast.FileObject{
 				k8sobjects.Role(core.Namespace("foo")),
@@ -848,6 +883,7 @@ func TestRoot_DeclaredFields(t *testing.T) {
 				k8sobjects.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -982,6 +1018,8 @@ func fakeParseError(err error, gvks ...schema.GroupVersionKind) status.MultiErro
 }
 
 func TestRoot_Parse_Discovery(t *testing.T) {
+	applySetID := applyset.IDFromSync(rootSyncName, declared.RootScope)
+
 	testCases := []struct {
 		name                string
 		parsed              []ast.FileObject
@@ -1038,6 +1076,7 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 				k8sobjects.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -1050,6 +1089,7 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 					"",
 					core.Name("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -1074,6 +1114,7 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 				fakeCRD(core.Name("anvils.acme.com"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Annotation(metadata.SourcePathAnnotationKey, "cluster/crd.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -1084,6 +1125,7 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 				k8sobjects.Role(core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/foo/role.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),
@@ -1097,6 +1139,7 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 					core.Namespace("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Annotation(metadata.ResourceManagerKey, ":root_my-rs"),
 					core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/obj.yaml"),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
@@ -1109,6 +1152,7 @@ func TestRoot_Parse_Discovery(t *testing.T) {
 					"",
 					core.Name("foo"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
 					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 					core.Annotation(metadata.GitContextKey, nilGitContext),

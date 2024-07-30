@@ -333,7 +333,11 @@ func TestAddUpdateDeleteLabels(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	var defaultLabels = []string{metadata.ManagedByKey, metadata.DeclaredVersionLabel}
+	var defaultLabels = []string{
+		metadata.ManagedByKey,
+		metadata.DeclaredVersionLabel,
+		metadata.ApplySetPartOfLabel,
+	}
 
 	// Checking that the configmap with no labels appears on cluster, and
 	// that no user labels are specified
@@ -350,12 +354,13 @@ func TestAddUpdateDeleteLabels(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	// Checking that label is updated after syncing an update.
-	err = nt.Validate(cmName, ns, &corev1.ConfigMap{},
-		testpredicates.HasExactlyLabelKeys(append(defaultLabels, "baz")...))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	var updatedLabels []string
+	updatedLabels = append(updatedLabels, defaultLabels...)
+	updatedLabels = append(updatedLabels, "baz")
+
+	// Checking that label was added after syncing.
+	nt.Must(nt.Validate(cmName, ns, &corev1.ConfigMap{},
+		testpredicates.HasExactlyLabelKeys(updatedLabels...)))
 
 	delete(cm.Labels, "baz")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm))
@@ -365,11 +370,8 @@ func TestAddUpdateDeleteLabels(t *testing.T) {
 	}
 
 	// Check that the label is deleted after syncing.
-	err = nt.Validate(cmName, ns, &corev1.ConfigMap{},
-		testpredicates.HasExactlyLabelKeys(metadata.ManagedByKey, metadata.DeclaredVersionLabel))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(cmName, ns, &corev1.ConfigMap{},
+		testpredicates.HasExactlyLabelKeys(defaultLabels...)))
 
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, cm)

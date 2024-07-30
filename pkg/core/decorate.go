@@ -66,6 +66,15 @@ func RemoveAnnotations(obj Annotated, annotations ...string) {
 	obj.SetAnnotations(as)
 }
 
+// RemoveLabels removes the passed set of labels from obj.
+func RemoveLabels(obj Labeled, labels ...string) {
+	actual := obj.GetLabels()
+	for _, label := range labels {
+		delete(actual, label)
+	}
+	obj.SetLabels(actual)
+}
+
 // AddAnnotations adds the specified annotations to the object.
 func AddAnnotations(obj Annotated, annotations map[string]string) {
 	existing := obj.GetAnnotations()

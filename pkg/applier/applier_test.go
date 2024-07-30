@@ -89,19 +89,21 @@ func TestApply(t *testing.T) {
 	abandonObj := deploymentObj.DeepCopy()
 	abandonObj.SetName("abandon-me")
 	abandonObj.SetAnnotations(map[string]string{
-		common.LifecycleDeleteAnnotation: common.PreventDeletion,
+		common.LifecycleDeleteAnnotation: common.PreventDeletion, // not removed
 		metadata.ResourceManagementKey:   metadata.ResourceManagementEnabled,
 		metadata.ResourceIDKey:           core.GKNN(abandonObj),
 		metadata.ResourceManagerKey:      resourceManager,
 		metadata.OwningInventoryKey:      "anything",
 		metadata.SyncTokenAnnotationKey:  "anything",
-		"example-to-not-delete":          "anything",
+		"example-to-not-delete":          "anything", // not removed
 	})
 	abandonObj.SetLabels(map[string]string{
-		metadata.ManagedByKey:   metadata.ManagedByValue,
-		metadata.SystemLabel:    "anything",
-		metadata.ArchLabel:      "anything",
-		"example-to-not-delete": "anything",
+		metadata.ManagedByKey: metadata.ManagedByValue,
+		metadata.SystemLabel:  "anything",
+		metadata.ArchLabel:    "anything",
+		// TODO: remove ApplySet metadata on abandon (b/355534413)
+		metadata.ApplySetPartOfLabel: "anything", // not removed
+		"example-to-not-delete":      "anything", // not removed
 	})
 	abandonObjID := core.IDOf(abandonObj)
 
@@ -322,15 +324,18 @@ func TestApply(t *testing.T) {
 			expectedServerObjs: []client.Object{
 				func() client.Object {
 					obj := abandonObj.DeepCopy()
-					obj.SetAnnotations(map[string]string{
-						common.LifecycleDeleteAnnotation: common.PreventDeletion,
-						// all configsync annotations removed
-						"example-to-not-delete": "anything",
-					})
-					obj.SetLabels(map[string]string{
-						// all configsync labels removed
-						"example-to-not-delete": "anything",
-					})
+					// all configsync annotations removed
+					core.RemoveAnnotations(obj,
+						metadata.ResourceManagementKey,
+						metadata.ResourceIDKey,
+						metadata.ResourceManagerKey,
+						metadata.OwningInventoryKey,
+						metadata.SyncTokenAnnotationKey)
+					// all configsync labels removed
+					core.RemoveLabels(obj,
+						metadata.ManagedByKey,
+						metadata.SystemLabel,
+						metadata.ArchLabel)
 					obj.SetUID("1")
 					obj.SetResourceVersion("2")
 					obj.SetGeneration(1)

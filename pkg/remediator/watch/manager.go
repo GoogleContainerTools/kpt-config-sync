@@ -20,10 +20,13 @@ import (
 	"sync"
 
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
+	"kpt.dev/configsync/pkg/applyset"
 	"kpt.dev/configsync/pkg/declared"
+	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/remediator/conflict"
 	"kpt.dev/configsync/pkg/remediator/queue"
 	"kpt.dev/configsync/pkg/status"
@@ -52,6 +55,9 @@ type Manager struct {
 
 	// mapper is the RESTMapper used by the watcherFactory
 	mapper meta.RESTMapper
+
+	// labelSelector filters watches
+	labelSelector labels.Selector
 
 	// The following fields are guarded by the mutex.
 	mux sync.RWMutex
@@ -95,6 +101,11 @@ func NewManager(scope declared.Scope, syncName string, cfg *rest.Config,
 		}
 	}
 
+	// Only watch & remediate objects applied by this reconciler
+	labelSelector := labels.Set{
+		metadata.ApplySetPartOfLabel: applyset.IDFromSync(syncName, scope),
+	}.AsSelector()
+
 	return &Manager{
 		scope:           scope,
 		syncName:        syncName,
@@ -103,6 +114,7 @@ func NewManager(scope declared.Scope, syncName string, cfg *rest.Config,
 		watcherMap:      make(map[schema.GroupVersionKind]Runnable),
 		watcherFactory:  options.watcherFactory,
 		mapper:          options.mapper,
+		labelSelector:   labelSelector,
 		queue:           q,
 		conflictHandler: ch,
 	}, nil
@@ -253,6 +265,7 @@ func (m *Manager) startWatcher(ctx context.Context, gvk schema.GroupVersionKind)
 		scope:           m.scope,
 		syncName:        m.syncName,
 		conflictHandler: m.conflictHandler,
+		labelSelector:   m.labelSelector,
 	}
 	w, err := m.watcherFactory(cfg)
 	if err != nil {

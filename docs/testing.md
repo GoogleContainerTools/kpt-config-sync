@@ -20,7 +20,7 @@ See [building from source](#build-from-source) for more information.
 For the complete list of arguments accepted by the e2e tests, see [flags.go](../e2e/flags.go)
 or invoke the e2e tests with the `--usage` flag.
 ```shell
-go test ./e2e/... --usage
+go test ./e2e/testcases/... --usage --e2e -v
 ```
 
 Below is a non-exhaustive list of some useful arguments for running the e2e tests.
@@ -56,6 +56,18 @@ make install-kind
 - After upgrading kind, you usually need to delete all your existing kind clusters so that kind functions correctly.
 - Deleting all running kind clusters usually fixes kind issues.
 
+#### Quickstart
+
+The following example shows how to run the e2e test case named `TestNamespaceGarbageCollection`.
+The test name can be replaced with [any desired regex pattern](https://pkg.go.dev/cmd/go#hdr-Testing_flags).
+The entire test suite takes a long time to run, so it's generally recommended to
+run targeted tests.
+
+```shell
+make config-sync-manifest-local
+go test ./e2e/testcases/... --e2e --test.v --test.run TestNamespaceGarbageCollection
+```
+
 #### Running E2E tests on kind
 
 Build everything and run all e2e tests. This will take a long time, but can be
@@ -70,14 +82,14 @@ Running the tests directly using `go test` gives more flexibility with the
 test parameters and allows running smaller subsets of tests.
 ```shell
 make config-sync-manifest-local
-go test ./e2e/... --e2e --debug --test.v --test.run (test name regexp)
+go test ./e2e/testcases/... --e2e --debug --test.v --test.run (test name regexp)
 ```
 
 To use already existing images without building everything from scratch, rebuild
 only the manifests and then rerun the tests.
 ```shell
 make build-manifests IMAGE_TAG=<tag>
-go test ./e2e/... --e2e <additional-options>
+go test ./e2e/testcases/... --e2e <additional-options>
 ```
 
 ### E2E tests (GKE)
@@ -118,7 +130,7 @@ Provide the `--destroy-clusters` option with:
 
 ```shell
 # GKE cluster options can be provided as command line flags
-go test ./e2e/... --e2e --test.v --share-test-env --gcp-project=<PROJECT_ID> --test-cluster=gke \
+go test ./e2e/testcases/... --e2e --test.v --share-test-env --gcp-project=<PROJECT_ID> --test-cluster=gke \
   --cluster-prefix=${USER}-test --create-clusters=lazy --destroy-clusters=false --num-clusters=5 --gcp-zone=us-central1-a \
   --test.run (test name regexp)
 ```
@@ -138,7 +150,7 @@ export GCP_CLUSTER=<CLUSTER_NAME>
 export GCP_REGION=<REGION>
 export GCP_ZONE=<ZONE>
 # Run the tests with image prefix/tag from previous step and desired test regex
-go test ./e2e/... --e2e --debug --test.v --share-test-env=true --test-cluster=gke --test.run (test name regexp)
+go test ./e2e/testcases/... --e2e --debug --test.v --share-test-env=true --test-cluster=gke --test.run (test name regexp)
 ```
 
 [kind]: https://kind.sigs.k8s.io/

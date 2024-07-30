@@ -24,6 +24,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/prometheus/client_golang/prometheus"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
@@ -66,14 +67,19 @@ func (c *Client) Create(ctx context.Context, obj client.Object, opts ...client.C
 
 	start := time.Now()
 	err := c.Client.Create(ctx, obj, opts...)
+
 	c.recordLatency(start, "Create", metrics.StatusLabel(err))
 	m.RecordAPICallDuration(ctx, "create", m.StatusTagKey(err), start)
 
-	switch {
-	case apierrors.IsAlreadyExists(err):
-		return ConflictCreateAlreadyExists(err, obj)
-	case err != nil:
-		return status.APIServerError(err, "failed to create object", obj)
+	if err != nil {
+		switch {
+		case apierrors.IsAlreadyExists(err):
+			return ConflictCreateAlreadyExists(err, obj)
+		case meta.IsNoMatchError(err):
+			return ConflictCreateResourceDoesNotExist(err, obj)
+		default:
+			return status.APIServerError(err, "failed to create object", obj)
+		}
 	}
 
 	klog.Infof("Created %s", description)
@@ -87,17 +93,23 @@ func (c *Client) Delete(ctx context.Context, obj client.Object, opts ...client.D
 	namespacedName := getNamespacedName(obj)
 
 	if err := c.Client.Get(ctx, namespacedName, obj); err != nil {
-		if apierrors.IsNotFound(err) {
+		switch {
+		case apierrors.IsNotFound(err):
 			// Object is already deleted
-			klog.V(2).Infof("Delete skipped, %s does not exist", description)
+			klog.V(2).Infof("Delete skipped, object %s does not exist", description)
 			return nil
-		}
-		// TODO: determine if this belongs in the non error path
-		if isFinalizing(obj) {
-			klog.V(2).Infof("Delete skipped, resource is finalizing %s", description)
+		case meta.IsNoMatchError(err):
+			// Resource is already deleted, implying the object was deleted
+			klog.V(2).Infof("Delete skipped, resource for %s does not exist", description)
 			return nil
+		default:
+			return status.ResourceWrap(err, "failed to get object for delete", obj)
 		}
-		return status.ResourceWrap(err, "failed to get resource for delete", obj)
+	}
+
+	if isFinalizing(obj) {
+		klog.V(2).Infof("Delete skipped, resource is finalizing %s", description)
+		return nil
 	}
 
 	start := time.Now()
@@ -108,17 +120,19 @@ func (c *Client) Delete(ctx context.Context, obj client.Object, opts ...client.D
 	case err == nil:
 		klog.Infof("Deleted %s", description)
 	case apierrors.IsNotFound(err):
-		klog.V(2).Infof("Not found during attempted delete %s", description)
+		klog.V(2).Infof("Object not found during attempted delete %s", description)
 		err = nil
-	default:
-		err = fmt.Errorf("delete failed for %s: %w", description, err)
+	case meta.IsNoMatchError(err):
+		// Resource is already deleted, implying the object was deleted
+		klog.V(2).Infof("Resource not found during attempted delete %s", description)
+		err = nil
 	}
 
 	c.recordLatency(start, "delete", metrics.StatusLabel(err))
 	m.RecordAPICallDuration(ctx, "delete", m.StatusTagKey(err), start)
 
 	if err != nil {
-		return status.ResourceWrap(err, "failed to delete", obj)
+		return status.ResourceWrap(err, "failed to delete object", obj)
 	}
 	return nil
 }
@@ -157,11 +171,15 @@ func (c *Client) apply(ctx context.Context, obj client.Object, updateFn update,
 
 	for tryNum := 0; tryNum < c.MaxTries; tryNum++ {
 		err := c.Client.Get(ctx, namespacedName, workingObj)
-		switch {
-		case apierrors.IsNotFound(err):
-			return nil, ConflictUpdateObjectDoesNotExist(err, obj)
-		case err != nil:
-			return nil, status.ResourceWrap(err, "failed to get object to update", obj)
+		if err != nil {
+			switch {
+			case apierrors.IsNotFound(err):
+				return nil, ConflictUpdateObjectDoesNotExist(err, obj)
+			case meta.IsNoMatchError(err):
+				return nil, ConflictUpdateResourceDoesNotExist(err, obj)
+			default:
+				return nil, status.ResourceWrap(err, "failed to get object to update", obj)
+			}
 		}
 
 		oldV := resourceVersion(workingObj)
@@ -171,7 +189,7 @@ func (c *Client) apply(ctx context.Context, obj client.Object, updateFn update,
 				klog.V(2).Infof("Update function for %s returned no update needed", description)
 				return newObj, nil
 			}
-			return nil, status.ResourceWrap(err, "failed to update", obj)
+			return nil, status.ResourceWrap(err, "failed to update object", obj)
 		}
 
 		// cmp.Diff may take a while on the resource, only compute if V(1)
@@ -182,28 +200,36 @@ func (c *Client) apply(ctx context.Context, obj client.Object, updateFn update,
 
 		start := time.Now()
 		err = clientUpdateFn(ctx, newObj)
+
 		c.recordLatency(start, "update", metrics.StatusLabel(err))
 		m.RecordAPICallDuration(ctx, "update", m.StatusTagKey(err), start)
 
-		if err == nil {
-			newV := resourceVersion(newObj)
-			if oldV == newV {
-				klog.Warningf("ResourceVersion for %s did not change during update (noop), updateFn should have indicated no update needed", description)
-			} else {
-				klog.Infof("Updated %s from ResourceVersion %s to %s", description, oldV, newV)
+		if err != nil {
+			switch {
+			case apierrors.IsConflict(err):
+				// Backoff and retry on resource conflict.
+				// The loop re-gets and modifies the current state, so callers
+				// don't need to explicitly update their cached version.
+				klog.V(2).Infof("Conflict during update for %q: %v", description, err)
+				time.Sleep(100 * time.Millisecond)
+				lastErr = err
+				continue
+			case apierrors.IsNotFound(err):
+				return nil, ConflictUpdateObjectDoesNotExist(err, obj)
+			case meta.IsNoMatchError(err):
+				return nil, ConflictUpdateResourceDoesNotExist(err, obj)
+			default:
+				return nil, status.ResourceWrap(err, "failed to update object", obj)
 			}
-			return newObj, nil
 		}
-		lastErr = err
 
-		// Note that this loop already re-gets the current state if there is a
-		// resourceVersion mismatch, so callers don't need to explicitly update their
-		// cached version.
-		if !apierrors.IsConflict(err) {
-			return nil, status.ResourceWrap(err, "failed to update", obj)
+		newV := resourceVersion(newObj)
+		if oldV == newV {
+			klog.Warningf("ResourceVersion for %s did not change during update (noop), updateFn should have indicated no update needed", description)
+		} else {
+			klog.Infof("Updated %s from ResourceVersion %s to %s", description, oldV, newV)
 		}
-		klog.V(2).Infof("Conflict during update for %q: %v", description, err)
-		time.Sleep(100 * time.Millisecond) // Back off on retry a bit.
+		return newObj, nil
 	}
 	return nil, status.ResourceWrap(lastErr, "exceeded max tries to update", obj)
 }
@@ -216,13 +242,19 @@ func (c *Client) Update(ctx context.Context, obj client.Object, opts ...client.U
 	oldV := resourceVersion(obj)
 	start := time.Now()
 	err := c.Client.Update(ctx, obj, opts...)
+
 	c.recordLatency(start, "update", metrics.StatusLabel(err))
 	m.RecordAPICallDuration(ctx, "update", m.StatusTagKey(err), start)
-	switch {
-	case apierrors.IsNotFound(err):
-		return ConflictUpdateObjectDoesNotExist(err, obj)
-	case err != nil:
-		return status.ResourceWrap(err, "failed to update", obj)
+
+	if err != nil {
+		switch {
+		case apierrors.IsNotFound(err):
+			return ConflictUpdateObjectDoesNotExist(err, obj)
+		case meta.IsNoMatchError(err):
+			return ConflictUpdateResourceDoesNotExist(err, obj)
+		default:
+			return status.ResourceWrap(err, "failed to update object", obj)
+		}
 	}
 	newV := resourceVersion(obj)
 	if oldV == newV {

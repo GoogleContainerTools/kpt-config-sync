@@ -21,8 +21,10 @@ import (
 
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
 	syncerclient "kpt.dev/configsync/pkg/syncer/client"
 	syncertestfake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
@@ -38,10 +40,19 @@ func TestClient_Create(t *testing.T) {
 		wantErr  status.Error
 	}{
 		{
-			name:     "Creates if does not exist",
+			name:     "Creates if object does not exist",
 			declared: k8sobjects.RoleObject(core.Name("admin"), core.Namespace("billing")),
 			client:   syncertestfake.NewClient(t, core.Scheme),
 			wantErr:  nil,
+		},
+		{
+			name:     "Conflict error if resource not found",
+			declared: k8sobjects.UnstructuredObject(kinds.Anvil(), core.Name("admin"), core.Namespace("billing")),
+			client: syncertestfake.NewErrorClient(
+				&meta.NoResourceMatchError{PartialResource: kinds.Anvil().GroupVersion().WithResource("anvils")}),
+			wantErr: syncerclient.ConflictCreateResourceDoesNotExist(
+				&meta.NoResourceMatchError{PartialResource: kinds.Anvil().GroupVersion().WithResource("anvils")},
+				k8sobjects.UnstructuredObject(kinds.Anvil(), core.Name("admin"), core.Namespace("billing"))),
 		},
 		{
 			name:     "Retriable if receives AlreadyExists",
@@ -80,13 +91,22 @@ func TestClient_Apply(t *testing.T) {
 		wantErr  status.Error
 	}{
 		{
-			name:     "Conflict error if not found",
+			name:     "Conflict error if object not found",
 			declared: k8sobjects.RoleObject(core.Name("admin"), core.Namespace("billing")),
 			client: syncertestfake.NewErrorClient(
 				apierrors.NewNotFound(rbacv1.Resource("Role"), "billing/admin")),
 			wantErr: syncerclient.ConflictUpdateObjectDoesNotExist(
 				apierrors.NewNotFound(rbacv1.Resource("Role"), "billing/admin"),
 				k8sobjects.RoleObject(core.Name("admin"), core.Namespace("billing"))),
+		},
+		{
+			name:     "Conflict error if resource not found",
+			declared: k8sobjects.UnstructuredObject(kinds.Anvil(), core.Name("admin"), core.Namespace("billing")),
+			client: syncertestfake.NewErrorClient(
+				&meta.NoResourceMatchError{PartialResource: kinds.Anvil().GroupVersion().WithResource("anvils")}),
+			wantErr: syncerclient.ConflictUpdateResourceDoesNotExist(
+				&meta.NoResourceMatchError{PartialResource: kinds.Anvil().GroupVersion().WithResource("anvils")},
+				k8sobjects.UnstructuredObject(kinds.Anvil(), core.Name("admin"), core.Namespace("billing"))),
 		},
 		{
 			name:     "Generic error if other error",
@@ -124,7 +144,7 @@ func TestClient_Update(t *testing.T) {
 		wantErr  status.Error
 	}{
 		{
-			name:     "Conflict error if not found",
+			name:     "Conflict error if object not found",
 			declared: k8sobjects.RoleObject(core.Name("admin"), core.Namespace("billing")),
 			client: syncertestfake.NewErrorClient(
 				apierrors.NewNotFound(rbacv1.Resource("Role"), "admin")),
@@ -133,10 +153,19 @@ func TestClient_Update(t *testing.T) {
 				k8sobjects.RoleObject(core.Name("admin"), core.Namespace("billing"))),
 		},
 		{
+			name:     "Conflict error if resource not found",
+			declared: k8sobjects.UnstructuredObject(kinds.Anvil(), core.Name("admin"), core.Namespace("billing")),
+			client: syncertestfake.NewErrorClient(
+				&meta.NoResourceMatchError{PartialResource: kinds.Anvil().GroupVersion().WithResource("anvils")}),
+			wantErr: syncerclient.ConflictUpdateResourceDoesNotExist(
+				&meta.NoResourceMatchError{PartialResource: kinds.Anvil().GroupVersion().WithResource("anvils")},
+				k8sobjects.UnstructuredObject(kinds.Anvil(), core.Name("admin"), core.Namespace("billing"))),
+		},
+		{
 			name:     "Generic error if other error",
 			declared: k8sobjects.RoleObject(core.Name("admin"), core.Namespace("billing")),
 			client:   syncertestfake.NewErrorClient(errors.New("some error")),
-			wantErr: status.ResourceWrap(errors.New("some error"), "failed to update",
+			wantErr: status.ResourceWrap(errors.New("some error"), "failed to update object",
 				k8sobjects.RoleObject(core.Name("admin"), core.Namespace("billing"))),
 		},
 		{

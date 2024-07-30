@@ -42,19 +42,10 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 
 	crdFile := filepath.Join(".", "..", "testdata", "customresources", "v1_crds", "anvil-crd.yaml")
 	clusterFile := filepath.Join(".", "..", "testdata", "customresources", "v1_crds", "clusteranvil-crd.yaml")
-	_, err := nt.Shell.Kubectl("apply", "-f", crdFile)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-	_, err = nt.Shell.Kubectl("apply", "-f", clusterFile)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Shell.Kubectl("apply", "-f", crdFile))
+	nt.Must(nt.Shell.Kubectl("apply", "-f", clusterFile))
 
-	err = nomostest.WaitForCRDs(nt, []string{"anvils.acme.com", "clusteranvils.acme.com"})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nomostest.WaitForCRDs(nt, []string{"anvils.acme.com", "clusteranvils.acme.com"}))
 
 	nsObj := k8sobjects.NamespaceObject("foo")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", nsObj))
@@ -63,47 +54,33 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding Anvil CR"))
 	firstCommitHash := nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
 
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Reset discovery client to pick up Anvil CRD
 	nt.RenewClient()
 
-	err = nt.Validate(configuration.Name, "", &admissionv1.ValidatingWebhookConfiguration{},
-		hasRule("acme.com.v1.admission-webhook.configsync.gke.io"))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(configuration.Name, "", &admissionv1.ValidatingWebhookConfiguration{},
+		hasRule("acme.com.v1.admission-webhook.configsync.gke.io")))
 
 	// Use Retry & Validate instead of WatchForCurrentStatus, because
 	// watching would require creating API objects and updating the scheme.
-	_, err = retry.Retry(60*time.Second, func() error {
+	nt.Must(retry.Retry(60*time.Second, func() error {
 		return nt.Validate("heavy", "foo", anvilCR("v1", "", 0),
 			testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus))
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, anvilObj)
 
-	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: rootSyncNN,
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	// Remove CRD
 	// This will garbage collect the CR too and block until both are deleted.
 	nt.T.Log("Deleting Anvil CRD")
-	_, err = nt.Shell.Kubectl("delete", "-f", crdFile)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Shell.Kubectl("delete", "-f", crdFile))
 
 	rootSyncLabels, err := nomostest.MetricLabelsForRootSync(nt, rootSyncNN)
 	if err != nil {
@@ -152,32 +129,24 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 	// Validate the source error metric was recorded.
 	// No management conflict is expected for this new commit, because the
 	// remediator should be paused waiting for the sync to succeed.
-	err = nomostest.ValidateMetrics(nt,
+	nt.Must(nomostest.ValidateMetrics(nt,
 		nomostest.ReconcilerErrorMetrics(nt, rootSyncLabels, secondCommitHash, metrics.ErrorSummary{
 			Source: 1,
-		}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		})))
 
 	// Remove the CR.
 	// This should fix the error and the conflict.
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/foo/anvil-v1.yaml"))
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing the Anvil CR as well"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// CR wasn't added to the inventory, so it won't be deleted.
 	nt.MetricsExpectations.RemoveObject(configsync.RootSyncKind, rootSyncNN, anvilObj)
 
 	// Validate reconciler error and conflict are cleared.
-	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: rootSyncNN,
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 }
 
 func TestSyncUpdateCustomResource(t *testing.T) {

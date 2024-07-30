@@ -123,9 +123,8 @@ func (r *reconciler) remediate(ctx context.Context, id core.ID, objDiff diff.Dif
 	case diff.NoOp:
 		return nil
 	case diff.ManagementConflict:
-		oldManager := core.GetAnnotation(objDiff.Actual, metadata.ResourceManagerKey)
+		// Error logged by conflict.Record AND worker.Run. So don't log here.
 		newManager := declared.ResourceManager(r.scope, r.syncName)
-		klog.Warningf("Remediator skipping object %v: management conflict detected (current: %s, desired: %s)", id, oldManager, newManager)
 		return status.ManagementConflictErrorWrap(objDiff.Actual, newManager)
 	case diff.Create:
 		declared, err := objDiff.UnstructuredDeclared()

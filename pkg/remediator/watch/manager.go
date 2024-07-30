@@ -30,6 +30,7 @@ import (
 	"kpt.dev/configsync/pkg/remediator/conflict"
 	"kpt.dev/configsync/pkg/remediator/queue"
 	"kpt.dev/configsync/pkg/status"
+	syncerclient "kpt.dev/configsync/pkg/syncer/client"
 )
 
 // Manager accepts new resource lists that are parsed from Git and then
@@ -160,11 +161,12 @@ func (m *Manager) AddWatches(ctx context.Context, gvkMap map[schema.GroupVersion
 		// Watch will be started later by UpdateWatches, after the applier succeeds.
 		// TODO: register pending resources and start watching them when the CRD is established
 		if _, err := m.mapper.RESTMapping(gvk.GroupKind(), gvk.Version); err != nil {
-			if meta.IsNoMatchError(err) {
+			switch {
+			case meta.IsNoMatchError(err):
 				klog.Infof("Remediator skipped adding watch for resource %v: %v: resource watch will be started after apply is successful", gvk, err)
-				continue
+			default:
+				errs = status.Append(errs, status.APIServerErrorWrap(err))
 			}
-			errs = status.Append(errs, status.APIServerErrorWrap(err))
 			continue
 		}
 		// We don't have a watcher for this type, so add a watcher for it.
@@ -221,7 +223,12 @@ func (m *Manager) UpdateWatches(ctx context.Context, gvkMap map[schema.GroupVers
 		// Only start watcher if the resource exists.
 		// All resources should exist and be established by now. If not, error.
 		if _, err := m.mapper.RESTMapping(gvk.GroupKind(), gvk.Version); err != nil {
-			errs = status.Append(errs, status.APIServerErrorWrap(err))
+			switch {
+			case meta.IsNoMatchError(err):
+				errs = status.Append(errs, syncerclient.ConflictWatchResourceDoesNotExist(err, gvk))
+			default:
+				errs = status.Append(errs, status.APIServerErrorWrap(err))
+			}
 			continue
 		}
 		// We don't have a watcher for this type, so add a watcher for it.

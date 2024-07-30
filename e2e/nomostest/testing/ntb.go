@@ -58,12 +58,13 @@ func NewFakeNTB(name string) *FakeNTB {
 
 // Error is equivalent to Log followed by Fail.
 func (t *FakeNTB) Error(args ...interface{}) {
-	t.Log(args...)
+	t.Log(injectErrorPrefix(args...)...)
 	t.Fail()
 }
 
 // Errorf is equivalent to Logf followed by Fail.
 func (t *FakeNTB) Errorf(format string, args ...interface{}) {
+	format, args = injectErrorPrefixF(format, args...)
 	t.Logf(format, args...)
 	t.Fail()
 }
@@ -90,12 +91,13 @@ func (t *FakeNTB) Failed() bool {
 
 // Fatal is equivalent to Log followed by FailNow.
 func (t *FakeNTB) Fatal(args ...interface{}) {
-	t.Log(args...)
+	t.Log(injectErrorPrefix(args...)...)
 	t.FailNow()
 }
 
 // Fatalf is equivalent to Logf followed by FailNow.
 func (t *FakeNTB) Fatalf(format string, args ...interface{}) {
+	format, args = injectErrorPrefixF(format, args...)
 	t.Logf(format, args...)
 	t.FailNow()
 }
@@ -176,11 +178,12 @@ func (t *FakeNTB) Skipped() bool {
 
 // Log generates the output. It's always at the same stack depth.
 func (t *FakeNTB) Log(args ...interface{}) {
-	fmt.Println(fmt.Sprintf("[%s]", t.name), fmt.Sprint(args...))
+	fmt.Println(fmt.Sprintf("[%s]", t.name), fmt.Sprint(injectTimePrefix(args...)...))
 }
 
 // Logf formats its arguments according to the format, analogous to Printf, and
 // records the text in the error log.
 func (t *FakeNTB) Logf(format string, args ...interface{}) {
+	format, args = injectTimePrefixF(format, args...)
 	fmt.Println(fmt.Sprintf("[%s]", t.name), fmt.Sprintf(format, args...))
 }

@@ -145,6 +145,7 @@ func syncDirectory(syncDirectoryMap map[types.NamespacedName]string, nn types.Na
 // If you want to validate specific fields of a Sync object, use
 // nt.Watcher.WatchObject() instead.
 func (nt *NT) WatchForAllSyncs(options ...WatchForAllSyncsOptions) error {
+	nt.T.Helper()
 	waitForRepoSyncsOptions := watchForAllSyncsOptions{
 		timeout:            nt.DefaultWaitTimeout,
 		readyCheck:         true,
@@ -223,6 +224,7 @@ func (nt *NT) WatchForSync(
 	syncDirPair *SyncDirPredicatePair,
 	opts ...testwatcher.WatchOption,
 ) error {
+	nt.T.Helper()
 	if namespace == "" {
 		// If namespace is empty, use the default namespace
 		namespace = configsync.ControllerNamespace

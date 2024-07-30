@@ -14,7 +14,9 @@
 
 package testlogger
 
-import "kpt.dev/configsync/e2e/nomostest/testing"
+import (
+	"kpt.dev/configsync/e2e/nomostest/testing"
+)
 
 // TestLogger wraps testing.NTB to add optional debug logging, without exposing
 // the ability to error or fatally terminate the test.
@@ -53,6 +55,7 @@ func (tl *TestLogger) IsDebugEnabled() bool {
 // Debug only prints the log message if debug is enabled.
 // Use for verbose logs that can be enabled by developers, but won't show in CI.
 func (tl *TestLogger) Debug(args ...interface{}) {
+	tl.t.Helper()
 	if tl.debugEnabled {
 		tl.t.Log(args...)
 	}
@@ -62,6 +65,7 @@ func (tl *TestLogger) Debug(args ...interface{}) {
 // enabled.
 // Use for verbose logs that can be enabled by developers, but won't show in CI.
 func (tl *TestLogger) Debugf(format string, args ...interface{}) {
+	tl.t.Helper()
 	if tl.debugEnabled {
 		tl.t.Logf(format, args...)
 	}
@@ -69,10 +73,12 @@ func (tl *TestLogger) Debugf(format string, args ...interface{}) {
 
 // Info prints the message to the test log.
 func (tl *TestLogger) Info(args ...interface{}) {
+	tl.t.Helper()
 	tl.t.Log(args...)
 }
 
 // Infof prints the message to the test log, with Sprintf-like formatting.
 func (tl *TestLogger) Infof(format string, args ...interface{}) {
+	tl.t.Helper()
 	tl.t.Logf(format, args...)
 }

@@ -16,6 +16,7 @@ package testing
 
 import (
 	"strings"
+	"testing"
 	"time"
 
 	"kpt.dev/configsync/e2e"
@@ -23,15 +24,15 @@ import (
 
 const errorPrefix = "ERROR:"
 
-// Wrapper implements NTB.
-type Wrapper struct {
-	t NTB
+// wrapper wraps testing.T to implement NTB with some custom behavior
+type wrapper struct {
+	*testing.T // embed struct for parent methods (e.g. Helper)
 }
 
 // NewShared creates a new instance of the Testing Wrapper that provides additional
 // functionality beyond the standard testing package.
 // It doesn't require the testFeature param.
-func NewShared(t NTB) *Wrapper {
+func NewShared(t *FakeNTB) NTB {
 	t.Helper()
 
 	testFeaturesFlag := *e2e.TestFeatures
@@ -45,15 +46,12 @@ func NewShared(t NTB) *Wrapper {
 		}
 	}
 
-	tw := &Wrapper{
-		t: t,
-	}
-	return tw
+	return t
 }
 
 // New creates a new instance of the Testing Wrapper that provides additional
 // functionality beyond the standard testing package.
-func New(t NTB, testFeature Feature) *Wrapper {
+func New(t *testing.T, testFeature Feature) NTB {
 	t.Helper()
 
 	if !KnownFeature(testFeature) {
@@ -79,119 +77,82 @@ func New(t NTB, testFeature Feature) *Wrapper {
 		t.Skipf("Skip the test because the feature %q is not included in the test-features flag %q", testFeature, testFeaturesFlag)
 	}
 
-	tw := &Wrapper{
-		t: t,
+	return &wrapper{
+		T: t,
 	}
-
-	return tw
-}
-
-// Cleanup registers a function to be called when the test and all its
-// subtests complete. Cleanup functions will be called in last added,
-// first called order.
-func (w *Wrapper) Cleanup(f func()) {
-	w.t.Cleanup(f)
 }
 
 // Error is equivalent to Log followed by Fail.
-func (w *Wrapper) Error(args ...interface{}) {
-	args = append([]interface{}{time.Now().UTC(), errorPrefix}, args...)
-
-	w.t.Helper()
-	w.t.Error(args...)
+func (w *wrapper) Error(args ...interface{}) {
+	w.Helper()
+	args = injectErrorPrefix(args...)
+	args = injectTimePrefix(args...)
+	w.T.Error(args...)
 }
 
 // Errorf is equivalent to Logf followed by Fail.
-func (w *Wrapper) Errorf(format string, args ...interface{}) {
-	format = "%s %s " + format
-	args = append([]interface{}{time.Now().UTC(), errorPrefix}, args...)
-
-	w.t.Helper()
-	w.t.Errorf(format, args...)
-}
-
-// Fail marks the function as having failed but continues execution.
-func (w *Wrapper) Fail() {
-	w.t.Fail()
-}
-
-// FailNow marks the function as having failed and stops its execution
-// by calling runtime.Goexit (which then runs all deferred calls in the
-// current goroutine).
-func (w *Wrapper) FailNow() {
-	w.t.FailNow()
-}
-
-// Failed reports whether the function has failed.
-func (w *Wrapper) Failed() bool {
-	return w.t.Failed()
+func (w *wrapper) Errorf(format string, args ...interface{}) {
+	w.Helper()
+	format, args = injectErrorPrefixF(format, args...)
+	format, args = injectTimePrefixF(format, args...)
+	w.T.Errorf(format, args...)
 }
 
 // Fatal is equivalent to Log followed by FailNow.
-func (w *Wrapper) Fatal(args ...interface{}) {
-	args = append([]interface{}{time.Now().UTC(), errorPrefix}, args...)
-
-	w.t.Helper()
-	w.t.Fatal(args...)
+func (w *wrapper) Fatal(args ...interface{}) {
+	w.Helper()
+	args = injectErrorPrefix(args...)
+	args = injectTimePrefix(args...)
+	w.T.Fatal(args...)
 }
 
 // Fatalf is equivalent to Logf followed by FailNow.
-func (w *Wrapper) Fatalf(format string, args ...interface{}) {
-	format = "%s %s " + format
-	args = append([]interface{}{time.Now().UTC(), errorPrefix}, args...)
-
-	w.t.Helper()
-	w.t.Fatalf(format, args...)
-}
-
-// Helper marks the calling function as a test helper function.
-// When printing file and line information, that function will be skipped.
-// Helper may be called simultaneously from multiple goroutines.
-func (w *Wrapper) Helper() {
-	w.t.Helper()
+func (w *wrapper) Fatalf(format string, args ...interface{}) {
+	w.Helper()
+	format, args = injectErrorPrefixF(format, args...)
+	format, args = injectTimePrefixF(format, args...)
+	w.T.Fatalf(format, args...)
 }
 
 // Log generates the output. It's always at the same stack depth.
-func (w *Wrapper) Log(args ...interface{}) {
-	w.t.Helper()
-	args = append([]interface{}{time.Now().UTC()}, args...)
-	w.t.Log(args...)
+func (w *wrapper) Log(args ...interface{}) {
+	w.Helper()
+	args = injectTimePrefix(args...)
+	w.T.Log(args...)
 }
 
 // Logf formats its arguments according to the format, analogous to Printf, and
 // records the text in the error log.
-func (w *Wrapper) Logf(format string, args ...interface{}) {
-	w.t.Helper()
-	format = "%s " + format
-	args = append([]interface{}{time.Now().UTC()}, args...)
-	w.t.Logf(format, args...)
-}
-
-// Name returns the name of the running test or benchmark.
-func (w *Wrapper) Name() string {
-	return w.t.Name()
+func (w *wrapper) Logf(format string, args ...interface{}) {
+	w.Helper()
+	format, args = injectTimePrefixF(format, args...)
+	w.T.Logf(format, args...)
 }
 
 // Skip is equivalent to Log followed by SkipNow.
-func (w *Wrapper) Skip(args ...interface{}) {
-	args = append([]interface{}{time.Now().UTC()}, args...)
-	w.t.Skip(args...)
-}
-
-// SkipNow marks the test as having been skipped and stops its execution
-// by calling runtime.Goexit.
-func (w *Wrapper) SkipNow() {
-	w.t.SkipNow()
+func (w *wrapper) Skip(args ...interface{}) {
+	args = injectTimePrefix(args...)
+	w.T.Skip(args...)
 }
 
 // Skipf is equivalent to Logf followed by SkipNow.
-func (w *Wrapper) Skipf(format string, args ...interface{}) {
-	format = "%s " + format
-	args = append([]interface{}{time.Now().UTC()}, args...)
-	w.t.Skipf(format, args...)
+func (w *wrapper) Skipf(format string, args ...interface{}) {
+	format, args = injectTimePrefixF(format, args...)
+	w.T.Skipf(format, args...)
 }
 
-// Skipped reports whether the test was skipped.
-func (w *Wrapper) Skipped() bool {
-	return w.t.Skipped()
+func injectTimePrefix(args ...interface{}) []interface{} {
+	return append([]interface{}{time.Now().UTC()}, args...)
+}
+
+func injectErrorPrefix(args ...interface{}) []interface{} {
+	return append([]interface{}{errorPrefix}, args...)
+}
+
+func injectTimePrefixF(format string, args ...interface{}) (string, []interface{}) {
+	return "%s " + format, append([]interface{}{time.Now().UTC()}, args...)
+}
+
+func injectErrorPrefixF(format string, args ...interface{}) (string, []interface{}) {
+	return "%s " + format, append([]interface{}{errorPrefix}, args...)
 }

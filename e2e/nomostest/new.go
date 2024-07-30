@@ -101,7 +101,7 @@ func PrintFeatureDurations() {
 // Usually tests should use nomostest.New but this is surfaced as a public
 // method for test cases which do not need all the features of NT, such
 // as access to a k8s cluster.
-func NewTestWrapper(t *testing.T, testFeature nomostesting.Feature, ntOptions ...ntopts.Opt) (*nomostesting.Wrapper, *ntopts.New) {
+func NewTestWrapper(t *testing.T, testFeature nomostesting.Feature, ntOptions ...ntopts.Opt) (nomostesting.NTB, *ntopts.New) {
 	e2e.EnableParallel(t)
 	tw := nomostesting.New(t, testFeature)
 	optsStruct := newOptStruct(TestClusterName(tw), TestDir(tw), ntOptions...)

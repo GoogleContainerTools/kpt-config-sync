@@ -316,22 +316,6 @@ func TestValidateManager(t *testing.T) {
 			operation:  admissionv1.Delete,
 			want:       fmt.Errorf(`config sync "reconciler-manager" can not DELETE object "RepoSync.configsync.gke.io, ns-1/reposync-1" managed by config sync "ns-reconciler-bookstore"`),
 		},
-		{
-			name:       "Importer can manage object with a root manager",
-			reconciler: "importer",
-			manager:    "bookstore",
-			id:         repoSyncID,
-			operation:  admissionv1.Update,
-			want:       nil,
-		},
-		{
-			name:       "Importer can manage object with a manager",
-			reconciler: "importer",
-			manager:    "root-reconciler",
-			id:         repoSyncID,
-			operation:  admissionv1.Update,
-			want:       nil,
-		},
 	}
 
 	for _, tc := range testCases {
@@ -379,38 +363,6 @@ func TestIsRootReconciler(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := isRootReconciler(tc.reconcilerName); got != tc.want {
 				t.Errorf("isRootReconciler() got %v; want %v", got, tc.want)
-			}
-		})
-	}
-}
-
-func TestIsImporter(t *testing.T) {
-	testCases := []struct {
-		name     string
-		username string
-		want     bool
-	}{
-		{
-			name:     "Config Sync importer service account",
-			username: "importer",
-			want:     true,
-		},
-		{
-			name:     "Config Sync monitor service account",
-			username: "monitor",
-			want:     false,
-		},
-		{
-			name:     "Empty username",
-			username: "",
-			want:     false,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := isImporter(tc.username); got != tc.want {
-				t.Errorf("isImporter() got %v; want %v", got, tc.want)
 			}
 		})
 	}

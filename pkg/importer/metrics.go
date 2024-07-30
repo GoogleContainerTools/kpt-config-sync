@@ -20,32 +20,14 @@ import (
 )
 
 // Name is the name of the importer Deployment.
+// Deprecated
 const Name = "importer"
 
 // Metrics contains the Prometheus metrics for the Importer.
+// TODO: Do we still need these metrics?
 var Metrics = struct {
-	CycleDuration    *prometheus.HistogramVec
-	NamespaceConfigs prometheus.Gauge
-	Violations       prometheus.Counter
+	Violations prometheus.Counter
 }{
-	CycleDuration: prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Help:      "Distribution of durations of cycles that the importer has attempted to complete",
-			Namespace: configmanagement.MetricsNamespace,
-			Subsystem: Name,
-			Name:      "cycle_duration_seconds",
-		},
-		// status: success, error
-		[]string{"status"},
-	),
-	NamespaceConfigs: prometheus.NewGauge(
-		prometheus.GaugeOpts{
-			Help:      "Number of namespace configs present in current state",
-			Namespace: configmanagement.MetricsNamespace,
-			Subsystem: Name,
-			Name:      "namespace_configs",
-		},
-	),
 	Violations: prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Help:      "Total number of safety violations that the importer has encountered.",
@@ -57,8 +39,6 @@ var Metrics = struct {
 
 func init() {
 	prometheus.MustRegister(
-		Metrics.CycleDuration,
-		Metrics.NamespaceConfigs,
 		Metrics.Violations,
 	)
 }

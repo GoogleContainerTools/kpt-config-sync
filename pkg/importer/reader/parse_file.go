@@ -41,6 +41,7 @@ func parseFile(path string) ([]*unstructured.Unstructured, error) {
 		contents, err := os.ReadFile(path)
 		if err != nil {
 			klog.Errorf("Failed to read file declared in git from mounted filesystem: %s", path)
+			// TODO: This uses the old importer metric. Should this be changed?
 			importer.Metrics.Violations.Inc()
 			return nil, err
 		}
@@ -49,6 +50,7 @@ func parseFile(path string) ([]*unstructured.Unstructured, error) {
 		contents, err := os.ReadFile(path)
 		if err != nil {
 			klog.Errorf("Failed to read file declared in git from mounted filesystem: %s", path)
+			// TODO: This uses the old importer metric. Should this be changed?
 			importer.Metrics.Violations.Inc()
 			return nil, err
 		}

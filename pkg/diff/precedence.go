@@ -22,7 +22,6 @@ import (
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
-	"kpt.dev/configsync/pkg/importer"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
@@ -31,7 +30,6 @@ import (
 )
 
 const (
-	saImporter             = importer.Name
 	saRootReconcilerPrefix = core.RootReconcilerPrefix
 	saReconcilerManager    = reconcilermanager.ManagerName
 
@@ -79,12 +77,6 @@ func CanManage(scope declared.Scope, syncName string, obj client.Object, op admi
 func ValidateManager(reconciler, manager string, id core.ID, op admissionv1.Operation) error {
 	if manager == "" {
 		// All managers are allowed to manage an object without a specified manager
-		return nil
-	}
-
-	// TODO: Remove this check when we turn down the old importer deployment.
-	if isImporter(reconciler) {
-		// Config Sync importer (legacy) is allowed to manage any object.
 		return nil
 	}
 
@@ -143,10 +135,6 @@ func ValidateManager(reconciler, manager string, id core.ID, op admissionv1.Oper
 			reconciler, op, id, oldReconciler)
 	}
 	return nil
-}
-
-func isImporter(reconcilerName string) bool {
-	return reconcilerName == saImporter
 }
 
 func isRootReconciler(reconcilerName string) bool {

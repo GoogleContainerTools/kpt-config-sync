@@ -29,7 +29,6 @@ import (
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
-	"kpt.dev/configsync/pkg/importer"
 	csmetadata "kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/testing/openapitest"
 	"sigs.k8s.io/cli-utils/pkg/common"
@@ -64,26 +63,6 @@ func TestValidator_Handle(t *testing.T) {
 		user   authenticationv1.UserInfo
 		deny   metav1.StatusReason
 	}{
-		{
-			// The Config Sync Importer is allowed to do anything it likes, so we just
-			// have one test for it.
-			name: "Importer creates a object whose configmanagement.gke.io/managed annotation is set to enabled but whose configsync.gke.io/resource-id annotation is unset",
-			newObj: k8sobjects.RoleObject(
-				core.Name("hello"),
-				core.Namespace("world"),
-				core.Label(csmetadata.ManagedByKey, csmetadata.ManagedByValue),
-				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
-				setRules([]rbacv1.PolicyRule{
-					{
-						APIGroups: []string{""},
-						Resources: []string{"pods"},
-						Verbs:     []string{"get", "list"},
-					},
-				}),
-				core.Annotation(csmetadata.DeclaredFieldsKey, `{"f:metadata":{"f:labels":{"f:app.kubernetes.io/managed-by":{}},"f:annotations":{"f:configmanagement.gke.io/managed":{}}},"f:rules":{}}`),
-			),
-			user: configSyncImporter(),
-		},
 		{
 			name: "Root reconciler deletes an object it manages",
 			oldObj: k8sobjects.RoleObject(
@@ -644,13 +623,6 @@ func validatorForTest(t *testing.T) *Validator {
 	}
 	od := &ObjectDiffer{converter: vc}
 	return &Validator{differ: od}
-}
-
-func configSyncImporter() authenticationv1.UserInfo {
-	return authenticationv1.UserInfo{
-		Groups:   []string{saGroup, saNamespaceGroup},
-		Username: importer.Name,
-	}
 }
 
 func configSyncRootReconciler(rsName string) authenticationv1.UserInfo {

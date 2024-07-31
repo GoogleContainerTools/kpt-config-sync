@@ -151,18 +151,41 @@ func TestValidateManager(t *testing.T) {
 		want       error
 	}{
 		{
-			name:       "Root reconciler can manage its own object",
+			name:       "Root reconciler can create its own object",
 			reconciler: "root-reconciler",
 			manager:    ":root",
+			operation:  admissionv1.Create,
 			want:       nil,
 		},
 		{
-			name:       "Root reconciler can manage object with any namespace manager",
+			name:       "Root reconciler can update its own object",
+			reconciler: "root-reconciler",
+			manager:    ":root",
+			operation:  admissionv1.Update,
+			want:       nil,
+		},
+		{
+			name:       "Root reconciler can delete its own object",
+			reconciler: "root-reconciler",
+			manager:    ":root",
+			operation:  admissionv1.Delete,
+			want:       nil,
+		},
+		{
+			name:       "Root reconciler can update object with any namespace manager",
 			reconciler: "root-reconciler",
 			manager:    "bookstore",
 			id:         cmID,
 			operation:  admissionv1.Update,
 			want:       nil,
+		},
+		{
+			name:       "Root reconciler can not delete object with any namespace manager",
+			reconciler: "root-reconciler",
+			manager:    "bookstore",
+			id:         cmID,
+			operation:  admissionv1.Delete,
+			want:       fmt.Errorf(`config sync "root-reconciler" can not DELETE object "ConfigMap.example.com, ns-1/cm-1" managed by config sync "ns-reconciler-bookstore"`),
 		},
 		{
 			name:       "Root reconciler can update its own RootSync",

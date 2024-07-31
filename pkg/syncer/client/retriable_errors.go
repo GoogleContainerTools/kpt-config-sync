@@ -15,6 +15,7 @@
 package client
 
 import (
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/pkg/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -68,4 +69,13 @@ func ConflictUpdateOldVersion(err error, resource client.Object) status.Error {
 		Wrap(err).
 		Sprintf("tried to update object with stale resource version").
 		BuildWithResources(resource)
+}
+
+// ConflictWatchResourceDoesNotExist means we tried to watch an object whose
+// resource group or kind does not exist.
+func ConflictWatchResourceDoesNotExist(err error, gvk schema.GroupVersionKind) status.Error {
+	return retriableConflictBuilder.
+		Wrap(err).
+		Sprintf("tried to watch resource type that does not exist: %s", gvk).
+		Build()
 }

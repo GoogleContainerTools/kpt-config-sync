@@ -29,6 +29,7 @@ import (
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
+	syncerclient "kpt.dev/configsync/pkg/syncer/client"
 	"kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/testerrors"
 	"sigs.k8s.io/cli-utils/pkg/testutil"
@@ -337,12 +338,13 @@ func TestManager_UpdateWatches(t *testing.T) {
 			wantWatchedTypes: []schema.GroupVersionKind{
 				kinds.Namespace(),
 			},
-			wantErr: status.APIServerErrorWrap(&meta.NoKindMatchError{
-				GroupKind: kinds.Role().GroupKind(),
-				SearchedVersions: []string{
-					kinds.Role().Version,
-				},
-			}),
+			wantErr: syncerclient.ConflictWatchResourceDoesNotExist(
+				&meta.NoKindMatchError{
+					GroupKind: kinds.Role().GroupKind(),
+					SearchedVersions: []string{
+						kinds.Role().Version,
+					},
+				}, kinds.Role()),
 		},
 	}
 

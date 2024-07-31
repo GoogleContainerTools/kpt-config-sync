@@ -16,6 +16,7 @@ package discovery
 
 import (
 	"errors"
+	"strings"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -64,6 +65,11 @@ func GetResources(discoveryClient ServerResourcer) ([]*metav1.APIResourceList, s
 			for gv, subErr := range discoErr.Groups {
 				if apierrors.IsNotFound(subErr) {
 					klog.Warningf("Failed to discover APIGroups %s due to not found, moving on: %v", gv, subErr)
+				} else if strings.Contains(subErr.Error(), "received empty response") {
+					// Allow "empty response" as common responses for metrics following
+					// upstream workaround https://github.com/kubernetes/kubernetes/pull/115978
+					// TODO b/353596666 change to type match when emptyResponseError in upstream is made public
+					klog.Warningf("Failed to discover resources for API group %s: assuming zero resources: %v", gv, subErr)
 				} else {
 					// return all the discovery errors if any one of them is a blocking error
 					return nil, status.APIServerError(discoveryErr, "API discovery failed")

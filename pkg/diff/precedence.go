@@ -124,9 +124,13 @@ func ValidateManager(reconciler, manager string, id core.ID, op admissionv1.Oper
 		}
 	}
 
-	if isRootReconciler(reconciler) && syncScope != declared.RootScope {
-		// RootReconciler is allowed to adopt an object as long as it's not
-		// managed by another RootReconciler.
+	if isRootReconciler(reconciler) && syncScope != declared.RootScope && op != admissionv1.Delete {
+		// RootReconciler is allowed to adopt an object as long, as it's not
+		// managed by another RootReconciler. This allows transfer from
+		// namespace to root reconciler.
+		// RootReconciler is NOT allowed to delete an object managed by another
+		// reconciler. This allows transfer from root to namespace reconciler.
+		// Transfer between root reconcilers only happens through the applier.
 		return nil
 	}
 

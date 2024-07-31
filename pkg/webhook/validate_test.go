@@ -16,7 +16,6 @@ package webhook
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	admissionv1 "k8s.io/api/admission/v1"
@@ -25,10 +24,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
+	"kpt.dev/configsync/pkg/declared"
 	csmetadata "kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/testing/openapitest"
 	"sigs.k8s.io/cli-utils/pkg/common"
@@ -42,17 +41,11 @@ const (
 )
 
 func rootSyncManagerAnnotation(rsName string) string {
-	if rsName == configsync.RootSyncName {
-		return ":root"
-	}
-	return fmt.Sprintf(":root-%s", rsName)
+	return declared.ResourceManager(declared.RootScope, rsName)
 }
 
 func repoSyncManagerAnnotation(ns, rsName string) string {
-	if rsName == configsync.RepoSyncName {
-		return ns
-	}
-	return fmt.Sprintf("%s-%s-%d", ns, rsName, len(rsName))
+	return declared.ResourceManager(declared.Scope(ns), rsName)
 }
 
 func TestValidator_Handle(t *testing.T) {
@@ -100,6 +93,7 @@ func TestValidator_Handle(t *testing.T) {
 				core.Annotation(csmetadata.DeclaredFieldsKey, `{"f:metadata":{"f:labels":{"f:app.kubernetes.io/managed-by":{}},"f:annotations":{"f:configmanagement.gke.io/managed":{},"f:configsync.gke.io/manager":{}}},"f:rules":{}}`),
 			),
 			user: configSyncRootReconciler(rootSyncName),
+			deny: metav1.StatusReasonForbidden,
 		},
 		{
 			name: "Namespace reconciler deletes an object it manages",

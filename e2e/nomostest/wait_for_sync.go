@@ -431,17 +431,17 @@ func (nt *NT) WaitForRepoImportErrorCode(code string, opts ...WaitOption) {
 }
 
 // WaitForRootSyncStalledError waits until the given Stalled error is present on the RootSync resource.
-func (nt *NT) WaitForRootSyncStalledError(rsNamespace, rsName, reason, message string) {
-	Wait(nt.T, fmt.Sprintf("RootSync %s/%s stalled error", rsNamespace, rsName), nt.DefaultWaitTimeout,
+func (nt *NT) WaitForRootSyncStalledError(rsName, reason, message string) {
+	Wait(nt.T, fmt.Sprintf("RootSync %s/%s stalled error", configsync.ControllerNamespace, rsName), nt.DefaultWaitTimeout,
 		func() error {
 			rs := &v1beta1.RootSync{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      rsName,
-					Namespace: rsNamespace,
+					Namespace: configsync.ControllerNamespace,
 				},
 				TypeMeta: k8sobjects.ToTypeMeta(kinds.RootSyncV1Beta1()),
 			}
-			if err := nt.KubeClient.Get(rsName, rsNamespace, rs); err != nil {
+			if err := nt.KubeClient.Get(rsName, configsync.ControllerNamespace, rs); err != nil {
 				return err
 			}
 			stalledCondition := rootsync.GetCondition(rs.Status.Conditions, v1beta1.RootSyncStalled)

@@ -810,15 +810,26 @@ func TestControllerValidationErrors(t *testing.T) {
 			},
 		},
 	}
-	if err := nt.KubeClient.Create(rootSync); err != nil {
-		nt.T.Fatal(err)
-	}
-	nt.WaitForRootSyncStalledError(rootSync.Namespace, rootSync.Name, "Validation", "RootSync objects are only allowed in the config-management-system namespace, not in test-ns")
 	t.Cleanup(func() {
-		if err := nomostest.DeleteObjectsAndWait(nt, rootSync); err != nil {
+		if err := nomostest.DeleteObjectsAndWait(nt, rootSync); err != nil && !apierrors.IsNotFound(err) {
 			nt.T.Fatal(err)
 		}
 	})
+	if err := nt.KubeClient.Create(rootSync); err != nil {
+		nt.T.Fatal(err)
+	}
+	expectedCondition := &v1beta1.RootSyncCondition{
+		Type:    v1beta1.RootSyncStalled,
+		Status:  metav1.ConditionTrue,
+		Reason:  "Validation",
+		Message: "RootSync objects are only allowed in the config-management-system namespace, not in test-ns",
+		ErrorSummary: &v1beta1.ErrorSummary{
+			ErrorCountAfterTruncation: 1,
+			TotalCount:                1,
+		},
+	}
+	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync.Name, rootSync.Namespace,
+		[]testpredicates.Predicate{testpredicates.RootSyncHasCondition(expectedCondition)}))
 
 	nt.T.Logf("Validate RepoSync is not allowed in the config-management-system namespace")
 	nnControllerNamespace := nomostest.RepoSyncNN(configsync.ControllerNamespace, configsync.RepoSyncName)

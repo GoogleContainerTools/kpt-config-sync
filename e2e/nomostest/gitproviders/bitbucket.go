@@ -202,6 +202,9 @@ func (b *BitbucketClient) refreshAccessToken() (string, error) {
 
 // FetchCloudSecret fetches secret from Google Cloud Secret Manager.
 func FetchCloudSecret(name string) (string, error) {
+	if *e2e.GCPProject == "" {
+		return "", fmt.Errorf("gcp-project must be set to fetch cloud secret")
+	}
 	out, err := exec.Command("gcloud", "secrets", "versions",
 		"access", "latest", "--project", *e2e.GCPProject, "--secret", name).CombinedOutput()
 	if err != nil {

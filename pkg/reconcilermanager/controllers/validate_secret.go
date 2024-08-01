@@ -39,6 +39,10 @@ func validateSecretExist(ctx context.Context, secretRef, namespace string, c cli
 
 // validateSecretData verify secret data for the given auth type.
 func validateSecretData(auth configsync.AuthType, secret *corev1.Secret) error {
+	hasDataKey := func(key string) bool {
+		val, ok := secret.Data[key]
+		return ok && len(val) > 0
+	}
 	switch auth {
 	case configsync.AuthSSH:
 		if _, ok := secret.Data[GitSecretConfigKeySSH]; !ok {
@@ -54,6 +58,25 @@ func validateSecretData(auth configsync.AuthType, secret *corev1.Secret) error {
 		}
 		if _, ok := secret.Data[GitSecretConfigKeyTokenUsername]; !ok {
 			return fmt.Errorf("git secretType was set as %q but username key is not present in %v secret", auth, secret.Name)
+		}
+	case configsync.AuthGithubApp:
+		if !hasDataKey(GitSecretGithubAppPrivateKey) {
+			return fmt.Errorf("git secretType was set as %q but %s key is not present in %v secret",
+				auth, GitSecretGithubAppPrivateKey, secret.Name)
+		}
+		if !hasDataKey(GitSecretGithubAppInstallationID) {
+			return fmt.Errorf("git secretType was set as %q but %s key is not present in %v secret",
+				auth, GitSecretGithubAppInstallationID, secret.Name)
+		}
+		hasAppID := hasDataKey(GitSecretGithubAppApplicationID)
+		hasClientID := hasDataKey(GitSecretGithubAppClientID)
+		if !(hasAppID || hasClientID) {
+			return fmt.Errorf("git secretType was set to %q but one of (%s, %s) is not present in %v secret",
+				auth, GitSecretGithubAppApplicationID, GitSecretGithubAppClientID, secret.Name)
+		}
+		if hasAppID && hasClientID {
+			return fmt.Errorf("git secretType was set to %q but more than one of (%s, %s) is present in %v secret",
+				auth, GitSecretGithubAppApplicationID, GitSecretGithubAppClientID, secret.Name)
 		}
 	case configsync.AuthNone:
 	case configsync.AuthGCENode:

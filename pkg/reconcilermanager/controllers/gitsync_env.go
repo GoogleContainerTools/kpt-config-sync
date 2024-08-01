@@ -59,6 +59,17 @@ const (
 	// GitSSLNoVerify represents the environment variable key for GIT_SSL_NO_VERIFY.
 	GitSSLNoVerify = "GIT_SSL_NO_VERIFY"
 
+	// GithubAppBaseURL is an optional parameter to override the GitHub api endpoint
+	GithubAppBaseURL = "GITSYNC_GITHUB_BASE_URL"
+	// GithubAppPrivateKey is the private key used for GitHub App authentication
+	GithubAppPrivateKey = "GITSYNC_GITHUB_APP_PRIVATE_KEY"
+	// GithubAppClientID is the client id used for GitHub App authentication
+	GithubAppClientID = "GITSYNC_GITHUB_APP_CLIENT_ID"
+	// GithubAppApplicationID is the app id used for GitHub App authentication
+	GithubAppApplicationID = "GITSYNC_GITHUB_APP_APPLICATION_ID"
+	// GithubAppInstallationID is the installation id used for GitHub App authentication
+	GithubAppInstallationID = "GITSYNC_GITHUB_APP_INSTALLATION_ID"
+
 	// DefaultSyncRev is the default git revision.
 	DefaultSyncRev = "HEAD"
 	// DefaultSyncBranch is the default git branch.
@@ -76,6 +87,76 @@ const (
 )
 
 var gceNodeAskpassURL = fmt.Sprintf("http://localhost:%v/git_askpass", gceNodeAskpassPort)
+
+// githubAppFromSecret maps the non-sensitive values from the githubapp Secret
+// to an internal representation.
+func githubAppFromSecret(secret *corev1.Secret) githubAppSpec {
+	githubApp := githubAppSpec{}
+	if clientID, ok := secret.Data[GitSecretGithubAppClientID]; ok {
+		githubApp.clientID = string(clientID)
+	}
+	if appID, ok := secret.Data[GitSecretGithubAppApplicationID]; ok {
+		githubApp.appID = string(appID)
+	}
+	if installationID, ok := secret.Data[GitSecretGithubAppInstallationID]; ok {
+		githubApp.installationID = string(installationID)
+	}
+	if baseURL, ok := secret.Data[GitSecretGithubAppBaseURL]; ok {
+		githubApp.baseURL = string(baseURL)
+	}
+	return githubApp
+}
+
+// githubAppSpec stores the values from the githubapp auth secret which are
+// mapped directly to env vars. These are all non-sensitive values.
+type githubAppSpec struct {
+	clientID       string
+	appID          string
+	installationID string
+	baseURL        string
+}
+
+// GitSyncEnvVars maps the github app configuration to git-sync env vars
+func (g githubAppSpec) GitSyncEnvVars(secretRef string) []corev1.EnvVar {
+	envVars := []corev1.EnvVar{
+		{
+			Name: GithubAppPrivateKey,
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: secretRef,
+					},
+					Key: GitSecretGithubAppPrivateKey,
+				},
+			},
+		},
+	}
+	if g.clientID != "" {
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  GithubAppClientID,
+			Value: g.clientID,
+		})
+	}
+	if g.appID != "" {
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  GithubAppApplicationID,
+			Value: g.appID,
+		})
+	}
+	if g.installationID != "" {
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  GithubAppInstallationID,
+			Value: g.installationID,
+		})
+	}
+	if g.baseURL != "" {
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  GithubAppBaseURL,
+			Value: g.baseURL,
+		})
+	}
+	return envVars
+}
 
 type options struct {
 	// ref is the git revision being synced.
@@ -261,7 +342,7 @@ func gitSyncEnvs(_ context.Context, opts options) []corev1.EnvVar {
 		})
 
 		fallthrough
-	case GitSecretConfigKeyToken, "", configsync.AuthNone:
+	case GitSecretConfigKeyToken, "", configsync.AuthNone, configsync.AuthGithubApp:
 		if opts.proxy != "" {
 			result = append(result, corev1.EnvVar{
 				Name:  gitSyncHTTPSProxy,

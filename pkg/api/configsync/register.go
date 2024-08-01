@@ -140,6 +140,8 @@ const (
 	// AuthK8sServiceAccount indicates using a Kubernetes service account with
 	// GKE or Fleet Workload Identity to authenticate to GCP services.
 	AuthK8sServiceAccount AuthType = "k8sserviceaccount"
+	// AuthGithubApp indicates using a GitHub app to authenticate with Git.
+	AuthGithubApp AuthType = "githubapp"
 )
 
 // NamespaceStrategy specifies the strategy used by the reconciler for undeclared

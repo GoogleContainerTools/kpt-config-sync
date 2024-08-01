@@ -1041,6 +1041,7 @@ func (r *RepoSyncReconciler) validateNamespaceSecret(ctx context.Context, repoSy
 	}
 
 	_, r.knownHostExist = secret.Data[KnownHostsKey]
+	r.githubApp = githubAppFromSecret(secret)
 
 	return validateSecretData(authType, secret)
 }
@@ -1243,10 +1244,11 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 					container.Env = append(container.Env, containerEnvs[container.Name]...)
 					// Don't mount git-creds volume if auth is 'none' or 'gcenode'.
 					container.VolumeMounts = volumeMounts(rs.Spec.Auth, caCertSecretRefName, rs.Spec.SourceType, container.VolumeMounts)
-					// Update Environment variables for `token` Auth, which
-					// passes the credentials as the Username and Password.
-					if authTypeToken(rs.Spec.Auth) {
+					switch rs.Spec.Auth {
+					case configsync.AuthToken:
 						container.Env = append(container.Env, gitSyncTokenAuthEnv(secretName)...)
+					case configsync.AuthGithubApp:
+						container.Env = append(container.Env, r.githubApp.GitSyncEnvVars(secretName)...)
 					}
 					sRef := client.ObjectKey{Namespace: rs.Namespace, Name: v1beta1.GetSecretName(rs.Spec.SecretRef)}
 					keys := GetSecretKeys(ctx, r.client, sRef)

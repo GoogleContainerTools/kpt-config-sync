@@ -109,6 +109,14 @@ func (optsStruct *New) EvaluateSkipOptions(t testing.NTB) {
 		t.Skip("Test skipped since the '--gcenode' flag should only select GCENode tests")
 	}
 
+	// GitHub App tests should run if and only if the --githubapp flag is specified.
+	if !*e2e.GitHubApp && optsStruct.GitHubAppTest {
+		t.Skip("Test skipped since the GitHubApp test requires the '--githubapp' flag")
+	}
+	if *e2e.GitHubApp && !optsStruct.GitHubAppTest {
+		t.Skip("Test skipped since the '--githubapp' flag should only select GitHubApp tests")
+	}
+
 	if *e2e.GitProvider != e2e.Local && optsStruct.RequireLocalGitProvider {
 		t.Skip("Test skipped for non-local GitProvider types")
 	}

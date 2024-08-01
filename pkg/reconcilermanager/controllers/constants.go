@@ -38,6 +38,17 @@ const (
 	GitSecretConfigKeyToken = "token"
 	// GitSecretConfigKeyTokenUsername is the key at which a token's username is stored
 	GitSecretConfigKeyTokenUsername = "username"
+
+	// GitSecretGithubAppPrivateKey is the key at which the githubapp private key is stored
+	GitSecretGithubAppPrivateKey = "github-app-private-key"
+	// GitSecretGithubAppInstallationID is the key at which the githubapp installation id is stored
+	GitSecretGithubAppInstallationID = "github-app-installation-id"
+	// GitSecretGithubAppApplicationID is the key at which the githubapp app id is stored
+	GitSecretGithubAppApplicationID = "github-app-application-id"
+	// GitSecretGithubAppClientID is the key at which the githubapp client id is stored
+	GitSecretGithubAppClientID = "github-app-client-id"
+	// GitSecretGithubAppBaseURL is the key at which the optional githubapp base url is stored
+	GitSecretGithubAppBaseURL = "github-app-base-url"
 )
 
 // Helm secret data key names

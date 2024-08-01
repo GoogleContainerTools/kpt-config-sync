@@ -29,6 +29,9 @@ type TestType struct {
 	// GCENodeTest specifies the test is for verifying the gcenode auth type.
 	// It requires a GKE cluster with workload identity disabled.
 	GCENodeTest bool
+
+	// GitHubAppTest specifies the test is for verifying the githubapp auth type.
+	GitHubAppTest bool
 }
 
 // StressTest specifies the test is a stress test.
@@ -49,4 +52,9 @@ func KCCTest(opt *New) {
 // GCENodeTest specifies the test is for verifying the gcenode auth type.
 func GCENodeTest(opt *New) {
 	opt.GCENodeTest = true
+}
+
+// GitHubAppTest specifies the test is for verifying the githubapp auth type.
+func GitHubAppTest(opt *New) {
+	opt.GitHubAppTest = true
 }

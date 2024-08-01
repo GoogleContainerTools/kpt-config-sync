@@ -95,6 +95,16 @@ var KCC = flag.Bool("kcc", false,
 var GceNode = flag.Bool("gcenode", false,
 	"If true, run test with 'gcenode' auth type.")
 
+// GitHubApp enables running the e2e tests for 'githubapp' auth type
+var GitHubApp = flag.Bool("githubapp", false,
+	"If true, run test with 'githubapp' auth type.")
+
+// GitHubAppConfigFile specifies a file path to read GitHub App config from.
+// If unset, defaults to fetching the GitHub App config from Secret Manager.
+var GitHubAppConfigFile = flag.String("githubapp-config-file",
+	util.EnvString("E2E_GITHUBAPP_CONFIG_FILE", ""),
+	"Local file path to GitHub App configuration file.")
+
 // Debug enables running the test in debug mode.
 // In debug mode:
 //  1. Test execution immediately stops on a call to t.Fatal.

@@ -113,7 +113,7 @@ func (c *clientApplier) Create(ctx context.Context, intendedState *unstructured.
 	} else {
 		if err1 := c.client.Patch(ctx, intendedState, client.Apply, client.FieldOwner(configsync.FieldManager)); err1 != nil {
 			switch {
-			case meta.IsNoMatchError(err1):
+			case meta.IsNoMatchError(err1), apierrors.IsNotFound(err1):
 				err = syncerclient.ConflictCreateResourceDoesNotExist(err1, intendedState)
 			default:
 				err = status.ResourceWrap(err1, "unable to apply resource", intendedState)

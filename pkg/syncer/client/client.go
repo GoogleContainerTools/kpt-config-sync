@@ -75,7 +75,7 @@ func (c *Client) Create(ctx context.Context, obj client.Object, opts ...client.C
 		switch {
 		case apierrors.IsAlreadyExists(err):
 			return ConflictCreateAlreadyExists(err, obj)
-		case meta.IsNoMatchError(err):
+		case meta.IsNoMatchError(err), apierrors.IsNotFound(err):
 			return ConflictCreateResourceDoesNotExist(err, obj)
 		default:
 			return status.APIServerError(err, "failed to create object", obj)

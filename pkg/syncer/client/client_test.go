@@ -46,12 +46,21 @@ func TestClient_Create(t *testing.T) {
 			wantErr:  nil,
 		},
 		{
-			name:     "Conflict error if resource not found",
+			name:     "Conflict error if resource IsNoMatchError",
 			declared: k8sobjects.UnstructuredObject(kinds.Anvil(), core.Name("admin"), core.Namespace("billing")),
 			client: syncertestfake.NewErrorClient(
 				&meta.NoResourceMatchError{PartialResource: kinds.Anvil().GroupVersion().WithResource("anvils")}),
 			wantErr: syncerclient.ConflictCreateResourceDoesNotExist(
 				&meta.NoResourceMatchError{PartialResource: kinds.Anvil().GroupVersion().WithResource("anvils")},
+				k8sobjects.UnstructuredObject(kinds.Anvil(), core.Name("admin"), core.Namespace("billing"))),
+		},
+		{
+			name:     "Conflict error if resource IsNotFound",
+			declared: k8sobjects.UnstructuredObject(kinds.Anvil(), core.Name("admin"), core.Namespace("billing")),
+			client: syncertestfake.NewErrorClient(
+				apierrors.NewNotFound(kinds.Anvil().GroupVersion().WithResource("anvils").GroupResource(), "admin")),
+			wantErr: syncerclient.ConflictCreateResourceDoesNotExist(
+				apierrors.NewNotFound(kinds.Anvil().GroupVersion().WithResource("anvils").GroupResource(), "admin"),
 				k8sobjects.UnstructuredObject(kinds.Anvil(), core.Name("admin"), core.Namespace("billing"))),
 		},
 		{

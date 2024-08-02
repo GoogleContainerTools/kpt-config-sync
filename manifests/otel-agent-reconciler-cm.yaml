@@ -1,4 +1,4 @@
-# Copyright 2022 Google LLC
+# Copyright 2024 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: otel-agent
+  name: otel-agent-reconciler
   namespace: config-management-system
   labels:
     app: opentelemetry
@@ -23,7 +23,7 @@ metadata:
     configmanagement.gke.io/system: "true"
     configmanagement.gke.io/arch: "csmr"
 data:
-  otel-agent-config.yaml: |
+  otel-agent-reconciler-config.yaml: |
     receivers:
       opencensus:
     exporters:
@@ -32,6 +32,24 @@ data:
         tls:
           insecure: true
     processors:
+      # Attributes processor adds custom configsync metric labels to applicable
+      # metrics to identify the sync object used to configure this deployment.
+      #
+      # Note: configsync.sync.generation is explicitly excluded here, because it
+      # is high cardinality. So we don't want to send it as a label, only as a
+      # resource attribute. That way it's only propagated to Prometheus, and not
+      # Monarch or Cloud Monitoring, which ignore custom resource attributes.
+      attributes:
+        actions:
+          - key: configsync.sync.kind
+            action: upsert
+            value: ${CONFIGSYNC_SYNC_KIND}
+          - key: configsync.sync.name
+            action: upsert
+            value: ${CONFIGSYNC_SYNC_NAME}
+          - key: configsync.sync.namespace
+            action: upsert
+            value: ${CONFIGSYNC_SYNC_NAMESPACE}
       batch:
       # Populate resource attributes from OTEL_RESOURCE_ATTRIBUTES env var and
       # the GCE metadata service, if available.
@@ -44,7 +62,7 @@ data:
       pipelines:
         metrics:
           receivers: [opencensus]
-          processors: [batch, resourcedetection]
+          processors: [batch, resourcedetection, attributes]
           exporters: [opencensus]
       telemetry:
         logs:

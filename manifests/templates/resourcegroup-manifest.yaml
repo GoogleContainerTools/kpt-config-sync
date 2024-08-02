@@ -231,6 +231,7 @@ spec:
             - ALL
       - args:
         - --config=/conf/otel-agent-config.yaml
+        - --feature-gates=-component.UseLocalHostAsDefaultHost
         command:
         - /otelcontribcol
         env:

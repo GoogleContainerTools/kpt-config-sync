@@ -81,10 +81,10 @@ type Interface interface {
 	NeedsUpdate() bool
 	// AddWatches starts server-side watches based upon the given map of GVKs
 	// which should be watched.
-	AddWatches(context.Context, map[schema.GroupVersionKind]struct{}) status.MultiError
+	AddWatches(context.Context, map[schema.GroupVersionKind]struct{}, string) status.MultiError
 	// UpdateWatches starts and stops server-side watches based upon the given map
 	// of GVKs which should be watched.
-	UpdateWatches(context.Context, map[schema.GroupVersionKind]struct{}) status.MultiError
+	UpdateWatches(context.Context, map[schema.GroupVersionKind]struct{}, string) status.MultiError
 }
 
 var _ Interface = &Remediator{}
@@ -228,11 +228,11 @@ func (r *Remediator) NeedsUpdate() bool {
 }
 
 // AddWatches implements Interface.
-func (r *Remediator) AddWatches(ctx context.Context, gvks map[schema.GroupVersionKind]struct{}) status.MultiError {
-	return r.watchMgr.AddWatches(ctx, gvks)
+func (r *Remediator) AddWatches(ctx context.Context, gvks map[schema.GroupVersionKind]struct{}, commit string) status.MultiError {
+	return r.watchMgr.AddWatches(ctx, gvks, commit)
 }
 
 // UpdateWatches implements Interface.
-func (r *Remediator) UpdateWatches(ctx context.Context, gvks map[schema.GroupVersionKind]struct{}) status.MultiError {
-	return r.watchMgr.UpdateWatches(ctx, gvks)
+func (r *Remediator) UpdateWatches(ctx context.Context, gvks map[schema.GroupVersionKind]struct{}, commit string) status.MultiError {
+	return r.watchMgr.UpdateWatches(ctx, gvks, commit)
 }

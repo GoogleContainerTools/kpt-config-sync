@@ -63,7 +63,7 @@ func (r *Remediator) Resume() {
 }
 
 // AddWatches fakes remediator.Remediator.AddWatches
-func (r *Remediator) AddWatches(_ context.Context, watches map[schema.GroupVersionKind]struct{}) status.MultiError {
+func (r *Remediator) AddWatches(_ context.Context, watches map[schema.GroupVersionKind]struct{}, _ string) status.MultiError {
 	r.Watching = true
 	if r.Watches == nil {
 		r.Watches = watches
@@ -76,7 +76,7 @@ func (r *Remediator) AddWatches(_ context.Context, watches map[schema.GroupVersi
 }
 
 // UpdateWatches fakes remediator.Remediator.UpdateWatches
-func (r *Remediator) UpdateWatches(_ context.Context, watches map[schema.GroupVersionKind]struct{}) status.MultiError {
+func (r *Remediator) UpdateWatches(_ context.Context, watches map[schema.GroupVersionKind]struct{}, _ string) status.MultiError {
 	r.Watching = true
 	r.Watches = watches
 	r.needsUpdate = false

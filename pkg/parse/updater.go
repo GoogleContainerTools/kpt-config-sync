@@ -30,7 +30,6 @@ import (
 	"kpt.dev/configsync/pkg/remediator"
 	"kpt.dev/configsync/pkg/remediator/conflict"
 	"kpt.dev/configsync/pkg/status"
-	syncerclient "kpt.dev/configsync/pkg/syncer/client"
 	"kpt.dev/configsync/pkg/util/clusterconfig"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -133,7 +132,7 @@ func (u *Updater) update(ctx context.Context, cache *cacheForCommit) status.Mult
 		// Add new resources to the watch list, without removing old ones.
 		// This ensures controller conflicts are caught while the applier is running.
 		declaredGVKs, _ := u.Resources.DeclaredGVKs()
-		err = u.addWatches(ctx, declaredGVKs)
+		err = u.addWatches(ctx, declaredGVKs, cache.source.commit)
 		if err != nil {
 			return err
 		}
@@ -232,9 +231,9 @@ func (u *Updater) apply(ctx context.Context, objs []client.Object, commit string
 
 // addWatches tells the Remediator to watch additional resources without
 // stopping any.
-func (u *Updater) addWatches(ctx context.Context, gvks map[schema.GroupVersionKind]struct{}) status.MultiError {
+func (u *Updater) addWatches(ctx context.Context, gvks map[schema.GroupVersionKind]struct{}, commit string) status.MultiError {
 	klog.V(1).Info("Remediator watches adding...")
-	watchErrs := u.Remediator.AddWatches(ctx, gvks)
+	watchErrs := u.Remediator.AddWatches(ctx, gvks, commit)
 	u.SyncErrorCache.SetWatchErrs(watchErrs)
 	if watchErrs != nil {
 		klog.Warningf("Failed to add resource watches: %v", watchErrs)
@@ -248,19 +247,10 @@ func (u *Updater) addWatches(ctx context.Context, gvks map[schema.GroupVersionKi
 // watching any old resources that were removed from the apply set.
 func (u *Updater) updateWatches(ctx context.Context, gvks map[schema.GroupVersionKind]struct{}, commit string) status.MultiError {
 	klog.V(1).Info("Remediator watches updating...")
-	watchErrs := u.Remediator.UpdateWatches(ctx, gvks)
+	watchErrs := u.Remediator.UpdateWatches(ctx, gvks, commit)
 	u.SyncErrorCache.SetWatchErrs(watchErrs)
 	if watchErrs != nil {
 		klog.Warningf("Failed to update resource watches: %v", watchErrs)
-		// Since errors here prevent remediator unpause, we need to record
-		// resource conflict metrics here, when a required resource doesn't
-		// exist. This usually only occurs if a required CRD was deleted
-		// after all the objects that needed it but before the applier finished.
-		for _, err := range watchErrs.Errors() {
-			if err.Code() == syncerclient.ResourceConflictCode {
-				metrics.RecordResourceConflict(ctx, commit)
-			}
-		}
 		return watchErrs
 	}
 	klog.V(3).Info("Remediator watches updated")

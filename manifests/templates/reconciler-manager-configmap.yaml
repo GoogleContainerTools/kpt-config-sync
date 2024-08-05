@@ -168,11 +168,10 @@ data:
            command:
            - /otelcontribcol
            args:
-           - "--config=/conf/otel-agent-reconciler-config.yaml"
+           - "--config=/conf/otel-agent-config.yaml"
            # The prometheus transformer appends `_ratio` to gauge metrics: https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/v0.86.0/pkg/translator/prometheus/normalize_name.go#L149
            # Add the feature gate to enable metric suffix trimming.
            - "--feature-gates=-pkg.translator.prometheus.NormalizeName"
-           - "--feature-gates=-component.UseLocalHostAsDefaultHost"
            securityContext:
              allowPrivilegeEscalation: false
              readOnlyRootFilesystem: true
@@ -185,7 +184,7 @@ data:
            - containerPort: 8888  # Metrics.
              protocol: TCP
            volumeMounts:
-           - name: otel-agent-config-reconciler-vol
+           - name: otel-agent-config-vol
              mountPath: /conf
            readinessProbe:
              httpGet:
@@ -274,9 +273,9 @@ data:
            secret:
              secretName: git-creds
              defaultMode: 288
-         - name: otel-agent-config-reconciler-vol
+         - name: otel-agent-config-vol
            configMap:
-             name: otel-agent-reconciler
+             name: otel-agent
              defaultMode: 420
          - name: service-account
            emptyDir: {}

@@ -84,7 +84,7 @@ HELM_STAGING_DIR := $(OUTPUT_DIR)/third_party/helm
 GIT_SYNC_VERSION := v4.2.3-gke.5__linux_amd64
 GIT_SYNC_IMAGE_NAME := gcr.io/config-management-release/git-sync:$(GIT_SYNC_VERSION)
 
-OTELCONTRIBCOL_VERSION := v0.106.0-gke.2
+OTELCONTRIBCOL_VERSION := v0.102.0-gke.6
 OTELCONTRIBCOL_IMAGE_NAME := gcr.io/config-management-release/otelcontribcol:$(OTELCONTRIBCOL_VERSION)
 
 # Directory used for staging Docker contexts.

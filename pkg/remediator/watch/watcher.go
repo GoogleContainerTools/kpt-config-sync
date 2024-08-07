@@ -40,6 +40,7 @@ type watcherConfig struct {
 	startWatch      WatchFunc
 	conflictHandler conflict.Handler
 	labelSelector   labels.Selector
+	commit          string
 }
 
 // watcherFactory knows how to build watch.Runnables.

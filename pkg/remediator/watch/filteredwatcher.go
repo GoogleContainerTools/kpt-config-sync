@@ -37,6 +37,7 @@ import (
 	"kpt.dev/configsync/pkg/remediator/conflict"
 	"kpt.dev/configsync/pkg/remediator/queue"
 	"kpt.dev/configsync/pkg/status"
+	syncerclient "kpt.dev/configsync/pkg/syncer/client"
 	"kpt.dev/configsync/pkg/util/log"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -73,6 +74,7 @@ type Runnable interface {
 	Stop()
 	Run(ctx context.Context) status.Error
 	ClearManagementConflictsWithKind(gk schema.GroupKind)
+	SetLatestCommit(string)
 }
 
 const (
@@ -90,7 +92,7 @@ const errorLoggingInterval = time.Second
 // - either present in the declared resources,
 // - or managed by the same reconciler.
 type filteredWatcher struct {
-	gvk        string
+	gvk        schema.GroupVersionKind
 	startWatch WatchFunc
 	resources  *declared.Resources
 	queue      *queue.ObjectQueue
@@ -104,6 +106,9 @@ type filteredWatcher struct {
 	mux     sync.Mutex
 	base    watch.Interface
 	stopped bool
+	// commitMux prevents simultaneous reads/writes on latestCommit
+	commitMux    sync.RWMutex
+	latestCommit string
 }
 
 // filteredWatcher implements the Runnable interface.
@@ -112,7 +117,7 @@ var _ Runnable = &filteredWatcher{}
 // NewFiltered returns a new filtered watcher initialized with the given options.
 func NewFiltered(cfg watcherConfig) Runnable {
 	return &filteredWatcher{
-		gvk:             cfg.gvk.String(),
+		gvk:             cfg.gvk,
 		startWatch:      cfg.startWatch,
 		resources:       cfg.resources,
 		queue:           cfg.queue,
@@ -121,6 +126,7 @@ func NewFiltered(cfg watcherConfig) Runnable {
 		base:            watch.NewEmptyWatch(),
 		errorTracker:    make(map[string]time.Time),
 		conflictHandler: cfg.conflictHandler,
+		latestCommit:    cfg.commit,
 	}
 }
 
@@ -153,6 +159,20 @@ func (w *filteredWatcher) addError(errorID string) bool {
 
 func (w *filteredWatcher) ClearManagementConflictsWithKind(gk schema.GroupKind) {
 	w.conflictHandler.ClearConflictErrorsWithKind(gk)
+}
+
+// SetLatestCommit sets the latest observed commit which references the GVK
+// watched by this filteredWatcher.
+func (w *filteredWatcher) SetLatestCommit(commit string) {
+	defer w.commitMux.Unlock()
+	w.commitMux.Lock()
+	w.latestCommit = commit
+}
+
+func (w *filteredWatcher) getLatestCommit() string {
+	defer w.commitMux.RUnlock()
+	w.commitMux.RLock()
+	return w.latestCommit
 }
 
 // Stop fully stops the filteredWatcher in a threadsafe manner. This means that
@@ -329,6 +349,9 @@ func (w *filteredWatcher) start(ctx context.Context, resourceVersion string) (bo
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return false, status.InternalWrapf(err, "failed to start watch for %s", w.gvk)
+		} else if apierrors.IsNotFound(err) {
+			metrics.RecordResourceConflict(ctx, w.getLatestCommit())
+			return false, syncerclient.ConflictWatchResourceDoesNotExist(err, w.gvk)
 		}
 		return false, status.APIServerErrorf(err, "failed to start watch for %s", w.gvk)
 	}

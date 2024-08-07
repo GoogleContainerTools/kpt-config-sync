@@ -27,6 +27,7 @@ import (
 	"kpt.dev/configsync/pkg/applyset"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/metadata"
+	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/remediator/conflict"
 	"kpt.dev/configsync/pkg/remediator/queue"
 	"kpt.dev/configsync/pkg/status"
@@ -141,7 +142,7 @@ func (m *Manager) NeedsUpdate() bool {
 //     and not present in the current watch map.
 //
 // This function is threadsafe.
-func (m *Manager) AddWatches(ctx context.Context, gvkMap map[schema.GroupVersionKind]struct{}) status.MultiError {
+func (m *Manager) AddWatches(ctx context.Context, gvkMap map[schema.GroupVersionKind]struct{}, commit string) status.MultiError {
 	m.mux.Lock()
 	defer m.mux.Unlock()
 	m.watching = true
@@ -154,7 +155,8 @@ func (m *Manager) AddWatches(ctx context.Context, gvkMap map[schema.GroupVersion
 	var errs status.MultiError
 	for gvk := range gvkMap {
 		// Skip watchers that are already started
-		if _, isWatched := m.watcherMap[gvk]; isWatched {
+		if w, isWatched := m.watcherMap[gvk]; isWatched {
+			w.SetLatestCommit(commit)
 			continue
 		}
 		// Only start watcher if the resource exists.
@@ -170,7 +172,7 @@ func (m *Manager) AddWatches(ctx context.Context, gvkMap map[schema.GroupVersion
 			continue
 		}
 		// We don't have a watcher for this type, so add a watcher for it.
-		if err := m.startWatcher(ctx, gvk); err != nil {
+		if err := m.startWatcher(ctx, gvk, commit); err != nil {
 			errs = status.Append(errs, err)
 			continue
 		}
@@ -193,7 +195,7 @@ func (m *Manager) AddWatches(ctx context.Context, gvkMap map[schema.GroupVersion
 //     and not present in the current watch map.
 //
 // This function is threadsafe.
-func (m *Manager) UpdateWatches(ctx context.Context, gvkMap map[schema.GroupVersionKind]struct{}) status.MultiError {
+func (m *Manager) UpdateWatches(ctx context.Context, gvkMap map[schema.GroupVersionKind]struct{}, commit string) status.MultiError {
 	m.mux.Lock()
 	defer m.mux.Unlock()
 	m.watching = true
@@ -217,7 +219,8 @@ func (m *Manager) UpdateWatches(ctx context.Context, gvkMap map[schema.GroupVers
 	var errs status.MultiError
 	for gvk := range gvkMap {
 		// Skip watchers that are already started
-		if _, isWatched := m.watcherMap[gvk]; isWatched {
+		if w, isWatched := m.watcherMap[gvk]; isWatched {
+			w.SetLatestCommit(commit)
 			continue
 		}
 		// Only start watcher if the resource exists.
@@ -225,6 +228,7 @@ func (m *Manager) UpdateWatches(ctx context.Context, gvkMap map[schema.GroupVers
 		if _, err := m.mapper.RESTMapping(gvk.GroupKind(), gvk.Version); err != nil {
 			switch {
 			case meta.IsNoMatchError(err):
+				metrics.RecordResourceConflict(ctx, commit)
 				errs = status.Append(errs, syncerclient.ConflictWatchResourceDoesNotExist(err, gvk))
 			default:
 				errs = status.Append(errs, status.APIServerErrorWrap(err))
@@ -232,7 +236,7 @@ func (m *Manager) UpdateWatches(ctx context.Context, gvkMap map[schema.GroupVers
 			continue
 		}
 		// We don't have a watcher for this type, so add a watcher for it.
-		if err := m.startWatcher(ctx, gvk); err != nil {
+		if err := m.startWatcher(ctx, gvk, commit); err != nil {
 			errs = status.Append(errs, err)
 			continue
 		}
@@ -247,18 +251,9 @@ func (m *Manager) UpdateWatches(ctx context.Context, gvkMap map[schema.GroupVers
 	return errs
 }
 
-// watchedGVKs returns a list of all GroupVersionKinds currently being watched.
-func (m *Manager) watchedGVKs() []schema.GroupVersionKind {
-	var gvks []schema.GroupVersionKind
-	for gvk := range m.watcherMap {
-		gvks = append(gvks, gvk)
-	}
-	return gvks
-}
-
 // startWatcher starts a watcher for a GVK. This function is NOT threadsafe;
 // caller must have a lock on m.mux.
-func (m *Manager) startWatcher(ctx context.Context, gvk schema.GroupVersionKind) error {
+func (m *Manager) startWatcher(ctx context.Context, gvk schema.GroupVersionKind, commit string) error {
 	_, found := m.watcherMap[gvk]
 	if found {
 		// The watcher is already started.
@@ -273,6 +268,7 @@ func (m *Manager) startWatcher(ctx context.Context, gvk schema.GroupVersionKind)
 		syncName:        m.syncName,
 		conflictHandler: m.conflictHandler,
 		labelSelector:   m.labelSelector,
+		commit:          commit,
 	}
 	w, err := m.watcherFactory(cfg)
 	if err != nil {

@@ -35,7 +35,7 @@ import (
 	"sigs.k8s.io/cli-utils/pkg/testutil"
 )
 
-func fakeRunnable() Runnable {
+func fakeRunnable(commit string) Runnable {
 	cfg := watcherConfig{
 		scope: "test",
 		startWatch: func(_ context.Context, _ metav1.ListOptions) (watch.Interface, error) {
@@ -43,6 +43,7 @@ func fakeRunnable() Runnable {
 		},
 		conflictHandler: fake.NewConflictHandler(),
 		labelSelector:   labels.Everything(),
+		commit:          commit,
 	}
 	return NewFiltered(cfg)
 }
@@ -51,16 +52,36 @@ func fakeError(gvk schema.GroupVersionKind) status.Error {
 	return status.APIServerErrorf(errors.New("failed"), "watcher failed for %s", gvk.String())
 }
 
-func testRunnables(errOnType map[schema.GroupVersionKind]bool) watcherFactory {
+func testRunnables(errOnType map[schema.GroupVersionKind]bool, commit string) watcherFactory {
 	return func(cfg watcherConfig) (runnable Runnable, err status.Error) {
 		if errOnType[cfg.gvk] {
 			return nil, fakeError(cfg.gvk)
 		}
-		return fakeRunnable(), nil
+		return fakeRunnable(commit), nil
 	}
 }
 
+type GroupVersionKindWithCommit struct {
+	Commit string
+	GVK    schema.GroupVersionKind
+}
+
+// watchedGVKs returns a list of all GroupVersionKinds currently being watched.
+func (m *Manager) watchedGVKs() []GroupVersionKindWithCommit {
+	var gvks []GroupVersionKindWithCommit
+	for gvk, watcher := range m.watcherMap {
+		fw := watcher.(*filteredWatcher)
+		gvks = append(gvks, GroupVersionKindWithCommit{
+			GVK:    gvk,
+			Commit: fw.getLatestCommit(),
+		})
+	}
+	return gvks
+}
+
 func TestManager_AddWatches(t *testing.T) {
+	previousCommit := "previous"
+	currentCommit := "current"
 	testCases := []struct {
 		name string
 		// watcherMap is the manager's map of watchers before the test begins.
@@ -74,7 +95,7 @@ func TestManager_AddWatches(t *testing.T) {
 		gvks map[schema.GroupVersionKind]struct{}
 		// wantWatchedTypes is the set of GVKS we want the Manager to be watching at
 		// the end of the test.
-		wantWatchedTypes []schema.GroupVersionKind
+		wantWatchedTypes []GroupVersionKindWithCommit
 		// wantErr, if non-nil, reports that we want Update to return an error.
 		wantErr status.MultiError
 	}{
@@ -99,16 +120,16 @@ func TestManager_AddWatches(t *testing.T) {
 				kinds.Namespace(): {},
 				kinds.Role():      {},
 			},
-			wantWatchedTypes: []schema.GroupVersionKind{
-				kinds.Namespace(),
-				kinds.Role(),
+			wantWatchedTypes: []GroupVersionKindWithCommit{
+				{GVK: kinds.Namespace(), Commit: currentCommit},
+				{GVK: kinds.Role(), Commit: currentCommit},
 			},
 		},
 		{
 			name: "keep watchers if still declared",
 			watcherMap: map[schema.GroupVersionKind]Runnable{
-				kinds.Namespace(): fakeRunnable(),
-				kinds.Role():      fakeRunnable(),
+				kinds.Namespace(): fakeRunnable(currentCommit),
+				kinds.Role():      fakeRunnable(currentCommit),
 			},
 			mappedGVKs: []schema.GroupVersionKind{
 				kinds.Namespace(),
@@ -118,29 +139,29 @@ func TestManager_AddWatches(t *testing.T) {
 				kinds.Namespace(): {},
 				kinds.Role():      {},
 			},
-			wantWatchedTypes: []schema.GroupVersionKind{
-				kinds.Namespace(),
-				kinds.Role(),
+			wantWatchedTypes: []GroupVersionKindWithCommit{
+				{GVK: kinds.Namespace(), Commit: currentCommit},
+				{GVK: kinds.Role(), Commit: currentCommit},
 			},
 		},
 		{
 			name: "do not delete watchers if nothing declared",
 			watcherMap: map[schema.GroupVersionKind]Runnable{
-				kinds.Namespace(): fakeRunnable(),
-				kinds.Role():      fakeRunnable(),
+				kinds.Namespace(): fakeRunnable(currentCommit),
+				kinds.Role():      fakeRunnable(currentCommit),
 			},
 			mappedGVKs: []schema.GroupVersionKind{},
 			gvks:       map[schema.GroupVersionKind]struct{}{},
-			wantWatchedTypes: []schema.GroupVersionKind{
-				kinds.Namespace(),
-				kinds.Role(),
+			wantWatchedTypes: []GroupVersionKindWithCommit{
+				{GVK: kinds.Namespace(), Commit: currentCommit},
+				{GVK: kinds.Role(), Commit: currentCommit},
 			},
 		},
 		{
 			name: "add/keep/no-delete watchers",
 			watcherMap: map[schema.GroupVersionKind]Runnable{
-				kinds.Role():        fakeRunnable(),
-				kinds.RoleBinding(): fakeRunnable(),
+				kinds.Role():        fakeRunnable(currentCommit),
+				kinds.RoleBinding(): fakeRunnable(currentCommit),
 			},
 			mappedGVKs: []schema.GroupVersionKind{
 				kinds.Namespace(),
@@ -151,10 +172,10 @@ func TestManager_AddWatches(t *testing.T) {
 				kinds.Namespace(): {},
 				kinds.Role():      {},
 			},
-			wantWatchedTypes: []schema.GroupVersionKind{
-				kinds.Namespace(),
-				kinds.Role(),
-				kinds.RoleBinding(),
+			wantWatchedTypes: []GroupVersionKindWithCommit{
+				{GVK: kinds.Namespace(), Commit: currentCommit},
+				{GVK: kinds.Role(), Commit: currentCommit},
+				{GVK: kinds.RoleBinding(), Commit: currentCommit},
 			},
 		},
 		{
@@ -171,8 +192,8 @@ func TestManager_AddWatches(t *testing.T) {
 				kinds.Namespace(): {},
 				kinds.Role():      {},
 			},
-			wantWatchedTypes: []schema.GroupVersionKind{
-				kinds.Namespace(),
+			wantWatchedTypes: []GroupVersionKindWithCommit{
+				{GVK: kinds.Namespace(), Commit: currentCommit},
 			},
 			wantErr: fakeError(kinds.Role()),
 		},
@@ -186,8 +207,29 @@ func TestManager_AddWatches(t *testing.T) {
 				kinds.Namespace(): {},
 				kinds.Role():      {},
 			},
-			wantWatchedTypes: []schema.GroupVersionKind{
+			wantWatchedTypes: []GroupVersionKindWithCommit{
+				{GVK: kinds.Namespace(), Commit: currentCommit},
+			},
+		},
+		{
+			name: "update latest Commit for already started watchers",
+			watcherMap: map[schema.GroupVersionKind]Runnable{
+				kinds.Role():        fakeRunnable(previousCommit),
+				kinds.RoleBinding(): fakeRunnable(previousCommit),
+			},
+			mappedGVKs: []schema.GroupVersionKind{
 				kinds.Namespace(),
+				kinds.Role(),
+				kinds.RoleBinding(),
+			},
+			gvks: map[schema.GroupVersionKind]struct{}{
+				kinds.Namespace(): {},
+				kinds.Role():      {},
+			},
+			wantWatchedTypes: []GroupVersionKindWithCommit{
+				{GVK: kinds.Namespace(), Commit: currentCommit},
+				{GVK: kinds.Role(), Commit: currentCommit},
+				{GVK: kinds.RoleBinding(), Commit: previousCommit},
 			},
 		},
 	}
@@ -196,7 +238,7 @@ func TestManager_AddWatches(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			fakeMapper := testutil.NewFakeRESTMapper(tc.mappedGVKs...)
 			options := &Options{
-				watcherFactory: testRunnables(tc.failedWatchers),
+				watcherFactory: testRunnables(tc.failedWatchers, currentCommit),
 				mapper:         fakeMapper,
 			}
 			m, err := NewManager(":test", "rs", nil, nil, &declared.Resources{}, options, fake.NewConflictHandler())
@@ -205,7 +247,7 @@ func TestManager_AddWatches(t *testing.T) {
 			}
 			m.watcherMap = tc.watcherMap
 
-			err = m.AddWatches(context.Background(), tc.gvks)
+			err = m.AddWatches(context.Background(), tc.gvks, currentCommit)
 			testerrors.AssertEqual(t, tc.wantErr, err)
 
 			if diff := cmp.Diff(tc.wantWatchedTypes, m.watchedGVKs(), cmpopts.SortSlices(sortGVKs)); diff != "" {
@@ -216,6 +258,8 @@ func TestManager_AddWatches(t *testing.T) {
 }
 
 func TestManager_UpdateWatches(t *testing.T) {
+	previousCommit := "previous"
+	currentCommit := "current"
 	testCases := []struct {
 		name string
 		// watcherMap is the manager's map of watchers before the test begins.
@@ -229,7 +273,7 @@ func TestManager_UpdateWatches(t *testing.T) {
 		gvks map[schema.GroupVersionKind]struct{}
 		// wantWatchedTypes is the set of GVKS we want the Manager to be watching at
 		// the end of the test.
-		wantWatchedTypes []schema.GroupVersionKind
+		wantWatchedTypes []GroupVersionKindWithCommit
 		// wantErr, if non-nil, reports that we want Update to return an error.
 		wantErr status.MultiError
 	}{
@@ -254,16 +298,16 @@ func TestManager_UpdateWatches(t *testing.T) {
 				kinds.Namespace(): {},
 				kinds.Role():      {},
 			},
-			wantWatchedTypes: []schema.GroupVersionKind{
-				kinds.Namespace(),
-				kinds.Role(),
+			wantWatchedTypes: []GroupVersionKindWithCommit{
+				{GVK: kinds.Namespace(), Commit: currentCommit},
+				{GVK: kinds.Role(), Commit: currentCommit},
 			},
 		},
 		{
 			name: "keep watchers if still declared",
 			watcherMap: map[schema.GroupVersionKind]Runnable{
-				kinds.Namespace(): fakeRunnable(),
-				kinds.Role():      fakeRunnable(),
+				kinds.Namespace(): fakeRunnable(currentCommit),
+				kinds.Role():      fakeRunnable(currentCommit),
 			},
 			mappedGVKs: []schema.GroupVersionKind{
 				kinds.Namespace(),
@@ -273,16 +317,16 @@ func TestManager_UpdateWatches(t *testing.T) {
 				kinds.Namespace(): {},
 				kinds.Role():      {},
 			},
-			wantWatchedTypes: []schema.GroupVersionKind{
-				kinds.Namespace(),
-				kinds.Role(),
+			wantWatchedTypes: []GroupVersionKindWithCommit{
+				{GVK: kinds.Namespace(), Commit: currentCommit},
+				{GVK: kinds.Role(), Commit: currentCommit},
 			},
 		},
 		{
 			name: "delete watchers if nothing declared",
 			watcherMap: map[schema.GroupVersionKind]Runnable{
-				kinds.Namespace(): fakeRunnable(),
-				kinds.Role():      fakeRunnable(),
+				kinds.Namespace(): fakeRunnable(currentCommit),
+				kinds.Role():      fakeRunnable(currentCommit),
 			},
 			mappedGVKs: []schema.GroupVersionKind{},
 			gvks:       map[schema.GroupVersionKind]struct{}{},
@@ -290,8 +334,8 @@ func TestManager_UpdateWatches(t *testing.T) {
 		{
 			name: "add/keep/delete watchers",
 			watcherMap: map[schema.GroupVersionKind]Runnable{
-				kinds.Role():        fakeRunnable(),
-				kinds.RoleBinding(): fakeRunnable(),
+				kinds.Role():        fakeRunnable(currentCommit),
+				kinds.RoleBinding(): fakeRunnable(currentCommit),
 			},
 			mappedGVKs: []schema.GroupVersionKind{
 				kinds.Namespace(),
@@ -301,9 +345,9 @@ func TestManager_UpdateWatches(t *testing.T) {
 				kinds.Namespace(): {},
 				kinds.Role():      {},
 			},
-			wantWatchedTypes: []schema.GroupVersionKind{
-				kinds.Namespace(),
-				kinds.Role(),
+			wantWatchedTypes: []GroupVersionKindWithCommit{
+				{GVK: kinds.Namespace(), Commit: currentCommit},
+				{GVK: kinds.Role(), Commit: currentCommit},
 			},
 		},
 		{
@@ -320,8 +364,8 @@ func TestManager_UpdateWatches(t *testing.T) {
 				kinds.Namespace(): {},
 				kinds.Role():      {},
 			},
-			wantWatchedTypes: []schema.GroupVersionKind{
-				kinds.Namespace(),
+			wantWatchedTypes: []GroupVersionKindWithCommit{
+				{GVK: kinds.Namespace(), Commit: currentCommit},
 			},
 			wantErr: fakeError(kinds.Role()),
 		},
@@ -335,8 +379,8 @@ func TestManager_UpdateWatches(t *testing.T) {
 				kinds.Namespace(): {},
 				kinds.Role():      {},
 			},
-			wantWatchedTypes: []schema.GroupVersionKind{
-				kinds.Namespace(),
+			wantWatchedTypes: []GroupVersionKindWithCommit{
+				{GVK: kinds.Namespace(), Commit: currentCommit},
 			},
 			wantErr: syncerclient.ConflictWatchResourceDoesNotExist(
 				&meta.NoKindMatchError{
@@ -346,13 +390,32 @@ func TestManager_UpdateWatches(t *testing.T) {
 					},
 				}, kinds.Role()),
 		},
+		{
+			name: "update latest Commit for already started watchers",
+			watcherMap: map[schema.GroupVersionKind]Runnable{
+				kinds.Role():        fakeRunnable(previousCommit),
+				kinds.RoleBinding(): fakeRunnable(previousCommit),
+			},
+			mappedGVKs: []schema.GroupVersionKind{
+				kinds.Namespace(),
+				kinds.Role(),
+			},
+			gvks: map[schema.GroupVersionKind]struct{}{
+				kinds.Namespace(): {},
+				kinds.Role():      {},
+			},
+			wantWatchedTypes: []GroupVersionKindWithCommit{
+				{GVK: kinds.Namespace(), Commit: currentCommit},
+				{GVK: kinds.Role(), Commit: currentCommit},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			fakeMapper := testutil.NewFakeRESTMapper(tc.mappedGVKs...)
 			options := &Options{
-				watcherFactory: testRunnables(tc.failedWatchers),
+				watcherFactory: testRunnables(tc.failedWatchers, currentCommit),
 				mapper:         fakeMapper,
 			}
 			m, err := NewManager(":test", "rs", nil, nil, &declared.Resources{}, options, fake.NewConflictHandler())
@@ -361,7 +424,7 @@ func TestManager_UpdateWatches(t *testing.T) {
 			}
 			m.watcherMap = tc.watcherMap
 
-			err = m.UpdateWatches(context.Background(), tc.gvks)
+			err = m.UpdateWatches(context.Background(), tc.gvks, currentCommit)
 			testerrors.AssertEqual(t, tc.wantErr, err)
 
 			if diff := cmp.Diff(tc.wantWatchedTypes, m.watchedGVKs(), cmpopts.SortSlices(sortGVKs)); diff != "" {
@@ -371,6 +434,6 @@ func TestManager_UpdateWatches(t *testing.T) {
 	}
 }
 
-func sortGVKs(l, r schema.GroupVersionKind) bool {
-	return l.String() < r.String()
+func sortGVKs(l, r GroupVersionKindWithCommit) bool {
+	return l.GVK.String() < r.GVK.String()
 }

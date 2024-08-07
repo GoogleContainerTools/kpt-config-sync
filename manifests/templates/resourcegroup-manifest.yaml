@@ -231,6 +231,7 @@ spec:
             - ALL
       - args:
         - --config=/conf/otel-agent-config.yaml
+        - --feature-gates=-pkg.translator.prometheus.NormalizeName
         command:
         - /otelcontribcol
         env:

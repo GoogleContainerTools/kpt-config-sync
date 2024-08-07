@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 )
 
 const clusterVersionPattern = `^(v?([0-9]+)(\.([0-9]+))?(\.([0-9]+))?([+-_].*)?)$`
@@ -37,6 +38,19 @@ func (cv ClusterVersion) String() string {
 			cv.Major, cv.Minor, cv.Patch, cv.Suffix)
 	}
 	return fmt.Sprintf("v%d.%d.%d", cv.Major, cv.Minor, cv.Patch)
+}
+
+// GKESuffix returns the GKE patch version integer from the -gke suffix
+func (cv ClusterVersion) GKESuffix() (int, error) {
+	if !strings.HasPrefix(cv.Suffix, "-gke.") {
+		return -1, fmt.Errorf("missing -gke suffix")
+	}
+	val := strings.TrimPrefix(cv.Suffix, "-gke.")
+	intVal, err := strconv.Atoi(val)
+	if err != nil {
+		return -1, fmt.Errorf("invalid suffix value: gke suffix must be an integer: %v", err)
+	}
+	return intVal, nil
 }
 
 // ParseClusterVersion parses the string "gitVersion" of a Kubernetes cluster.

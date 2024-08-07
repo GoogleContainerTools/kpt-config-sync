@@ -75,7 +75,7 @@ func TestPublicHelm(t *testing.T) {
 	var expectedCPULimit string
 	var expectedMemoryRequest string
 	var expectedMemoryLimit string
-	if nt.IsGKEAutopilot {
+	if nt.IsGKEAutopilot && !nt.ClusterSupportsBursting {
 		expectedCPURequest = "250m"
 		expectedCPULimit = expectedCPURequest
 		expectedMemoryRequest = "512Mi"
@@ -244,7 +244,7 @@ service:
 	var expectedCPULimit string
 	var expectedMemoryRequest string
 	var expectedMemoryLimit string
-	if nt.IsGKEAutopilot {
+	if nt.IsGKEAutopilot && !nt.ClusterSupportsBursting {
 		expectedCPURequest = "250m"
 		expectedCPULimit = expectedCPURequest
 		expectedMemoryRequest = "512Mi"

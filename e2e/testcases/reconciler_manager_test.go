@@ -16,6 +16,7 @@ package e2e
 
 import (
 	"fmt"
+	"math"
 	"testing"
 	"time"
 
@@ -1068,30 +1069,33 @@ func simulateAutopilotResourceAdjustment(nt *nomostest.NT, expectedResources map
 	nt.T.Logf("expectedTotalResources: %s", log.AsJSON(expectedTotalResources))
 
 	// https://cloud.google.com/kubernetes-engine/docs/concepts/autopilot-resource-requests#autopilot-resource-management
+	if nt.ClusterSupportsBursting {
+		nt.T.Log("cluster supports bursting, skipping CPU adjustment")
+	} else {
+		// Autopilot increases the CPU of the first container,
+		// until the total CPU is a multiple of 250m.
+		minimumTotalCPURequests := resource.MustParse("250m")
+		remainder := expectedTotalResources.CPURequest.MilliValue() % minimumTotalCPURequests.MilliValue()
+		if remainder > 0 {
+			// Compute difference
+			diff := minimumTotalCPURequests.DeepCopy()
+			diff.Sub(*resource.NewMilliQuantity(remainder, minimumTotalCPURequests.Format))
+			// Add difference to first container
+			// Go doesn't allow modifying a struct field in a map directly,
+			// so read, update, and write it back.
+			updated := expectedResources[firstContainerName]
+			updated.CPURequest.Add(diff)
+			expectedResources[firstContainerName] = updated
+		}
 
-	// Autopilot increases the CPU of the first container,
-	// until the total CPU is a multiple of 250m.
-	minimumTotalCPURequests := resource.MustParse("250m")
-	remainder := expectedTotalResources.CPURequest.MilliValue() % minimumTotalCPURequests.MilliValue()
-	if remainder > 0 {
-		// Compute difference
-		diff := minimumTotalCPURequests.DeepCopy()
-		diff.Sub(*resource.NewMilliQuantity(remainder, minimumTotalCPURequests.Format))
-		// Add difference to first container
-		// Go doesn't allow modifying a struct field in a map directly,
-		// so read, update, and write it back.
-		updated := expectedResources[firstContainerName]
-		updated.CPURequest.Add(diff)
-		expectedResources[firstContainerName] = updated
+		// Re-compute expected totals
+		expectedTotalResources = totalExpectedContainerResources(expectedResources)
 	}
-
-	// Re-compute expected totals
-	expectedTotalResources = totalExpectedContainerResources(expectedResources)
 
 	// Autopilot increases the Memory of the first container,
 	// until the total Memory is at least 1CPU:1Gi ratio (1000m:1024Mi).
 	// Note: This math assumes the values are too low to overflow.
-	minimumTotalMemory := int64(float64(expectedTotalResources.CPURequest.MilliValue()) / float64(1000.0) * 1024)
+	minimumTotalMemory := int64(math.Round(1.024 * float64(expectedTotalResources.CPURequest.MilliValue())))
 	// TODO: Figure out how to build a Quantity in Mebibytes without parsing
 	minimumTotalMemoryRequests := resource.MustParse(fmt.Sprintf("%dMi", minimumTotalMemory))
 	if expectedTotalResources.MemoryRequest.Cmp(minimumTotalMemoryRequests) < 0 {

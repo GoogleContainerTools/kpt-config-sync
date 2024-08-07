@@ -4196,6 +4196,97 @@ func TestRootReconcilerWithoutKnownHosts(t *testing.T) {
 	require.Equal(t, false, isKnownHosts)
 }
 
+func TestRootSyncReconcilerWithGithubApp(t *testing.T) {
+	// Mock out parseDeployment for testing.
+	parseDeployment = parsedDeployment
+
+	secretRef := "my-secret"
+	rs := rootSyncWithGit(rootsyncName,
+		rootsyncSecretType(configsync.AuthGithubApp),
+	)
+	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
+	secretObject := k8sobjects.SecretObject(secretRef, core.Namespace(rs.Namespace))
+	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs, secretObject)
+
+	// Reconcile with missing secretRef
+	ctx := context.Background()
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+
+	wantRs := k8sobjects.RootSyncObjectV1Beta1(rs.Name)
+	rootsync.SetStalled(wantRs, "Validation",
+		fmt.Errorf(`KNV1061: RootSyncs which specify spec.git.auth as one of "ssh", "cookiefile", "githubapp", or "token" must also specify spec.git.secretRef
+
+namespace: config-management-system
+metadata.name: my-root-sync
+group: configsync.gke.io
+version: v1beta1
+kind: RootSync
+
+For more information, see https://g.co/cloud/acm-errors#knv1061`))
+	validateRootSyncStatus(t, wantRs, fakeClient)
+
+	// Reconcile with missing Secret
+	require.NoError(t, fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs))
+	rs.Spec.Git.SecretRef = &v1beta1.SecretReference{Name: secretRef}
+	require.NoError(t, fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)))
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+
+	wantRs = k8sobjects.RootSyncObjectV1Beta1(rs.Name)
+	rootsync.SetStalled(wantRs, "Validation",
+		fmt.Errorf(`git secretType was set as "githubapp" but github-app-private-key key is not present in %s secret`, secretRef))
+	validateRootSyncStatus(t, wantRs, fakeClient)
+
+	// Create a fully valid configuration
+	require.NoError(t, fakeClient.Get(ctx, client.ObjectKeyFromObject(secretObject), secretObject))
+	secretObject.Data = map[string][]byte{
+		"github-app-private-key":     []byte("private-key-0"),
+		"github-app-client-id":       []byte("client-id-0"),
+		"github-app-installation-id": []byte("installation-id-0"),
+	}
+	require.NoError(t, fakeClient.Update(ctx, secretObject, client.FieldOwner(reconcilermanager.FieldManager)))
+
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
+	}
+	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
+	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs[reconcilermanager.GitSync] = append(
+		rootContainerEnvs[reconcilermanager.GitSync],
+		corev1.EnvVar{Name: "GITSYNC_GITHUB_APP_CLIENT_ID", Value: "client-id-0"},
+		corev1.EnvVar{Name: "GITSYNC_GITHUB_APP_INSTALLATION_ID", Value: "installation-id-0"},
+		corev1.EnvVar{
+			Name: "GITSYNC_GITHUB_APP_PRIVATE_KEY",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: secretRef,
+					},
+					Key: "github-app-private-key",
+				},
+			},
+		},
+	)
+	rootDeployment := rootSyncDeployment(rootReconcilerName,
+		setServiceAccountName(rootReconcilerName),
+		secretMutator(secretRef),
+		containerResourcesMutator(resourceOverrides),
+		containerEnvMutator(rootContainerEnvs),
+		setUID("1"), setResourceVersion("1"), setGeneration(1),
+	)
+	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(rootDeployment): rootDeployment}
+	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+}
+
 func validateRootSyncStatus(t *testing.T, want *v1beta1.RootSync, fakeClient *syncerFake.Client) {
 	t.Helper()
 

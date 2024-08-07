@@ -94,7 +94,7 @@ func GitSpec(git *v1beta1.Git, rs client.Object) status.Error {
 	// Note that Auth is a case-sensitive field, so ones with arbitrary capitalization
 	// will fail to apply.
 	switch git.Auth {
-	case configsync.AuthSSH, configsync.AuthCookieFile, configsync.AuthGCENode, configsync.AuthToken, configsync.AuthNone:
+	case configsync.AuthSSH, configsync.AuthCookieFile, configsync.AuthGCENode, configsync.AuthToken, configsync.AuthNone, configsync.AuthGithubApp:
 	case configsync.AuthGCPServiceAccount:
 		if git.GCPServiceAccountEmail == "" {
 			return MissingGCPSAEmail(configsync.GitSource, rs)
@@ -254,7 +254,7 @@ func MissingGitRepo(o client.Object) status.Error {
 // InvalidGitAuthType reports that a RootSync/RepoSync doesn't use one of the known auth
 // methods.
 func InvalidGitAuthType(o client.Object) status.Error {
-	types := []string{string(configsync.AuthSSH), string(configsync.AuthCookieFile), string(configsync.AuthGCENode), string(configsync.AuthToken), string(configsync.AuthNone), string(configsync.AuthGCPServiceAccount)}
+	types := []string{string(configsync.AuthSSH), string(configsync.AuthCookieFile), string(configsync.AuthGCENode), string(configsync.AuthToken), string(configsync.AuthNone), string(configsync.AuthGCPServiceAccount), string(configsync.AuthGithubApp)}
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
 		Sprintf("%ss must specify spec.git.auth to be one of %s", kind,
@@ -287,8 +287,8 @@ func IllegalSecretRef(sourceType configsync.SourceType, o client.Object) status.
 func MissingSecretRef(sourceType configsync.SourceType, o client.Object) status.Error {
 	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss which specify spec.%s.auth as one of %q, %q or %q must also specify spec.%s.secretRef",
-			kind, sourceType, configsync.AuthSSH, configsync.AuthCookieFile, configsync.AuthToken, sourceType).
+		Sprintf("%ss which specify spec.%s.auth as one of %q, %q, %q, or %q must also specify spec.%s.secretRef",
+			kind, sourceType, configsync.AuthSSH, configsync.AuthCookieFile, configsync.AuthGithubApp, configsync.AuthToken, sourceType).
 		BuildWithResources(o)
 }
 

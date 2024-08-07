@@ -27,6 +27,9 @@ import (
 	"kpt.dev/configsync/pkg/status"
 )
 
+// Initialization is the tag value to initiate a Count
+const Initialization = "cs_counter_initialization"
+
 func record(ctx context.Context, ms ...stats.Measurement) {
 	stats.Record(ctx, ms...)
 	if klog.V(5).Enabled() {

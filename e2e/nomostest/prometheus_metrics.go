@@ -344,42 +344,42 @@ func metricResourceFightsHasValueAtLeast(nt *NT, syncLabels prometheusmodel.Labe
 		labels := prometheusmodel.LabelSet{
 			prometheusmodel.LabelName(ocmetrics.KeyComponent.Name()): prometheusmodel.LabelValue(ocmetrics.OtelCollectorName),
 		}.Merge(syncLabels)
-		// ResourceFightsView counts the total number of ResourceFights, so we don't need to aggregate
-		query := fmt.Sprintf("%s%s", metricName, labels)
 		if value == 0 {
-			// Tolerate missing metrics when expecting a zero value.
-			// Don't allow any value other than zero.
-			return metricExistsWithValueOrDoesNotExist(ctx, nt, v1api, query, float64(value))
+			query := fmt.Sprintf("rate(%s%s[1m])", metricName, labels)
+			return metricExistsWithValue(ctx, nt, v1api, query, 0)
 		}
+		query := fmt.Sprintf("%s%s", metricName, labels)
 		return metricExistsWithValueAtLeast(ctx, nt, v1api, query, float64(value))
 	}
 }
 
 // metricResourceConflictsHasValueAtLeast returns a MetricsPredicate that
-// validates that ResourceConflicts has at least the expected value.
-// If the expected value is zero, the metric must be zero or not found.
+// validates whether ResourceConflicts has been recorded recently
+// If the expected value is zero, the rate at which ResourceConflicts occur is also zero.
 func metricResourceConflictsHasValueAtLeast(nt *NT, syncLabels prometheusmodel.LabelSet, commitHash string, value int) MetricsPredicate {
 	return func(ctx context.Context, v1api prometheusv1.API) error {
 		metricName := ocmetrics.ResourceConflictsView.Name
 		metricName = fmt.Sprintf("%s%s", prometheusConfigSyncMetricPrefix, metricName)
+		if value == 0 {
+			labels := prometheusmodel.LabelSet{
+				prometheusmodel.LabelName(ocmetrics.KeyComponent.Name()): prometheusmodel.LabelValue(ocmetrics.OtelCollectorName),
+				prometheusmodel.LabelName(ocmetrics.KeyCommit.Name()):    ocmetrics.Initialization,
+			}.Merge(syncLabels)
+			query := fmt.Sprintf("rate(%s%s[30s])", metricName, labels)
+			return metricExistsWithValue(ctx, nt, v1api, query, 0)
+		}
 		labels := prometheusmodel.LabelSet{
 			prometheusmodel.LabelName(ocmetrics.KeyComponent.Name()): prometheusmodel.LabelValue(ocmetrics.OtelCollectorName),
 			prometheusmodel.LabelName(ocmetrics.KeyCommit.Name()):    prometheusmodel.LabelValue(commitHash),
 		}.Merge(syncLabels)
-		// ResourceConflictsView counts the total number of ResourceConflicts, so we don't need to aggregate
 		query := fmt.Sprintf("%s%s", metricName, labels)
-		if value == 0 {
-			// Tolerate missing metrics when expecting a zero value.
-			// Don't allow any value other than zero.
-			return metricExistsWithValueOrDoesNotExist(ctx, nt, v1api, query, float64(value))
-		}
 		return metricExistsWithValueAtLeast(ctx, nt, v1api, query, float64(value))
 	}
 }
 
 // metricInternalErrorsHasValueAtLeast returns a MetricsPredicate that validates
-// that InternalErrors has at least the expected value.
-// If the expected value is zero, the metric must be zero or not found.
+// whether InternalErrors has been recorded recently.
+// If the expected value is zero, the rate at which InternalErrors occur is also zero.
 func metricInternalErrorsHasValueAtLeast(nt *NT, syncLabels prometheusmodel.LabelSet, value int) MetricsPredicate {
 	return func(ctx context.Context, v1api prometheusv1.API) error {
 		metricName := ocmetrics.InternalErrorsView.Name
@@ -387,13 +387,11 @@ func metricInternalErrorsHasValueAtLeast(nt *NT, syncLabels prometheusmodel.Labe
 		labels := prometheusmodel.LabelSet{
 			prometheusmodel.LabelName(ocmetrics.KeyComponent.Name()): prometheusmodel.LabelValue(ocmetrics.OtelCollectorName),
 		}.Merge(syncLabels)
-		// InternalErrorsView counts the total number of InternalErrors, so we don't need to aggregate
-		query := fmt.Sprintf("%s%s", metricName, labels)
 		if value == 0 {
-			// Tolerate missing metrics when expecting a zero value.
-			// Don't allow any value other than zero.
-			return metricExistsWithValueOrDoesNotExist(ctx, nt, v1api, query, float64(value))
+			query := fmt.Sprintf("rate(%s%s[1m])", metricName, labels)
+			return metricExistsWithValue(ctx, nt, v1api, query, 0)
 		}
+		query := fmt.Sprintf("%s%s", metricName, labels)
 		return metricExistsWithValueAtLeast(ctx, nt, v1api, query, float64(value))
 	}
 }

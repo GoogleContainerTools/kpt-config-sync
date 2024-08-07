@@ -161,6 +161,8 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		Watcher:                 sharedNt.Watcher,
 		WatchClient:             sharedNt.WatchClient,
 		IsGKEAutopilot:          sharedNt.IsGKEAutopilot,
+		ClusterVersion:          sharedNt.ClusterVersion,
+		ClusterSupportsBursting: sharedNt.ClusterSupportsBursting,
 		DefaultWaitTimeout:      sharedNt.DefaultWaitTimeout,
 		DefaultReconcileTimeout: opts.ReconcileTimeout,
 		kubeconfigPath:          sharedNt.kubeconfigPath,
@@ -182,7 +184,6 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		OCIClient:               sharedNt.OCIClient,
 	}
 
-	nt.detectClusterVersion()
 	t.Logf("using shared test env: %s, cluster version: %s, cluster hash: %s", sharedNt.ClusterName, nt.ClusterVersion, nt.ClusterHash)
 
 	if opts.SkipConfigSyncInstall {
@@ -278,6 +279,7 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	}
 
 	nt.detectClusterVersion()
+	nt.detectClusterSupportsBursting()
 
 	// TODO: Try speeding up the reconciler and hydration polling.
 	// It seems that speeding them up too much can cause failures in

@@ -115,6 +115,9 @@ type NT struct {
 	// ClusterVersion is the parsed version of the target test cluster
 	ClusterVersion *clusterversion.ClusterVersion
 
+	// ClusterSupportsBursting indicates if the cluster supports bursting.
+	ClusterSupportsBursting bool
+
 	// ClusterHash is a 64 character long unique identifier formed in hex used to identify a GKE cluster.
 	ClusterHash string
 
@@ -885,6 +888,48 @@ func (nt *NT) detectGKEAutopilot(skipAutopilot bool) {
 	}
 	if nt.IsGKEAutopilot && skipAutopilot {
 		nt.T.Skip("Test skipped when running on Autopilot clusters")
+	}
+}
+
+// Prerequisites for autopilot bursting:
+// - You originally created the cluster with GKE version 1.26 or later
+// - The cluster is running GKE version 1.30.2-gke.1394000 or later
+// See: https://cloud.google.com/kubernetes-engine/docs/how-to/pod-bursting-gke#availability-in-gke
+func (nt *NT) autopilotClusterSupportsBursting() (bool, error) {
+	args := []string{"container", "clusters", "describe", nt.ClusterName,
+		"--project", *e2e.GCPProject, "--location", *e2e.GCPRegion,
+		"--format", `value(initialClusterVersion)`}
+	out, err := nt.Shell.Gcloud(args...)
+	if err != nil {
+		return false, err
+	}
+	initialClusterVersion, err := clusterversion.ParseClusterVersion(strings.TrimSpace(string(out)))
+	if err != nil {
+		return false, err
+	}
+	if initialClusterVersion.Major < 1 || initialClusterVersion.Minor < 26 {
+		return false, nil
+	}
+	gkeSuffix, err := nt.ClusterVersion.GKESuffix()
+	if err != nil {
+		return false, err
+	}
+	if nt.ClusterVersion.Major < 1 || nt.ClusterVersion.Minor < 30 ||
+		nt.ClusterVersion.Patch < 2 || gkeSuffix < 1394000 {
+		return false, nil
+	}
+	return true, nil
+}
+
+func (nt *NT) detectClusterSupportsBursting() {
+	if nt.IsGKEAutopilot {
+		var err error
+		nt.ClusterSupportsBursting, err = nt.autopilotClusterSupportsBursting()
+		if err != nil {
+			nt.T.Fatal(err)
+		}
+	} else {
+		nt.ClusterSupportsBursting = true
 	}
 }
 

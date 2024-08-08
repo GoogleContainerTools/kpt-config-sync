@@ -922,7 +922,7 @@ func (nt *NT) autopilotClusterSupportsBursting() (bool, error) {
 }
 
 func (nt *NT) detectClusterSupportsBursting() {
-	if nt.IsGKEAutopilot {
+	if *e2e.GKEAutopilot {
 		var err error
 		nt.ClusterSupportsBursting, err = nt.autopilotClusterSupportsBursting()
 		if err != nil {

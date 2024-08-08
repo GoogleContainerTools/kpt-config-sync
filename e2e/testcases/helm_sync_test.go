@@ -887,6 +887,7 @@ func generateServiceAccountKey(nt *nomostest.NT, projectID, gsaKeySecretID, gsaE
 
 func rootSyncForWordpressHelmChart(nt *nomostest.NT, valuesMutator func(map[string]interface{})) *v1beta1.RootSync {
 	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	nomostest.EnableDeletionPropagation(rs)
 	values := map[string]interface{}{
 		"image": map[string]interface{}{
 			"digest":     "sha256:362cb642db481ebf6f14eb0244fbfb17d531a84ecfe099cd3bba6810db56694e",

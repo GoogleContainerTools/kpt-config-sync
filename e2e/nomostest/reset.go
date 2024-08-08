@@ -169,7 +169,10 @@ func ResetRootSyncs(nt *NT, rsList []v1beta1.RootSync) error {
 		// Enable deletion propagation, if not enabled
 		if EnableDeletionPropagation(rs) {
 			nt.T.Logf("[RESET] Enabling deletion propagation on RootSync %s", rsNN)
-			if err := nt.KubeClient.Update(rs); err != nil {
+			// Use MergePatch instead of Update in case modified since list
+			patch := fmt.Sprintf(`{"metadata": {"annotations": {"%s": "%s"}}}`,
+				metadata.DeletionPropagationPolicyAnnotationKey, metadata.DeletionPropagationPolicyForeground)
+			if err := nt.KubeClient.MergePatch(rs, patch); err != nil {
 				return err
 			}
 			if err := nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rs.Name, rs.Namespace, []testpredicates.Predicate{
@@ -241,7 +244,10 @@ func ResetRepoSyncs(nt *NT, rsList []v1beta1.RepoSync) error {
 		// Enable deletion propagation, if not enabled
 		if EnableDeletionPropagation(rs) {
 			nt.T.Logf("[RESET] Enabling deletion propagation on RepoSync %s", rsNN)
-			if err := nt.KubeClient.Update(rs); err != nil {
+			// Use MergePatch instead of Update in case modified since list
+			patch := fmt.Sprintf(`{"metadata": {"annotations": {"%s": "%s"}}}`,
+				metadata.DeletionPropagationPolicyAnnotationKey, metadata.DeletionPropagationPolicyForeground)
+			if err := nt.KubeClient.MergePatch(rs, patch); err != nil {
 				return err
 			}
 			if err := nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), rs.Name, rs.Namespace, []testpredicates.Predicate{

@@ -85,6 +85,14 @@ func (optsStruct *New) EvaluateSkipOptions(t testing.NTB) {
 		t.Skip("Test skipped since the '--stress' flag should only select stress tests")
 	}
 
+	// Profiling tests should run if and only if the --profiling flag is specified.
+	if !*e2e.Profiling && optsStruct.ProfilingTest {
+		t.Skip("Test skipped since the stress test requires the '--profiling' flag")
+	}
+	if *e2e.Profiling && !optsStruct.ProfilingTest {
+		t.Skip("Test skipped since the '--profiling' flag should only select profiling tests")
+	}
+
 	// KCC tests should run if and only if the --kcc flag is specified.
 	if !*e2e.KCC && optsStruct.KCCTest {
 		t.Skip("Test skipped since the KCC test requires the '--kcc' flag")

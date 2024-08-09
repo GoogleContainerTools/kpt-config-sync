@@ -359,38 +359,7 @@ func TestStressManyDeployments(t *testing.T) {
 		name := fmt.Sprintf("pause-%d", i)
 		nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile(
 			fmt.Sprintf("%s/namespaces/%s/deployment-%s.yaml", syncPath, ns, name),
-			[]byte(fmt.Sprintf(`
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: %s
-  namespace: %s
-  labels:
-    app: %s
-    nomos-test: enabled
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: %s
-  template:
-    metadata:
-      labels:
-        app: %s
-    spec:
-      containers:
-      - name: pause
-        image: registry.k8s.io/pause:3.7
-        ports:
-        - containerPort: 80
-        resources:
-          limits:
-            cpu: 250m
-            memory: 256Mi
-          requests:
-            cpu: 250m
-            memory: 256Mi
-`, name, ns, name, name, name))))
+			[]byte(pauseDeploymentYAML(name, ns))))
 	}
 
 	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("Adding a test namespace and %d deployments", deployCount)))
@@ -891,4 +860,39 @@ func validateNumberOfObjectsEquals(nt *nomostest.NT, gvk schema.GroupVersionKind
 		return fmt.Errorf("expected cluster to have %d %s objects, but found %d", count, gvk, len(nsList.Items))
 	}
 	return nil
+}
+
+func pauseDeploymentYAML(name, namespace string) string {
+	return fmt.Sprintf(`
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: %s
+  namespace: %s
+  labels:
+    app: %s
+    nomos-test: enabled
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: %s
+  template:
+    metadata:
+      labels:
+        app: %s
+    spec:
+      containers:
+      - name: pause
+        image: registry.k8s.io/pause:3.7
+        ports:
+        - containerPort: 80
+        resources:
+          limits:
+            cpu: 250m
+            memory: 256Mi
+          requests:
+            cpu: 250m
+            memory: 256Mi
+`, name, namespace, name, name, name)
 }

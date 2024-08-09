@@ -122,16 +122,16 @@ func TestStressCRD(t *testing.T) {
 	}
 
 	nt.T.Logf("Verify that there are exactly 1000 Namespaces managed by Config Sync on the cluster")
-	validateNumberOfObjectsEquals(nt, kinds.Namespace(), 1000,
-		client.MatchingLabels{metadata.ManagedByKey: metadata.ManagedByValue, labelKey: labelValue})
+	nt.Must(validateNumberOfObjectsEquals(nt, kinds.Namespace(), 1000,
+		client.MatchingLabels{metadata.ManagedByKey: metadata.ManagedByValue, labelKey: labelValue}))
 
 	nt.T.Logf("Verify that there are exactly 1000 ConfigMaps managed by Config Sync on the cluster")
-	validateNumberOfObjectsEquals(nt, kinds.ConfigMap(), 1000,
-		client.MatchingLabels{metadata.ManagedByKey: metadata.ManagedByValue, labelKey: labelValue})
+	nt.Must(validateNumberOfObjectsEquals(nt, kinds.ConfigMap(), 1000,
+		client.MatchingLabels{metadata.ManagedByKey: metadata.ManagedByValue, labelKey: labelValue}))
 
 	nt.T.Logf("Verify that there are exactly 1000 CronTab CRs managed by Config Sync on the cluster")
-	validateNumberOfObjectsEquals(nt, crontabGVK, 1000,
-		client.MatchingLabels{metadata.ManagedByKey: metadata.ManagedByValue})
+	nt.Must(validateNumberOfObjectsEquals(nt, crontabGVK, 1000,
+		client.MatchingLabels{metadata.ManagedByKey: metadata.ManagedByValue}))
 }
 
 // TestStressLargeNamespace tests that Config Sync can sync a namespace including 5000 resources successfully.
@@ -167,9 +167,9 @@ func TestStressLargeNamespace(t *testing.T) {
 	}
 
 	nt.T.Log("Verify there are 5000 ConfigMaps in the namespace")
-	validateNumberOfObjectsEquals(nt, kinds.ConfigMap(), 5000,
+	nt.Must(validateNumberOfObjectsEquals(nt, kinds.ConfigMap(), 5000,
 		client.MatchingLabels{labelKey: labelValue},
-		client.InNamespace(ns))
+		client.InNamespace(ns)))
 }
 
 // TestStressFrequentGitCommits adds 100 Git commits, and verifies that Config Sync can sync the changes in these commits successfully.
@@ -204,9 +204,9 @@ func TestStressFrequentGitCommits(t *testing.T) {
 	}
 
 	nt.T.Logf("Verify that there are exactly 100 ConfigMaps under the %s namespace", ns)
-	validateNumberOfObjectsEquals(nt, kinds.ConfigMap(), 100,
+	nt.Must(validateNumberOfObjectsEquals(nt, kinds.ConfigMap(), 100,
 		client.MatchingLabels{labelKey: labelValue},
-		client.InNamespace(ns))
+		client.InNamespace(ns)))
 }
 
 // This test creates a RootSync pointed at https://github.com/config-sync-examples/crontab-crs
@@ -402,9 +402,9 @@ spec:
 	}
 
 	nt.T.Logf("Verify the number of Deployment objects")
-	validateNumberOfObjectsEquals(nt, kinds.Deployment(), deployCount,
+	nt.Must(validateNumberOfObjectsEquals(nt, kinds.Deployment(), deployCount,
 		client.MatchingLabels{metadata.ManagedByKey: metadata.ManagedByValue},
-		client.InNamespace(ns))
+		client.InNamespace(ns)))
 
 	nt.T.Log("Removing resources from Git")
 	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(syncPath))
@@ -465,9 +465,9 @@ func TestStressMemoryUsageGit(t *testing.T) {
 			Kind:    kind,
 			Version: "v2",
 		}
-		validateNumberOfObjectsEquals(nt, gvk, crCount,
+		nt.Must(validateNumberOfObjectsEquals(nt, gvk, crCount,
 			client.MatchingLabels{metadata.ManagedByKey: metadata.ManagedByValue},
-			client.InNamespace(ns))
+			client.InNamespace(ns)))
 	}
 
 	nt.T.Log("Removing resources from Git")
@@ -562,9 +562,9 @@ func TestStressMemoryUsageOCI(t *testing.T) {
 			Kind:    kind,
 			Version: "v2",
 		}
-		validateNumberOfObjectsEquals(nt, gvk, crCount,
+		nt.Must(validateNumberOfObjectsEquals(nt, gvk, crCount,
 			client.MatchingLabels{metadata.ManagedByKey: metadata.ManagedByValue},
-			client.InNamespace(ns))
+			client.InNamespace(ns)))
 	}
 
 	nt.T.Log("Remove all files and publish an empty OCI image")
@@ -654,9 +654,9 @@ func TestStressMemoryUsageHelm(t *testing.T) {
 			Kind:    kind,
 			Version: "v1",
 		}
-		validateNumberOfObjectsEquals(nt, gvk, crCount,
+		nt.Must(validateNumberOfObjectsEquals(nt, gvk, crCount,
 			client.MatchingLabels{metadata.ManagedByKey: metadata.ManagedByValue},
-			client.InNamespace(ns))
+			client.InNamespace(ns)))
 	}
 
 	emptyChart, err := nt.BuildAndPushHelmPackage(nomostest.RootSyncNN(configsync.RootSyncName),
@@ -881,13 +881,14 @@ func truncateSourceErrors() testpredicates.Predicate {
 	}
 }
 
-func validateNumberOfObjectsEquals(nt *nomostest.NT, gvk schema.GroupVersionKind, count int, opts ...client.ListOption) {
+func validateNumberOfObjectsEquals(nt *nomostest.NT, gvk schema.GroupVersionKind, count int, opts ...client.ListOption) error {
 	nsList := &metav1.PartialObjectMetadataList{}
 	nsList.SetGroupVersionKind(gvk)
 	if err := nt.KubeClient.List(nsList, opts...); err != nil {
-		nt.T.Error(err)
+		return fmt.Errorf("listing objects: %w", err)
 	}
 	if len(nsList.Items) != count {
-		nt.T.Errorf("Expected cluster to have %d %s objects, but found %d", count, gvk, len(nsList.Items))
+		return fmt.Errorf("expected cluster to have %d %s objects, but found %d", count, gvk, len(nsList.Items))
 	}
+	return nil
 }

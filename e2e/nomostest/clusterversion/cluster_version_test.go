@@ -87,3 +87,150 @@ func TestParseClusterVersion(t *testing.T) {
 		})
 	}
 }
+
+func TestIsAtLeast(t *testing.T) {
+	testcases := map[string]struct {
+		myClusterVersion    ClusterVersion
+		otherClusterVersion ClusterVersion
+		expectAtLeast       bool
+	}{
+		"less than minor version on earlier minor version": {
+			myClusterVersion: ClusterVersion{
+				Major:  1,
+				Minor:  25,
+				Patch:  11,
+				Suffix: "-gke.1062001",
+			},
+			otherClusterVersion: ClusterVersion{Major: 1, Minor: 26},
+			expectAtLeast:       false,
+		},
+		"greater than minor version on same minor version": {
+			myClusterVersion: ClusterVersion{
+				Major:  1,
+				Minor:  26,
+				Patch:  11,
+				Suffix: "-gke.1062001",
+			},
+			otherClusterVersion: ClusterVersion{Major: 1, Minor: 26},
+			expectAtLeast:       true,
+		},
+		"greater than minor version on later minor version": {
+			myClusterVersion: ClusterVersion{
+				Major:  1,
+				Minor:  27,
+				Patch:  11,
+				Suffix: "-gke.1062001",
+			},
+			otherClusterVersion: ClusterVersion{Major: 1, Minor: 26},
+			expectAtLeast:       true,
+		},
+		"greater than gke patch version on earlier minor version": {
+			myClusterVersion: ClusterVersion{
+				Major:  1,
+				Minor:  29,
+				Patch:  4,
+				Suffix: "-gke.1994000",
+			},
+			otherClusterVersion: ClusterVersion{
+				Major:  1,
+				Minor:  30,
+				Patch:  2,
+				Suffix: "-gke.1394000",
+			},
+			expectAtLeast: false,
+		},
+		"less than gke patch version on same patch version": {
+			myClusterVersion: ClusterVersion{
+				Major:  1,
+				Minor:  30,
+				Patch:  2,
+				Suffix: "-gke.1004000",
+			},
+			otherClusterVersion: ClusterVersion{
+				Major:  1,
+				Minor:  30,
+				Patch:  2,
+				Suffix: "-gke.1394000",
+			},
+			expectAtLeast: false,
+		},
+		"equal to gke patch version": {
+			myClusterVersion: ClusterVersion{
+				Major:  1,
+				Minor:  30,
+				Patch:  2,
+				Suffix: "-gke.1394000",
+			},
+			otherClusterVersion: ClusterVersion{
+				Major:  1,
+				Minor:  30,
+				Patch:  2,
+				Suffix: "-gke.1394000",
+			},
+			expectAtLeast: true,
+		},
+		"greater than gke patch version on same patch version": {
+			myClusterVersion: ClusterVersion{
+				Major:  1,
+				Minor:  30,
+				Patch:  2,
+				Suffix: "-gke.1994000",
+			},
+			otherClusterVersion: ClusterVersion{
+				Major:  1,
+				Minor:  30,
+				Patch:  2,
+				Suffix: "-gke.1394000",
+			},
+			expectAtLeast: true,
+		},
+		"greater than gke patch version on later minor version": {
+			myClusterVersion: ClusterVersion{
+				Major:  1,
+				Minor:  31,
+				Patch:  0,
+				Suffix: "-gke.1004000",
+			},
+			otherClusterVersion: ClusterVersion{
+				Major:  1,
+				Minor:  30,
+				Patch:  2,
+				Suffix: "-gke.1394000",
+			},
+			expectAtLeast: true,
+		},
+		"less than gke patch version on my unspecified GKE patch": {
+			myClusterVersion: ClusterVersion{
+				Major: 1,
+				Minor: 31,
+				Patch: 0,
+			},
+			otherClusterVersion: ClusterVersion{
+				Major:  1,
+				Minor:  31,
+				Patch:  0,
+				Suffix: "-gke.1004000",
+			},
+		},
+		"greater than gke patch version on other unspecified GKE patch": {
+			myClusterVersion: ClusterVersion{
+				Major:  1,
+				Minor:  31,
+				Patch:  0,
+				Suffix: "-gke.1004000",
+			},
+			otherClusterVersion: ClusterVersion{
+				Major: 1,
+				Minor: 31,
+				Patch: 0,
+			},
+			expectAtLeast: true,
+		},
+	}
+	for name, tc := range testcases {
+		t.Run(name, func(t *testing.T) {
+			got := tc.myClusterVersion.IsAtLeast(tc.otherClusterVersion)
+			testutil.AssertEqual(t, tc.expectAtLeast, got)
+		})
+	}
+}

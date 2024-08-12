@@ -907,18 +907,11 @@ func (nt *NT) autopilotClusterSupportsBursting() (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if initialClusterVersion.Major < 1 || initialClusterVersion.Minor < 26 {
-		return false, nil
-	}
-	gkeSuffix, err := nt.ClusterVersion.GKESuffix()
-	if err != nil {
-		return false, err
-	}
-	if nt.ClusterVersion.Major < 1 || nt.ClusterVersion.Minor < 30 ||
-		nt.ClusterVersion.Patch < 2 || gkeSuffix < 1394000 {
-		return false, nil
-	}
-	return true, nil
+	minInitialVersion := clusterversion.ClusterVersion{Major: 1, Minor: 26}
+	minCurrentVersion := clusterversion.ClusterVersion{
+		Major: 1, Minor: 30, Patch: 2, Suffix: "-gke.1394000"}
+	return initialClusterVersion.IsAtLeast(minInitialVersion) &&
+		nt.ClusterVersion.IsAtLeast(minCurrentVersion), nil
 }
 
 func (nt *NT) detectClusterSupportsBursting() {

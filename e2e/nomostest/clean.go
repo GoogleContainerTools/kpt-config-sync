@@ -213,7 +213,7 @@ func uninstallUnmanagedPackagesOfType(nt *NT, gvk schema.GroupVersionKind) error
 		testpredicates.Or(nt.Logger, conditions...),
 	}
 	// Delete the unmanaged packages in parallel
-	nt.T.Log("[CLEANUP] Deleting unmanaged %s objects...", gvk.Kind)
+	nt.T.Logf("[CLEANUP] Deleting unmanaged %s objects...", gvk.Kind)
 	tg := taskgroup.New()
 	for _, obj := range rsObjs {
 		nn := client.ObjectKeyFromObject(obj)

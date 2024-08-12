@@ -53,6 +53,27 @@ func (cv ClusterVersion) GKESuffix() (int, error) {
 	return intVal, nil
 }
 
+// IsAtLeast returns whether the ClusterVersion is at least the provided version.
+func (cv ClusterVersion) IsAtLeast(other ClusterVersion) bool {
+	if cv.Major != other.Major {
+		return cv.Major > other.Major
+	}
+	if cv.Minor != other.Minor {
+		return cv.Minor > other.Minor
+	}
+	if cv.Patch != other.Patch {
+		return cv.Patch > other.Patch
+	}
+	// Compare -gke suffix, if they exist
+	myGKESuffix, _ := cv.GKESuffix()
+	otherGKESuffix, _ := other.GKESuffix()
+	if myGKESuffix != otherGKESuffix {
+		return myGKESuffix > otherGKESuffix
+	}
+	// Base case - Equal
+	return true
+}
+
 // ParseClusterVersion parses the string "gitVersion" of a Kubernetes cluster.
 func ParseClusterVersion(version string) (ClusterVersion, error) {
 	re := regexp.MustCompile(clusterVersionPattern)

@@ -61,8 +61,6 @@ GO_LICENSES := $(BIN_DIR)/go-licenses
 
 ADDLICENSE := $(BIN_DIR)/addlicense
 
-GOLANGCI_LINT := $(BIN_DIR)/golangci-lint
-
 CONTROLLER_GEN := $(BIN_DIR)/controller-gen
 
 KIND := $(BIN_DIR)/kind
@@ -72,6 +70,10 @@ KIND := $(BIN_DIR)/kind
 CRANE := $(BIN_DIR)/crane
 
 # End vendored tools
+
+# golangci-lint is GPL, so it must not be vendored.
+GOLANGCI_LINT_VERSION := v1.59.1
+GOLANGCI_LINT := $(BIN_DIR)/golangci-lint
 
 KUSTOMIZE_VERSION := v5.4.2-gke.0
 KUSTOMIZE := $(BIN_DIR)/kustomize
@@ -394,7 +396,7 @@ clean-addlicense:
 	@rm -rf $(ADDLICENSE)
 
 "$(GOLANGCI_LINT)": buildenv-dirs
-	GOPATH="$(GO_DIR)" go install github.com/golangci/golangci-lint/cmd/golangci-lint
+	GOPATH="$(GO_DIR)" go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 
 .PHONY: install-golangci-lint
 # install golangci-lint (user-friendly target alias)

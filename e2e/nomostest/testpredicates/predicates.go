@@ -38,6 +38,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testlogger"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
+	kptv1alpha1 "kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/kinds"
@@ -456,38 +457,39 @@ func NoConfigSyncMetadata() Predicate {
 	}
 }
 
-// AllResourcesAreCurrent ensures that the managed resources
-// are all Current in the ResourceGroup CR.
-func AllResourcesAreCurrent() Predicate {
-	return func(o client.Object) error {
-		if o == nil {
+// AllResourcesReconciled ensures that the managed resources
+// are all reconciled in the ResourceGroup CR.
+func AllResourcesReconciled(scheme *runtime.Scheme) Predicate {
+	prereq := HasObservedLatestGeneration(scheme)
+	return func(obj client.Object) error {
+		if obj == nil {
 			return ErrObjectNotFound
 		}
-		u, ok := o.(*unstructured.Unstructured)
-		if !ok {
-			return WrongTypeErr(u, &unstructured.Unstructured{})
-		}
-		resourceStatuses, found, err := unstructured.NestedSlice(u.Object, "status", "resourceStatuses")
-		if err != nil {
+		if err := prereq(obj); err != nil {
 			return err
 		}
-		if !found {
-			return fmt.Errorf("resource status not found in %v", u)
-		}
-		for _, resource := range resourceStatuses {
-			s, ok := resource.(map[string]interface{})
-			if !ok {
-				return WrongTypeErr(s, map[string]interface{}{})
-			}
-			status, found, err := unstructured.NestedString(s, "status")
+		if uObj, ok := obj.(*unstructured.Unstructured); ok {
+			rObj, err := kinds.ToTypedObject(uObj, scheme)
 			if err != nil {
 				return err
 			}
-			if !found {
-				return fmt.Errorf("status field not found for resource %v", resource)
+			obj, err = kinds.ObjectAsClientObject(rObj)
+			if err != nil {
+				return err
 			}
-			if status != "Current" {
-				return fmt.Errorf("status %v is not Current", status)
+		}
+		rgObj, ok := obj.(*kptv1alpha1.ResourceGroup)
+		if !ok {
+			return WrongTypeErr(obj, rgObj)
+		}
+		for _, resource := range rgObj.Status.ResourceStatuses {
+			if resource.Strategy == kptv1alpha1.Apply && resource.Status != kptv1alpha1.Current {
+				return fmt.Errorf("expected applied object %v to have status %q, but got %q",
+					resource.ObjMetadata, kptv1alpha1.Current, resource.Status)
+			}
+			if resource.Strategy == kptv1alpha1.Delete && resource.Status != kptv1alpha1.NotFound {
+				return fmt.Errorf("expected deleted object %v to have status %q, but got %q",
+					resource.ObjMetadata, kptv1alpha1.NotFound, resource.Status)
 			}
 		}
 		return nil
@@ -933,14 +935,14 @@ func HasObservedLatestGeneration(scheme *runtime.Scheme) Predicate {
 		expected := obj.GetGeneration()
 		found, ok, err := unstructured.NestedInt64(uObj.UnstructuredContent(), "status", "observedGeneration")
 		if err != nil {
-			return fmt.Errorf("expected %s %s to have observedGeneration: %w",
+			return fmt.Errorf("expected %s %s to have status.observedGeneration: %w",
 				gvk.Kind, core.ObjectNamespacedName(obj), err)
 		} else if !ok {
-			return fmt.Errorf("expected %s %s to have observedGeneration, but the field is missing",
+			return fmt.Errorf("expected %s %s to have status.observedGeneration, but the field is missing",
 				gvk.Kind, core.ObjectNamespacedName(obj))
 		}
 		if found != expected {
-			return fmt.Errorf("expected %s %s to have observedGeneration equal to %d, but got %d",
+			return fmt.Errorf("expected %s %s to have status.observedGeneration equal to %d, but got %d",
 				gvk.Kind, core.ObjectNamespacedName(obj),
 				expected, found)
 		}

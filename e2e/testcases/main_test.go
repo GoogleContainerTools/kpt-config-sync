@@ -102,7 +102,7 @@ func main(m *testing.M) int {
 	// This TestMain function is required in every e2e test case file.
 	flag.Parse()
 
-	if !*e2e.E2E && !*e2e.Stress {
+	if !*e2e.E2E && !*e2e.Stress && !*e2e.Profiling {
 		// This allows `go test ./...` to function as expected without triggering any long running tests.
 		return 0
 	}

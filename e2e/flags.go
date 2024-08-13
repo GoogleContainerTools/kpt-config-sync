@@ -83,6 +83,10 @@ var E2E = flag.Bool("e2e", false,
 var Stress = flag.Bool("stress", false,
 	"If true, run stress tests.")
 
+// Profiling enables running of profiling tests.
+var Profiling = flag.Bool("profiling", false,
+	"If true, run profiling tests.")
+
 // KCC enables running the e2e tests for kcc resources.
 var KCC = flag.Bool("kcc", false,
 	"If true, run kcc tests.")

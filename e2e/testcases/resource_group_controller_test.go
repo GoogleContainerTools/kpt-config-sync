@@ -60,7 +60,7 @@ func TestResourceGroupController(t *testing.T) {
 	_, err := retry.Retry(60*time.Second, func() error {
 		rg := resourcegroup.Unstructured(configsync.RootSyncName, configsync.ControllerNamespace, id)
 		err := nt.Validate(configsync.RootSyncName, configsync.ControllerNamespace, rg,
-			testpredicates.AllResourcesAreCurrent())
+			testpredicates.AllResourcesReconciled(nt.Scheme))
 		if err != nil {
 			return err
 		}

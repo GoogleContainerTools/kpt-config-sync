@@ -367,11 +367,16 @@ lint-go: "$(GOLANGCI_LINT)"
 lint-bash:
 	@./scripts/lint-bash.sh
 
+# List of currently permitted licenses to be included for go modules.
+# This may need to be updated as new dependencies are added.
+# See https://github.com/google/licenseclassifier/blob/e6a9bb99b5a6f71d5a34336b8245e305f5430f99/license_type.go
+ALLOWED_LICENSES := "MIT,ISC,Apache-2.0,BSD-2-Clause,BSD-3-Clause"
+
 .PHONY: lint-license
 # Lints licenses for all packages, even ones just for testing.
 lint-license: "$(GO_LICENSES)"
-	@echo "\"$(GO_LICENSES)\" check \$$(go list all)"
-	@"$(GO_LICENSES)" check $(shell go list all)
+	@echo "\"$(GO_LICENSES)\" check --allowed_licenses=$(ALLOWED_LICENSES) \$$(go list all) ./vendor/..."
+	@"$(GO_LICENSES)" check --allowed_licenses=$(ALLOWED_LICENSES) $(shell go list all) ./vendor/...
 
 "$(GO_LICENSES)": buildenv-dirs
 	GOPATH="$(GO_DIR)" go install github.com/google/go-licenses/v2

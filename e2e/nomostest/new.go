@@ -317,10 +317,10 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		nt.DefaultWaitTimeout = 6 * time.Minute
 	}
 
-	// Longer default wait timeout for stress tests
+	// Longer default wait timeout for stress & profiling tests
 	// Particularly the reset/finalizer takes a long time for the stress tests
 	// Current slowest test is TestStressLargeRequest
-	if *e2e.Stress {
+	if *e2e.Stress || *e2e.Profiling {
 		nt.DefaultWaitTimeout = 30 * time.Minute
 	}
 

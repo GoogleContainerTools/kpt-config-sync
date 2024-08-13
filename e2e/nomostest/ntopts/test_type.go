@@ -20,6 +20,9 @@ type TestType struct {
 	// StressTest specifies the test is a stress test.
 	StressTest bool
 
+	// ProfilingTest specifies the test is a profiling test.
+	ProfilingTest bool
+
 	// KCCTest specifies the test is for KCC resources.
 	KCCTest bool
 
@@ -31,6 +34,11 @@ type TestType struct {
 // StressTest specifies the test is a stress test.
 func StressTest(opt *New) {
 	opt.StressTest = true
+}
+
+// ProfilingTest specifies the test is a profiling test.
+func ProfilingTest(opt *New) {
+	opt.ProfilingTest = true
 }
 
 // KCCTest specifies the test is a kcc test.

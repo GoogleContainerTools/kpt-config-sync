@@ -61,9 +61,18 @@ func (a *ArtifactRegistryProvider) Type() string {
 }
 
 // Teardown preforms teardown
-// Does nothing currently. We may want to have this delete the repository to
-// minimize side effects.
+// This deletes the repository to prevent side effects across executions.
 func (a *ArtifactRegistryProvider) Teardown() error {
+	out, err := a.gcloudClient.Gcloud("artifacts", "repositories",
+		"delete", a.repositoryName,
+		"--quiet",
+		"--location", a.location,
+		"--project", a.project)
+	if err != nil {
+		if !strings.Contains(string(out), "NOT_FOUND") {
+			return fmt.Errorf("failed to delete repository: %w", err)
+		}
+	}
 	return nil
 }
 

@@ -22,6 +22,7 @@ resources:
 - ../ns-reconciler-base-cluster-role.yaml
 - ../root-reconciler-base-cluster-role.yaml
 - ../otel-agent-cm.yaml
+- ../otel-agent-reconciler-cm.yaml
 - ../reconciler-manager-service-account.yaml
 - ../reposync-crd.yaml
 - ../rootsync-crd.yaml

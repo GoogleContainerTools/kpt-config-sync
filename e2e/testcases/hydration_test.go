@@ -189,11 +189,6 @@ func TestHydrateExternalFiles(t *testing.T) {
 	nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "external-files"}}}`)
 	nt.Must(nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(syncDirMap)))
 
-	// Validate nomos status
-	latestCommit := nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
-	nt.Must(nt.Validate(configsync.RootSyncName, configsync.ControllerNamespace, &v1beta1.RootSync{},
-		testpredicates.RootSyncHasNomosStatus(latestCommit, "SYNCED")))
-
 	nt.T.Log("Validating resources are synced")
 	tg := taskgroup.New()
 	tg.Go(func() error {

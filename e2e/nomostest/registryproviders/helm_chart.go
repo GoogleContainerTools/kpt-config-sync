@@ -128,9 +128,11 @@ func BuildHelmPackage(artifactDir string, provider HelmRegistryProvider, rsRef t
 		return nil, fmt.Errorf("packaging helm chart: %w", err)
 	}
 	helmPackage := &HelmPackage{
+		HelmChartID: HelmChartID{
+			Name:    name,
+			Version: version,
+		},
 		LocalChartTgzPath: filepath.Join(tmpDir, fmt.Sprintf("%s-%s.tgz", name, version)),
-		Name:              name,
-		Version:           version,
 		Provider:          provider,
 	}
 	return helmPackage, nil
@@ -160,14 +162,19 @@ func updateYAMLFile(name string, updateFn func(map[string]interface{}) error) er
 	return nil
 }
 
+// HelmChartID identifies a helm chart.
+type HelmChartID struct {
+	Name    string
+	Version string
+}
+
 // HelmPackage represents a helm package that is pushed to a remote registry by the
 // test scaffolding. It uses git references as version tags to enable straightforward
 // integration with the git e2e tooling and to mimic how a user might leverage
 // git and helm.
 type HelmPackage struct {
+	HelmChartID
 	LocalChartTgzPath string
-	Name              string
-	Version           string
 	Digest            string
 	Provider          HelmRegistryProvider
 }

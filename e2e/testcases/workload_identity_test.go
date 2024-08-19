@@ -503,7 +503,7 @@ func updateRootSyncWithHelmSourceConfig(nt *nomostest.NT, rsRef types.Namespaced
 		return nil, fmt.Errorf("pushing helm chart: %w", err)
 	}
 	nt.T.Log("Update RootSync to sync from a helm chart")
-	rootSyncHelm := nt.RootSyncObjectHelm(configsync.RootSyncName, chart)
+	rootSyncHelm := nt.RootSyncObjectHelm(configsync.RootSyncName, chart.HelmChartID)
 	rootSyncHelm.Spec.Helm.ReleaseName = chart.Name
 	for _, mutator := range mutators {
 		mutator(rootSyncHelm)
@@ -522,7 +522,7 @@ func updateRepoSyncWithHelmSourceConfig(nt *nomostest.NT, rsRef types.Namespaced
 		return nil, fmt.Errorf("pushing helm chart: %w", err)
 	}
 	nt.T.Log("Update RepoSync to sync from a helm chart")
-	repoSyncHelm := nt.RepoSyncObjectHelm(rsRef, chart)
+	repoSyncHelm := nt.RepoSyncObjectHelm(rsRef, chart.HelmChartID)
 	repoSyncHelm.Spec.Helm.ReleaseName = chart.Name
 	for _, mutator := range mutators {
 		mutator(repoSyncHelm)

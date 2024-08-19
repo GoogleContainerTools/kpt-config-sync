@@ -139,6 +139,12 @@ type NT struct {
 	// The key is the namespace and name of the RepoSync object, the value points to the corresponding Repository object.
 	NonRootRepos map[types.NamespacedName]*gitproviders.Repository
 
+	// RootSyncHelmCharts is a map of RootSyncs that sync Helm charts
+	RootSyncHelmCharts map[types.NamespacedName]registryproviders.HelmChartID
+
+	// RepoSyncHelmCharts is a map of RepoSyncs that sync Helm charts
+	RepoSyncHelmCharts map[types.NamespacedName]registryproviders.HelmChartID
+
 	// MetricsExpectations tracks the objects expected to be declared in the
 	// source and the operations expected to be performed on them by the set of
 	// RootSyncs and RepoSyncs managed by this test.
@@ -527,7 +533,19 @@ func (nt *NT) testLogs(previousPodLog bool) {
 		//nt.PodLogs(configmanagement.ControllerNamespace, reconcilermanager.NsReconcilerName(ns), reconcilermanager.GitSync, previousPodLog)
 		nt.LogDeploymentPodResources(configmanagement.ControllerNamespace, core.RootReconcilerName(name))
 	}
+	for nn := range nt.RootSyncHelmCharts {
+		nt.PodLogs(configmanagement.ControllerNamespace, core.RootReconcilerName(nn.Name),
+			reconcilermanager.Reconciler, previousPodLog)
+		//nt.PodLogs(configmanagement.ControllerNamespace, reconcilermanager.NsReconcilerName(ns), reconcilermanager.GitSync, previousPodLog)
+		nt.LogDeploymentPodResources(configmanagement.ControllerNamespace, core.RootReconcilerName(nn.Name))
+	}
 	for nn := range nt.NonRootRepos {
+		nt.PodLogs(configmanagement.ControllerNamespace, core.NsReconcilerName(nn.Namespace, nn.Name),
+			reconcilermanager.Reconciler, previousPodLog)
+		//nt.PodLogs(configmanagement.ControllerNamespace, reconcilermanager.NsReconcilerName(ns), reconcilermanager.GitSync, previousPodLog)
+		nt.LogDeploymentPodResources(configmanagement.ControllerNamespace, core.NsReconcilerName(nn.Namespace, nn.Name))
+	}
+	for nn := range nt.RepoSyncHelmCharts {
 		nt.PodLogs(configmanagement.ControllerNamespace, core.NsReconcilerName(nn.Namespace, nn.Name),
 			reconcilermanager.Reconciler, previousPodLog)
 		//nt.PodLogs(configmanagement.ControllerNamespace, reconcilermanager.NsReconcilerName(ns), reconcilermanager.GitSync, previousPodLog)

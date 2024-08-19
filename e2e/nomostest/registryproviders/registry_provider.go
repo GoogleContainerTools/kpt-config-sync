@@ -244,9 +244,11 @@ func pushHelmPackage(provider HelmRegistryProvider, repoURL, localChartTgzPath s
 	digest := strings.TrimSpace(string(out))
 
 	return &HelmPackage{
+		HelmChartID: HelmChartID{
+			Name:    chartName,
+			Version: chartVersion,
+		},
 		LocalChartTgzPath: localChartTgzPath,
-		Version:           chartVersion,
-		Name:              chartName,
 		Digest:            digest,
 		Provider:          provider,
 	}, nil

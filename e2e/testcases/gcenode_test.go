@@ -190,9 +190,7 @@ func TestGCENodeHelm(t *testing.T) {
 		ntopts.RepoSyncPermissions(policy.AllAdmin()), // NS reconciler manages a bunch of resources.
 		ntopts.WithDelegatedControl)
 
-	if err := workloadidentity.ValidateDisabled(nt); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(workloadidentity.ValidateDisabled(nt))
 
 	rootSyncRef := nomostest.RootSyncNN(configsync.RootSyncName)
 	rootChart, err := nt.BuildAndPushHelmPackage(
@@ -203,11 +201,9 @@ func TestGCENodeHelm(t *testing.T) {
 	}
 
 	nt.T.Log("Update RootSync to sync from a private Artifact Registry")
-	rootSyncHelm := nt.RootSyncObjectHelm(configsync.RootSyncName, rootChart)
+	rootSyncHelm := nt.RootSyncObjectHelm(configsync.RootSyncName, rootChart.HelmChartID)
 	rootSyncHelm.Spec.Helm.ReleaseName = "my-coredns"
-	if err = nt.KubeClient.Apply(rootSyncHelm); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.KubeClient.Apply(rootSyncHelm))
 
 	repoSyncRef := nomostest.RepoSyncNN(testNs, configsync.RepoSyncName)
 	nsChart, err := nt.BuildAndPushHelmPackage(repoSyncRef,
@@ -216,32 +212,16 @@ func TestGCENodeHelm(t *testing.T) {
 		nt.T.Fatalf("failed to push helm chart: %v", err)
 	}
 	nt.T.Log("Update RepoSync to sync from a helm chart")
-	repoSyncHelm := nt.RepoSyncObjectHelm(repoSyncRef, nsChart)
+	repoSyncHelm := nt.RepoSyncObjectHelm(repoSyncRef, nsChart.HelmChartID)
 	repoSyncHelm.Spec.Helm.ReleaseName = "my-ns-chart"
-	if err = nt.KubeClient.Apply(repoSyncHelm); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.KubeClient.Apply(repoSyncHelm))
 
-	err = nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn(rootChart.Version)),
-		nomostest.WithRepoSha1Func(nomostest.HelmChartVersionShaFn(nsChart.Version)),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
-			rootSyncRef: rootChart.Name,
-			repoSyncRef: nsChart.Name}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
-	err = nt.Validate(fmt.Sprintf("%s-%s", rootSyncHelm.Spec.Helm.ReleaseName, rootChart.Name),
+	nt.Must(nt.Validate(fmt.Sprintf("%s-%s", rootSyncHelm.Spec.Helm.ReleaseName, rootChart.Name),
 		"default", &appsv1.Deployment{},
-		testpredicates.IsManagedBy(nt.Scheme, declared.RootScope, rootSyncRef.Name))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-	err = nt.Validate(fmt.Sprintf("%s-%s", repoSyncHelm.Spec.Helm.ReleaseName, nsChart.Name),
+		testpredicates.IsManagedBy(nt.Scheme, declared.RootScope, rootSyncRef.Name)))
+	nt.Must(nt.Validate(fmt.Sprintf("%s-%s", repoSyncHelm.Spec.Helm.ReleaseName, nsChart.Name),
 		repoSyncRef.Namespace, &appsv1.Deployment{},
-		testpredicates.IsManagedBy(nt.Scheme, declared.Scope(repoSyncRef.Namespace), repoSyncRef.Name))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		testpredicates.IsManagedBy(nt.Scheme, declared.Scope(repoSyncRef.Namespace), repoSyncRef.Name)))
 }

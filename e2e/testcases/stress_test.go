@@ -593,7 +593,7 @@ func TestStressMemoryUsageHelm(t *testing.T) {
 	kind := "Anvil"
 
 	nt.T.Logf("Updating RootSync to sync from the Helm chart: %s:%s", chart.Name, chart.Version)
-	rs := nt.RootSyncObjectHelm(configsync.RootSyncName, chart)
+	rs := nt.RootSyncObjectHelm(configsync.RootSyncName, chart.HelmChartID)
 	rs.Spec.Helm.Namespace = ns
 	rs.Spec.Helm.Values = &apiextensionsv1.JSON{
 		Raw: []byte(fmt.Sprintf(`{"resources": %d, "replicas": %d}`, crdCount, crCount)),
@@ -605,15 +605,7 @@ func TestStressMemoryUsageHelm(t *testing.T) {
 
 	// Validate that the resources sync without the reconciler running out of
 	// memory, getting OOMKilled, and crash looping.
-	err = nt.WatchForAllSyncs(
-		nomostest.WithTimeout(5*time.Minute),
-		nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn(chart.Version)),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
-			nomostest.DefaultRootRepoNamespacedName: chart.Name,
-		}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs(nomostest.WithTimeout(5 * time.Minute)))
 
 	nt.T.Logf("Verify the number of Anvil objects")
 	for i := 1; i <= crdCount; i++ {
@@ -639,17 +631,13 @@ func TestStressMemoryUsageHelm(t *testing.T) {
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"helm": {"chart": %q, "version": %q, "namespace": null, "values": null}}}`,
 		emptyChart.Name, emptyChart.Version))
 
+	// Update the expected helm chart
+	rsKey := client.ObjectKeyFromObject(rs)
+	nt.RootSyncHelmCharts[rsKey] = emptyChart.HelmChartID
+
 	// Validate that the resources sync without the reconciler running out of
 	// memory, getting OOMKilled, and crash looping.
-	err = nt.WatchForAllSyncs(
-		nomostest.WithTimeout(5*time.Minute),
-		nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn(emptyChart.Version)),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
-			nomostest.DefaultRootRepoNamespacedName: emptyChart.Name,
-		}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs(nomostest.WithTimeout(5 * time.Minute)))
 }
 
 func TestStressResourceGroup(t *testing.T) {

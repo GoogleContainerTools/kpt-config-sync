@@ -146,7 +146,7 @@ func syncDirectory(syncDirectoryMap map[types.NamespacedName]string, nn types.Na
 // nt.Watcher.WatchObject() instead.
 func (nt *NT) WatchForAllSyncs(options ...WatchForAllSyncsOptions) error {
 	nt.T.Helper()
-	waitForRepoSyncsOptions := watchForAllSyncsOptions{
+	opts := watchForAllSyncsOptions{
 		timeout:            nt.DefaultWaitTimeout,
 		readyCheck:         true,
 		syncRootRepos:      true,
@@ -159,10 +159,10 @@ func (nt *NT) WatchForAllSyncs(options ...WatchForAllSyncsOptions) error {
 	}
 	// Override defaults with specified options
 	for _, option := range options {
-		option(&waitForRepoSyncsOptions)
+		option(&opts)
 	}
 
-	if waitForRepoSyncsOptions.readyCheck {
+	if opts.readyCheck {
 		if err := WaitForConfigSyncReady(nt); err != nil {
 			return err
 		}
@@ -170,34 +170,52 @@ func (nt *NT) WatchForAllSyncs(options ...WatchForAllSyncsOptions) error {
 
 	tg := taskgroup.New()
 
-	if waitForRepoSyncsOptions.syncRootRepos {
+	if opts.syncRootRepos {
 		for name := range nt.RootRepos {
-			if _, ok := waitForRepoSyncsOptions.skipRootRepos[name]; ok {
+			if _, ok := opts.skipRootRepos[name]; ok {
 				continue
 			}
 			nn := RootSyncNN(name)
-			syncDir := syncDirectory(waitForRepoSyncsOptions.syncDirectoryMap, nn)
+			syncDir := syncDirectory(opts.syncDirectoryMap, nn)
 			tg.Go(func() error {
 				return nt.WatchForSync(kinds.RootSyncV1Beta1(), nn.Name, nn.Namespace,
-					waitForRepoSyncsOptions.rootSha1Fn, RootSyncHasStatusSyncCommit,
+					opts.rootSha1Fn, RootSyncHasStatusSyncCommit,
 					&SyncDirPredicatePair{Dir: syncDir, Predicate: RootSyncHasStatusSyncDirectory},
-					testwatcher.WatchTimeout(waitForRepoSyncsOptions.timeout))
+					testwatcher.WatchTimeout(opts.timeout))
+			})
+		}
+		for nn, chart := range nt.RootSyncHelmCharts {
+			tg.Go(func() error {
+				return nt.WatchForSync(kinds.RootSyncV1Beta1(), nn.Name, nn.Namespace,
+					HelmChartVersionShaFn(chart.Version),
+					RootSyncHasStatusSyncCommit,
+					&SyncDirPredicatePair{Dir: chart.Name, Predicate: RootSyncHasStatusSyncDirectory},
+					testwatcher.WatchTimeout(opts.timeout))
 			})
 		}
 	}
 
-	if waitForRepoSyncsOptions.syncNamespaceRepos {
+	if opts.syncNamespaceRepos {
 		for nn := range nt.NonRootRepos {
-			if _, ok := waitForRepoSyncsOptions.skipNonRootRepos[nn]; ok {
+			if _, ok := opts.skipNonRootRepos[nn]; ok {
 				continue
 			}
-			syncDir := syncDirectory(waitForRepoSyncsOptions.syncDirectoryMap, nn)
+			syncDir := syncDirectory(opts.syncDirectoryMap, nn)
 			nnPtr := nn
 			tg.Go(func() error {
 				return nt.WatchForSync(kinds.RepoSyncV1Beta1(), nnPtr.Name, nnPtr.Namespace,
-					waitForRepoSyncsOptions.repoSha1Fn, RepoSyncHasStatusSyncCommit,
+					opts.repoSha1Fn, RepoSyncHasStatusSyncCommit,
 					&SyncDirPredicatePair{Dir: syncDir, Predicate: RepoSyncHasStatusSyncDirectory},
-					testwatcher.WatchTimeout(waitForRepoSyncsOptions.timeout))
+					testwatcher.WatchTimeout(opts.timeout))
+			})
+		}
+		for nn, chart := range nt.RepoSyncHelmCharts {
+			tg.Go(func() error {
+				return nt.WatchForSync(kinds.RepoSyncV1Beta1(), nn.Name, nn.Namespace,
+					HelmChartVersionShaFn(chart.Version),
+					RepoSyncHasStatusSyncCommit,
+					&SyncDirPredicatePair{Dir: chart.Name, Predicate: RepoSyncHasStatusSyncDirectory},
+					testwatcher.WatchTimeout(opts.timeout))
 			})
 		}
 	}

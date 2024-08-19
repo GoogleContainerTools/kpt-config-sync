@@ -155,7 +155,7 @@ func TestReconcilerManagerTeardownInvalidRSyncs(t *testing.T) {
 	if err = nomostest.SetupFakeSSHCreds(nt, rootSync.Kind, nomostest.RootSyncNN(rootSync.Name), configsync.AuthToken, controllers.GitCredentialVolume); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.WaitForRootSyncStalledError(rootSync.Namespace, rootSync.Name,
+	nt.WaitForRootSyncStalledError(rootSync.Name,
 		"Validation", `git secretType was set as "token" but token key is not present in git-creds secret`)
 
 	t.Log("Validate the RepoSync")

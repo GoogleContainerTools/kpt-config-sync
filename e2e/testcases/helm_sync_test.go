@@ -149,7 +149,7 @@ func TestHelmWatchConfigMap(t *testing.T) {
 	}
 	nt.Must(nt.KubeClient.Apply(rs))
 
-	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap \"helm-watch-config-map\" not found")
+	nt.WaitForRootSyncStalledError(rs.Name, "Validation", "KNV1061: RootSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap \"helm-watch-config-map\" not found")
 
 	cmName := "helm-watch-config-map"
 	nt.T.Log("Apply valid ConfigMap that is not immutable (which should not be allowed)")
@@ -169,7 +169,7 @@ image:
 		}
 	})
 	nt.Must(nt.KubeClient.Create(cm0))
-	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap \"helm-watch-config-map\" in namespace \"config-management-system\" is not immutable")
+	nt.WaitForRootSyncStalledError(rs.Name, "Validation", "KNV1061: RootSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap \"helm-watch-config-map\" in namespace \"config-management-system\" is not immutable")
 
 	nt.T.Log("Apply the ConfigMap with values to the cluster with incorrect data key")
 	cm1 := k8sobjects.ConfigMapObject(core.Name(cmName), core.Namespace(configsync.ControllerNamespace))
@@ -181,11 +181,11 @@ image:
 `,
 	}
 	nt.Must(nt.KubeClient.Update(cm1))
-	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap \"helm-watch-config-map\" in namespace \"config-management-system\" does not have data key \"values.yaml\"")
+	nt.WaitForRootSyncStalledError(rs.Name, "Validation", "KNV1061: RootSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap \"helm-watch-config-map\" in namespace \"config-management-system\" does not have data key \"values.yaml\"")
 
 	// delete the ConfigMap
 	nt.Must(nt.KubeClient.Delete(cm1))
-	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RootSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap \"helm-watch-config-map\" not found")
+	nt.WaitForRootSyncStalledError(rs.Name, "Validation", "KNV1061: RootSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap \"helm-watch-config-map\" not found")
 
 	nt.T.Log("Apply valid ConfigMap with values: imagePullPolicy: Always; wordpressUserName: test-user-1")
 	cm2 := k8sobjects.ConfigMapObject(core.Name(cmName), core.Namespace(configsync.ControllerNamespace))

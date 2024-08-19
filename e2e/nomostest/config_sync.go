@@ -1355,7 +1355,7 @@ func SetupFakeSSHCreds(nt *NT, rsKind string, rsRef types.NamespacedName, auth c
 	nt.T.Logf("The %s/%s Secret doesn't exist with auth %q, so creating a fake one", rsRef.Namespace, secretName, auth)
 	msg := fmt.Sprintf("Secret %s not found: create one to allow client authentication", secretName)
 	if rsKind == kinds.RootSyncV1Beta1().Kind {
-		nt.WaitForRootSyncStalledError(rsRef.Namespace, rsRef.Name, "Validation", msg)
+		nt.WaitForRootSyncStalledError(rsRef.Name, "Validation", msg)
 	} else {
 		nt.WaitForRepoSyncStalledError(rsRef.Namespace, rsRef.Name, "Validation", msg)
 	}

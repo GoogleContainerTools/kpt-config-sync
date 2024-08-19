@@ -51,7 +51,7 @@ func TestSyncingThroughAProxy(t *testing.T) {
 	}
 	nt.T.Log("Verify the NoOpProxyError")
 	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
-	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", `KNV1061: RootSyncs which specify spec.git.proxy must also specify spec.git.auth as one of "none", "cookiefile" or "token"`)
+	nt.WaitForRootSyncStalledError(rs.Name, "Validation", `KNV1061: RootSyncs which specify spec.git.proxy must also specify spec.git.auth as one of "none", "cookiefile" or "token"`)
 
 	nt.T.Log("Set auth type to cookiefile")
 	nt.MustMergePatch(rs, `{"spec": {"git": {"auth": "cookiefile"}}}`)
@@ -59,12 +59,12 @@ func TestSyncingThroughAProxy(t *testing.T) {
 	if err = nomostest.SetupFakeSSHCreds(nt, rs.Kind, nomostest.RootSyncNN(rs.Name), configsync.AuthCookieFile, controllers.GitCredentialVolume); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", `git secretType was set as "cookiefile" but cookie_file key is not present`)
+	nt.WaitForRootSyncStalledError(rs.Name, "Validation", `git secretType was set as "cookiefile" but cookie_file key is not present`)
 
 	nt.T.Log("Set auth type to token")
 	nt.MustMergePatch(rs, `{"spec": {"git": {"auth": "token"}}}`)
 	nt.T.Log("Verify the secretRef error")
-	nt.WaitForRootSyncStalledError(rs.Namespace, rs.Name, "Validation", `git secretType was set as "token" but token key is not present`)
+	nt.WaitForRootSyncStalledError(rs.Name, "Validation", `git secretType was set as "token" but token key is not present`)
 
 	nt.T.Log("Set auth type to none")
 	nt.MustMergePatch(rs, `{"spec": {"git": {"auth": "none", "secretRef": {"name":""}}}}`)

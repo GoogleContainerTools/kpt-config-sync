@@ -1529,7 +1529,9 @@ func ConfigMapHasData(key string, value string) Predicate {
 		if !ok {
 			return WrongTypeErr(o, cm)
 		}
-		if cm.Data[key] == value {
+
+		data, ok := cm.Data[key]
+		if ok && data == value {
 			return nil
 		}
 		return fmt.Errorf("%s: %s is not in the ConfigMap", key, value)

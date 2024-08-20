@@ -71,7 +71,7 @@ spec:
         - -conf
         - /etc/coredns/Corefile
         image: coredns/coredns:1.8.4
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         livenessProbe:
           failureThreshold: 5
           httpGet:

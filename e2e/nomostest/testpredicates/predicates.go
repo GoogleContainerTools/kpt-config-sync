@@ -1518,3 +1518,22 @@ func RootSyncHasNomosStatus(expectedCommit, expectedStatus string) Predicate {
 		return nil
 	}
 }
+
+// ConfigMapHasData returns an error if the ConfigMap doesn't contain the given key value pair
+func ConfigMapHasData(key string, value string) Predicate {
+	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
+		cm, ok := o.(*corev1.ConfigMap)
+		if !ok {
+			return WrongTypeErr(o, cm)
+		}
+
+		data, ok := cm.Data[key]
+		if ok && data == value {
+			return nil
+		}
+		return fmt.Errorf("%s: %s is not in the ConfigMap", key, value)
+	}
+}

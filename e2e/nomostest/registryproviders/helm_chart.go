@@ -168,6 +168,11 @@ type HelmChartID struct {
 	Version string
 }
 
+// String returns NAME/VERSION.
+func (id HelmChartID) String() string {
+	return fmt.Sprintf("%s/%s", id.Name, id.Version)
+}
+
 // HelmPackage represents a helm package that is pushed to a remote registry by the
 // test scaffolding. It uses git references as version tags to enable straightforward
 // integration with the git e2e tooling and to mimic how a user might leverage

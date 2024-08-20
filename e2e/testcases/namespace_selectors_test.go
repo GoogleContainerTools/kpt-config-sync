@@ -77,6 +77,7 @@ var (
 
 func TestNamespaceSelectorHierarchicalFormat(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Selector)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	bookstoreNSS := k8sobjects2.NamespaceSelectorObject(core.Name(bookstoreNSSName))
 	bookstoreCM := k8sobjects2.ConfigMapObject(core.Name(bookstoreCMName),
@@ -95,21 +96,21 @@ func TestNamespaceSelectorHierarchicalFormat(t *testing.T) {
 
 	shoestoreNSS.Spec.Selector.MatchLabels = map[string]string{"app": shoestoreNS}
 
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/namespace-selector-bookstore.yaml", bookstoreNSS))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/namespace-selector-shoestore.yaml", shoestoreNSS))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/bookstore/ns.yaml", k8sobjects2.NamespaceObject(bookstoreNS, core.Label("app", bookstoreNS))))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/shoestore/ns.yaml", k8sobjects2.NamespaceObject(shoestoreNS, core.Label("app", shoestoreNS))))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/cm-bookstore.yaml", bookstoreCM))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/rq-bookstore.yaml", bookstoreRQ))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/cm-shoestore.yaml", shoestoreCM))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add Namespaces, NamespaceSelectors and Namespace-scoped resources"))
+	nt.Must(rootSyncGitRepo.Add("acme/namespaces/namespace-selector-bookstore.yaml", bookstoreNSS))
+	nt.Must(rootSyncGitRepo.Add("acme/namespaces/namespace-selector-shoestore.yaml", shoestoreNSS))
+	nt.Must(rootSyncGitRepo.Add("acme/namespaces/bookstore/ns.yaml", k8sobjects2.NamespaceObject(bookstoreNS, core.Label("app", bookstoreNS))))
+	nt.Must(rootSyncGitRepo.Add("acme/namespaces/shoestore/ns.yaml", k8sobjects2.NamespaceObject(shoestoreNS, core.Label("app", shoestoreNS))))
+	nt.Must(rootSyncGitRepo.Add("acme/namespaces/cm-bookstore.yaml", bookstoreCM))
+	nt.Must(rootSyncGitRepo.Add("acme/namespaces/rq-bookstore.yaml", bookstoreRQ))
+	nt.Must(rootSyncGitRepo.Add("acme/namespaces/cm-shoestore.yaml", shoestoreCM))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Add Namespaces, NamespaceSelectors and Namespace-scoped resources"))
 
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, selectors.InvalidSelectorErrorCode, "NamespaceSelector MUST NOT use the dynamic mode with the hierarchy source format")
 
 	nt.T.Log("Update NamespaceSelector to use static mode with the hierarchy format")
 	bookstoreNSS.Spec.Mode = v1.NSSelectorStaticMode
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/namespace-selector-bookstore.yaml", bookstoreNSS))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update NamespaceSelector to use static mode"))
+	nt.Must(rootSyncGitRepo.Add("acme/namespaces/namespace-selector-bookstore.yaml", bookstoreNSS))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Update NamespaceSelector to use static mode"))
 
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -123,6 +124,7 @@ func TestNamespaceSelectorHierarchicalFormat(t *testing.T) {
 
 func TestNamespaceSelectorUnstructuredFormat(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Selector, ntopts.Unstructured)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	bookstoreNSS := k8sobjects2.NamespaceSelectorObject(core.Name(bookstoreNSSName))
 	bookstoreCM := k8sobjects2.ConfigMapObject(core.Name(bookstoreCMName),
@@ -140,13 +142,13 @@ func TestNamespaceSelectorUnstructuredFormat(t *testing.T) {
 
 	shoestoreNSS.Spec.Selector.MatchLabels = map[string]string{"app": shoestoreNS}
 
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespace-selector-bookstore.yaml", bookstoreNSS))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespace-selector-shoestore.yaml", shoestoreNSS))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/shoestore-ns.yaml", k8sobjects2.NamespaceObject(shoestoreNS, core.Label("app", shoestoreNS))))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm-bookstore.yaml", bookstoreCM))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/rq-bookstore.yaml", bookstoreRQ))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm-shoestore.yaml", shoestoreCM))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add Namespaces, NamespaceSelectors and Namespace-scoped resources"))
+	nt.Must(rootSyncGitRepo.Add("acme/namespace-selector-bookstore.yaml", bookstoreNSS))
+	nt.Must(rootSyncGitRepo.Add("acme/namespace-selector-shoestore.yaml", shoestoreNSS))
+	nt.Must(rootSyncGitRepo.Add("acme/shoestore-ns.yaml", k8sobjects2.NamespaceObject(shoestoreNS, core.Label("app", shoestoreNS))))
+	nt.Must(rootSyncGitRepo.Add("acme/cm-bookstore.yaml", bookstoreCM))
+	nt.Must(rootSyncGitRepo.Add("acme/rq-bookstore.yaml", bookstoreRQ))
+	nt.Must(rootSyncGitRepo.Add("acme/cm-shoestore.yaml", shoestoreCM))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Add Namespaces, NamespaceSelectors and Namespace-scoped resources"))
 
 	nt.Logger.Info("Only resources in shoestore are created because bookstore Namespace is not declared")
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -176,8 +178,8 @@ func TestNamespaceSelectorUnstructuredFormat(t *testing.T) {
 
 	nt.Logger.Info("Update NamespaceSelector to use dynamic mode")
 	bookstoreNSS.Spec.Mode = v1.NSSelectorDynamicMode
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespace-selector-bookstore.yaml", bookstoreNSS))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update NamespaceSelector to use dynamic mode"))
+	nt.Must(rootSyncGitRepo.Add("acme/namespace-selector-bookstore.yaml", bookstoreNSS))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Update NamespaceSelector to use dynamic mode"))
 	if err := nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(),
 		configsync.RootSyncName,
 		configsync.ControllerNamespace,
@@ -241,8 +243,8 @@ func TestNamespaceSelectorUnstructuredFormat(t *testing.T) {
 
 	nt.Logger.Info("Update NamespaceSelector to use static mode")
 	bookstoreNSS.Spec.Mode = v1.NSSelectorStaticMode
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespace-selector-bookstore.yaml", bookstoreNSS))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update NamespaceSelector to use static mode"))
+	nt.Must(rootSyncGitRepo.Add("acme/namespace-selector-bookstore.yaml", bookstoreNSS))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Update NamespaceSelector to use static mode"))
 
 	if err := nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(),
 		configsync.RootSyncName,
@@ -273,8 +275,8 @@ func TestNamespaceSelectorUnstructuredFormat(t *testing.T) {
 
 	nt.Logger.Info("Update NamespaceSelector back to use dynamic mode")
 	bookstoreNSS.Spec.Mode = v1.NSSelectorDynamicMode
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespace-selector-bookstore.yaml", bookstoreNSS))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update NamespaceSelector to use dynamic mode again"))
+	nt.Must(rootSyncGitRepo.Add("acme/namespace-selector-bookstore.yaml", bookstoreNSS))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Update NamespaceSelector to use dynamic mode again"))
 	if err := nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(),
 		configsync.RootSyncName,
 		configsync.ControllerNamespace,

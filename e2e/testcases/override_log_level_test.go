@@ -34,6 +34,7 @@ import (
 
 func TestOverrideRootSyncLogLevel(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.Unstructured)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	rootSyncName := nomostest.RootSyncNN(configsync.RootSyncName)
 	rootReconcilerName := core.RootReconcilerObjectKey(rootSyncName.Name)
@@ -41,8 +42,8 @@ func TestOverrideRootSyncLogLevel(t *testing.T) {
 
 	// add kustomize to enable hydration controller container in root-sync
 	nt.T.Log("Add the kustomize components root directory")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/kustomize-components", "."))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add DRY configs to the repository"))
+	nt.Must(rootSyncGitRepo.Copy("../testdata/hydration/kustomize-components", "."))
+	nt.Must(rootSyncGitRepo.CommitAndPush("add DRY configs to the repository"))
 
 	nt.T.Log("Update RootSync to sync from the kustomize-components directory")
 	nt.MustMergePatch(rootSyncV1, `{"spec": {"git": {"dir": "kustomize-components"}}}`)
@@ -143,20 +144,25 @@ func TestOverrideRootSyncLogLevel(t *testing.T) {
 }
 
 func TestOverrideRepoSyncLogLevel(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.Unstructured, ntopts.NamespaceRepo(frontendNamespace, configsync.RepoSyncName))
+	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.Unstructured,
+		ntopts.NamespaceRepo(frontendNamespace, configsync.RepoSyncName))
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	repoSyncID := nomostest.RepoSyncID(configsync.RepoSyncName, frontendNamespace)
+	repoSyncKey := repoSyncID.ObjectKey
+	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
+
 	frontendReconcilerNN := core.NsReconcilerObjectKey(frontendNamespace, configsync.RepoSyncName)
-	frontendNN := nomostest.RepoSyncNN(frontendNamespace, configsync.RepoSyncName)
-	repoSyncFrontend := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, frontendNN)
+	repoSyncFrontend := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, repoSyncKey)
 
 	// add kustomize to enable hydration controller container in repo-sync
 	nt.T.Log("Add the kustomize components root repo directory")
-	nt.Must(nt.NonRootRepos[frontendNN].Copy("../testdata/hydration/kustomize-components", "."))
-	nt.Must(nt.NonRootRepos[frontendNN].CommitAndPush("add DRY configs to the repository"))
+	nt.Must(repoSyncGitRepo.Copy("../testdata/hydration/kustomize-components", "."))
+	nt.Must(repoSyncGitRepo.CommitAndPush("add DRY configs to the repository"))
 
 	nt.T.Log("Update RepoSync to sync from the kustomize-components directory")
 	repoSyncFrontend.Spec.Git.Dir = "kustomize-components"
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(frontendNamespace, configsync.RepoSyncName), repoSyncFrontend))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from the kustomize directory"))
+	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(frontendNamespace, configsync.RepoSyncName), repoSyncFrontend))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Update RepoSync to sync from the kustomize directory"))
 
 	// Verify ns-reconciler-frontend uses the default log level
 	err := nt.Watcher.WatchObject(kinds.Deployment(),
@@ -185,8 +191,8 @@ func TestOverrideRepoSyncLogLevel(t *testing.T) {
 			},
 		},
 	}
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(frontendNamespace, configsync.RepoSyncName), repoSyncFrontend))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update log level of frontend Reposync"))
+	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(frontendNamespace, configsync.RepoSyncName), repoSyncFrontend))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Update log level of frontend Reposync"))
 
 	// validate override and make sure other containers are unaffected
 	err = nt.Watcher.WatchObject(kinds.Deployment(),
@@ -225,8 +231,8 @@ func TestOverrideRepoSyncLogLevel(t *testing.T) {
 			},
 		},
 	}
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(frontendNamespace, configsync.RepoSyncName), repoSyncFrontend))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update log level of frontend Reposync"))
+	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(frontendNamespace, configsync.RepoSyncName), repoSyncFrontend))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Update log level of frontend Reposync"))
 
 	// validate override for all containers
 	err = nt.Watcher.WatchObject(kinds.Deployment(),
@@ -244,8 +250,8 @@ func TestOverrideRepoSyncLogLevel(t *testing.T) {
 
 	// Clear override from repoSync Frontend
 	repoSyncFrontend.Spec.Override = nil
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(frontendNamespace, configsync.RepoSyncName), repoSyncFrontend))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Clear override from repoSync Frontend"))
+	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(frontendNamespace, configsync.RepoSyncName), repoSyncFrontend))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Clear override from repoSync Frontend"))
 
 	// validate log level value are back to default for all containers
 	err = nt.Watcher.WatchObject(kinds.Deployment(),

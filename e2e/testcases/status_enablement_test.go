@@ -39,6 +39,7 @@ import (
 
 func TestStatusEnabledAndDisabled(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.Unstructured)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 	id := applier.InventoryID(configsync.RootSyncName, configsync.ControllerNamespace)
 
 	rootSync := k8sobjects.RootSyncObjectV1Alpha1(configsync.RootSyncName)
@@ -49,9 +50,9 @@ func TestStatusEnabledAndDisabled(t *testing.T) {
 	}
 
 	namespaceName := "status-test"
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespaceObject(namespaceName, nil)))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm1.yaml", k8sobjects.ConfigMapObject(core.Name("cm1"), core.Namespace(namespaceName))))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add a namespace and a configmap"))
+	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespaceObject(namespaceName, nil)))
+	nt.Must(rootSyncGitRepo.Add("acme/cm1.yaml", k8sobjects.ConfigMapObject(core.Name("cm1"), core.Namespace(namespaceName))))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Add a namespace and a configmap"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

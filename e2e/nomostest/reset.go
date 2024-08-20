@@ -131,12 +131,9 @@ func Reset(nt *NT) error {
 		return err
 	}
 
-	// NOTE: These git repos are not actually being deleted here, just
-	// unassigned to a specific RSync. All remote repos are cached in
-	// nt.RemoteRepositories and then reassigned in `resetRepository`.
-	// Repos are actually deleted by `Clean` in environment setup and teardown.
-	nt.NonRootRepos = make(map[types.NamespacedName]*gitproviders.Repository)
-	nt.RootRepos = make(map[string]*gitproviders.Repository)
+	// NOTE: These sources are not actually being deleted here, just
+	// unassigned from a specific RSync.
+	nt.SyncSources.Reset()
 
 	// Reset expected objects
 	nt.MetricsExpectations.Reset()

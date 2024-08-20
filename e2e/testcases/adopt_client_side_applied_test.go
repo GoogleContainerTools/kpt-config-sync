@@ -22,13 +22,14 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"kpt.dev/configsync/e2e/nomostest"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
-	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 )
 
 func TestAdoptClientSideAppliedResource(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl)
+
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	// Declare a ClusterRole and `kubectl apply -f` it to the cluster.
 	nsViewerName := "ns-viewer"
@@ -40,8 +41,8 @@ func TestAdoptClientSideAppliedResource(t *testing.T) {
 		Verbs:     []string{"get", "list"},
 	}}
 
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("ns-viewer-client-side-applied.yaml", nsViewer))
-	nt.MustKubectl("apply", "-f", filepath.Join(nt.RootRepos[configsync.RootSyncName].Root, "ns-viewer-client-side-applied.yaml"))
+	nt.Must(rootSyncGitRepo.Add("ns-viewer-client-side-applied.yaml", nsViewer))
+	nt.MustKubectl("apply", "-f", filepath.Join(rootSyncGitRepo.Root, "ns-viewer-client-side-applied.yaml"))
 
 	// Validate the ClusterRole exist.
 	err := nt.Validate(nsViewerName, "", &rbacv1.ClusterRole{})
@@ -55,8 +56,8 @@ func TestAdoptClientSideAppliedResource(t *testing.T) {
 		Resources: []string{"namespaces"},
 		Verbs:     []string{"get"},
 	}}
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/ns-viewer-cr.yaml", nsViewer))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add namespace-viewer ClusterRole"))
+	nt.Must(rootSyncGitRepo.Add("acme/cluster/ns-viewer-cr.yaml", nsViewer))
+	nt.Must(rootSyncGitRepo.CommitAndPush("add namespace-viewer ClusterRole"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

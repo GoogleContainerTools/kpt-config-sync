@@ -37,7 +37,6 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configmanagement"
-	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
@@ -78,20 +77,21 @@ import (
 // 3. RepoSyncs can share an ssh-key secret
 // 4. R*Sync status isn't updated after sync without external input.
 func TestComposition(t *testing.T) {
+	lvl0ID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t,
 		nomostesting.MultiRepos,
 		ntopts.Unstructured,
 		ntopts.WithDelegatedControl,
 		ntopts.RepoSyncPermissions(policy.RepoSyncAdmin(), policy.CoreAdmin()), // NS reconciler manages RepoSyncs and ConfigMaps
-		ntopts.RootRepo(configsync.RootSyncName))
+		ntopts.RootRepo(lvl0ID.Name))
 
-	lvl0NN := nomostest.RootSyncNN(configsync.RootSyncName)
+	lvl0NN := lvl0ID.ObjectKey
 	lvl1NN := nomostest.RootSyncNN("level-1")
 	lvl2NN := types.NamespacedName{Namespace: testNs, Name: "level-2"}
 	lvl3NN := types.NamespacedName{Namespace: testNs, Name: "level-3"}
 	lvl4NN := types.NamespacedName{Namespace: testNs, Name: "level-4"}
 
-	lvl0Repo := nt.RootRepos[lvl0NN.Name]
+	lvl0Repo := nt.SyncSourceGitRepository(lvl0ID)
 
 	lvl0Sync := nomostest.RootSyncObjectV1Beta1FromRootRepo(nt, lvl0NN.Name)
 	lvl0Sync.Spec.Git.Dir = gitproviders.DefaultSyncDir
@@ -138,7 +138,7 @@ func TestComposition(t *testing.T) {
 	t.Cleanup(func() {
 		cleanupManagedSync(nt, lvl0Repo, lvl3Sync.Spec.Git.Dir, lvl3Sync)
 	})
-	// Print reconciler logs for R*Syncs that aren't in nt.RootRepos or nt.NonRootRepos.
+	// Print reconciler logs for R*Syncs that aren't in nt.SyncSources.
 	t.Cleanup(func() {
 		if t.Failed() {
 			nt.PodLogs(configmanagement.ControllerNamespace, core.RootReconcilerName(lvl1NN.Name),
@@ -353,8 +353,8 @@ func (id gvknn) String() string {
 // waitForSync waits for the specified R*Syncs to be Synced.
 //
 // The reason we can't just use nt.WaitForRepoSyncs is that the R*Syncs for this
-// test are not all in nt.RootRepos or nt.NonRootRepos, because they're all
-// sharing the same repository.
+// test are not all in nt.SyncSources, because they're all sharing the same
+// repository.
 //
 // So this function uses the same sha1Func for all R*Syncs.
 func waitForSync(nt *nomostest.NT, sha1Func nomostest.Sha1Func, objs ...client.Object) {

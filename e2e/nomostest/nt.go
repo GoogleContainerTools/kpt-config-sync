@@ -30,35 +30,35 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"kpt.dev/configsync/e2e/nomostest/clusterversion"
-	"kpt.dev/configsync/e2e/nomostest/gitproviders"
-	"kpt.dev/configsync/e2e/nomostest/ntopts"
-	"kpt.dev/configsync/e2e/nomostest/portforwarder"
-	"kpt.dev/configsync/e2e/nomostest/registryproviders"
-	"kpt.dev/configsync/e2e/nomostest/retry"
-	"kpt.dev/configsync/e2e/nomostest/taskgroup"
-	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
-	"kpt.dev/configsync/e2e/nomostest/testlogger"
-	"kpt.dev/configsync/e2e/nomostest/testshell"
-	"kpt.dev/configsync/e2e/nomostest/testwatcher"
-	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/core/k8sobjects"
-	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
-	"kpt.dev/configsync/pkg/util"
-	"kpt.dev/configsync/pkg/util/log"
-
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
 	"kpt.dev/configsync/e2e"
+	"kpt.dev/configsync/e2e/nomostest/clusterversion"
+	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	testmetrics "kpt.dev/configsync/e2e/nomostest/metrics"
+	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	"kpt.dev/configsync/e2e/nomostest/portforwarder"
+	"kpt.dev/configsync/e2e/nomostest/registryproviders"
+	"kpt.dev/configsync/e2e/nomostest/retry"
+	"kpt.dev/configsync/e2e/nomostest/syncsource"
+	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	"kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
+	"kpt.dev/configsync/e2e/nomostest/testlogger"
+	"kpt.dev/configsync/e2e/nomostest/testshell"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	ocmetrics "kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/reconcilermanager"
+	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
+	"kpt.dev/configsync/pkg/util"
+	"kpt.dev/configsync/pkg/util/log"
 	"kpt.dev/configsync/pkg/webhook/configuration"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -128,22 +128,11 @@ type NT struct {
 	// for object reconciliation.
 	DefaultReconcileTimeout *time.Duration
 
-	// RootRepos is the root repositories the cluster is syncing to.
-	// The key is the RootSync name and the value points to the corresponding Repository object.
-	// Each test case was set up with a default RootSync (`root-sync`) installed.
-	// After the test, all other RootSync or RepoSync objects are deleted, but the default one persists.
-	RootRepos map[string]*gitproviders.Repository
-
-	// NonRootRepos is the Namespace repositories the cluster is syncing to.
-	// Only used in multi-repo tests.
-	// The key is the namespace and name of the RepoSync object, the value points to the corresponding Repository object.
-	NonRootRepos map[types.NamespacedName]*gitproviders.Repository
-
-	// RootSyncHelmCharts is a map of RootSyncs that sync Helm charts
-	RootSyncHelmCharts map[types.NamespacedName]registryproviders.HelmChartID
-
-	// RepoSyncHelmCharts is a map of RepoSyncs that sync Helm charts
-	RepoSyncHelmCharts map[types.NamespacedName]registryproviders.HelmChartID
+	// SyncSources tracks the RootSyncs & RepoSyncs used by the current test.
+	// Each one is mapped to a SyncSource or nil, if no source is configured.
+	// The list of IDs is used for iterating over test RSyncs.
+	// The ID group and kind must always be either RootSync of RepoSync.
+	SyncSources syncsource.Set
 
 	// MetricsExpectations tracks the objects expected to be declared in the
 	// source and the operations expected to be performed on them by the set of
@@ -237,28 +226,6 @@ var CSNamespaces = []string{
 	configmanagement.MonitoringNamespace,
 	configmanagement.RGControllerNamespace,
 }
-
-// DefaultRootReconcilerName is the root-reconciler name of the default RootSync object: "root-sync".
-var DefaultRootReconcilerName = core.RootReconcilerName(configsync.RootSyncName)
-
-// RootSyncNN returns the NamespacedName of the RootSync object.
-func RootSyncNN(name string) types.NamespacedName {
-	return types.NamespacedName{
-		Namespace: configsync.ControllerNamespace,
-		Name:      name,
-	}
-}
-
-// RepoSyncNN returns the NamespacedName of the RepoSync object.
-func RepoSyncNN(ns, name string) types.NamespacedName {
-	return types.NamespacedName{
-		Namespace: ns,
-		Name:      name,
-	}
-}
-
-// DefaultRootRepoNamespacedName is the NamespacedName of the default RootSync object.
-var DefaultRootRepoNamespacedName = RootSyncNN(configsync.RootSyncName)
 
 var mySharedNTs *sharedNTs
 
@@ -411,35 +378,51 @@ func (nt *NT) MustMergePatch(obj client.Object, patch string, opts ...client.Pat
 
 // NumRepoSyncNamespaces returns the number of unique namespaces managed by RepoSyncs.
 func (nt *NT) NumRepoSyncNamespaces() int {
-	if len(nt.NonRootRepos) == 0 {
+	if len(nt.SyncSources) == 0 {
 		return 0
 	}
 	rsNamespaces := map[string]struct{}{}
-	for nn := range nt.NonRootRepos {
-		rsNamespaces[nn.Namespace] = struct{}{}
+	for id := range nt.SyncSources {
+		if id.Kind == configsync.RepoSyncKind {
+			rsNamespaces[id.Namespace] = struct{}{}
+		}
 	}
 	return len(rsNamespaces)
+}
+
+// SyncSourceGitRepository returns the git Repository for the specified RSync,
+// if it exists in NT.SyncSources.
+func (nt *NT) SyncSourceGitRepository(id core.ID) *gitproviders.Repository {
+	source, found := nt.SyncSources[id]
+	if !found {
+		nt.T.Fatalf("Missing %s: %s", id.Kind, id.ObjectKey)
+	}
+	gitSource, ok := source.(*syncsource.GitSyncSource)
+	if !ok {
+		nt.T.Fatalf("Expected *GitSyncSource for %s %s but found %T: %s", id.Kind, id.ObjectKey, source)
+	}
+	return gitSource.Repository
 }
 
 // DefaultRootSha1Fn is the default function to retrieve the commit hash of the root repo.
 func DefaultRootSha1Fn(nt *NT, nn types.NamespacedName) (string, error) {
 	// Get the repository this RootSync is syncing to, and ensure it is synced to HEAD.
-	repo, exists := nt.RootRepos[nn.Name]
+	source, exists := nt.SyncSources[RootSyncID(nn.Name)]
 	if !exists {
-		return "", fmt.Errorf("nt.RootRepos doesn't include RootSync %q", nn.Name)
+		return "", fmt.Errorf("nt.SyncSources doesn't include RootSync %q", nn)
 	}
-	return repo.Hash()
+	return source.Commit()
 }
 
 // DefaultRepoSha1Fn is the default function to retrieve the commit hash of the namespace repo.
 func DefaultRepoSha1Fn(nt *NT, nn types.NamespacedName) (string, error) {
 	// Get the repository this RepoSync is syncing to, and ensure it is synced
 	// to HEAD.
-	repo, exists := nt.NonRootRepos[nn]
+	source, exists := nt.SyncSources[RepoSyncID(nn.Name, nn.Namespace)]
 	if !exists {
-		return "", fmt.Errorf("checked if nonexistent repo is synced")
+		return "", fmt.Errorf("nt.SyncSources doesn't include RepoSync %q", nn)
 	}
-	return repo.Hash()
+	return source.Commit()
 }
 
 // RenewClient gets a new Client for talking to the cluster.
@@ -527,29 +510,19 @@ func (nt *NT) testLogs(previousPodLog bool) {
 	nt.PodLogs(configmanagement.ControllerNamespace, reconcilermanager.ManagerName, reconcilermanager.ManagerName, previousPodLog)
 	nt.PodLogs(configmanagement.ControllerNamespace, configuration.ShortName, configuration.ShortName, previousPodLog)
 	nt.PodLogs("resource-group-system", "resource-group-controller-manager", "manager", false)
-	for name := range nt.RootRepos {
-		nt.PodLogs(configmanagement.ControllerNamespace, core.RootReconcilerName(name),
-			reconcilermanager.Reconciler, previousPodLog)
+	for id := range nt.SyncSources {
+		var reconcilerName string
+		switch id.Kind {
+		case configsync.RootSyncKind:
+			reconcilerName = core.RootReconcilerName(id.Name)
+		case configsync.RepoSyncKind:
+			reconcilerName = core.NsReconcilerName(id.Namespace, id.Name)
+		default:
+			nt.T.Fatalf("Invalid SyncSources key: %#v", id)
+		}
+		nt.PodLogs(configmanagement.ControllerNamespace, reconcilerName, reconcilermanager.Reconciler, previousPodLog)
 		//nt.PodLogs(configmanagement.ControllerNamespace, reconcilermanager.NsReconcilerName(ns), reconcilermanager.GitSync, previousPodLog)
-		nt.LogDeploymentPodResources(configmanagement.ControllerNamespace, core.RootReconcilerName(name))
-	}
-	for nn := range nt.RootSyncHelmCharts {
-		nt.PodLogs(configmanagement.ControllerNamespace, core.RootReconcilerName(nn.Name),
-			reconcilermanager.Reconciler, previousPodLog)
-		//nt.PodLogs(configmanagement.ControllerNamespace, reconcilermanager.NsReconcilerName(ns), reconcilermanager.GitSync, previousPodLog)
-		nt.LogDeploymentPodResources(configmanagement.ControllerNamespace, core.RootReconcilerName(nn.Name))
-	}
-	for nn := range nt.NonRootRepos {
-		nt.PodLogs(configmanagement.ControllerNamespace, core.NsReconcilerName(nn.Namespace, nn.Name),
-			reconcilermanager.Reconciler, previousPodLog)
-		//nt.PodLogs(configmanagement.ControllerNamespace, reconcilermanager.NsReconcilerName(ns), reconcilermanager.GitSync, previousPodLog)
-		nt.LogDeploymentPodResources(configmanagement.ControllerNamespace, core.NsReconcilerName(nn.Namespace, nn.Name))
-	}
-	for nn := range nt.RepoSyncHelmCharts {
-		nt.PodLogs(configmanagement.ControllerNamespace, core.NsReconcilerName(nn.Namespace, nn.Name),
-			reconcilermanager.Reconciler, previousPodLog)
-		//nt.PodLogs(configmanagement.ControllerNamespace, reconcilermanager.NsReconcilerName(ns), reconcilermanager.GitSync, previousPodLog)
-		nt.LogDeploymentPodResources(configmanagement.ControllerNamespace, core.NsReconcilerName(nn.Namespace, nn.Name))
+		nt.LogDeploymentPodResources(configmanagement.ControllerNamespace, reconcilerName)
 	}
 }
 
@@ -736,22 +709,19 @@ func (nt *NT) portForwardGitServer() {
 		if prevPodName == podName {
 			return
 		}
-		// allRepos specifies the slice all repos for port forwarding.
-		var allRepos []types.NamespacedName
-		// allRepoMap is a map of repoNN->Repository for port forwarding.
-		allRepoMap := make(map[types.NamespacedName]*gitproviders.Repository)
-		for repoName, repo := range nt.RootRepos {
-			repoNN := RootSyncNN(repoName)
-			allRepos = append(allRepos, repoNN)
-			allRepoMap[repoNN] = repo
-		}
-		for repoNN, repo := range nt.NonRootRepos {
-			allRepos = append(allRepos, repoNN)
-			allRepoMap[repoNN] = repo
+		// allGitRepos specifies the slice all repos for port forwarding.
+		var allGitRepos []types.NamespacedName
+		// allGitRepoMap is a map of repoNN->Repository for port forwarding.
+		allGitRepoMap := make(map[types.NamespacedName]*gitproviders.Repository)
+		for id, source := range nt.SyncSources {
+			if gitSource, ok := source.(*syncsource.GitSyncSource); ok {
+				allGitRepos = append(allGitRepos, id.ObjectKey)
+				allGitRepoMap[id.ObjectKey] = gitSource.Repository
+			}
 		}
 		// re-init all repos
-		InitGitRepos(nt, allRepos...)
-		for repoNN, repo := range allRepoMap {
+		InitGitRepos(nt, allGitRepos...)
+		for repoNN, repo := range allGitRepoMap {
 			// construct remoteURL with provided port. Calling LocalPort would lead to deadlock
 			remoteURL, err := provider.RemoteURLWithPort(newPort, repoNN.String())
 			if err != nil {
@@ -839,7 +809,7 @@ func (nt *NT) portForwardRegistryServer(helmTest, ociTest bool) {
 	)
 }
 
-// portForwardGitServer forwards the prometheus deployment to a port.
+// portForwardPrometheus forwards the prometheus deployment to a port.
 func (nt *NT) portForwardPrometheus() {
 	nt.T.Helper()
 	if nt.prometheusPortForwarder != nil {

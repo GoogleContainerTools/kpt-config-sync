@@ -118,22 +118,23 @@ func TestSwitchFromGitToOciCentralized(t *testing.T) {
 		// bookinfo repo contains ServiceAccount
 		ntopts.RepoSyncPermissions(policy.RBACAdmin(), policy.CoreAdmin()),
 	)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	repoSyncID := nomostest.RepoSyncID(configsync.RepoSyncName, namespace)
+	repoSyncKey := repoSyncID.ObjectKey
+	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
+
 	var err error
 	// file path to the RepoSync config in the root repository.
 	repoSyncPath := nomostest.StructuredNSPath(namespace, configsync.RepoSyncName)
-	rsNN := types.NamespacedName{
-		Name:      configsync.RepoSyncName,
-		Namespace: namespace,
-	}
 
 	// Remote git branch will only contain the bookinfo-sa ServiceAccount
 	bookinfoSA := k8sobjects.ServiceAccountObject("bookinfo-sa", core.Namespace(namespace))
-	nt.Must(nt.NonRootRepos[rsNN].Add("acme/sa.yaml", bookinfoSA))
-	nt.Must(nt.NonRootRepos[rsNN].CommitAndPush("Add ServiceAccount"))
+	nt.Must(repoSyncGitRepo.Add("acme/sa.yaml", bookinfoSA))
+	nt.Must(repoSyncGitRepo.CommitAndPush("Add ServiceAccount"))
 
 	// OCI image will only contain the bookinfo-admin role
 	bookinfoRole := k8sobjects.RoleObject(core.Name("bookinfo-admin"))
-	image, err := nt.BuildAndPushOCIImage(rsNN, registryproviders.ImageInputObjects(nt.Scheme, bookinfoRole))
+	image, err := nt.BuildAndPushOCIImage(repoSyncKey, registryproviders.ImageInputObjects(nt.Scheme, bookinfoRole))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -151,14 +152,14 @@ func TestSwitchFromGitToOciCentralized(t *testing.T) {
 
 	// Switch from Git to OCI
 	nt.T.Log("Update the RepoSync object to sync from OCI")
-	repoSyncOCI := nt.RepoSyncObjectOCI(rsNN, image)
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(repoSyncPath, repoSyncOCI))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("configure RepoSync to sync from OCI in the root repository"))
+	repoSyncOCI := nt.RepoSyncObjectOCI(repoSyncKey, image)
+	nt.Must(rootSyncGitRepo.Add(repoSyncPath, repoSyncOCI))
+	nt.Must(rootSyncGitRepo.CommitAndPush("configure RepoSync to sync from OCI in the root repository"))
 
 	if err := nt.WatchForAllSyncs(
 		nomostest.WithRepoSha1Func(imageDigestFuncByDigest(image.Digest)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
-			rsNN: ".",
+			repoSyncKey: ".",
 		})); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -183,19 +184,18 @@ func TestSwitchFromGitToOciDelegated(t *testing.T) {
 		// bookinfo repo contains ServiceAccount
 		ntopts.RepoSyncPermissions(policy.RBACAdmin(), policy.CoreAdmin()),
 	)
-	rsNN := types.NamespacedName{
-		Name:      configsync.RepoSyncName,
-		Namespace: namespace,
-	}
+	repoSyncID := nomostest.RepoSyncID(configsync.RepoSyncName, namespace)
+	repoSyncKey := repoSyncID.ObjectKey
+	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
 
 	// Remote git branch will only contain the bookinfo-sa ServiceAccount
 	bookinfoSA := k8sobjects.ServiceAccountObject("bookinfo-sa", core.Namespace(namespace))
-	nt.Must(nt.NonRootRepos[rsNN].Add("acme/sa.yaml", bookinfoSA))
-	nt.Must(nt.NonRootRepos[rsNN].CommitAndPush("Add ServiceAccount"))
+	nt.Must(repoSyncGitRepo.Add("acme/sa.yaml", bookinfoSA))
+	nt.Must(repoSyncGitRepo.CommitAndPush("Add ServiceAccount"))
 
 	// OCI image will only contain the bookinfo-admin role
 	bookinfoRole := k8sobjects.RoleObject(core.Name("bookinfo-admin"))
-	image, err := nt.BuildAndPushOCIImage(rsNN, registryproviders.ImageInputObjects(nt.Scheme, bookinfoRole))
+	image, err := nt.BuildAndPushOCIImage(repoSyncKey, registryproviders.ImageInputObjects(nt.Scheme, bookinfoRole))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -215,7 +215,7 @@ func TestSwitchFromGitToOciDelegated(t *testing.T) {
 	}
 
 	// Switch from Git to OCI
-	repoSyncOCI := nt.RepoSyncObjectOCI(rsNN, image)
+	repoSyncOCI := nt.RepoSyncObjectOCI(repoSyncKey, image)
 	nt.T.Log("Manually update the RepoSync object to sync from OCI")
 	if err := nt.KubeClient.Apply(repoSyncOCI); err != nil {
 		nt.T.Fatal(err)

@@ -1169,14 +1169,19 @@ func filterResourceMap(resourceMap map[string]v1beta1.ContainerResourcesSpec, co
 // 7. Recreate RootSync CRD
 // 8. Validate RootSync syncing works
 func TestReconcilerManagerRootSyncCRDMissing(t *testing.T) {
+	rootSyncID := nomostest.DefaultRootSyncID
 	repoSyncNS := "bookstore"
-	repoSyncNN := nomostest.RepoSyncNN(repoSyncNS, configsync.RepoSyncName)
+	repoSyncID := nomostest.RepoSyncID(configsync.RepoSyncName, repoSyncNS)
 	nt := nomostest.New(t, nomostesting.ACMController,
 		ntopts.WithDelegatedControl, // Delegated so deleting the RootSync doesn't delete the RepoSyncs.
 		ntopts.Unstructured,
-		ntopts.NamespaceRepo(repoSyncNN.Namespace, repoSyncNN.Name),
+		ntopts.NamespaceRepo(repoSyncID.Namespace, repoSyncID.Name),
 		ntopts.RepoSyncPermissions(policy.CoreAdmin()), // NS Reconciler manages ServiceAccounts
 	)
+	rootSyncKey := rootSyncID.ObjectKey
+	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
+	repoSyncKey := repoSyncID.ObjectKey
+	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
 
 	reconcilerManagerKey := client.ObjectKey{
 		Name:      reconcilermanager.ManagerName,
@@ -1188,9 +1193,8 @@ func TestReconcilerManagerRootSyncCRDMissing(t *testing.T) {
 		testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus)))
 
 	// Enable RootSync deletion propagation, if not enabled
-	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	rootSync := &v1beta1.RootSync{}
-	nt.Must(nt.KubeClient.Get(rootSyncNN.Name, rootSyncNN.Namespace, rootSync))
+	nt.Must(nt.KubeClient.Get(rootSyncKey.Name, rootSyncKey.Namespace, rootSync))
 	if nomostest.EnableDeletionPropagation(rootSync) {
 		nt.Must(nt.KubeClient.Update(rootSync))
 		nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync.Name, rootSync.Namespace, []testpredicates.Predicate{
@@ -1202,9 +1206,9 @@ func TestReconcilerManagerRootSyncCRDMissing(t *testing.T) {
 	nsName1 := "root-sync-1"
 	rootSyncDir1 := gitproviders.DefaultSyncDir
 	nt.Must(nt.ValidateNotFound(nsName1, "", &corev1.Namespace{}))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/ns-%s.yaml", rootSyncDir1, nsName1),
+	nt.Must(rootSyncGitRepo.Add(fmt.Sprintf("%s/ns-%s.yaml", rootSyncDir1, nsName1),
 		k8sobjects.NamespaceObject(nsName1)))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding namespace 1"))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Adding namespace 1"))
 	nt.Must(nt.WatchForAllSyncs())
 	nt.Must(nt.Validate(nsName1, "", &corev1.Namespace{}))
 
@@ -1222,9 +1226,9 @@ func TestReconcilerManagerRootSyncCRDMissing(t *testing.T) {
 	saName1 := "repo-sync-1"
 	repoSyncDir1 := gitproviders.DefaultSyncDir
 	nt.Must(nt.ValidateNotFound(saName1, repoSyncNS, &corev1.ServiceAccount{}))
-	nt.Must(nt.NonRootRepos[repoSyncNN].Add(fmt.Sprintf("%s/sa-%s.yaml", repoSyncDir1, saName1),
+	nt.Must(repoSyncGitRepo.Add(fmt.Sprintf("%s/sa-%s.yaml", repoSyncDir1, saName1),
 		k8sobjects.ServiceAccountObject(saName1, core.Namespace(repoSyncNS))))
-	nt.Must(nt.NonRootRepos[repoSyncNN].CommitAndPush("Adding service account 1"))
+	nt.Must(repoSyncGitRepo.CommitAndPush("Adding service account 1"))
 	nt.Must(nt.WatchForAllSyncs(
 		nomostest.SkipReadyCheck(), // Skip ready check because it requires the RootSync CRD to exist.
 		nomostest.RepoSyncOnly()))
@@ -1243,17 +1247,17 @@ func TestReconcilerManagerRootSyncCRDMissing(t *testing.T) {
 	saName2 := "repo-sync-2"
 	repoSyncDir2 := "acme-2"
 	nt.Must(nt.ValidateNotFound(saName2, repoSyncNS, &corev1.ServiceAccount{}))
-	nt.Must(nt.NonRootRepos[repoSyncNN].Add(fmt.Sprintf("%s/sa-%s.yaml", repoSyncDir2, saName2),
+	nt.Must(repoSyncGitRepo.Add(fmt.Sprintf("%s/sa-%s.yaml", repoSyncDir2, saName2),
 		k8sobjects.ServiceAccountObject(saName2, core.Namespace(repoSyncNS))))
-	nt.Must(nt.NonRootRepos[repoSyncNN].CommitAndPush("Adding service account 2"))
+	nt.Must(repoSyncGitRepo.CommitAndPush("Adding service account 2"))
 	// Change RepoSync sync dir to trigger reconciler-manager to update the reconciler
-	repoSync := k8sobjects.RepoSyncObjectV1Beta1(repoSyncNN.Namespace, repoSyncNN.Name)
+	repoSync := k8sobjects.RepoSyncObjectV1Beta1(repoSyncKey.Namespace, repoSyncKey.Name)
 	nt.MustMergePatch(repoSync, fmt.Sprintf(`{"spec":{"git":{"dir":%q}}}`, repoSyncDir2))
 	nt.Must(nt.WatchForAllSyncs(
 		nomostest.SkipReadyCheck(), // Skip ready check because it requires the RootSync CRD to exist.
 		nomostest.RepoSyncOnly(),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
-			repoSyncNN: repoSyncDir2,
+			repoSyncKey: repoSyncDir2,
 		})))
 	nt.Must(nt.Validate(saName2, repoSyncNS, &corev1.ServiceAccount{}))
 
@@ -1274,8 +1278,8 @@ func TestReconcilerManagerRootSyncCRDMissing(t *testing.T) {
 	nt.Must(nt.KubeClient.Create(rootSync))
 	nt.Must(nt.WatchForAllSyncs(
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
-			rootSyncNN: rootSyncDir1,
-			repoSyncNN: repoSyncDir2,
+			rootSyncKey: rootSyncDir1,
+			repoSyncKey: repoSyncDir2,
 		})))
 	nt.Must(nt.Validate(nsName1, "", &corev1.Namespace{}))
 }

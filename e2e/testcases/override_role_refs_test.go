@@ -37,6 +37,7 @@ func TestRootSyncRoleRefs(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.Unstructured,
 		ntopts.RootRepo("sync-a"),
 	)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 	rootSyncA := nomostest.RootSyncObjectV1Beta1FromRootRepo(nt, "sync-a")
 	syncAReconcilerName := core.RootReconcilerName(rootSyncA.Name)
 	syncANN := types.NamespacedName{
@@ -83,23 +84,23 @@ func TestRootSyncRoleRefs(t *testing.T) {
 		},
 	}
 	clusterRoleObject2 := k8sobjects.ClusterRoleObject(core.Name("bar-role"))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
+	nt.Must(rootSyncGitRepo.Add(
 		nomostest.StructuredNSPath(rootSyncA.Namespace, rootSyncA.Name),
 		rootSyncA,
 	))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
+	nt.Must(rootSyncGitRepo.Add(
 		fmt.Sprintf("acme/namespaces/%s/%s.yaml", roleObject.Namespace, roleObject.Name),
 		roleObject,
 	))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
+	nt.Must(rootSyncGitRepo.Add(
 		fmt.Sprintf("acme/namespaces/%s.yaml", clusterRoleObject.Name),
 		clusterRoleObject,
 	))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
+	nt.Must(rootSyncGitRepo.Add(
 		fmt.Sprintf("acme/namespaces/%s.yaml", clusterRoleObject2.Name),
 		clusterRoleObject2,
 	))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add Roles and RoleRefs"))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Add Roles and RoleRefs"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -126,11 +127,11 @@ func TestRootSyncRoleRefs(t *testing.T) {
 			Name: "foo-role",
 		},
 	}
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
+	nt.Must(rootSyncGitRepo.Add(
 		fmt.Sprintf("acme/namespaces/%s/%s.yaml", configsync.ControllerNamespace, rootSyncA.Name),
 		rootSyncA,
 	))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Reduce RoleRefs"))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Reduce RoleRefs"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -151,10 +152,10 @@ func TestRootSyncRoleRefs(t *testing.T) {
 	}
 
 	nt.T.Logf("Delete the RootSync %s to verify garbage collection", syncANN.Name)
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(
+	nt.Must(rootSyncGitRepo.Remove(
 		nomostest.StructuredNSPath(rootSyncA.Namespace, rootSyncA.Name),
 	))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Prune RootSync"))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Prune RootSync"))
 	if err := nt.WatchForSync(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
 		nomostest.DefaultRootSha1Fn, nomostest.RootSyncHasStatusSyncCommit, nil); err != nil {
 		nt.T.Fatal(err)

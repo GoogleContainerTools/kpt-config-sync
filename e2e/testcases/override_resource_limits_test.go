@@ -40,6 +40,7 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.SkipAutopilotCluster,
 		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName),
 		ntopts.NamespaceRepo(frontendNamespace, configsync.RepoSyncName))
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	rootReconcilerNN := core.RootReconcilerObjectKey(rootSyncNN.Name)
@@ -169,7 +170,7 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 			},
 		},
 	}
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend))
+	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend))
 
 	// Override the CPU/memory requests and limits of the reconciler container of ns-reconciler-frontend
 	repoSyncFrontend.Spec.Override = &v1alpha1.RepoSyncOverrideSpec{
@@ -192,8 +193,8 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 			},
 		},
 	}
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(frontendNamespace, configsync.RepoSyncName), repoSyncFrontend))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend and frontend RepoSync resource limits"))
+	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(frontendNamespace, configsync.RepoSyncName), repoSyncFrontend))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Update backend and frontend RepoSync resource limits"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -324,8 +325,8 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 
 	// Clear `spec.override` from repoSyncBackend
 	repoSyncBackend.Spec.Override = nil
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Clear `spec.override` from repoSyncBackend"))
+	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Clear `spec.override` from repoSyncBackend"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -363,8 +364,8 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 
 	// Clear `spec.override` from repoSyncFrontend
 	repoSyncFrontend.Spec.Override = nil
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(frontendNamespace, configsync.RepoSyncName), repoSyncFrontend))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Clear `spec.override` from repoSyncFrontend"))
+	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(frontendNamespace, configsync.RepoSyncName), repoSyncFrontend))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Clear `spec.override` from repoSyncFrontend"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -408,6 +409,7 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.SkipAutopilotCluster,
 		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName),
 		ntopts.NamespaceRepo(frontendNamespace, configsync.RepoSyncName))
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	rootReconcilerNN := core.RootReconcilerObjectKey(rootSyncNN.Name)
@@ -537,7 +539,7 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 			},
 		},
 	}
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend))
+	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend))
 
 	// Override the CPU/memory requests and limits of the reconciler container of ns-reconciler-frontend
 	repoSyncFrontend.Spec.Override = &v1beta1.RepoSyncOverrideSpec{
@@ -560,8 +562,8 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 			},
 		},
 	}
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(frontendNamespace, configsync.RepoSyncName), repoSyncFrontend))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend and frontend RepoSync resource limits"))
+	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(frontendNamespace, configsync.RepoSyncName), repoSyncFrontend))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Update backend and frontend RepoSync resource limits"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -690,8 +692,8 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 
 	// Clear `spec.override` from repoSyncBackend
 	repoSyncBackend.Spec.Override = nil
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Clear `spec.override` from repoSyncBackend"))
+	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Clear `spec.override` from repoSyncBackend"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -729,8 +731,8 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 
 	// Clear `spec.override` from repoSyncFrontend
 	repoSyncFrontend.Spec.Override = nil
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(frontendNamespace, configsync.RepoSyncName), repoSyncFrontend))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Clear `spec.override` from repoSyncFrontend"))
+	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(frontendNamespace, configsync.RepoSyncName), repoSyncFrontend))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Clear `spec.override` from repoSyncFrontend"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

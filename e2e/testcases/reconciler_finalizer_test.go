@@ -37,7 +37,6 @@ import (
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testutils"
-	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
@@ -53,32 +52,33 @@ import (
 // TestReconcilerFinalizer_Orphan tests that the reconciler's finalizer
 // correctly handles Orphan deletion propagation.
 func TestReconcilerFinalizer_Orphan(t *testing.T) {
-	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.MultiRepos)
+	rootSyncID := nomostest.DefaultRootSyncID
+	rootSyncKey := rootSyncID.ObjectKey
+	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
 
-	rootRepo := nt.RootRepos[rootSyncNN.Name]
 	deployment1NN := types.NamespacedName{Name: "helloworld-1", Namespace: testNs}
 	namespace1NN := types.NamespacedName{Name: testNs}
-	safetyNamespace1NN := types.NamespacedName{Name: rootRepo.SafetyNSName}
+	safetyNamespace1NN := types.NamespacedName{Name: rootSyncGitRepo.SafetyNSName}
 
 	nt.T.Cleanup(func() {
 		cleanupSingleLevel(nt,
-			rootSyncNN,
+			rootSyncKey,
 			deployment1NN,
 			namespace1NN, safetyNamespace1NN)
 	})
 
 	// Add namespace to RootSync
 	namespace1 := k8sobjects.NamespaceObject(namespace1NN.Name)
-	nt.Must(rootRepo.Add(nomostest.StructuredNSPath(namespace1NN.Name, namespace1NN.Name), namespace1))
+	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(namespace1NN.Name, namespace1NN.Name), namespace1))
 
 	// Add deployment-helloworld-1 to RootSync
 	deployment1Path := nomostest.StructuredNSPath(deployment1NN.Namespace, "deployment-helloworld-1")
 	deployment1 := loadDeployment(nt, "../testdata/deployment-helloworld.yaml")
 	deployment1.SetName(deployment1NN.Name)
 	deployment1.SetNamespace(deployment1NN.Namespace)
-	nt.Must(rootRepo.Add(deployment1Path, deployment1))
-	nt.Must(rootRepo.CommitAndPush("Adding deployment helloworld-1 to RootSync"))
+	nt.Must(rootSyncGitRepo.Add(deployment1Path, deployment1))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Adding deployment helloworld-1 to RootSync"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -92,10 +92,10 @@ func TestReconcilerFinalizer_Orphan(t *testing.T) {
 	// Start here to catch both the finalizer injection and deletion behavior.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go nomostest.TailReconcilerLogs(ctx, nt, nomostest.RootReconcilerObjectKey(rootSyncNN.Name))
+	go nomostest.TailReconcilerLogs(ctx, nt, nomostest.RootReconcilerObjectKey(rootSyncKey.Name))
 
 	nt.T.Log("Disabling RootSync deletion propagation")
-	rootSync := k8sobjects.RootSyncObjectV1Beta1(rootSyncNN.Name)
+	rootSync := k8sobjects.RootSyncObjectV1Beta1(rootSyncKey.Name)
 	err := nt.KubeClient.Get(rootSync.GetName(), rootSync.GetNamespace(), rootSync)
 	if err != nil {
 		nt.T.Fatal(err)
@@ -142,32 +142,33 @@ func TestReconcilerFinalizer_Orphan(t *testing.T) {
 // TestReconcilerFinalizer_Foreground tests that the reconciler's finalizer
 // correctly handles Foreground deletion propagation.
 func TestReconcilerFinalizer_Foreground(t *testing.T) {
-	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.MultiRepos)
+	rootSyncID := nomostest.DefaultRootSyncID
+	rootSyncKey := rootSyncID.ObjectKey
+	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
 
-	rootRepo := nt.RootRepos[rootSyncNN.Name]
 	deployment1NN := types.NamespacedName{Name: "helloworld-1", Namespace: testNs}
 	namespace1NN := types.NamespacedName{Name: testNs}
-	safetyNamespace1NN := types.NamespacedName{Name: rootRepo.SafetyNSName}
+	safetyNamespace1NN := types.NamespacedName{Name: rootSyncGitRepo.SafetyNSName}
 
 	nt.T.Cleanup(func() {
 		cleanupSingleLevel(nt,
-			rootSyncNN,
+			rootSyncKey,
 			deployment1NN,
 			namespace1NN, safetyNamespace1NN)
 	})
 
 	// Add namespace to RootSync
 	namespace1 := k8sobjects.NamespaceObject(namespace1NN.Name)
-	nt.Must(rootRepo.Add(nomostest.StructuredNSPath(namespace1NN.Name, namespace1NN.Name), namespace1))
+	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(namespace1NN.Name, namespace1NN.Name), namespace1))
 
 	// Add deployment-helloworld-1 to RootSync
 	deployment1Path := nomostest.StructuredNSPath(deployment1NN.Namespace, "deployment-helloworld-1")
 	deployment1 := loadDeployment(nt, "../testdata/deployment-helloworld.yaml")
 	deployment1.SetName(deployment1NN.Name)
 	deployment1.SetNamespace(deployment1NN.Namespace)
-	nt.Must(rootRepo.Add(deployment1Path, deployment1))
-	nt.Must(rootRepo.CommitAndPush("Adding deployment helloworld-1 to RootSync"))
+	nt.Must(rootSyncGitRepo.Add(deployment1Path, deployment1))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Adding deployment helloworld-1 to RootSync"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -181,10 +182,10 @@ func TestReconcilerFinalizer_Foreground(t *testing.T) {
 	// Start here to catch both the finalizer injection and deletion behavior.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go nomostest.TailReconcilerLogs(ctx, nt, nomostest.RootReconcilerObjectKey(rootSyncNN.Name))
+	go nomostest.TailReconcilerLogs(ctx, nt, nomostest.RootReconcilerObjectKey(rootSyncKey.Name))
 
 	nt.T.Log("Enabling RootSync deletion propagation")
-	rootSync := k8sobjects.RootSyncObjectV1Beta1(rootSyncNN.Name)
+	rootSync := k8sobjects.RootSyncObjectV1Beta1(rootSyncKey.Name)
 	err := nt.KubeClient.Get(rootSync.Name, rootSync.Namespace, rootSync)
 	if err != nil {
 		nt.T.Fatal(err)
@@ -228,40 +229,42 @@ func TestReconcilerFinalizer_Foreground(t *testing.T) {
 // TestReconcilerFinalizer_MultiLevelForeground tests that the reconciler's
 // finalizer correctly handles multiple layers of Foreground deletion propagation.
 func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
-	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
-	repoSyncNN := nomostest.RepoSyncNN(testNs, "rs-test")
+	rootSyncID := nomostest.DefaultRootSyncID
+	repoSyncID := nomostest.RepoSyncID("rs-test", testNs)
 	nt := nomostest.New(t,
 		nomostesting.MultiRepos,
-		ntopts.NamespaceRepo(repoSyncNN.Namespace, repoSyncNN.Name),
+		ntopts.NamespaceRepo(repoSyncID.Namespace, repoSyncID.Name),
 		ntopts.RepoSyncPermissions(policy.AppsAdmin(), policy.CoreAdmin()), // NS Reconciler manages Deployments
 	)
+	rootSyncKey := rootSyncID.ObjectKey
+	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
+	repoSyncKey := repoSyncID.ObjectKey
+	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
 
-	rootRepo := nt.RootRepos[rootSyncNN.Name]
-	nsRepo := nt.NonRootRepos[repoSyncNN]
-	repoSyncPath := nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name)
-	deployment1NN := types.NamespacedName{Name: "helloworld-1", Namespace: repoSyncNN.Namespace}
-	deployment2NN := types.NamespacedName{Name: "helloworld-2", Namespace: repoSyncNN.Namespace}
-	namespace1NN := types.NamespacedName{Name: repoSyncNN.Namespace}
-	safetyNamespace1NN := types.NamespacedName{Name: rootRepo.SafetyNSName}
-	safetyNamespace2NN := types.NamespacedName{Name: nsRepo.SafetyNSName}
+	repoSyncPath := nomostest.StructuredNSPath(repoSyncKey.Namespace, repoSyncKey.Name)
+	deployment1NN := types.NamespacedName{Name: "helloworld-1", Namespace: repoSyncKey.Namespace}
+	deployment2NN := types.NamespacedName{Name: "helloworld-2", Namespace: repoSyncKey.Namespace}
+	namespace1NN := types.NamespacedName{Name: repoSyncKey.Namespace}
+	safetyNamespace1NN := types.NamespacedName{Name: rootSyncGitRepo.SafetyNSName}
+	safetyNamespace2NN := types.NamespacedName{Name: repoSyncGitRepo.SafetyNSName}
 
 	nt.T.Cleanup(func() {
 		cleanupMultiLevel(nt,
-			rootSyncNN, repoSyncNN,
+			rootSyncKey, repoSyncKey,
 			deployment1NN, deployment2NN,
 			namespace1NN, safetyNamespace1NN, safetyNamespace2NN)
 	})
 
 	// Namespace created for the RepoSync by test setup
-	namespace1 := rootRepo.MustGet(nt.T, nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Namespace))
+	namespace1 := rootSyncGitRepo.MustGet(nt.T, nomostest.StructuredNSPath(repoSyncKey.Namespace, repoSyncKey.Namespace))
 
 	// Add deployment-helloworld-1 to RootSync
 	deployment1Path := nomostest.StructuredNSPath(deployment1NN.Namespace, "deployment-helloworld-1")
 	deployment1 := loadDeployment(nt, "../testdata/deployment-helloworld.yaml")
 	deployment1.SetName(deployment1NN.Name)
 	deployment1.SetNamespace(deployment1NN.Namespace)
-	nt.Must(rootRepo.Add(deployment1Path, deployment1))
-	nt.Must(rootRepo.CommitAndPush("Adding deployment helloworld-1 to RootSync"))
+	nt.Must(rootSyncGitRepo.Add(deployment1Path, deployment1))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Adding deployment helloworld-1 to RootSync"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -274,8 +277,8 @@ func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
 	deployment2 := loadDeployment(nt, "../testdata/deployment-helloworld.yaml")
 	deployment2.SetName(deployment2NN.Name)
 	deployment2.SetNamespace(deployment1NN.Namespace)
-	nt.Must(nsRepo.Add(deployment2Path, deployment2))
-	nt.Must(nsRepo.CommitAndPush("Adding deployment helloworld-2 to RepoSync"))
+	nt.Must(repoSyncGitRepo.Add(deployment2Path, deployment2))
+	nt.Must(repoSyncGitRepo.CommitAndPush("Adding deployment helloworld-2 to RepoSync"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -289,11 +292,11 @@ func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
 	// Start here to catch both the finalizer injection and deletion behavior.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go nomostest.TailReconcilerLogs(ctx, nt, nomostest.RootReconcilerObjectKey(rootSyncNN.Name))
-	go nomostest.TailReconcilerLogs(ctx, nt, nomostest.NsReconcilerObjectKey(repoSyncNN.Namespace, repoSyncNN.Name))
+	go nomostest.TailReconcilerLogs(ctx, nt, nomostest.RootReconcilerObjectKey(rootSyncKey.Name))
+	go nomostest.TailReconcilerLogs(ctx, nt, nomostest.NsReconcilerObjectKey(repoSyncKey.Namespace, repoSyncKey.Name))
 
 	nt.T.Log("Enabling RootSync deletion propagation")
-	rootSync := k8sobjects.RootSyncObjectV1Beta1(rootSyncNN.Name)
+	rootSync := k8sobjects.RootSyncObjectV1Beta1(rootSyncKey.Name)
 	err := nt.KubeClient.Get(rootSync.Name, rootSync.Namespace, rootSync)
 	if err != nil {
 		nt.T.Fatal(err)
@@ -311,10 +314,10 @@ func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
 		}))
 
 	nt.T.Log("Enabling RepoSync deletion propagation")
-	repoSync := rootRepo.MustGet(nt.T, repoSyncPath)
+	repoSync := rootSyncGitRepo.MustGet(nt.T, repoSyncPath)
 	if nomostest.SetDeletionPropagationPolicy(repoSync, metadata.DeletionPropagationPolicyForeground) {
-		nt.Must(rootRepo.Add(repoSyncPath, repoSync))
-		nt.Must(rootRepo.CommitAndPush("Enabling RepoSync deletion propagation"))
+		nt.Must(rootSyncGitRepo.Add(repoSyncPath, repoSync))
+		nt.Must(rootSyncGitRepo.CommitAndPush("Enabling RepoSync deletion propagation"))
 	}
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -356,26 +359,28 @@ func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
 // correctly handles multiple layers of deletion propagation.
 // The RootSync has Foreground policy, but manages a RepoSync with Orphan policy.
 func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
-	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
-	repoSyncNN := nomostest.RepoSyncNN(testNs, "rs-test")
+	rootSyncID := nomostest.DefaultRootSyncID
+	repoSyncID := nomostest.RepoSyncID("rs-test", testNs)
 	nt := nomostest.New(t,
 		nomostesting.MultiRepos,
-		ntopts.NamespaceRepo(repoSyncNN.Namespace, repoSyncNN.Name),
+		ntopts.NamespaceRepo(repoSyncID.Namespace, repoSyncID.Name),
 		ntopts.RepoSyncPermissions(policy.AppsAdmin(), policy.CoreAdmin()), // NS Reconciler manages Deployments
 	)
+	rootSyncKey := rootSyncID.ObjectKey
+	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
+	repoSyncKey := repoSyncID.ObjectKey
+	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
 
-	rootRepo := nt.RootRepos[rootSyncNN.Name]
-	nsRepo := nt.NonRootRepos[repoSyncNN]
-	repoSyncPath := nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name)
-	deployment1NN := types.NamespacedName{Name: "helloworld-1", Namespace: repoSyncNN.Namespace}
-	deployment2NN := types.NamespacedName{Name: "helloworld-2", Namespace: repoSyncNN.Namespace}
-	namespace1NN := types.NamespacedName{Name: repoSyncNN.Namespace}
-	safetyNamespace1NN := types.NamespacedName{Name: rootRepo.SafetyNSName}
-	safetyNamespace2NN := types.NamespacedName{Name: nsRepo.SafetyNSName}
+	repoSyncPath := nomostest.StructuredNSPath(repoSyncKey.Namespace, repoSyncKey.Name)
+	deployment1NN := types.NamespacedName{Name: "helloworld-1", Namespace: repoSyncKey.Namespace}
+	deployment2NN := types.NamespacedName{Name: "helloworld-2", Namespace: repoSyncKey.Namespace}
+	namespace1NN := types.NamespacedName{Name: repoSyncKey.Namespace}
+	safetyNamespace1NN := types.NamespacedName{Name: rootSyncGitRepo.SafetyNSName}
+	safetyNamespace2NN := types.NamespacedName{Name: repoSyncGitRepo.SafetyNSName}
 
 	nt.T.Cleanup(func() {
 		cleanupMultiLevel(nt,
-			rootSyncNN, repoSyncNN,
+			rootSyncKey, repoSyncKey,
 			deployment1NN, deployment2NN,
 			namespace1NN, safetyNamespace1NN, safetyNamespace2NN)
 	})
@@ -385,8 +390,8 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 	deployment1 := loadDeployment(nt, "../testdata/deployment-helloworld.yaml")
 	deployment1.SetName(deployment1NN.Name)
 	deployment1.SetNamespace(deployment2NN.Namespace)
-	nt.Must(rootRepo.Add(deployment1Path, deployment1))
-	nt.Must(rootRepo.CommitAndPush("Adding deployment helloworld-1 to RootSync"))
+	nt.Must(rootSyncGitRepo.Add(deployment1Path, deployment1))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Adding deployment helloworld-1 to RootSync"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -399,8 +404,8 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 	deployment2 := loadDeployment(nt, "../testdata/deployment-helloworld.yaml")
 	deployment2.SetName(deployment2NN.Name)
 	deployment2.SetNamespace(deployment2NN.Namespace)
-	nt.Must(nsRepo.Add(deployment2Path, deployment2))
-	nt.Must(nsRepo.CommitAndPush("Adding deployment helloworld-2 to RepoSync"))
+	nt.Must(repoSyncGitRepo.Add(deployment2Path, deployment2))
+	nt.Must(repoSyncGitRepo.CommitAndPush("Adding deployment helloworld-2 to RepoSync"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -414,11 +419,11 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 	// Start here to catch both the finalizer injection and deletion behavior.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go nomostest.TailReconcilerLogs(ctx, nt, nomostest.RootReconcilerObjectKey(rootSyncNN.Name))
-	go nomostest.TailReconcilerLogs(ctx, nt, nomostest.NsReconcilerObjectKey(repoSyncNN.Namespace, repoSyncNN.Name))
+	go nomostest.TailReconcilerLogs(ctx, nt, nomostest.RootReconcilerObjectKey(rootSyncKey.Name))
+	go nomostest.TailReconcilerLogs(ctx, nt, nomostest.NsReconcilerObjectKey(repoSyncKey.Namespace, repoSyncKey.Name))
 
 	nt.T.Log("Enabling RootSync deletion propagation")
-	rootSync := k8sobjects.RootSyncObjectV1Beta1(rootSyncNN.Name)
+	rootSync := k8sobjects.RootSyncObjectV1Beta1(rootSyncKey.Name)
 	err := nt.KubeClient.Get(rootSync.Name, rootSync.Namespace, rootSync)
 	if err != nil {
 		nt.T.Fatal(err)
@@ -436,10 +441,10 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 		}))
 
 	nt.T.Log("Disabling RepoSync deletion propagation")
-	repoSync := rootRepo.MustGet(nt.T, repoSyncPath)
+	repoSync := rootSyncGitRepo.MustGet(nt.T, repoSyncPath)
 	if nomostest.RemoveDeletionPropagationPolicy(repoSync) {
-		nt.Must(rootRepo.Add(repoSyncPath, repoSync))
-		nt.Must(rootRepo.CommitAndPush("Disabling RepoSync deletion propagation"))
+		nt.Must(rootSyncGitRepo.Add(repoSyncPath, repoSync))
+		nt.Must(rootSyncGitRepo.CommitAndPush("Disabling RepoSync deletion propagation"))
 		if err := nt.WatchForAllSyncs(); err != nil {
 			nt.T.Fatal(err)
 		}
@@ -452,10 +457,10 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 
 	// Abandon the test namespace, otherwise it will block the finalizer
 	namespace1Path := nomostest.StructuredNSPath(namespace1NN.Name, namespace1NN.Name)
-	namespace1 := rootRepo.MustGet(nt.T, namespace1Path)
+	namespace1 := rootSyncGitRepo.MustGet(nt.T, namespace1Path)
 	core.SetAnnotation(namespace1, common.LifecycleDeleteAnnotation, common.PreventDeletion)
-	nt.Must(rootRepo.Add(namespace1Path, namespace1))
-	nt.Must(rootRepo.CommitAndPush("Adding annotation to keep test namespace on removal from git"))
+	nt.Must(rootSyncGitRepo.Add(namespace1Path, namespace1))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Adding annotation to keep test namespace on removal from git"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -505,21 +510,24 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 // is added to that Namespace from the test. Deletion of both the Namespace and
 // RootSync should be blocked until the Namespace finalizer is removed.
 func TestReconcileFinalizerReconcileTimeout(t *testing.T) {
-	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
-	nestedRootSyncNN := nomostest.RootSyncNN("nested-root-sync")
+	rootSyncID := nomostest.DefaultRootSyncID
+	rootSync2ID := nomostest.RootSyncID("nested-root-sync")
 	namespaceNN := types.NamespacedName{Name: "managed-ns"}
 	contrivedFinalizer := "e2e-test"
 	nt := nomostest.New(t, nomostesting.MultiRepos,
 		ntopts.Unstructured,
-		ntopts.RootRepo(nestedRootSyncNN.Name),      // Create a nested RootSync to delete mid-test
+		ntopts.RootRepo(rootSync2ID.Name),           // Create a nested RootSync to delete mid-test
 		ntopts.WithCentralizedControl,               // This test assumes centralized control
 		ntopts.WithReconcileTimeout(10*time.Second), // Reconcile expected to fail, so use a short timeout
 	)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
+	rootSync2GitRepo := nt.SyncSourceGitRepository(rootSync2ID)
+
 	// add a Namespace to the nested RootSync
 	namespace := k8sobjects.NamespaceObject(namespaceNN.Name)
 	nsPath := nomostest.StructuredNSPath(namespace.GetNamespace(), namespaceNN.Name)
-	nt.Must(nt.RootRepos[nestedRootSyncNN.Name].Add(nsPath, namespace))
-	nt.Must(nt.RootRepos[nestedRootSyncNN.Name].CommitAndPush(fmt.Sprintf("add Namespace %s", namespaceNN.Name)))
+	nt.Must(rootSync2GitRepo.Add(nsPath, namespace))
+	nt.Must(rootSync2GitRepo.CommitAndPush(fmt.Sprintf("add Namespace %s", namespaceNN.Name)))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -563,7 +571,7 @@ func TestReconcileFinalizerReconcileTimeout(t *testing.T) {
 		tg := taskgroup.New()
 		tg.Go(func() error {
 			return nt.Watcher.WatchForNotFound(kinds.RootSyncV1Beta1(),
-				nestedRootSyncNN.Name, nestedRootSyncNN.Namespace)
+				rootSync2ID.Name, rootSync2ID.Namespace)
 		})
 		tg.Go(func() error {
 			return nt.Watcher.WatchForNotFound(kinds.Namespace(),
@@ -576,9 +584,9 @@ func TestReconcileFinalizerReconcileTimeout(t *testing.T) {
 
 	// Try to remove the nested RootSync. Deletion should be blocked by ns finalizer
 	nestedRootSyncPath := fmt.Sprintf("acme/namespaces/%s/%s.yaml",
-		configsync.ControllerNamespace, nestedRootSyncNN.Name)
-	nt.Must(nt.RootRepos[rootSyncNN.Name].Remove(nestedRootSyncPath))
-	nt.Must(nt.RootRepos[rootSyncNN.Name].CommitAndPush(fmt.Sprintf("remove Namespace %s", namespaceNN.Name)))
+		rootSync2ID.Namespace, rootSync2ID.Name)
+	nt.Must(rootSyncGitRepo.Remove(nestedRootSyncPath))
+	nt.Must(rootSyncGitRepo.CommitAndPush(fmt.Sprintf("remove Namespace %s", namespaceNN.Name)))
 	expectedCondition := &v1beta1.RootSyncCondition{
 		Type:    v1beta1.RootSyncReconcilerFinalizerFailure,
 		Status:  "True",
@@ -592,13 +600,13 @@ func TestReconcileFinalizerReconcileTimeout(t *testing.T) {
 		},
 	}
 	// Finalizer currently only sets condition, not sync status
-	if err := nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), nestedRootSyncNN.Name, nestedRootSyncNN.Namespace,
+	if err := nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync2ID.Name, rootSync2ID.Namespace,
 		[]testpredicates.Predicate{testpredicates.RootSyncHasCondition(expectedCondition)}); err != nil {
 		nt.T.Fatal(err)
 	}
 	// Wait a fixed duration for RootSync deletion to be blocked
 	time.Sleep(30 * time.Second)
-	if err := nt.Validate(nestedRootSyncNN.Name, nestedRootSyncNN.Namespace, &v1beta1.RootSync{}); err != nil {
+	if err := nt.Validate(rootSync2ID.Name, rootSync2ID.Namespace, &v1beta1.RootSync{}); err != nil {
 		nt.T.Fatal(err)
 	}
 	if err := nt.Validate(namespaceNN.Name, namespaceNN.Namespace, &corev1.Namespace{}); err != nil {

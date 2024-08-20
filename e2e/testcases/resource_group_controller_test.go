@@ -39,17 +39,18 @@ import (
 
 func TestResourceGroupController(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.ACMController)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	ns := "rg-test"
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
+	nt.Must(rootSyncGitRepo.Add(
 		"acme/namespaces/rg-test/ns.yaml",
 		k8sobjects.NamespaceObject(ns)))
 
 	cmName := "e2e-test-configmap"
 	cmPath := "acme/namespaces/rg-test/configmap.yaml"
 	cm := k8sobjects.ConfigMapObject(core.Name(cmName), core.Namespace(ns))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding a ConfigMap to repo"))
+	nt.Must(rootSyncGitRepo.Add(cmPath, cm))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Adding a ConfigMap to repo"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

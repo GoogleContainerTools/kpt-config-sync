@@ -39,6 +39,7 @@ var preventDeletion = core.Annotation(common.LifecycleDeleteAnnotation, common.P
 func TestPreventDeletionNamespace(t *testing.T) {
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.Lifecycle)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	// Ensure the Namespace doesn't already exist.
 	err := nt.ValidateNotFound("shipping", "", &corev1.Namespace{})
@@ -55,9 +56,9 @@ func TestPreventDeletionNamespace(t *testing.T) {
 
 	// Declare the Namespace with the lifecycle annotation, and ensure it is created.
 	nsObj := k8sobjects.NamespaceObject("shipping", preventDeletion)
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/shipping/ns.yaml", nsObj))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/shipping/role.yaml", role))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("declare Namespace with prevent deletion lifecycle annotation"))
+	nt.Must(rootSyncGitRepo.Add("acme/namespaces/shipping/ns.yaml", nsObj))
+	nt.Must(rootSyncGitRepo.Add("acme/namespaces/shipping/role.yaml", role))
+	nt.Must(rootSyncGitRepo.CommitAndPush("declare Namespace with prevent deletion lifecycle annotation"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -81,9 +82,9 @@ func TestPreventDeletionNamespace(t *testing.T) {
 	}
 
 	// Delete the declaration and ensure the Namespace isn't deleted.
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/shipping/ns.yaml"))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/shipping/role.yaml"))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove Namespace shipping declaration"))
+	nt.Must(rootSyncGitRepo.Remove("acme/namespaces/shipping/ns.yaml"))
+	nt.Must(rootSyncGitRepo.Remove("acme/namespaces/shipping/role.yaml"))
+	nt.Must(rootSyncGitRepo.CommitAndPush("remove Namespace shipping declaration"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -114,8 +115,8 @@ func TestPreventDeletionNamespace(t *testing.T) {
 
 	// Remove the lifecycle annotation from the namespace so that the namespace can be deleted after the test case.
 	nsObj = k8sobjects.NamespaceObject("shipping")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/shipping/ns.yaml", nsObj))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove the lifecycle annotation from Namespace"))
+	nt.Must(rootSyncGitRepo.Add("acme/namespaces/shipping/ns.yaml", nsObj))
+	nt.Must(rootSyncGitRepo.CommitAndPush("remove the lifecycle annotation from Namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -134,6 +135,7 @@ func TestPreventDeletionNamespace(t *testing.T) {
 func TestPreventDeletionRole(t *testing.T) {
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.Lifecycle)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	// Ensure the Namespace doesn't already exist.
 	err := nt.ValidateNotFound("shipping-admin", "shipping", &rbacv1.Role{})
@@ -149,9 +151,9 @@ func TestPreventDeletionRole(t *testing.T) {
 		Verbs:     []string{"get"},
 	}}
 	nsObj := k8sobjects.NamespaceObject("shipping")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/shipping/ns.yaml", nsObj))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/shipping/role.yaml", role))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("declare Role with prevent deletion lifecycle annotation"))
+	nt.Must(rootSyncGitRepo.Add("acme/namespaces/shipping/ns.yaml", nsObj))
+	nt.Must(rootSyncGitRepo.Add("acme/namespaces/shipping/role.yaml", role))
+	nt.Must(rootSyncGitRepo.CommitAndPush("declare Role with prevent deletion lifecycle annotation"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -177,8 +179,8 @@ func TestPreventDeletionRole(t *testing.T) {
 	}
 
 	// Delete the declaration and ensure the Namespace isn't deleted.
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/shipping/role.yaml"))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove Role declaration"))
+	nt.Must(rootSyncGitRepo.Remove("acme/namespaces/shipping/role.yaml"))
+	nt.Must(rootSyncGitRepo.CommitAndPush("remove Role declaration"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -208,8 +210,8 @@ func TestPreventDeletionRole(t *testing.T) {
 
 	// Remove the lifecycle annotation from the role so that the role can be deleted after the test case.
 	delete(role.Annotations, common.LifecycleDeleteAnnotation)
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/shipping/role.yaml", role))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove the lifecycle annotation from Role"))
+	nt.Must(rootSyncGitRepo.Add("acme/namespaces/shipping/role.yaml", role))
+	nt.Must(rootSyncGitRepo.CommitAndPush("remove the lifecycle annotation from Role"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -236,6 +238,7 @@ func TestPreventDeletionRole(t *testing.T) {
 func TestPreventDeletionClusterRole(t *testing.T) {
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.Lifecycle)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	// Ensure the ClusterRole doesn't already exist.
 	err := nt.ValidateNotFound("test-admin", "", &rbacv1.ClusterRole{})
@@ -250,8 +253,8 @@ func TestPreventDeletionClusterRole(t *testing.T) {
 		Resources: []string{"configmaps"},
 		Verbs:     []string{"get"},
 	}}
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/cr.yaml", clusterRole))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("declare ClusterRole with prevent deletion lifecycle annotation"))
+	nt.Must(rootSyncGitRepo.Add("acme/cluster/cr.yaml", clusterRole))
+	nt.Must(rootSyncGitRepo.CommitAndPush("declare ClusterRole with prevent deletion lifecycle annotation"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -265,8 +268,8 @@ func TestPreventDeletionClusterRole(t *testing.T) {
 	}
 
 	// Delete the declaration and ensure the ClusterRole isn't deleted.
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster/cr.yaml"))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove ClusterRole bar declaration"))
+	nt.Must(rootSyncGitRepo.Remove("acme/cluster/cr.yaml"))
+	nt.Must(rootSyncGitRepo.CommitAndPush("remove ClusterRole bar declaration"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -281,8 +284,8 @@ func TestPreventDeletionClusterRole(t *testing.T) {
 
 	// Remove the lifecycle annotation from the cluster-role so that it can be deleted after the test case.
 	delete(clusterRole.Annotations, common.LifecycleDeleteAnnotation)
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/cr.yaml", clusterRole))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove the lifecycle annotation from ClusterRole"))
+	nt.Must(rootSyncGitRepo.Add("acme/cluster/cr.yaml", clusterRole))
+	nt.Must(rootSyncGitRepo.CommitAndPush("remove the lifecycle annotation from ClusterRole"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -313,6 +316,7 @@ func skipAutopilotManagedNamespace(nt *nomostest.NT, ns string) bool {
 
 func TestPreventDeletionSpecialNamespaces(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Lifecycle, ntopts.Unstructured)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	// Build list of special namespaces to test.
 	// Skip namespaces managed by GKE Autopilot, if on an Autopilot cluster
@@ -325,11 +329,11 @@ func TestPreventDeletionSpecialNamespaces(t *testing.T) {
 
 	for ns := range specialNamespaces {
 		checkpointProtectedNamespace(nt, ns)
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/ns-%s.yaml", ns), k8sobjects.NamespaceObject(ns)))
+		nt.Must(rootSyncGitRepo.Add(fmt.Sprintf("acme/ns-%s.yaml", ns), k8sobjects.NamespaceObject(ns)))
 	}
 	bookstoreNS := k8sobjects.NamespaceObject("bookstore")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns-bookstore.yaml", bookstoreNS))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add special namespaces and one non-special namespace"))
+	nt.Must(rootSyncGitRepo.Add("acme/ns-bookstore.yaml", bookstoreNS))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Add special namespaces and one non-special namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -354,10 +358,10 @@ func TestPreventDeletionSpecialNamespaces(t *testing.T) {
 	}
 
 	for ns := range specialNamespaces {
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(fmt.Sprintf("acme/ns-%s.yaml", ns)))
+		nt.Must(rootSyncGitRepo.Remove(fmt.Sprintf("acme/ns-%s.yaml", ns)))
 	}
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/ns-bookstore.yaml"))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove namespaces"))
+	nt.Must(rootSyncGitRepo.Remove("acme/ns-bookstore.yaml"))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Remove namespaces"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

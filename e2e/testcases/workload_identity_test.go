@@ -350,8 +350,10 @@ func TestWorkloadIdentity(t *testing.T) {
 			nt.T.Logf("Update RootSync and RepoSync to sync from %s", tc.sourceType)
 			switch tc.sourceType {
 			case configsync.GitSource:
-				rootMeta = updateRSyncWithGitSourceConfig(nt, rootSync, nt.RootRepos[configsync.RootSyncName], tc.rootSrcCfg)
-				nsMeta = updateRSyncWithGitSourceConfig(nt, repoSync, nt.NonRootRepos[nsRef], tc.nsSrcCfg)
+				rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+				rootMeta = updateRSyncWithGitSourceConfig(nt, rootSync, rootSyncGitRepo, tc.rootSrcCfg)
+				repoSyncGitRepo := nt.SyncSourceGitRepository(nomostest.RepoSyncID(nsRef.Name, nsRef.Namespace))
+				nsMeta = updateRSyncWithGitSourceConfig(nt, repoSync, repoSyncGitRepo, tc.nsSrcCfg)
 			case configsync.HelmSource:
 				rootChart, err = updateRootSyncWithHelmSourceConfig(nt, rsRef, tc.rootSrcCfg)
 				if err != nil {

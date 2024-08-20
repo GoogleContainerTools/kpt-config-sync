@@ -38,6 +38,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/policy"
 	"kpt.dev/configsync/e2e/nomostest/registryproviders"
+	"kpt.dev/configsync/e2e/nomostest/syncsource"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -330,7 +331,7 @@ func TestHelmDefaultNamespace(t *testing.T) {
 	nt.T.Log("Update RootSync to sync from a helm chart")
 	// Switch from Git to Helm
 	rs := nt.RootSyncObjectHelm(configsync.RootSyncName, chart.HelmChartID)
-	nt.T.Log("Manually update the RepoSync object to sync from helm")
+	nt.T.Log("Manually update the RootSync object to sync from helm")
 	nt.Must(nt.KubeClient.Apply(rs))
 
 	nt.T.Log("Wait for RootSync to sync from a helm chart")
@@ -356,6 +357,7 @@ func TestHelmDefaultNamespace(t *testing.T) {
 //
 // 4. The following environment variables are set: GCP_PROJECT, GCP_CLUSTER, GCP_REGION|GCP_ZONE.
 func TestHelmLatestVersion(t *testing.T) {
+	rootSyncID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t,
 		nomostesting.WorkloadIdentity,
 		ntopts.Unstructured,
@@ -363,7 +365,7 @@ func TestHelmLatestVersion(t *testing.T) {
 	)
 
 	newVersion := "1.0.0"
-	chart, err := nt.BuildAndPushHelmPackage(nomostest.RootSyncNN(configsync.RootSyncName),
+	chart, err := nt.BuildAndPushHelmPackage(rootSyncID.ObjectKey,
 		registryproviders.HelmSourceChart(privateSimpleHelmChart),
 		registryproviders.HelmChartVersion(newVersion))
 	if err != nil {
@@ -378,7 +380,7 @@ func TestHelmLatestVersion(t *testing.T) {
 	nt.T.Log("Update RootSync to sync from a helm chart")
 	nt.Must(nt.KubeClient.Apply(rs))
 
-	nt.T.Log("Wait for RootSync to sync from a helm chart")
+	nt.T.Logf("Wait for RootSync to sync from helm chart: %s", chart.HelmChartID)
 	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("Validate version label of a deployment from the helm chart")
@@ -387,16 +389,17 @@ func TestHelmLatestVersion(t *testing.T) {
 
 	// helm-sync automatically detects and updates to the new helm chart version
 	newVersion = "2.5.9"
-	chart, err = nt.BuildAndPushHelmPackage(nomostest.RootSyncNN(configsync.RootSyncName),
+	chart, err = nt.BuildAndPushHelmPackage(rootSyncID.ObjectKey,
 		registryproviders.HelmSourceChart(privateSimpleHelmChart),
 		registryproviders.HelmChartVersion(newVersion))
 	if err != nil {
 		nt.T.Fatalf("failed to push helm chart: %v", err)
 	}
 
-	nt.T.Log("Wait for RootSync to sync from a helm chart")
-	rsKey := client.ObjectKeyFromObject(rs)
-	nt.RootSyncHelmCharts[rsKey] = chart.HelmChartID
+	nt.T.Logf("Wait for RootSync to sync from helm chart: %s", chart.HelmChartID)
+	nt.SyncSources[rootSyncID] = &syncsource.HelmSyncSource{
+		ChartID: chart.HelmChartID,
+	}
 	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("Validate version label of a deployment from the helm chart")
@@ -404,15 +407,17 @@ func TestHelmLatestVersion(t *testing.T) {
 		testpredicates.HasLabel("version", chart.Version)))
 
 	newVersion = "3.0.0"
-	chart, err = nt.BuildAndPushHelmPackage(nomostest.RootSyncNN(configsync.RootSyncName),
+	chart, err = nt.BuildAndPushHelmPackage(rootSyncID.ObjectKey,
 		registryproviders.HelmSourceChart(privateSimpleHelmChart),
 		registryproviders.HelmChartVersion(newVersion))
 	if err != nil {
 		nt.T.Fatalf("failed to push helm chart: %v", err)
 	}
 
-	nt.T.Log("Wait for RootSync to sync from a helm chart")
-	nt.RootSyncHelmCharts[rsKey] = chart.HelmChartID
+	nt.T.Logf("Wait for RootSync to sync from helm chart: %s", chart.HelmChartID)
+	nt.SyncSources[rootSyncID] = &syncsource.HelmSyncSource{
+		ChartID: chart.HelmChartID,
+	}
 	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("Validate version label of a deployment from the helm chart")
@@ -432,9 +437,18 @@ func TestHelmVersionRange(t *testing.T) {
 	nt.T.Logf("Updating RootSync to sync from public helm chart with version range")
 	nt.Must(nt.KubeClient.Apply(rs))
 
-	nt.T.Log("Wait for RootSync to sync from a helm chart")
-	rsKey := client.ObjectKeyFromObject(rs)
-	nt.RootSyncHelmCharts[rsKey] = registryproviders.HelmChartID{Name: rs.Spec.Helm.Chart, Version: "15.4.1"}
+	rootSyncID := core.ID{
+		GroupKind: nomostest.DefaultRootSyncID.GroupKind,
+		ObjectKey: client.ObjectKeyFromObject(rs),
+	}
+	chartID := registryproviders.HelmChartID{
+		Name:    rs.Spec.Helm.Chart,
+		Version: "15.4.1", // latest minor+patch with the same major version
+	}
+	nt.T.Logf("Wait for RootSync to sync from helm chart: %s", chartID)
+	nt.SyncSources[rootSyncID] = &syncsource.HelmSyncSource{
+		ChartID: chartID,
+	}
 	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("Validate Deployment from chart exists")
@@ -450,6 +464,7 @@ func TestHelmNamespaceRepo(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.RequireHelmProvider,
 		ntopts.RepoSyncPermissions(policy.AllAdmin()), // NS reconciler manages a bunch of resources.
 		ntopts.NamespaceRepo(repoSyncNN.Namespace, repoSyncNN.Name))
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	nt.T.Log("Build a Helm chart with cluster-scoped resources")
 	chart, err := nt.BuildAndPushHelmPackage(repoSyncNN,
@@ -460,8 +475,8 @@ func TestHelmNamespaceRepo(t *testing.T) {
 
 	nt.T.Log("Update RepoSync to sync from helm repo, should fail due to cluster-scope resource")
 	rs := nt.RepoSyncObjectHelm(repoSyncNN, chart.HelmChartID)
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from a Helm Chart with cluster-scoped resources"))
+	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Update RepoSync to sync from a Helm Chart with cluster-scoped resources"))
 	nt.WaitForRepoSyncSourceError(repoSyncNN.Namespace, repoSyncNN.Name, nonhierarchical.BadScopeErrCode, "must be Namespace-scoped type")
 
 	nt.T.Log("Update the helm chart with only a namespace-scope resource")
@@ -472,8 +487,8 @@ func TestHelmNamespaceRepo(t *testing.T) {
 		nt.T.Fatalf("failed to push helm chart: %v", err)
 	}
 	rs = nt.RepoSyncObjectHelm(repoSyncNN, validChart.HelmChartID)
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from a Helm Chart with namespace-scoped resources"))
+	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Update RepoSync to sync from a Helm Chart with namespace-scoped resources"))
 
 	nt.T.Log("Wait for RepoSync to sync from a helm chart")
 	nt.Must(nt.WatchForAllSyncs())
@@ -492,6 +507,7 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.RequireHelmProvider,
 		ntopts.RepoSyncPermissions(policy.AppsAdmin(), policy.CoreAdmin()),
 		ntopts.NamespaceRepo(repoSyncNN.Namespace, repoSyncNN.Name))
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 	cmName := "helm-cm-ns-repo-1"
 
 	chart, err := nt.BuildAndPushHelmPackage(repoSyncNN,
@@ -504,8 +520,8 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 	rs := nt.RepoSyncObjectHelm(repoSyncNN, chart.HelmChartID)
 	rs.Spec.Helm.ReleaseName = "test"
 	rs.Spec.Helm.ValuesFileRefs = []v1beta1.ValuesFileRef{{Name: cmName, DataKey: "foo.yaml"}}
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to sync from a Helm Chart without cluster scoped resources"))
+	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Update RepoSync to sync from a Helm Chart without cluster scoped resources"))
 	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "KNV1061: RepoSyncs must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap \"helm-cm-ns-repo-1\" not found")
 
 	nt.T.Log("Create a ConfigMap that is not immutable (which should not be allowed)")
@@ -557,8 +573,8 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 
 	nt.T.Log("Update ValuesFileRefs to reference new ConfigMap`")
 	rs.Spec.Helm.ValuesFileRefs = []v1beta1.ValuesFileRef{{Name: cmName2, DataKey: "foo.yaml"}}
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update RepoSync to reference new ConfigMap"))
+	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Update RepoSync to reference new ConfigMap"))
 
 	nt.T.Log("Wait for RepoSync to sync from a helm chart")
 	nt.Must(nt.WatchForAllSyncs())

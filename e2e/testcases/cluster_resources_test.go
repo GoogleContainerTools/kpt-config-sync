@@ -75,6 +75,7 @@ func managerFieldsNonEmpty() testpredicates.Predicate {
 // changes to cluster-scoped objects.
 func TestRevertClusterRole(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	crName := "e2e-test-clusterrole"
 
@@ -93,8 +94,8 @@ func TestRevertClusterRole(t *testing.T) {
 	}
 	declaredCr := k8sobjects.ClusterRoleObject(core.Name(crName))
 	declaredCr.Rules = declaredRules
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/clusterrole.yaml", declaredCr))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add get/list/create ClusterRole"))
+	nt.Must(rootSyncGitRepo.Add("acme/cluster/clusterrole.yaml", declaredCr))
+	nt.Must(rootSyncGitRepo.CommitAndPush("add get/list/create ClusterRole"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -143,6 +144,7 @@ func TestRevertClusterRole(t *testing.T) {
 // resources.
 func TestClusterRoleLifecycle(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	crName := "e2e-test-clusterrole"
 
@@ -161,8 +163,8 @@ func TestClusterRoleLifecycle(t *testing.T) {
 	}
 	declaredCr := k8sobjects.ClusterRoleObject(core.Name(crName))
 	declaredCr.Rules = declaredRules
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/clusterrole.yaml", declaredCr))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add get/list/create ClusterRole"))
+	nt.Must(rootSyncGitRepo.Add("acme/cluster/clusterrole.yaml", declaredCr))
+	nt.Must(rootSyncGitRepo.CommitAndPush("add get/list/create ClusterRole"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -194,8 +196,8 @@ func TestClusterRoleLifecycle(t *testing.T) {
 	}
 	updatedCr := k8sobjects.ClusterRoleObject(core.Name(crName))
 	updatedCr.Rules = updatedRules
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/clusterrole.yaml", updatedCr))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("update ClusterRole to get/list"))
+	nt.Must(rootSyncGitRepo.Add("acme/cluster/clusterrole.yaml", updatedCr))
+	nt.Must(rootSyncGitRepo.CommitAndPush("update ClusterRole to get/list"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -216,8 +218,8 @@ func TestClusterRoleLifecycle(t *testing.T) {
 	}
 
 	// Delete the ClusterRole from the SOT.
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster/clusterrole.yaml"))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("deleting ClusterRole"))
+	nt.Must(rootSyncGitRepo.Remove("acme/cluster/clusterrole.yaml"))
+	nt.Must(rootSyncGitRepo.CommitAndPush("deleting ClusterRole"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

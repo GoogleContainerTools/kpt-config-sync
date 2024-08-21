@@ -51,14 +51,14 @@ const (
 // Public documentation:
 // https://cloud.google.com/anthos-config-management/docs/how-to/installing-config-sync#git-creds-secret
 func TestGCENodeCSR(t *testing.T) {
+	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, testNs)
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
 		ntopts.RequireGKE(t), ntopts.GCENodeTest,
 		ntopts.RequireCloudSourceRepository(t),
-		ntopts.RepoSyncWithGitSource(testNs, configsync.RepoSyncName),
+		ntopts.SyncWithGitSource(repoSyncID),
 		ntopts.RepoSyncPermissions(policy.AllAdmin()), // NS reconciler manages a bunch of resources.
 		ntopts.WithDelegatedControl)
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
-	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, testNs)
 	repoSyncKey := repoSyncID.ObjectKey
 	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
 
@@ -112,10 +112,11 @@ func TestGCENodeCSR(t *testing.T) {
 //   - `roles/artifactregistry.reader` for access image in Artifact Registry.
 //   - `roles/containerregistry.ServiceAgent` for access image in Container Registry.
 func TestGCENodeOCI(t *testing.T) {
+	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, testNs)
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
 		ntopts.RequireGKE(t), ntopts.GCENodeTest,
 		ntopts.RequireOCIArtifactRegistry(t),
-		ntopts.RepoSyncWithGitSource(testNs, configsync.RepoSyncName),
+		ntopts.SyncWithGitSource(repoSyncID),
 		ntopts.RepoSyncPermissions(policy.AllAdmin()), // NS reconciler manages a bunch of resources.
 		ntopts.WithDelegatedControl)
 
@@ -138,7 +139,7 @@ func TestGCENodeOCI(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	repoSyncRef := nomostest.RepoSyncNN(testNs, configsync.RepoSyncName)
+	repoSyncRef := repoSyncID.ObjectKey
 	nsImage, err := nt.BuildAndPushOCIImage(
 		repoSyncRef,
 		registryproviders.ImageSourcePackage("hydration/namespace-repo"),
@@ -187,10 +188,11 @@ func TestGCENodeOCI(t *testing.T) {
 // 2. The Compute Engine default service account `PROJECT_ID-compute@developer.gserviceaccount.com` needs to have the following role:
 //   - `roles/artifactregistry.reader` for access image in Artifact Registry.
 func TestGCENodeHelm(t *testing.T) {
+	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, testNs)
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
 		ntopts.RequireGKE(t), ntopts.GCENodeTest,
 		ntopts.RequireHelmArtifactRegistry(t),
-		ntopts.RepoSyncWithGitSource(testNs, configsync.RepoSyncName),
+		ntopts.SyncWithGitSource(repoSyncID),
 		ntopts.RepoSyncPermissions(policy.AllAdmin()), // NS reconciler manages a bunch of resources.
 		ntopts.WithDelegatedControl)
 
@@ -209,7 +211,7 @@ func TestGCENodeHelm(t *testing.T) {
 	rootSyncHelm.Spec.Helm.ReleaseName = "my-coredns"
 	nt.Must(nt.KubeClient.Apply(rootSyncHelm))
 
-	repoSyncRef := nomostest.RepoSyncNN(testNs, configsync.RepoSyncName)
+	repoSyncRef := repoSyncID.ObjectKey
 	nsChart, err := nt.BuildAndPushHelmPackage(repoSyncRef,
 		registryproviders.HelmSourceChart("ns-chart"))
 	if err != nil {

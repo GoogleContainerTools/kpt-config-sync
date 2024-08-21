@@ -173,9 +173,9 @@ func TestNamespaceStrategyMultipleRootSyncs(t *testing.T) {
 	rootSyncYID := core.RootSyncID("sync-y")
 	namespaceA := k8sobjects.NamespaceObject("namespace-a")
 	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.Unstructured,
-		ntopts.RootSyncWithGitSource(rootSyncAID.Name), // will declare namespace-a explicitly
-		ntopts.RootSyncWithGitSource(rootSyncXID.Name), // will declare resources in namespace-a, but not namespace-a itself
-		ntopts.RootSyncWithGitSource(rootSyncYID.Name), // will declare resources in namespace-a, but not namespace-a itself
+		ntopts.SyncWithGitSource(rootSyncAID), // will declare namespace-a explicitly
+		ntopts.SyncWithGitSource(rootSyncXID), // will declare resources in namespace-a, but not namespace-a itself
+		ntopts.SyncWithGitSource(rootSyncYID), // will declare resources in namespace-a, but not namespace-a itself
 	)
 	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
 	rootSyncAGitRepo := nt.SyncSourceGitRepository(rootSyncAID)

@@ -272,9 +272,13 @@ func TestWorkloadIdentity(t *testing.T) {
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			rootSyncID := nomostest.DefaultRootSyncID
+			repoSyncID := core.RepoSyncID(configsync.RepoSyncName, testNs)
+			rootSyncKey := rootSyncID.ObjectKey
+			repoSyncKey := repoSyncID.ObjectKey
 			var err error
 			opts := []ntopts.Opt{ntopts.Unstructured, ntopts.RequireGKE(t),
-				ntopts.RepoSyncWithGitSource(testNs, configsync.RepoSyncName),
+				ntopts.SyncWithGitSource(repoSyncID),
 				ntopts.RepoSyncPermissions(policy.AllAdmin()), // NS reconciler manages a bunch of resources.
 				ntopts.WithDelegatedControl}
 			if tc.requireHelmGAR {
@@ -307,10 +311,8 @@ func TestWorkloadIdentity(t *testing.T) {
 			testutils.ClearMembershipInfo(nt, fleetMembership, *e2e.GCPProject, gkeURI)
 			testutils.ClearMembershipInfo(nt, fleetMembership, testutils.TestCrossProjectFleetProjectID, gkeURI)
 
-			rootSync := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
-			repoSync := k8sobjects.RepoSyncObjectV1Beta1(testNs, configsync.RepoSyncName)
-			rsRef := nomostest.RootSyncNN(rootSync.Name)
-			nsRef := nomostest.RepoSyncNN(repoSync.Namespace, repoSync.Name)
+			rootSync := k8sobjects.RootSyncObjectV1Beta1(rootSyncID.Name)
+			repoSync := k8sobjects.RepoSyncObjectV1Beta1(repoSyncID.Namespace, repoSyncID.Name)
 			nt.T.Cleanup(func() {
 				testutils.ClearMembershipInfo(nt, fleetMembership, *e2e.GCPProject, gkeURI)
 				testutils.ClearMembershipInfo(nt, fleetMembership, testutils.TestCrossProjectFleetProjectID, gkeURI)
@@ -350,27 +352,27 @@ func TestWorkloadIdentity(t *testing.T) {
 			nt.T.Logf("Update RootSync and RepoSync to sync from %s", tc.sourceType)
 			switch tc.sourceType {
 			case configsync.GitSource:
-				rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+				rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
 				rootMeta = updateRSyncWithGitSourceConfig(nt, rootSync, rootSyncGitRepo, tc.rootSrcCfg)
-				repoSyncGitRepo := nt.SyncSourceGitRepository(core.RepoSyncID(nsRef.Name, nsRef.Namespace))
+				repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
 				nsMeta = updateRSyncWithGitSourceConfig(nt, repoSync, repoSyncGitRepo, tc.nsSrcCfg)
 			case configsync.HelmSource:
-				rootChart, err = updateRootSyncWithHelmSourceConfig(nt, rsRef, tc.rootSrcCfg)
+				rootChart, err = updateRootSyncWithHelmSourceConfig(nt, rootSyncKey, tc.rootSrcCfg)
 				if err != nil {
 					nt.T.Fatal(err)
 				}
-				nsChart, err = updateRepoSyncWithHelmSourceConfig(nt, nsRef, tc.nsSrcCfg)
+				nsChart, err = updateRepoSyncWithHelmSourceConfig(nt, repoSyncKey, tc.nsSrcCfg)
 				if err != nil {
 					nt.T.Fatal(err)
 				}
 
 			case configsync.OciSource:
 				if tc.requireOCIGAR { // OCI provider is AR
-					rootMeta, err = updateRootSyncWithOCISourceConfig(nt, rsRef, tc.rootSrcCfg)
+					rootMeta, err = updateRootSyncWithOCISourceConfig(nt, rootSyncKey, tc.rootSrcCfg)
 					if err != nil {
 						nt.T.Fatal(err)
 					}
-					nsMeta, err = updateRepoSyncWithOCISourceConfig(nt, nsRef, tc.nsSrcCfg)
+					nsMeta, err = updateRepoSyncWithOCISourceConfig(nt, repoSyncKey, tc.nsSrcCfg)
 					if err != nil {
 						nt.T.Fatal(err)
 					}
@@ -387,7 +389,7 @@ func TestWorkloadIdentity(t *testing.T) {
 						}
 					}`, configsync.OciSource, tc.rootSrcCfg.repo, tc.rootSrcCfg.dir, tc.gsaEmail))
 					rootMeta = rsyncValidateMeta{
-						rsRef:    rsRef,
+						rsRef:    rootSyncKey,
 						sha1Func: tc.rootSrcCfg.commitFn,
 						syncDir:  tc.rootSrcCfg.dir,
 					}
@@ -403,7 +405,7 @@ func TestWorkloadIdentity(t *testing.T) {
 						}
 					}`, configsync.OciSource, tc.nsSrcCfg.repo, tc.nsSrcCfg.dir, tc.gsaEmail))
 					nsMeta = rsyncValidateMeta{
-						rsRef:    nsRef,
+						rsRef:    repoSyncKey,
 						sha1Func: tc.nsSrcCfg.commitFn,
 						syncDir:  tc.nsSrcCfg.dir,
 					}
@@ -468,25 +470,25 @@ func TestWorkloadIdentity(t *testing.T) {
 					nomostest.WithRootSha1Func(nomostest.HelmChartVersionShaFn(rootChart.Version)),
 					nomostest.WithRepoSha1Func(nomostest.HelmChartVersionShaFn(nsChart.Version)),
 					nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
-						rsRef: rootChart.Name,
-						nsRef: nsChart.Name})); err != nil {
+						rootSyncKey: rootChart.Name,
+						repoSyncKey: nsChart.Name})); err != nil {
 					nt.T.Fatal(err)
 				}
 				if err = nt.Validate(truncateStringByLength(fmt.Sprintf("%s-%s", rootChart.Name, rootChart.Name), 63),
 					"default", &appsv1.Deployment{},
-					testpredicates.IsManagedBy(nt.Scheme, declared.RootScope, rsRef.Name)); err != nil {
+					testpredicates.IsManagedBy(nt.Scheme, declared.RootScope, rootSyncKey.Name)); err != nil {
 					nt.T.Fatal(err)
 				}
 				if err = nt.Validate(truncateStringByLength(nsChart.Name, 63),
-					nsRef.Namespace, &appsv1.Deployment{},
-					testpredicates.IsManagedBy(nt.Scheme, declared.Scope(nsRef.Namespace), nsRef.Name)); err != nil {
+					repoSyncKey.Namespace, &appsv1.Deployment{},
+					testpredicates.IsManagedBy(nt.Scheme, declared.Scope(repoSyncKey.Namespace), repoSyncKey.Name)); err != nil {
 					nt.T.Fatal(err)
 				}
 			}
 
 			// Migrate from gcpserviceaccount to k8sserviceaccount
 			if tc.testKSAMigration {
-				if err := migrateFromGSAtoKSA(nt, tc.fleetWITest, tc.sourceType, rsRef, nsRef, tc.newRootSrcCfg, tc.newNSSrcCfg); err != nil {
+				if err := migrateFromGSAtoKSA(nt, tc.fleetWITest, tc.sourceType, rootSyncKey, repoSyncKey, tc.newRootSrcCfg, tc.newNSSrcCfg); err != nil {
 					nt.T.Fatal(err)
 				}
 			}

@@ -66,9 +66,10 @@ func TestInvalidRootSyncBranchStatus(t *testing.T) {
 }
 
 func TestInvalidRepoSyncBranchStatus(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.RepoSyncWithGitSource(namespaceRepo, configsync.RepoSyncName))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, namespaceRepo)
+	nt := nomostest.New(t, nomostesting.SyncSource,
+		ntopts.SyncWithGitSource(repoSyncID))
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 	repoSyncKey := repoSyncID.ObjectKey
 	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
 

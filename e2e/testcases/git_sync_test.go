@@ -27,6 +27,7 @@ import (
 
 func TestMultipleRemoteBranchesOutOfSync(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.ACMController)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	if err := nt.KubeClient.Get(configsync.RootSyncName, configmanagement.ControllerNamespace, rs); err != nil {
@@ -34,11 +35,11 @@ func TestMultipleRemoteBranchesOutOfSync(t *testing.T) {
 	}
 
 	nt.T.Log("Create an extra remote tracking branch")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Push("HEAD:upstream/main"))
+	nt.Must(rootSyncGitRepo.Push("HEAD:upstream/main"))
 
 	nt.T.Logf("Update the remote main branch by adding a test namespace")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/hello/ns.yaml", k8sobjects.NamespaceObject("hello")))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add Namespace"))
+	nt.Must(rootSyncGitRepo.Add("acme/namespaces/hello/ns.yaml", k8sobjects.NamespaceObject("hello")))
+	nt.Must(rootSyncGitRepo.CommitAndPush("add Namespace"))
 
 	nt.T.Logf("Verify git-sync can pull the latest commit with the default branch and revision")
 	// WatchForAllSyncs validates RootSync's lastSyncedCommit is updated to the
@@ -51,8 +52,8 @@ func TestMultipleRemoteBranchesOutOfSync(t *testing.T) {
 	}
 
 	nt.T.Logf("Remove the test namespace to make sure git-sync can fetch newer commit")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/namespaces/hello/ns.yaml"))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("remove Namespace"))
+	nt.Must(rootSyncGitRepo.Remove("acme/namespaces/hello/ns.yaml"))
+	nt.Must(rootSyncGitRepo.CommitAndPush("remove Namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

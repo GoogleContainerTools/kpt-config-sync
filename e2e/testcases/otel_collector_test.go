@@ -116,6 +116,7 @@ func TestOtelCollectorDeployment(t *testing.T) {
 		ntopts.RequireGKE(t),
 		ntopts.Unstructured,
 	)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 	nt.T.Cleanup(func() {
 		if t.Failed() {
 			nt.PodLogs("config-management-monitoring", csmetrics.OtelCollectorName, "", false)
@@ -131,8 +132,8 @@ func TestOtelCollectorDeployment(t *testing.T) {
 
 	nt.T.Log("Adding test commit after otel-collector is started up so multiple commit hashes are processed in pipelines")
 	namespace := k8sobjects.NamespaceObject("foo")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding foo namespace"))
+	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Adding foo namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -183,8 +184,8 @@ func TestOtelCollectorDeployment(t *testing.T) {
 
 	// Change the RootSync to sync from kustomize-components dir to enable Kustomize metrics
 	nt.T.Log("Add the kustomize components root directory to enable kustomize metrics")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/kustomize-components", "."))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add DRY configs to the repository"))
+	nt.Must(rootSyncGitRepo.Copy("../testdata/hydration/kustomize-components", "."))
+	nt.Must(rootSyncGitRepo.CommitAndPush("add DRY configs to the repository"))
 
 	nt.T.Log("Update RootSync to sync from the kustomize-components directory")
 	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
@@ -237,6 +238,7 @@ func TestGCMMetrics(t *testing.T) {
 		ntopts.RequireGKE(t),
 		ntopts.Unstructured,
 	)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 	nt.T.Cleanup(func() {
 		if t.Failed() {
 			nt.PodLogs("config-management-monitoring", csmetrics.OtelCollectorName, "", false)
@@ -273,8 +275,8 @@ func TestGCMMetrics(t *testing.T) {
 
 	nt.T.Log("Adding test namespace")
 	namespace := k8sobjects.NamespaceObject("foo")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding foo namespace"))
+	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Adding foo namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -290,8 +292,8 @@ func TestGCMMetrics(t *testing.T) {
 	}
 
 	nt.T.Log("Remove the test resource")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/ns.yaml"))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove the test namespace"))
+	nt.Must(rootSyncGitRepo.Remove("acme/ns.yaml"))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Remove the test namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -320,14 +322,15 @@ func TestGCMMetrics(t *testing.T) {
 //   - roles/iam.workloadIdentityUser on config-management-monitoring/default for e2e-test-metric-writer
 func TestOtelCollectorGCMLabelAggregation(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.RequireGKE(t))
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 	setupMetricsServiceAccount(nt)
 
 	startTime := time.Now().UTC()
 
 	nt.T.Log("Adding test commit")
 	namespace := k8sobjects.NamespaceObject("foo")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding foo namespace"))
+	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Adding foo namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

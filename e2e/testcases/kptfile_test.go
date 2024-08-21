@@ -26,14 +26,15 @@ import (
 
 func TestIgnoreKptfiles(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	// Add multiple Kptfiles
-	nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile("acme/cluster/Kptfile", []byte("random content")))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile("acme/namespaces/foo/Kptfile", nil))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile("acme/namespaces/foo/subdir/Kptfile", []byte("# some comment")))
+	nt.Must(rootSyncGitRepo.AddFile("acme/cluster/Kptfile", []byte("random content")))
+	nt.Must(rootSyncGitRepo.AddFile("acme/namespaces/foo/Kptfile", nil))
+	nt.Must(rootSyncGitRepo.AddFile("acme/namespaces/foo/subdir/Kptfile", []byte("# some comment")))
 	nsObj := k8sobjects.NamespaceObject("foo")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", nsObj))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding multiple Kptfiles"))
+	nt.Must(rootSyncGitRepo.Add("acme/namespaces/foo/ns.yaml", nsObj))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Adding multiple Kptfiles"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

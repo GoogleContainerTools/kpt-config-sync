@@ -38,6 +38,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/iam"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/registryproviders"
+	"kpt.dev/configsync/e2e/nomostest/syncsource"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testresourcegroup"
@@ -76,6 +77,7 @@ func crontabCR(namespace, name string) (*unstructured.Unstructured, error) {
 func TestStressCRD(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.StressTest,
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	syncPath := gitproviders.DefaultSyncDir
 
@@ -93,24 +95,24 @@ func TestStressCRD(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile(fmt.Sprintf("%s/crontab-crd.yaml", syncPath), crdContent))
+	nt.Must(rootSyncGitRepo.AddFile(fmt.Sprintf("%s/crontab-crd.yaml", syncPath), crdContent))
 
 	labelKey := "StressTestName"
 	labelValue := "TestStressCRD"
 	for i := 1; i <= 1000; i++ {
 		ns := fmt.Sprintf("foo%d", i)
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/ns-%d.yaml", syncPath, i), k8sobjects.NamespaceObject(
+		nt.Must(rootSyncGitRepo.Add(fmt.Sprintf("%s/ns-%d.yaml", syncPath, i), k8sobjects.NamespaceObject(
 			ns, core.Label(labelKey, labelValue))))
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/cm-%d.yaml", syncPath, i), k8sobjects.ConfigMapObject(
+		nt.Must(rootSyncGitRepo.Add(fmt.Sprintf("%s/cm-%d.yaml", syncPath, i), k8sobjects.ConfigMapObject(
 			core.Name("cm1"), core.Namespace(ns), core.Label(labelKey, labelValue))))
 
 		cr, err := crontabCR(ns, "cr1")
 		if err != nil {
 			nt.T.Fatal(err)
 		}
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/crontab-cr-%d.yaml", syncPath, i), cr))
+		nt.Must(rootSyncGitRepo.Add(fmt.Sprintf("%s/crontab-cr-%d.yaml", syncPath, i), cr))
 	}
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add configs (one CRD and 1000 Namespaces (every namespace has one ConfigMap and one CR)"))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Add configs (one CRD and 1000 Namespaces (every namespace has one ConfigMap and one CR)"))
 	err = nt.WatchForAllSyncs(nomostest.WithTimeout(30 * time.Minute))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -138,6 +140,7 @@ func TestStressCRD(t *testing.T) {
 func TestStressLargeNamespace(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.StressTest,
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	syncPath := gitproviders.DefaultSyncDir
 	ns := "my-ns-1"
@@ -152,15 +155,15 @@ func TestStressLargeNamespace(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/ns-%s.yaml", syncPath, ns), k8sobjects.NamespaceObject(ns)))
+	nt.Must(rootSyncGitRepo.Add(fmt.Sprintf("%s/ns-%s.yaml", syncPath, ns), k8sobjects.NamespaceObject(ns)))
 
 	labelKey := "StressTestName"
 	labelValue := "TestStressLargeNamespace"
 	for i := 1; i <= 5000; i++ {
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/cm-%d.yaml", syncPath, i), k8sobjects.ConfigMapObject(
+		nt.Must(rootSyncGitRepo.Add(fmt.Sprintf("%s/cm-%d.yaml", syncPath, i), k8sobjects.ConfigMapObject(
 			core.Name(fmt.Sprintf("cm-%d", i)), core.Namespace(ns), core.Label(labelKey, labelValue))))
 	}
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add configs (5000 ConfigMaps and 1 Namespace"))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Add configs (5000 ConfigMaps and 1 Namespace"))
 	err := nt.WatchForAllSyncs(nomostest.WithTimeout(10 * time.Minute))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -176,6 +179,7 @@ func TestStressLargeNamespace(t *testing.T) {
 func TestStressFrequentGitCommits(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.StressTest,
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	syncPath := gitproviders.DefaultSyncDir
 	ns := "bookstore"
@@ -183,8 +187,8 @@ func TestStressFrequentGitCommits(t *testing.T) {
 	nt.T.Log("Stop the CS webhook by removing the webhook configuration")
 	nomostest.StopWebhook(nt)
 
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/ns-%s.yaml", syncPath, ns), k8sobjects.NamespaceObject(ns)))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("add a namespace: %s", ns)))
+	nt.Must(rootSyncGitRepo.Add(fmt.Sprintf("%s/ns-%s.yaml", syncPath, ns), k8sobjects.NamespaceObject(ns)))
+	nt.Must(rootSyncGitRepo.CommitAndPush(fmt.Sprintf("add a namespace: %s", ns)))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -194,9 +198,9 @@ func TestStressFrequentGitCommits(t *testing.T) {
 	labelValue := "TestStressFrequentGitCommits"
 	for i := 0; i < 100; i++ {
 		cmName := fmt.Sprintf("cm-%v", i)
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/%s.yaml", syncPath, cmName),
+		nt.Must(rootSyncGitRepo.Add(fmt.Sprintf("%s/%s.yaml", syncPath, cmName),
 			k8sobjects.ConfigMapObject(core.Name(cmName), core.Namespace(ns), core.Label(labelKey, labelValue))))
-		nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("add %s", cmName)))
+		nt.Must(rootSyncGitRepo.CommitAndPush(fmt.Sprintf("add %s", cmName)))
 	}
 	err := nt.WatchForAllSyncs(nomostest.WithTimeout(10 * time.Minute))
 	if err != nil {
@@ -292,6 +296,7 @@ func TestStressLargeRequest(t *testing.T) {
 func TestStress100CRDs(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.StressTest,
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	syncPath := gitproviders.DefaultSyncDir
 	ns := "stress-test-ns"
@@ -319,8 +324,8 @@ func TestStress100CRDs(t *testing.T) {
 	nomostest.DeletePodByLabel(nt, "app", reconcilermanager.Reconciler, true)
 
 	nt.T.Log("Adding a test namespace to the repo to trigger a new sync")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/ns-%s.yaml", syncPath, ns), k8sobjects.NamespaceObject(ns)))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add a test namespace to trigger a new sync"))
+	nt.Must(rootSyncGitRepo.Add(fmt.Sprintf("%s/ns-%s.yaml", syncPath, ns), k8sobjects.NamespaceObject(ns)))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Add a test namespace to trigger a new sync"))
 
 	nt.T.Logf("Waiting for the sync to complete")
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -346,6 +351,7 @@ func TestStressManyDeployments(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured,
 		ntopts.StressTest,
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	syncPath := filepath.Join(gitproviders.DefaultSyncDir, "stress-test")
 	ns := "stress-test-ns"
@@ -353,16 +359,16 @@ func TestStressManyDeployments(t *testing.T) {
 	deployCount := 1000
 
 	nt.T.Logf("Adding a test namespace and %d deployments", deployCount)
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/ns-%s.yaml", syncPath, ns), k8sobjects.NamespaceObject(ns)))
+	nt.Must(rootSyncGitRepo.Add(fmt.Sprintf("%s/ns-%s.yaml", syncPath, ns), k8sobjects.NamespaceObject(ns)))
 
 	for i := 1; i <= deployCount; i++ {
 		name := fmt.Sprintf("pause-%d", i)
-		nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile(
+		nt.Must(rootSyncGitRepo.AddFile(
 			fmt.Sprintf("%s/namespaces/%s/deployment-%s.yaml", syncPath, ns, name),
 			[]byte(pauseDeploymentYAML(name, ns))))
 	}
 
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("Adding a test namespace and %d deployments", deployCount)))
+	nt.Must(rootSyncGitRepo.CommitAndPush(fmt.Sprintf("Adding a test namespace and %d deployments", deployCount)))
 
 	// Validate that the resources sync without the reconciler running out of
 	// memory, getting OOMKilled, and crash looping.
@@ -376,8 +382,8 @@ func TestStressManyDeployments(t *testing.T) {
 		client.InNamespace(ns)))
 
 	nt.T.Log("Removing resources from Git")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(syncPath))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing resources from Git"))
+	nt.Must(rootSyncGitRepo.Remove(syncPath))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Removing resources from Git"))
 
 	// Validate that the resources sync without the reconciler running out of
 	// memory, getting OOMKilled, and crash looping.
@@ -392,6 +398,7 @@ func TestStressManyDeployments(t *testing.T) {
 func TestStressMemoryUsageGit(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.StressTest,
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	syncPath := filepath.Join(gitproviders.DefaultSyncDir, "stress-test")
 	ns := "stress-test-ns"
@@ -401,12 +408,12 @@ func TestStressMemoryUsageGit(t *testing.T) {
 	crCount := 50
 
 	nt.T.Logf("Adding a test namespace, %d crds, and %d objects per crd", crdCount, crCount)
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/ns-%s.yaml", syncPath, ns), k8sobjects.NamespaceObject(ns)))
+	nt.Must(rootSyncGitRepo.Add(fmt.Sprintf("%s/ns-%s.yaml", syncPath, ns), k8sobjects.NamespaceObject(ns)))
 
 	for i := 1; i <= crdCount; i++ {
 		group := fmt.Sprintf("acme-%d.com", i)
 		crd := fakeCRD(kind, group)
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/crd-%s.yaml", syncPath, crd.Name), crd))
+		nt.Must(rootSyncGitRepo.Add(fmt.Sprintf("%s/crd-%s.yaml", syncPath, crd.Name), crd))
 		gvk := schema.GroupVersionKind{
 			Group:   group,
 			Kind:    kind,
@@ -414,11 +421,11 @@ func TestStressMemoryUsageGit(t *testing.T) {
 		}
 		for j := 1; j <= crCount; j++ {
 			cr := fakeCR(fmt.Sprintf("%s-%d", strings.ToLower(kind), j), ns, gvk)
-			nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/namespaces/%s/%s-%s.yaml", syncPath, ns, crd.Name, cr.GetName()), cr))
+			nt.Must(rootSyncGitRepo.Add(fmt.Sprintf("%s/namespaces/%s/%s-%s.yaml", syncPath, ns, crd.Name, cr.GetName()), cr))
 		}
 	}
 
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("Adding a test namespace, %d crds, and %d objects per crd", crdCount, crCount)))
+	nt.Must(rootSyncGitRepo.CommitAndPush(fmt.Sprintf("Adding a test namespace, %d crds, and %d objects per crd", crdCount, crCount)))
 
 	// Validate that the resources sync without the reconciler running out of
 	// memory, getting OOMKilled, and crash looping.
@@ -440,8 +447,8 @@ func TestStressMemoryUsageGit(t *testing.T) {
 	}
 
 	nt.T.Log("Removing resources from Git")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(syncPath))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing resources from Git"))
+	nt.Must(rootSyncGitRepo.Remove(syncPath))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Removing resources from Git"))
 
 	// Validate that the resources sync without the reconciler running out of
 	// memory, getting OOMKilled, and crash looping.
@@ -568,6 +575,8 @@ func TestStressMemoryUsageOCI(t *testing.T) {
 // 7. IAM for the test runner to write to Artifact Registry repo
 // 8. gcloud & helm
 func TestStressMemoryUsageHelm(t *testing.T) {
+	rootSyncID := nomostest.DefaultRootSyncID
+	rootSyncKey := rootSyncID.ObjectKey
 	nt := nomostest.New(t, nomostesting.WorkloadIdentity, ntopts.Unstructured,
 		ntopts.StressTest, ntopts.RequireHelmProvider,
 		ntopts.WithReconcileTimeout(30*time.Second))
@@ -580,7 +589,7 @@ func TestStressMemoryUsageHelm(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	chart, err := nt.BuildAndPushHelmPackage(nomostest.RootSyncNN(configsync.RootSyncName),
+	chart, err := nt.BuildAndPushHelmPackage(rootSyncKey,
 		registryproviders.HelmSourceChart("anvil-set"))
 	if err != nil {
 		nt.T.Fatalf("failed to push helm chart: %v", err)
@@ -593,7 +602,7 @@ func TestStressMemoryUsageHelm(t *testing.T) {
 	kind := "Anvil"
 
 	nt.T.Logf("Updating RootSync to sync from the Helm chart: %s:%s", chart.Name, chart.Version)
-	rs := nt.RootSyncObjectHelm(configsync.RootSyncName, chart.HelmChartID)
+	rs := nt.RootSyncObjectHelm(rootSyncID.Name, chart.HelmChartID)
 	rs.Spec.Helm.Namespace = ns
 	rs.Spec.Helm.Values = &apiextensionsv1.JSON{
 		Raw: []byte(fmt.Sprintf(`{"resources": %d, "replicas": %d}`, crdCount, crCount)),
@@ -620,7 +629,7 @@ func TestStressMemoryUsageHelm(t *testing.T) {
 			client.InNamespace(ns)))
 	}
 
-	emptyChart, err := nt.BuildAndPushHelmPackage(nomostest.RootSyncNN(configsync.RootSyncName),
+	emptyChart, err := nt.BuildAndPushHelmPackage(rootSyncKey,
 		registryproviders.HelmSourceChart("empty"),
 		registryproviders.HelmChartVersion("v1.1.0"))
 	if err != nil {
@@ -632,8 +641,9 @@ func TestStressMemoryUsageHelm(t *testing.T) {
 		emptyChart.Name, emptyChart.Version))
 
 	// Update the expected helm chart
-	rsKey := client.ObjectKeyFromObject(rs)
-	nt.RootSyncHelmCharts[rsKey] = emptyChart.HelmChartID
+	nt.SyncSources[rootSyncID] = &syncsource.HelmSyncSource{
+		ChartID: emptyChart.HelmChartID,
+	}
 
 	// Validate that the resources sync without the reconciler running out of
 	// memory, getting OOMKilled, and crash looping.

@@ -31,12 +31,14 @@ import (
 	testmetrics "kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/registryproviders"
+	"kpt.dev/configsync/e2e/nomostest/syncsource"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testlogger"
 	"kpt.dev/configsync/e2e/nomostest/testshell"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -168,10 +170,7 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		kubeconfigPath:          sharedNt.kubeconfigPath,
 		ReconcilerPollingPeriod: sharedNt.ReconcilerPollingPeriod,
 		HydrationPollingPeriod:  sharedNt.HydrationPollingPeriod,
-		RootRepos:               make(map[string]*gitproviders.Repository),
-		NonRootRepos:            make(map[types.NamespacedName]*gitproviders.Repository),
-		RootSyncHelmCharts:      make(map[types.NamespacedName]registryproviders.HelmChartID),
-		RepoSyncHelmCharts:      make(map[types.NamespacedName]registryproviders.HelmChartID),
+		SyncSources:             make(map[core.ID]syncsource.SyncSource),
 		MetricsExpectations:     sharedNt.MetricsExpectations,
 		gitPrivateKeyPath:       sharedNt.gitPrivateKeyPath,
 		gitCACertPath:           sharedNt.gitCACertPath,
@@ -267,10 +266,7 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		repoSyncPermissions:     opts.RepoSyncPermissions,
 		DefaultReconcileTimeout: opts.ReconcileTimeout,
 		kubeconfigPath:          opts.KubeconfigPath,
-		RootRepos:               make(map[string]*gitproviders.Repository),
-		NonRootRepos:            make(map[types.NamespacedName]*gitproviders.Repository),
-		RootSyncHelmCharts:      make(map[types.NamespacedName]registryproviders.HelmChartID),
-		RepoSyncHelmCharts:      make(map[types.NamespacedName]registryproviders.HelmChartID),
+		SyncSources:             make(map[core.ID]syncsource.SyncSource),
 		MetricsExpectations:     testmetrics.NewSyncSetExpectations(t, scheme),
 		Scheme:                  scheme,
 		RemoteRepositories:      make(map[types.NamespacedName]*gitproviders.Repository),
@@ -427,10 +423,16 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 	// - local repo is initialized and empty
 	// - remote repo exists (except for LocalProvider, which is done in portForwardGitServer)
 	for name := range opts.RootRepos {
-		nt.RootRepos[name] = initRepository(nt, gitproviders.RootRepo, RootSyncNN(name), opts.SourceFormat)
+		id := RootSyncID(name)
+		nt.SyncSources[id] = &syncsource.GitSyncSource{
+			Repository: initRepository(nt, gitproviders.RootRepo, id.ObjectKey, opts.SourceFormat),
+		}
 	}
 	for nsr := range opts.NamespaceRepos {
-		nt.NonRootRepos[nsr] = initRepository(nt, gitproviders.NamespaceRepo, nsr, configsync.SourceFormatUnstructured)
+		id := RepoSyncID(nsr.Name, nsr.Namespace)
+		nt.SyncSources[id] = &syncsource.GitSyncSource{
+			Repository: initRepository(nt, gitproviders.NamespaceRepo, id.ObjectKey, configsync.SourceFormatUnstructured),
+		}
 	}
 	// set up port forward if using in-cluster git server
 	if *e2e.GitProvider == e2e.Local {
@@ -452,16 +454,17 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 	}
 
 	if opts.InitialCommit != nil {
-		rootSyncNN := RootSyncNN(configsync.RootSyncName)
+		rootSyncID := DefaultRootSyncID
+		rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
 		for path, obj := range opts.InitialCommit.Files {
-			nt.Must(nt.RootRepos[configsync.RootSyncName].Add(path, obj))
+			nt.Must(rootSyncGitRepo.Add(path, obj))
 			// Some source objects are not included in the declared resources.
 			if testmetrics.IsObjectDeclarable(obj) {
 				// Some source objects are included in the declared resources, but not applied.
-				nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, obj)
+				nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncID.ObjectKey, obj)
 			}
 		}
-		nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush(opts.InitialCommit.Message))
+		nt.Must(rootSyncGitRepo.CommitAndPush(opts.InitialCommit.Message))
 	}
 
 	// First wait for CRDs to be established.

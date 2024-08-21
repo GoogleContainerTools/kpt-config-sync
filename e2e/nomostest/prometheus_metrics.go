@@ -27,7 +27,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	testmetrics "kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/retry"
-	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metrics"
@@ -73,27 +72,23 @@ func ValidateMetrics(nt *NT, predicates ...MetricsPredicate) error {
 }
 
 // ValidateStandardMetrics validates the set of standard metrics for the
-// reconciler-manager and all registered RootSyncs (nt.RootRepos) and RepoSyncs
-// (nt.NonRootRepos).
+// reconciler-manager and all registered nt.SyncSources.
 func ValidateStandardMetrics(nt *NT) error {
 	err := ValidateMetrics(nt, ReconcilerManagerMetrics(nt))
 	if err != nil {
 		return err
 	}
-	for rsName := range nt.RootRepos {
+	for id := range nt.SyncSources.RootSyncs() {
 		err = ValidateStandardMetricsForRootSync(nt, testmetrics.Summary{
-			Sync: types.NamespacedName{
-				Name:      rsName,
-				Namespace: configmanagement.ControllerNamespace,
-			},
+			Sync: id.ObjectKey,
 		})
 		if err != nil {
 			return err
 		}
 	}
-	for nn := range nt.NonRootRepos {
+	for id := range nt.SyncSources.RepoSyncs() {
 		err = ValidateStandardMetricsForRepoSync(nt, testmetrics.Summary{
-			Sync: nn,
+			Sync: id.ObjectKey,
 		})
 		if err != nil {
 			return err
@@ -137,10 +132,12 @@ func MetricLabelsForRepoSync(nt *NT, syncNN types.NamespacedName) (prometheusmod
 // ValidateStandardMetricsForRootSync validates the set of standard metrics for
 // the specified RootSync.
 func ValidateStandardMetricsForRootSync(nt *NT, summary testmetrics.Summary) error {
-	if _, found := nt.RootRepos[summary.Sync.Name]; !found {
-		return fmt.Errorf("RootRepo %q not found", summary.Sync)
+	id := RootSyncID(summary.Sync.Name)
+	source, found := nt.SyncSources[id]
+	if !found {
+		return fmt.Errorf("SyncSource not found for %s: %s", id.Kind, id.ObjectKey)
 	}
-	commitHash, err := nt.RootRepos[summary.Sync.Name].Hash()
+	commit, err := source.Commit()
 	if err != nil {
 		return fmt.Errorf("hashing RootRepo for RootSync: %s: %w", summary.Sync, err)
 	}
@@ -148,16 +145,18 @@ func ValidateStandardMetricsForRootSync(nt *NT, summary testmetrics.Summary) err
 	if err != nil {
 		return fmt.Errorf("reading sync metric labels: %w", err)
 	}
-	return ValidateStandardMetricsForSync(nt, configsync.RootSyncKind, syncLabels, commitHash, summary)
+	return ValidateStandardMetricsForSync(nt, configsync.RootSyncKind, syncLabels, commit, summary)
 }
 
 // ValidateStandardMetricsForRepoSync validates the set of standard metrics for
 // the specified RootSync.
 func ValidateStandardMetricsForRepoSync(nt *NT, summary testmetrics.Summary) error {
-	if _, found := nt.NonRootRepos[summary.Sync]; !found {
-		return fmt.Errorf("NonRootRepo %q not found", summary.Sync)
+	id := RepoSyncID(summary.Sync.Name, summary.Sync.Namespace)
+	source, found := nt.SyncSources[id]
+	if !found {
+		return fmt.Errorf("SyncSource not found for %s: %s", id.Kind, id.ObjectKey)
 	}
-	commitHash, err := nt.NonRootRepos[summary.Sync].Hash()
+	commit, err := source.Commit()
 	if err != nil {
 		return fmt.Errorf("hashing NonRootRepo for RepoSync: %s", summary.Sync)
 	}
@@ -165,7 +164,7 @@ func ValidateStandardMetricsForRepoSync(nt *NT, summary testmetrics.Summary) err
 	if err != nil {
 		return fmt.Errorf("reading sync metric labels: %w", err)
 	}
-	return ValidateStandardMetricsForSync(nt, configsync.RepoSyncKind, syncLabels, commitHash, summary)
+	return ValidateStandardMetricsForSync(nt, configsync.RepoSyncKind, syncLabels, commit, summary)
 }
 
 // ValidateStandardMetricsForSync validates the set of standard metrics for the

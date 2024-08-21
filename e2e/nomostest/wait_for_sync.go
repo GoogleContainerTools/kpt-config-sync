@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
+	"kpt.dev/configsync/e2e/nomostest/syncsource"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
@@ -140,7 +141,7 @@ func syncDirectory(syncDirectoryMap map[types.NamespacedName]string, nn types.Na
 	return gitproviders.DefaultSyncDir
 }
 
-// WatchForAllSyncs calls WatchForSync on all Syncs in nt.RootRepos & nt.NonRootRepos.
+// WatchForAllSyncs calls WatchForSync on all Syncs in nt.SyncSources.
 //
 // If you want to validate specific fields of a Sync object, use
 // nt.Watcher.WatchObject() instead.
@@ -171,50 +172,54 @@ func (nt *NT) WatchForAllSyncs(options ...WatchForAllSyncsOptions) error {
 	tg := taskgroup.New()
 
 	if opts.syncRootRepos {
-		for name := range nt.RootRepos {
-			if _, ok := opts.skipRootRepos[name]; ok {
+		for id, source := range nt.SyncSources.RootSyncs() {
+			if _, ok := opts.skipRootRepos[id.Name]; ok {
 				continue
 			}
-			nn := RootSyncNN(name)
-			syncDir := syncDirectory(opts.syncDirectoryMap, nn)
+			// TODO: Move SyncPath logic into a SyncSource method
+			var syncPath string
+			switch tSource := source.(type) {
+			case *syncsource.GitSyncSource:
+				syncPath = syncDirectory(opts.syncDirectoryMap, id.ObjectKey)
+			case *syncsource.HelmSyncSource:
+				syncPath = tSource.ChartID.Name
+			// case *syncsource.OCISyncSource:
+			// TODO: setup OCI RootSyncs
+			default:
+				nt.T.Fatalf("Invalid %s source %T: %s", id.Kind, source, id.Name)
+			}
+			idPtr := id
 			tg.Go(func() error {
-				return nt.WatchForSync(kinds.RootSyncV1Beta1(), nn.Name, nn.Namespace,
+				return nt.WatchForSync(kinds.RootSyncV1Beta1(), idPtr.Name, idPtr.Namespace,
 					opts.rootSha1Fn, RootSyncHasStatusSyncCommit,
-					&SyncDirPredicatePair{Dir: syncDir, Predicate: RootSyncHasStatusSyncDirectory},
-					testwatcher.WatchTimeout(opts.timeout))
-			})
-		}
-		for nn, chart := range nt.RootSyncHelmCharts {
-			tg.Go(func() error {
-				return nt.WatchForSync(kinds.RootSyncV1Beta1(), nn.Name, nn.Namespace,
-					HelmChartVersionShaFn(chart.Version),
-					RootSyncHasStatusSyncCommit,
-					&SyncDirPredicatePair{Dir: chart.Name, Predicate: RootSyncHasStatusSyncDirectory},
+					&SyncDirPredicatePair{Dir: syncPath, Predicate: RootSyncHasStatusSyncDirectory},
 					testwatcher.WatchTimeout(opts.timeout))
 			})
 		}
 	}
 
 	if opts.syncNamespaceRepos {
-		for nn := range nt.NonRootRepos {
-			if _, ok := opts.skipNonRootRepos[nn]; ok {
+		for id, source := range nt.SyncSources.RepoSyncs() {
+			if _, ok := opts.skipNonRootRepos[id.ObjectKey]; ok {
 				continue
 			}
-			syncDir := syncDirectory(opts.syncDirectoryMap, nn)
-			nnPtr := nn
+			// TODO: Move SyncPath logic into a SyncSource method
+			var syncPath string
+			switch tSource := source.(type) {
+			case *syncsource.GitSyncSource:
+				syncPath = syncDirectory(opts.syncDirectoryMap, id.ObjectKey)
+			case *syncsource.HelmSyncSource:
+				syncPath = tSource.ChartID.Name
+			// case *syncsource.OCISyncSource:
+			// TODO: setup OCI RootSyncs
+			default:
+				nt.T.Fatalf("Invalid %s source %T: %s", id.Kind, source, id.Name)
+			}
+			idPtr := id
 			tg.Go(func() error {
-				return nt.WatchForSync(kinds.RepoSyncV1Beta1(), nnPtr.Name, nnPtr.Namespace,
+				return nt.WatchForSync(kinds.RepoSyncV1Beta1(), idPtr.Name, idPtr.Namespace,
 					opts.repoSha1Fn, RepoSyncHasStatusSyncCommit,
-					&SyncDirPredicatePair{Dir: syncDir, Predicate: RepoSyncHasStatusSyncDirectory},
-					testwatcher.WatchTimeout(opts.timeout))
-			})
-		}
-		for nn, chart := range nt.RepoSyncHelmCharts {
-			tg.Go(func() error {
-				return nt.WatchForSync(kinds.RepoSyncV1Beta1(), nn.Name, nn.Namespace,
-					HelmChartVersionShaFn(chart.Version),
-					RepoSyncHasStatusSyncCommit,
-					&SyncDirPredicatePair{Dir: chart.Name, Predicate: RepoSyncHasStatusSyncDirectory},
+					&SyncDirPredicatePair{Dir: syncPath, Predicate: RepoSyncHasStatusSyncDirectory},
 					testwatcher.WatchTimeout(opts.timeout))
 			})
 		}

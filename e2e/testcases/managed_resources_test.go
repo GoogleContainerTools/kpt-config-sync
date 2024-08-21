@@ -55,6 +55,7 @@ import (
 // cluster-scoped changes are made with kubectl.
 func TestDriftKubectlApplyClusterScoped(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	rootSync2Name := "abcdef"
 	rootSync1ApplySetID := applyset.IDFromSync(configsync.RootSyncName, declared.RootScope)
@@ -63,8 +64,8 @@ func TestDriftKubectlApplyClusterScoped(t *testing.T) {
 	rootSync2Manager := declared.ResourceManager(declared.RootScope, rootSync2Name)
 
 	namespace := k8sobjects.NamespaceObject("bookstore")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add a namespace"))
+	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
+	nt.Must(rootSyncGitRepo.CommitAndPush("add a namespace"))
 	nt.Must(nt.WatchForAllSyncs())
 
 	/* A new test */
@@ -244,6 +245,7 @@ func TestDriftKubectlApplyClusterScoped(t *testing.T) {
 // namespace-scoped changes are made with kubectl.
 func TestDriftKubectlApplyNamespaceScoped(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	rootSync2Name := "abcdef"
 	rootSync1ApplySetID := applyset.IDFromSync(configsync.RootSyncName, declared.RootScope)
@@ -252,14 +254,14 @@ func TestDriftKubectlApplyNamespaceScoped(t *testing.T) {
 	rootSync2Manager := declared.ResourceManager(declared.RootScope, rootSync2Name)
 
 	namespace := k8sobjects.NamespaceObject("bookstore")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add a namespace"))
+	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
+	nt.Must(rootSyncGitRepo.CommitAndPush("add a namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
 
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm.yaml", k8sobjects.ConfigMapObject(core.Name("cm-1"), core.Namespace("bookstore"))))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add a configmap"))
+	nt.Must(rootSyncGitRepo.Add("acme/cm.yaml", k8sobjects.ConfigMapObject(core.Name("cm-1"), core.Namespace("bookstore"))))
+	nt.Must(rootSyncGitRepo.CommitAndPush("add a configmap"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -492,16 +494,17 @@ func TestDriftKubectlApplyNamespaceScoped(t *testing.T) {
 // that Config Sync recreates the deleted object.
 func TestDriftKubectlDelete(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	namespace := k8sobjects.NamespaceObject("bookstore")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add a namespace"))
+	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
+	nt.Must(rootSyncGitRepo.CommitAndPush("add a namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
 
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm.yaml", k8sobjects.ConfigMapObject(core.Name("cm-1"), core.Namespace("bookstore"))))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add a configmap"))
+	nt.Must(rootSyncGitRepo.Add("acme/cm.yaml", k8sobjects.ConfigMapObject(core.Name("cm-1"), core.Namespace("bookstore"))))
+	nt.Must(rootSyncGitRepo.CommitAndPush("add a configmap"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -552,16 +555,17 @@ func TestDriftKubectlDelete(t *testing.T) {
 // annotation, and verifies that Config Sync recreates the deleted object.
 func TestDriftKubectlDeleteWithIgnoreMutationAnnotation(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	namespace := k8sobjects.NamespaceObject("bookstore", core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add a namespace"))
+	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
+	nt.Must(rootSyncGitRepo.CommitAndPush("add a namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
 
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm.yaml", k8sobjects.ConfigMapObject(core.Name("cm-1"), core.Namespace("bookstore"))))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add a configmap"))
+	nt.Must(rootSyncGitRepo.Add("acme/cm.yaml", k8sobjects.ConfigMapObject(core.Name("cm-1"), core.Namespace("bookstore"))))
+	nt.Must(rootSyncGitRepo.CommitAndPush("add a configmap"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -612,10 +616,11 @@ func TestDriftKubectlDeleteWithIgnoreMutationAnnotation(t *testing.T) {
 // does not remove this field.
 func TestDriftKubectlAnnotateUnmanagedField(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	namespace := k8sobjects.NamespaceObject("bookstore")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add a namespace"))
+	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
+	nt.Must(rootSyncGitRepo.CommitAndPush("add a namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -672,10 +677,11 @@ func TestDriftKubectlAnnotateUnmanagedField(t *testing.T) {
 // Config Sync does not remove this field.
 func TestDriftKubectlAnnotateUnmanagedFieldWithIgnoreMutationAnnotation(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	namespace := k8sobjects.NamespaceObject("bookstore", core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add a namespace"))
+	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
+	nt.Must(rootSyncGitRepo.CommitAndPush("add a namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -701,10 +707,11 @@ func TestDriftKubectlAnnotateUnmanagedFieldWithIgnoreMutationAnnotation(t *testi
 // that Config Sync corrects it.
 func TestDriftKubectlAnnotateManagedField(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	namespace := k8sobjects.NamespaceObject("bookstore", core.Annotation("season", "summer"))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add a namespace"))
+	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
+	nt.Must(rootSyncGitRepo.CommitAndPush("add a namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -763,12 +770,13 @@ func TestDriftKubectlAnnotateManagedField(t *testing.T) {
 // Config Sync does not correct it.
 func TestDriftKubectlAnnotateManagedFieldWithIgnoreMutationAnnotation(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	namespace := k8sobjects.NamespaceObject("bookstore",
 		core.Annotation("season", "summer"),
 		core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add a namespace"))
+	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
+	nt.Must(rootSyncGitRepo.CommitAndPush("add a namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -810,10 +818,11 @@ func TestDriftKubectlAnnotateManagedFieldWithIgnoreMutationAnnotation(t *testing
 // verifies that Config Sync corrects it.
 func TestDriftKubectlAnnotateDeleteManagedFields(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	namespace := k8sobjects.NamespaceObject("bookstore", core.Annotation("season", "summer"))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add a namespace"))
+	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
+	nt.Must(rootSyncGitRepo.CommitAndPush("add a namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -872,12 +881,13 @@ func TestDriftKubectlAnnotateDeleteManagedFields(t *testing.T) {
 // Config Sync does not correct it.
 func TestDriftKubectlAnnotateDeleteManagedFieldsWithIgnoreMutationAnnotation(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	namespace := k8sobjects.NamespaceObject("bookstore",
 		core.Annotation("season", "summer"),
 		core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", namespace))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add a namespace"))
+	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
+	nt.Must(rootSyncGitRepo.CommitAndPush("add a namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -920,6 +930,7 @@ func TestDriftKubectlAnnotateDeleteManagedFieldsWithIgnoreMutationAnnotation(t *
 // Config Sync re-adds it.
 func TestDriftRemoveApplySetPartOfLabel(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	rootSync1ApplySetID := applyset.IDFromSync(configsync.RootSyncName, declared.RootScope)
 
@@ -932,8 +943,8 @@ func TestDriftRemoveApplySetPartOfLabel(t *testing.T) {
 
 	nsObj := k8sobjects.NamespaceObject(namespace,
 		core.Annotation("season", "summer"))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns.yaml", nsObj))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add a namespace"))
+	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", nsObj))
+	nt.Must(rootSyncGitRepo.CommitAndPush("add a namespace"))
 	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("Changing the ApplySet ID label value")

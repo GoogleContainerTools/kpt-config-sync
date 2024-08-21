@@ -23,12 +23,12 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/e2e/nomostest"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
-	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 )
 
 func TestChangeCustomResourceDefinitionSchema(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	oldCRDFile := filepath.Join(".", "..", "testdata", "customresources", "changed_schema_crds", "old_schema_crd.yaml")
 	newCRDFile := filepath.Join(".", "..", "testdata", "customresources", "changed_schema_crds", "new_schema_crd.yaml")
@@ -44,10 +44,10 @@ func TestChangeCustomResourceDefinitionSchema(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile("acme/cluster/crd.yaml", crdContent))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/foo/ns.yaml", k8sobjects.NamespaceObject("foo")))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile("acme/namespaces/foo/cr.yaml", crContent))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding a CRD and CR"))
+	nt.Must(rootSyncGitRepo.AddFile("acme/cluster/crd.yaml", crdContent))
+	nt.Must(rootSyncGitRepo.Add("acme/namespaces/foo/ns.yaml", k8sobjects.NamespaceObject("foo")))
+	nt.Must(rootSyncGitRepo.AddFile("acme/namespaces/foo/cr.yaml", crContent))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Adding a CRD and CR"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -73,9 +73,9 @@ func TestChangeCustomResourceDefinitionSchema(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile("acme/cluster/crd.yaml", crdContent))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile("acme/namespaces/foo/cr.yaml", crContent))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding the CRD with new schema and a CR using the new schema"))
+	nt.Must(rootSyncGitRepo.AddFile("acme/cluster/crd.yaml", crdContent))
+	nt.Must(rootSyncGitRepo.AddFile("acme/namespaces/foo/cr.yaml", crContent))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Adding the CRD with new schema and a CR using the new schema"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

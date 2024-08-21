@@ -51,6 +51,7 @@ func emptyConstraintTemplate() unstructured.Unstructured {
 
 func TestConstraintTemplateAndConstraintInSameCommit(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	crdName := "k8sallowedrepos.constraints.gatekeeper.sh"
 	nt.T.Logf("Delete the %q CRD if needed", crdName)
@@ -62,18 +63,18 @@ func TestConstraintTemplateAndConstraintInSameCommit(t *testing.T) {
 	}
 
 	nt.T.Log("Adding ConstraintTemplate & Constraint in one commit")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/gatekeeper/constraint-template.yaml", "acme/cluster/constraint-template.yaml"))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/gatekeeper/constraint.yaml", "acme/cluster/constraint.yaml"))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add ConstraintTemplate & Constraint"))
+	nt.Must(rootSyncGitRepo.Copy("../testdata/gatekeeper/constraint-template.yaml", "acme/cluster/constraint-template.yaml"))
+	nt.Must(rootSyncGitRepo.Copy("../testdata/gatekeeper/constraint.yaml", "acme/cluster/constraint.yaml"))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Add ConstraintTemplate & Constraint"))
 
 	// Cleanup if waiting for sync error fails.
 	nt.T.Cleanup(func() {
 		if nt.T.Failed() {
 			// Cleanup before deleting the ConstraintTemplate CRDs to avoid resource conflict errors from the webhook.
-			nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster"))
+			nt.Must(rootSyncGitRepo.Remove("acme/cluster"))
 			// Add back the safety ClusterRole to pass the safety check (KNV2006).
-			nt.Must(nt.RootRepos[configsync.RootSyncName].AddSafetyClusterRole())
-			nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Reset the acme directory"))
+			nt.Must(rootSyncGitRepo.AddSafetyClusterRole())
+			nt.Must(rootSyncGitRepo.CommitAndPush("Reset the acme directory"))
 			if err := nt.WatchForAllSyncs(); err != nil {
 				nt.T.Fatal(err)
 			}
@@ -98,10 +99,10 @@ func TestConstraintTemplateAndConstraintInSameCommit(t *testing.T) {
 	}
 
 	// Cleanup before deleting the ConstraintTemplate and Constraint CRDs to avoid resource conflict errors from the webhook.
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster"))
+	nt.Must(rootSyncGitRepo.Remove("acme/cluster"))
 	// Add back the safety ClusterRole to pass the safety check (KNV2006).
-	nt.Must(nt.RootRepos[configsync.RootSyncName].AddSafetyClusterRole())
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Reset the acme directory"))
+	nt.Must(rootSyncGitRepo.AddSafetyClusterRole())
+	nt.Must(rootSyncGitRepo.CommitAndPush("Reset the acme directory"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

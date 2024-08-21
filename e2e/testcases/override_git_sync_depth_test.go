@@ -35,8 +35,9 @@ import (
 )
 
 func TestOverrideGitSyncDepthV1Alpha1(t *testing.T) {
+	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, backendNamespace)
 	nt := nomostest.New(t, nomostesting.OverrideAPI,
-		ntopts.RepoSyncWithGitSource(backendNamespace, configsync.RepoSyncName))
+		ntopts.SyncWithGitSource(repoSyncID))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -49,7 +50,7 @@ func TestOverrideGitSyncDepthV1Alpha1(t *testing.T) {
 		Namespace: configsync.ControllerNamespace,
 	}
 	nsReconcilerNN := types.NamespacedName{
-		Name:      core.NsReconcilerName(backendNamespace, configsync.RepoSyncName),
+		Name:      core.NsReconcilerName(repoSyncID.Namespace, repoSyncID.Name),
 		Namespace: configsync.ControllerNamespace,
 	}
 
@@ -67,8 +68,7 @@ func TestOverrideGitSyncDepthV1Alpha1(t *testing.T) {
 
 	rootSync := k8sobjects.RootSyncObjectV1Alpha1(configsync.RootSyncName)
 
-	nn := nomostest.RepoSyncNN(backendNamespace, configsync.RepoSyncName)
-	repoSyncBackend := nomostest.RepoSyncObjectV1Alpha1FromNonRootRepo(nt, nn)
+	repoSyncBackend := nomostest.RepoSyncObjectV1Alpha1FromNonRootRepo(nt, repoSyncID.ObjectKey)
 
 	// Override the git sync depth setting for root-reconciler
 	nt.MustMergePatch(rootSync, `{"spec": {"override": {"gitSyncDepth": 5}}}`)
@@ -81,7 +81,7 @@ func TestOverrideGitSyncDepthV1Alpha1(t *testing.T) {
 	// Override the git sync depth setting for ns-reconciler-backend
 	var depth int64 = 33
 	repoSyncBackend.Spec.SafeOverride().GitSyncDepth = &depth
-	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend))
+	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(repoSyncID.Namespace, repoSyncID.Name), repoSyncBackend))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Update backend RepoSync git sync depth to 33"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -107,7 +107,7 @@ func TestOverrideGitSyncDepthV1Alpha1(t *testing.T) {
 	// Override the git sync depth setting for ns-reconciler-backend to 0
 	depth = 0
 	repoSyncBackend.Spec.SafeOverride().GitSyncDepth = &depth
-	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend))
+	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(repoSyncID.Namespace, repoSyncID.Name), repoSyncBackend))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Update backend RepoSync git sync depth to 0"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -121,7 +121,7 @@ func TestOverrideGitSyncDepthV1Alpha1(t *testing.T) {
 
 	// Clear `spec.override` from repoSyncBackend
 	repoSyncBackend.Spec.Override = &v1alpha1.RepoSyncOverrideSpec{}
-	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend))
+	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(repoSyncID.Namespace, repoSyncID.Name), repoSyncBackend))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Clear `spec.override` from repoSyncBackend"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -135,8 +135,9 @@ func TestOverrideGitSyncDepthV1Alpha1(t *testing.T) {
 }
 
 func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
+	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, backendNamespace)
 	nt := nomostest.New(t, nomostesting.OverrideAPI,
-		ntopts.RepoSyncWithGitSource(backendNamespace, configsync.RepoSyncName))
+		ntopts.SyncWithGitSource(repoSyncID))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -149,7 +150,7 @@ func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
 		Namespace: configsync.ControllerNamespace,
 	}
 	nsReconcilerNN := types.NamespacedName{
-		Name:      core.NsReconcilerName(backendNamespace, configsync.RepoSyncName),
+		Name:      core.NsReconcilerName(repoSyncID.Namespace, repoSyncID.Name),
 		Namespace: configsync.ControllerNamespace,
 	}
 
@@ -167,8 +168,7 @@ func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
 
 	rootSync := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 
-	nn := nomostest.RepoSyncNN(backendNamespace, configsync.RepoSyncName)
-	repoSyncBackend := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)
+	repoSyncBackend := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, repoSyncID.ObjectKey)
 
 	// Override the git sync depth setting for root-reconciler
 	nt.MustMergePatch(rootSync, `{"spec": {"override": {"gitSyncDepth": 5}}}`)
@@ -181,7 +181,7 @@ func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
 	// Override the git sync depth setting for ns-reconciler-backend
 	var depth int64 = 33
 	repoSyncBackend.Spec.SafeOverride().GitSyncDepth = &depth
-	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend))
+	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(repoSyncID.Namespace, repoSyncID.Name), repoSyncBackend))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Update backend RepoSync git sync depth to 33"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -207,7 +207,7 @@ func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
 	// Override the git sync depth setting for ns-reconciler-backend to 0
 	depth = 0
 	repoSyncBackend.Spec.SafeOverride().GitSyncDepth = &depth
-	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend))
+	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(repoSyncID.Namespace, repoSyncID.Name), repoSyncBackend))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Update backend RepoSync git sync depth to 0"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -221,7 +221,7 @@ func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
 
 	// Clear `spec.override` from repoSyncBackend
 	repoSyncBackend.Spec.Override = &v1beta1.RepoSyncOverrideSpec{}
-	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend))
+	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(repoSyncID.Namespace, repoSyncID.Name), repoSyncBackend))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Clear `spec.override` from repoSyncBackend"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)

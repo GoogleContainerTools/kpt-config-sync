@@ -59,22 +59,11 @@ type MultiRepo struct {
 	RepoSyncPermissions []rbacv1.PolicyRule
 }
 
-// RepoSyncWithGitSource tells the test case that a RepoSync should be applied
-// that points to an empty Git Repository.
+// SyncWithGitSource tells the test case that a RootSync or RepoSync should be
+// applied that points to an empty Git Repository.
 // TODO: Add another option that allows specifying an existing Repository
-func RepoSyncWithGitSource(ns, name string) func(opt *New) {
+func SyncWithGitSource(id core.ID) func(opt *New) {
 	return func(opt *New) {
-		id := core.RepoSyncID(name, ns)
-		opt.SyncSources[id] = &syncsource.GitSyncSource{}
-	}
-}
-
-// RootSyncWithGitSource tells the test case that a RootSync should be applied
-// that points to an empty Git Repository.
-// TODO: Add another option that allows specifying an existing Repository
-func RootSyncWithGitSource(name string) func(opt *New) {
-	return func(opt *New) {
-		id := core.RootSyncID(name)
 		opt.SyncSources[id] = &syncsource.GitSyncSource{}
 	}
 }

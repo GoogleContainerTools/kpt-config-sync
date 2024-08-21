@@ -460,10 +460,11 @@ func TestHelmVersionRange(t *testing.T) {
 // Running this test on Artifact Registry has following pre-requisites:
 // Google service account `e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for accessing images in Artifact Registry.
 func TestHelmNamespaceRepo(t *testing.T) {
-	repoSyncNN := nomostest.RepoSyncNN(testNs, configsync.RepoSyncName)
+	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, testNs)
+	repoSyncNN := repoSyncID.ObjectKey
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.RequireHelmProvider,
 		ntopts.RepoSyncPermissions(policy.AllAdmin()), // NS reconciler manages a bunch of resources.
-		ntopts.RepoSyncWithGitSource(repoSyncNN.Namespace, repoSyncNN.Name))
+		ntopts.SyncWithGitSource(repoSyncID))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	nt.T.Log("Build a Helm chart with cluster-scoped resources")
@@ -503,10 +504,11 @@ func TestHelmNamespaceRepo(t *testing.T) {
 // This test will work only with following pre-requisites:
 // Google service account `e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for accessing images in Artifact Registry.
 func TestHelmConfigMapNamespaceRepo(t *testing.T) {
-	repoSyncNN := nomostest.RepoSyncNN(testNs, configsync.RepoSyncName)
+	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, testNs)
+	repoSyncNN := repoSyncID.ObjectKey
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.RequireHelmProvider,
 		ntopts.RepoSyncPermissions(policy.AppsAdmin(), policy.CoreAdmin()),
-		ntopts.RepoSyncWithGitSource(repoSyncNN.Namespace, repoSyncNN.Name))
+		ntopts.SyncWithGitSource(repoSyncID))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 	cmName := "helm-cm-ns-repo-1"
 

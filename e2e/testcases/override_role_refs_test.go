@@ -34,16 +34,14 @@ import (
 )
 
 func TestRootSyncRoleRefs(t *testing.T) {
+	rootSyncAID := core.RootSyncID("sync-a")
 	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.Unstructured,
-		ntopts.RootSyncWithGitSource("sync-a"),
+		ntopts.SyncWithGitSource(rootSyncAID),
 	)
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
-	rootSyncA := nomostest.RootSyncObjectV1Beta1FromRootRepo(nt, "sync-a")
+	rootSyncA := nomostest.RootSyncObjectV1Beta1FromRootRepo(nt, rootSyncAID.Name)
 	syncAReconcilerName := core.RootReconcilerName(rootSyncA.Name)
-	syncANN := types.NamespacedName{
-		Name:      rootSyncA.Name,
-		Namespace: rootSyncA.Namespace,
-	}
+	syncANN := rootSyncAID.ObjectKey
 	if err := nt.Validate(controllers.RootSyncLegacyClusterRoleBindingName, "", &rbacv1.ClusterRoleBinding{},
 		testpredicates.ClusterRoleBindingSubjectNamesEqual(nomostest.DefaultRootReconcilerName, syncAReconcilerName)); err != nil {
 		nt.T.Fatal(err)

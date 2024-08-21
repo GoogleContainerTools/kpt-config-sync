@@ -67,10 +67,10 @@ func secretDataDeletePatch(key string) string {
 }
 
 func TestCACertSecretRefV1Alpha1(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.RequireLocalGitProvider,
-		ntopts.RepoSyncWithGitSource(backendNamespace, configsync.RepoSyncName))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, backendNamespace)
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.RequireLocalGitProvider,
+		ntopts.SyncWithGitSource(repoSyncID))
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 	repoSyncKey := repoSyncID.ObjectKey
 	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
 	rootSyncReconcilerName := nomostest.DefaultRootReconcilerName
@@ -189,10 +189,10 @@ func TestCACertSecretRefV1Alpha1(t *testing.T) {
 }
 
 func TestCACertSecretRefV1Beta1(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.RequireLocalGitProvider,
-		ntopts.RepoSyncWithGitSource(backendNamespace, configsync.RepoSyncName))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, backendNamespace)
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.RequireLocalGitProvider,
+		ntopts.SyncWithGitSource(repoSyncID))
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 	repoSyncKey := repoSyncID.ObjectKey
 	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
 	rootSyncReconcilerName := nomostest.DefaultRootReconcilerName
@@ -316,10 +316,10 @@ func TestCACertSecretRefV1Beta1(t *testing.T) {
 }
 
 func TestCACertSecretWatch(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.RequireLocalGitProvider,
-		ntopts.RepoSyncWithGitSource(backendNamespace, configsync.RepoSyncName))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, backendNamespace)
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.RequireLocalGitProvider,
+		ntopts.SyncWithGitSource(repoSyncID))
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 	repoSyncKey := repoSyncID.ObjectKey
 	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
 	rootSyncReconcilerName := nomostest.DefaultRootReconcilerName
@@ -439,12 +439,12 @@ func TestOCICACertSecretRefRootRepo(t *testing.T) {
 // TestOCICACertSecretRefNamespaceRepo can run only run on KinD clusters.
 // It tests RepoSyncs can pull from OCI images using a CA certificate.
 func TestOCICACertSecretRefNamespaceRepo(t *testing.T) {
+	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, backendNamespace)
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
 		ntopts.RequireLocalOCIProvider,
-		ntopts.RepoSyncWithGitSource(backendNamespace, configsync.RepoSyncName),
+		ntopts.SyncWithGitSource(repoSyncID),
 		ntopts.RepoSyncPermissions(policy.CoreAdmin()))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
-	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, backendNamespace)
 	repoSyncKey := repoSyncID.ObjectKey
 	repoSyncReconcilerName := core.NsReconcilerName(repoSyncID.Namespace, repoSyncID.Name)
 
@@ -557,21 +557,22 @@ func TestHelmCACertSecretRefRootRepo(t *testing.T) {
 // TestHelmCACertSecretRefNamespaceRepo can run only run on KinD clusters.
 // It tests RepoSyncs can pull from OCI images using a CA certificate.
 func TestHelmCACertSecretRefNamespaceRepo(t *testing.T) {
+	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, backendNamespace)
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
 		ntopts.RequireLocalHelmProvider,
-		ntopts.RepoSyncWithGitSource(backendNamespace, configsync.RepoSyncName),
+		ntopts.SyncWithGitSource(repoSyncID),
 		ntopts.RepoSyncPermissions(policy.CoreAdmin()))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	caCertSecret := nomostest.PublicCertSecretName(nomostest.RegistrySyncSource)
 
-	nn := nomostest.RepoSyncNN(backendNamespace, configsync.RepoSyncName)
-	rs := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)
+	repoSyncKey := repoSyncID.ObjectKey
+	rs := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, repoSyncKey)
 	upsertedSecret := controllers.ReconcilerResourceName(
-		core.NsReconcilerName(nn.Namespace, nn.Name), caCertSecret)
+		core.NsReconcilerName(repoSyncKey.Namespace, repoSyncKey.Name), caCertSecret)
 
-	cm := k8sobjects.ConfigMapObject(core.Name("foo-cm"), core.Namespace(nn.Namespace))
-	chart, err := nt.BuildAndPushHelmPackage(nn, registryproviders.HelmChartObjects(nt.Scheme, cm))
+	cm := k8sobjects.ConfigMapObject(core.Name("foo-cm"), core.Namespace(repoSyncKey.Namespace))
+	chart, err := nt.BuildAndPushHelmPackage(repoSyncKey, registryproviders.HelmChartObjects(nt.Scheme, cm))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -592,20 +593,20 @@ func TestHelmCACertSecretRefNamespaceRepo(t *testing.T) {
 		},
 	}
 	nt.Must(rootSyncGitRepo.Add(
-		nomostest.StructuredNSPath(nn.Namespace, nn.Name), rs))
+		nomostest.StructuredNSPath(repoSyncKey.Namespace, repoSyncKey.Name), rs))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Set the RepoSync to use Helm without providing CA cert"))
 
-	nt.WaitForRepoSyncSourceError(nn.Namespace, nn.Name, status.SourceErrorCode, "tls: failed to verify certificate: x509: certificate signed by unknown authority")
+	nt.WaitForRepoSyncSourceError(repoSyncKey.Namespace, repoSyncKey.Name, status.SourceErrorCode, "tls: failed to verify certificate: x509: certificate signed by unknown authority")
 
 	nt.T.Log("Add caCertSecretRef to RepoSync")
 	rs.Spec.Helm.CACertSecretRef = &v1beta1.SecretReference{Name: caCertSecret}
 	nt.Must(rootSyncGitRepo.Add(
-		nomostest.StructuredNSPath(nn.Namespace, nn.Name), rs))
+		nomostest.StructuredNSPath(repoSyncKey.Namespace, repoSyncKey.Name), rs))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Set the CA cert for the RepoSync"))
 	err = nt.WatchForAllSyncs(
 		nomostest.WithRepoSha1Func(nomostest.HelmChartVersionShaFn(chart.Version)),
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
-			nn: chart.Name,
+			repoSyncKey: chart.Name,
 		}))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -622,7 +623,7 @@ func TestHelmCACertSecretRefNamespaceRepo(t *testing.T) {
 	nt.T.Log("Set the RepoSync to sync from git")
 	rs.Spec.SourceType = configsync.GitSource
 	nt.Must(rootSyncGitRepo.Add(
-		nomostest.StructuredNSPath(nn.Namespace, nn.Name), rs))
+		nomostest.StructuredNSPath(repoSyncKey.Namespace, repoSyncKey.Name), rs))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Set the RepoSync to sync from Git"))
 
 	if err := nt.WatchForAllSyncs(); err != nil {

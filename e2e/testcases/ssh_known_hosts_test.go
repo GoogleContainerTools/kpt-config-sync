@@ -131,7 +131,7 @@ func TestRepoSyncSSHKnownHost(t *testing.T) {
 	nt := nomostest.New(t,
 		nomostesting.SyncSource, ntopts.RequireLocalGitProvider,
 		ntopts.Unstructured, ntopts.WithDelegatedControl,
-		ntopts.RepoSyncWithGitSource(repoSyncID.Namespace, repoSyncID.Name),
+		ntopts.SyncWithGitSource(repoSyncID),
 		ntopts.RepoSyncPermissions(policy.AppsAdmin(), policy.CoreAdmin()))
 	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
 

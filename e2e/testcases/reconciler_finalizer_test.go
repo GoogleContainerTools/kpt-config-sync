@@ -230,10 +230,10 @@ func TestReconcilerFinalizer_Foreground(t *testing.T) {
 // finalizer correctly handles multiple layers of Foreground deletion propagation.
 func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
 	rootSyncID := nomostest.DefaultRootSyncID
-	repoSyncID := nomostest.RepoSyncID("rs-test", testNs)
+	repoSyncID := core.RepoSyncID("rs-test", testNs)
 	nt := nomostest.New(t,
 		nomostesting.MultiRepos,
-		ntopts.NamespaceRepo(repoSyncID.Namespace, repoSyncID.Name),
+		ntopts.RepoSyncWithGitSource(repoSyncID.Namespace, repoSyncID.Name),
 		ntopts.RepoSyncPermissions(policy.AppsAdmin(), policy.CoreAdmin()), // NS Reconciler manages Deployments
 	)
 	rootSyncKey := rootSyncID.ObjectKey
@@ -360,10 +360,10 @@ func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
 // The RootSync has Foreground policy, but manages a RepoSync with Orphan policy.
 func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 	rootSyncID := nomostest.DefaultRootSyncID
-	repoSyncID := nomostest.RepoSyncID("rs-test", testNs)
+	repoSyncID := core.RepoSyncID("rs-test", testNs)
 	nt := nomostest.New(t,
 		nomostesting.MultiRepos,
-		ntopts.NamespaceRepo(repoSyncID.Namespace, repoSyncID.Name),
+		ntopts.RepoSyncWithGitSource(repoSyncID.Namespace, repoSyncID.Name),
 		ntopts.RepoSyncPermissions(policy.AppsAdmin(), policy.CoreAdmin()), // NS Reconciler manages Deployments
 	)
 	rootSyncKey := rootSyncID.ObjectKey
@@ -511,14 +511,14 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 // RootSync should be blocked until the Namespace finalizer is removed.
 func TestReconcileFinalizerReconcileTimeout(t *testing.T) {
 	rootSyncID := nomostest.DefaultRootSyncID
-	rootSync2ID := nomostest.RootSyncID("nested-root-sync")
+	rootSync2ID := core.RootSyncID("nested-root-sync")
 	namespaceNN := types.NamespacedName{Name: "managed-ns"}
 	contrivedFinalizer := "e2e-test"
 	nt := nomostest.New(t, nomostesting.MultiRepos,
 		ntopts.Unstructured,
-		ntopts.RootRepo(rootSync2ID.Name),           // Create a nested RootSync to delete mid-test
-		ntopts.WithCentralizedControl,               // This test assumes centralized control
-		ntopts.WithReconcileTimeout(10*time.Second), // Reconcile expected to fail, so use a short timeout
+		ntopts.RootSyncWithGitSource(rootSync2ID.Name), // Create a nested RootSync to delete mid-test
+		ntopts.WithCentralizedControl,                  // This test assumes centralized control
+		ntopts.WithReconcileTimeout(10*time.Second),    // Reconcile expected to fail, so use a short timeout
 	)
 	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
 	rootSync2GitRepo := nt.SyncSourceGitRepository(rootSync2ID)

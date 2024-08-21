@@ -28,6 +28,7 @@ import (
 	testmetrics "kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/retry"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metrics"
 	ocmetrics "kpt.dev/configsync/pkg/metrics"
@@ -132,7 +133,7 @@ func MetricLabelsForRepoSync(nt *NT, syncNN types.NamespacedName) (prometheusmod
 // ValidateStandardMetricsForRootSync validates the set of standard metrics for
 // the specified RootSync.
 func ValidateStandardMetricsForRootSync(nt *NT, summary testmetrics.Summary) error {
-	id := RootSyncID(summary.Sync.Name)
+	id := core.RootSyncID(summary.Sync.Name)
 	source, found := nt.SyncSources[id]
 	if !found {
 		return fmt.Errorf("SyncSource not found for %s: %s", id.Kind, id.ObjectKey)
@@ -151,7 +152,7 @@ func ValidateStandardMetricsForRootSync(nt *NT, summary testmetrics.Summary) err
 // ValidateStandardMetricsForRepoSync validates the set of standard metrics for
 // the specified RootSync.
 func ValidateStandardMetricsForRepoSync(nt *NT, summary testmetrics.Summary) error {
-	id := RepoSyncID(summary.Sync.Name, summary.Sync.Namespace)
+	id := core.RepoSyncID(summary.Sync.Name, summary.Sync.Namespace)
 	source, found := nt.SyncSources[id]
 	if !found {
 		return fmt.Errorf("SyncSource not found for %s: %s", id.Kind, id.ObjectKey)

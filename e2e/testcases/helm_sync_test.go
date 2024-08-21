@@ -463,7 +463,7 @@ func TestHelmNamespaceRepo(t *testing.T) {
 	repoSyncNN := nomostest.RepoSyncNN(testNs, configsync.RepoSyncName)
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.RequireHelmProvider,
 		ntopts.RepoSyncPermissions(policy.AllAdmin()), // NS reconciler manages a bunch of resources.
-		ntopts.NamespaceRepo(repoSyncNN.Namespace, repoSyncNN.Name))
+		ntopts.RepoSyncWithGitSource(repoSyncNN.Namespace, repoSyncNN.Name))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	nt.T.Log("Build a Helm chart with cluster-scoped resources")
@@ -506,7 +506,7 @@ func TestHelmConfigMapNamespaceRepo(t *testing.T) {
 	repoSyncNN := nomostest.RepoSyncNN(testNs, configsync.RepoSyncName)
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.RequireHelmProvider,
 		ntopts.RepoSyncPermissions(policy.AppsAdmin(), policy.CoreAdmin()),
-		ntopts.NamespaceRepo(repoSyncNN.Namespace, repoSyncNN.Name))
+		ntopts.RepoSyncWithGitSource(repoSyncNN.Namespace, repoSyncNN.Name))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 	cmName := "helm-cm-ns-repo-1"
 

@@ -29,6 +29,7 @@ type SyncSource interface {
 	// Commit returns the current/latest "commit" for this source.
 	// The commit value is used to validate RSync status and metrics.
 	Commit() (string, error)
+	// TODO: Add SourceFormat
 }
 
 // GitSyncSource is the "git" source, backed by a Git repository.

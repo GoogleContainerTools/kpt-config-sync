@@ -274,7 +274,7 @@ func TestWorkloadIdentity(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var err error
 			opts := []ntopts.Opt{ntopts.Unstructured, ntopts.RequireGKE(t),
-				ntopts.NamespaceRepo(testNs, configsync.RepoSyncName),
+				ntopts.RepoSyncWithGitSource(testNs, configsync.RepoSyncName),
 				ntopts.RepoSyncPermissions(policy.AllAdmin()), // NS reconciler manages a bunch of resources.
 				ntopts.WithDelegatedControl}
 			if tc.requireHelmGAR {
@@ -352,7 +352,7 @@ func TestWorkloadIdentity(t *testing.T) {
 			case configsync.GitSource:
 				rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 				rootMeta = updateRSyncWithGitSourceConfig(nt, rootSync, rootSyncGitRepo, tc.rootSrcCfg)
-				repoSyncGitRepo := nt.SyncSourceGitRepository(nomostest.RepoSyncID(nsRef.Name, nsRef.Namespace))
+				repoSyncGitRepo := nt.SyncSourceGitRepository(core.RepoSyncID(nsRef.Name, nsRef.Namespace))
 				nsMeta = updateRSyncWithGitSourceConfig(nt, repoSync, repoSyncGitRepo, tc.nsSrcCfg)
 			case configsync.HelmSource:
 				rootChart, err = updateRootSyncWithHelmSourceConfig(nt, rsRef, tc.rootSrcCfg)

@@ -83,14 +83,14 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	repoSync5Key := repoSync5ID.ObjectKey
 	testNs2 := "ns-2"
 	repoSync6ID := core.RepoSyncID(repoSync1ID.Name, testNs2)
-	repoSync6Key := repoSync6ID.ObjectKey
 
 	nt := nomostest.New(t, nomostesting.MultiRepos, ntopts.Unstructured,
-		ntopts.WithDelegatedControl, ntopts.RootSyncWithGitSource(rootSync1ID.Name),
+		ntopts.WithDelegatedControl,
+		ntopts.SyncWithGitSource(rootSync1ID),
 		// NS reconciler allowed to manage RepoSyncs but not RoleBindings
 		ntopts.RepoSyncPermissions(policy.RepoSyncAdmin()),
-		ntopts.RepoSyncWithGitSource(repoSync1Key.Namespace, repoSync1Key.Name),
-		ntopts.RepoSyncWithGitSource(repoSync6Key.Namespace, repoSync6Key.Name))
+		ntopts.SyncWithGitSource(repoSync1ID),
+		ntopts.SyncWithGitSource(repoSync6ID))
 	rootSync0GitRepo := nt.SyncSourceGitRepository(rootSync0ID)
 	rootSync1GitRepo := nt.SyncSourceGitRepository(rootSync1ID)
 
@@ -301,7 +301,7 @@ func TestConflictingDefinitions_RootToNamespace(t *testing.T) {
 	rootSyncKey := rootSyncID.ObjectKey
 	repoSyncKey := repoSyncID.ObjectKey
 	nt := nomostest.New(t, nomostesting.MultiRepos,
-		ntopts.RepoSyncWithGitSource(repoSyncKey.Namespace, repoSyncKey.Name),
+		ntopts.SyncWithGitSource(repoSyncID),
 		ntopts.RepoSyncPermissions(policy.RBACAdmin()), // NS Reconciler manages Roles
 	)
 	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
@@ -422,7 +422,7 @@ func TestConflictingDefinitions_NamespaceToRoot(t *testing.T) {
 	rootSyncKey := rootSyncID.ObjectKey
 	repoSyncKey := repoSyncID.ObjectKey
 	nt := nomostest.New(t, nomostesting.MultiRepos,
-		ntopts.RepoSyncWithGitSource(repoSyncKey.Namespace, repoSyncKey.Name),
+		ntopts.SyncWithGitSource(repoSyncID),
 		ntopts.RepoSyncPermissions(policy.RBACAdmin()), // NS reconciler manages Roles
 	)
 	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
@@ -555,7 +555,7 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	// If declaring RootSync in a Root repo, the source format has to be unstructured.
 	// Otherwise, the hierarchical validator will complain that the config-management-system has configs but missing a Namespace config.
 	nt := nomostest.New(t, nomostesting.MultiRepos, ntopts.Unstructured,
-		ntopts.RootSyncWithGitSource(rootSync2ID.Name))
+		ntopts.SyncWithGitSource(rootSync2ID))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
 	rootSync2GitRepo := nt.SyncSourceGitRepository(rootSync2ID)
 
@@ -678,8 +678,8 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 
 	nt := nomostest.New(t, nomostesting.MultiRepos,
 		ntopts.RepoSyncPermissions(policy.RBACAdmin()), // NS reconciler manages Roles
-		ntopts.RepoSyncWithGitSource(repoSync1ID.Namespace, repoSync1ID.Name),
-		ntopts.RepoSyncWithGitSource(repoSync2ID.Namespace, repoSync2ID.Name))
+		ntopts.SyncWithGitSource(repoSync1ID),
+		ntopts.SyncWithGitSource(repoSync2ID))
 
 	repoSync1GitRepo := nt.SyncSourceGitRepository(repoSync1ID)
 	repoSync2GitRepo := nt.SyncSourceGitRepository(repoSync2ID)

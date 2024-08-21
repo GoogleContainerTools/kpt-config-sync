@@ -1186,18 +1186,17 @@ func TestNomosVersion(t *testing.T) {
 
 func TestNomosStatusNameFilter(t *testing.T) {
 	bookinfoNS := "bookinfo"
-	bookinfoRS := "bookinfo-repo-sync"
-	crontab := "crontab-sync"
-	bookRepo := nomostest.RepoSyncNN(bookinfoNS, bookinfoRS)
-	crontabRepo := nomostest.RepoSyncNN(bookinfoNS, crontab)
+	rootSync1ID := core.RootSyncID("crontab-sync")
+	repoSync1ID := core.RepoSyncID("bookinfo-repo-sync", bookinfoNS)
+	repoSync2ID := core.RepoSyncID("crontab-sync", bookinfoNS)
 	nt := nomostest.New(
 		t,
 		nomostesting.NomosCLI,
 		ntopts.Unstructured,
-		ntopts.RootSyncWithGitSource(crontab),
+		ntopts.SyncWithGitSource(rootSync1ID),
 		ntopts.RepoSyncPermissions(policy.RepoSyncAdmin()),
-		ntopts.RepoSyncWithGitSource(bookRepo.Namespace, bookRepo.Name),
-		ntopts.RepoSyncWithGitSource(crontabRepo.Namespace, crontabRepo.Name),
+		ntopts.SyncWithGitSource(repoSync1ID),
+		ntopts.SyncWithGitSource(repoSync2ID),
 	)
 
 	// get status with only name filter crontab-sync

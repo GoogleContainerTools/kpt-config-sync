@@ -61,9 +61,11 @@ import (
 // reconciler and its dependencies managed by the reconciler-manager.
 func TestReconcilerManagerNormalTeardown(t *testing.T) {
 	testNamespace := "teardown"
+	rootSyncID := nomostest.DefaultRootSyncID
+	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, testNamespace)
 	nt := nomostest.New(t, nomostesting.ACMController,
 		ntopts.WithDelegatedControl, ntopts.Unstructured,
-		ntopts.RepoSyncWithGitSource(testNamespace, configsync.RepoSyncName))
+		ntopts.SyncWithGitSource(repoSyncID))
 
 	t.Log("Validate the reconciler-manager deployment")
 	reconcilerManager := &appsv1.Deployment{}
@@ -73,7 +75,7 @@ func TestReconcilerManagerNormalTeardown(t *testing.T) {
 
 	t.Log("Validate the RootSync")
 	rootSync := &v1beta1.RootSync{}
-	setNN(rootSync, client.ObjectKey{Name: configsync.RootSyncName, Namespace: configsync.ControllerNamespace})
+	setNN(rootSync, rootSyncID.ObjectKey)
 	err = nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync.Name, rootSync.Namespace, []testpredicates.Predicate{
 		testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
 		testpredicates.HasFinalizer(metadata.ReconcilerManagerFinalizer),
@@ -85,7 +87,7 @@ func TestReconcilerManagerNormalTeardown(t *testing.T) {
 
 	t.Log("Validate the RepoSync")
 	repoSync := &v1beta1.RepoSync{}
-	setNN(repoSync, client.ObjectKey{Name: configsync.RepoSyncName, Namespace: testNamespace})
+	setNN(repoSync, repoSyncID.ObjectKey)
 	err = nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSync.Name, repoSync.Namespace, []testpredicates.Predicate{
 		testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
 		testpredicates.HasFinalizer(metadata.ReconcilerManagerFinalizer),
@@ -120,9 +122,10 @@ func TestReconcilerManagerNormalTeardown(t *testing.T) {
 // RepoSync is invalid.
 func TestReconcilerManagerTeardownInvalidRSyncs(t *testing.T) {
 	testNamespace := "invalid-teardown"
+	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, testNamespace)
 	nt := nomostest.New(t, nomostesting.ACMController,
 		ntopts.WithDelegatedControl, ntopts.Unstructured,
-		ntopts.RepoSyncWithGitSource(testNamespace, configsync.RepoSyncName))
+		ntopts.SyncWithGitSource(repoSyncID))
 
 	t.Log("Validate the reconciler-manager deployment")
 	reconcilerManager := &appsv1.Deployment{}
@@ -159,7 +162,7 @@ func TestReconcilerManagerTeardownInvalidRSyncs(t *testing.T) {
 		"Validation", `git secretType was set as "token" but token key is not present in git-creds secret`)
 
 	t.Log("Validate the RepoSync")
-	repoSync := k8sobjects.RepoSyncObjectV1Beta1(testNamespace, configsync.RepoSyncName)
+	repoSync := k8sobjects.RepoSyncObjectV1Beta1(repoSyncID.Namespace, repoSyncID.Name)
 	err = nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSync.Name, repoSync.Namespace, []testpredicates.Predicate{
 		testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
 		testpredicates.HasFinalizer(metadata.ReconcilerManagerFinalizer),
@@ -293,13 +296,13 @@ func TestReconcilerManagerTeardownRootSyncWithReconcileTimeout(t *testing.T) {
 // the deletions fail to reconcile.
 func TestReconcilerManagerTeardownRepoSyncWithReconcileTimeout(t *testing.T) {
 	testNamespace := "reconcile-timeout"
+	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, testNamespace)
 	nt := nomostest.New(t, nomostesting.ACMController,
 		ntopts.WithDelegatedControl, ntopts.Unstructured,
-		ntopts.RepoSyncWithGitSource(testNamespace, configsync.RepoSyncName))
+		ntopts.SyncWithGitSource(repoSyncID))
 
 	repoSync := &v1beta1.RepoSync{}
-	repoSync.Name = configsync.RepoSyncName
-	repoSync.Namespace = testNamespace
+	setNN(repoSync, repoSyncID.ObjectKey)
 	repoSyncReconcilerNN := core.NsReconcilerObjectKey(repoSync.Namespace, repoSync.Name)
 	nt.T.Log("Validate the RepoSync reconciler and its dependencies")
 	repoSyncDependencies := validateRepoSyncDependencies(nt, repoSync.Namespace, repoSync.Name)
@@ -1175,7 +1178,7 @@ func TestReconcilerManagerRootSyncCRDMissing(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.ACMController,
 		ntopts.WithDelegatedControl, // Delegated so deleting the RootSync doesn't delete the RepoSyncs.
 		ntopts.Unstructured,
-		ntopts.RepoSyncWithGitSource(repoSyncID.Namespace, repoSyncID.Name),
+		ntopts.SyncWithGitSource(repoSyncID),
 		ntopts.RepoSyncPermissions(policy.CoreAdmin()), // NS Reconciler manages ServiceAccounts
 	)
 	rootSyncKey := rootSyncID.ObjectKey

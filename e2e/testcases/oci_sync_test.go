@@ -111,21 +111,21 @@ func TestPublicOCI(t *testing.T) {
 
 func TestSwitchFromGitToOciCentralized(t *testing.T) {
 	namespace := testNs
+	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, namespace)
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
 		ntopts.RequireOCIProvider,
-		ntopts.RepoSyncWithGitSource(namespace, configsync.RepoSyncName),
+		ntopts.SyncWithGitSource(repoSyncID),
 		// bookinfo image contains RoleBinding
 		// bookinfo repo contains ServiceAccount
 		ntopts.RepoSyncPermissions(policy.RBACAdmin(), policy.CoreAdmin()),
 	)
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
-	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, namespace)
 	repoSyncKey := repoSyncID.ObjectKey
 	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
 
 	var err error
 	// file path to the RepoSync config in the root repository.
-	repoSyncPath := nomostest.StructuredNSPath(namespace, configsync.RepoSyncName)
+	repoSyncPath := nomostest.StructuredNSPath(repoSyncID.Namespace, repoSyncID.Name)
 
 	// Remote git branch will only contain the bookinfo-sa ServiceAccount
 	bookinfoSA := k8sobjects.ServiceAccountObject("bookinfo-sa", core.Namespace(namespace))
@@ -177,14 +177,14 @@ func TestSwitchFromGitToOciCentralized(t *testing.T) {
 
 func TestSwitchFromGitToOciDelegated(t *testing.T) {
 	namespace := testNs
+	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, namespace)
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
 		ntopts.WithDelegatedControl, ntopts.RequireOCIProvider,
-		ntopts.RepoSyncWithGitSource(namespace, configsync.RepoSyncName),
+		ntopts.SyncWithGitSource(repoSyncID),
 		// bookinfo image contains RoleBinding
 		// bookinfo repo contains ServiceAccount
 		ntopts.RepoSyncPermissions(policy.RBACAdmin(), policy.CoreAdmin()),
 	)
-	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, namespace)
 	repoSyncKey := repoSyncID.ObjectKey
 	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
 
@@ -238,13 +238,13 @@ func TestSwitchFromGitToOciDelegated(t *testing.T) {
 	}
 
 	// Invalid cases
-	rs := k8sobjects.RepoSyncObjectV1Beta1(namespace, configsync.RepoSyncName)
+	rs := k8sobjects.RepoSyncObjectV1Beta1(repoSyncID.Namespace, repoSyncID.Name)
 	nt.T.Log("Manually patch RepoSync object to miss Git spec when sourceType is git")
 	nt.MustMergePatch(rs, `{"spec":{"sourceType":"git", "git":null, "oci": null}}`)
-	nt.WaitForRepoSyncStalledError(namespace, configsync.RepoSyncName, "Validation", `KNV1061: RepoSyncs must specify spec.git when spec.sourceType is "git"`)
+	nt.WaitForRepoSyncStalledError(repoSyncID.Namespace, repoSyncID.Name, "Validation", `KNV1061: RepoSyncs must specify spec.git when spec.sourceType is "git"`)
 	nt.T.Log("Manually patch RepoSync object to miss OCI spec when sourceType is oci")
 	nt.MustMergePatch(rs, `{"spec":{"sourceType":"oci"}}`)
-	nt.WaitForRepoSyncStalledError(namespace, configsync.RepoSyncName, "Validation", `KNV1061: RepoSyncs must specify spec.oci when spec.sourceType is "oci"`)
+	nt.WaitForRepoSyncStalledError(repoSyncID.Namespace, repoSyncID.Name, "Validation", `KNV1061: RepoSyncs must specify spec.oci when spec.sourceType is "oci"`)
 }
 
 // resourceQuotaHasHardPods validates if the RepoSync has the expected sourceType.

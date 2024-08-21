@@ -18,28 +18,20 @@ import (
 	"time"
 
 	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/types"
+	"kpt.dev/configsync/e2e/nomostest/syncsource"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/core"
 )
-
-// RepoOpts defines options for a Repository.
-// Add options as-needed for tests.
-type RepoOpts struct{}
 
 // MultiRepo configures the NT for use with multi-repo tests.
 // If NonRootRepos is non-empty, the test is assumed to be running in
 // multi-repo mode.
 type MultiRepo struct {
 	configsync.SourceFormat
-	// NamespaceRepos is a set representing the Namespace repos to create.
-	//
-	// We don't support referencing the Root repository in this map; while we do
-	// support this use case, it isn't special behavior that tests any unique code
-	// paths.
-	NamespaceRepos map[types.NamespacedName]RepoOpts
 
-	// RootRepos is a set representing the Root repos to create.
-	RootRepos map[string]RepoOpts
+	// SyncSources is the set of RootSyncs and RepoSync and their source config
+	// for this test.
+	SyncSources syncsource.Set
 
 	// Control indicates options for configuring Namespace Repos.
 	Control RepoControl
@@ -67,23 +59,23 @@ type MultiRepo struct {
 	RepoSyncPermissions []rbacv1.PolicyRule
 }
 
-// NamespaceRepo tells the test case that a Namespace Repo should be configured
-// that points at the provided Repository.
-func NamespaceRepo(ns, name string) func(opt *New) {
+// RepoSyncWithGitSource tells the test case that a RepoSync should be applied
+// that points to an empty Git Repository.
+// TODO: Add another option that allows specifying an existing Repository
+func RepoSyncWithGitSource(ns, name string) func(opt *New) {
 	return func(opt *New) {
-		nn := types.NamespacedName{
-			Namespace: ns,
-			Name:      name,
-		}
-		opt.NamespaceRepos[nn] = RepoOpts{}
+		id := core.RepoSyncID(name, ns)
+		opt.SyncSources[id] = &syncsource.GitSyncSource{}
 	}
 }
 
-// RootRepo tells the test case that a Root Repo should be configured
-// that points at the provided Repository.
-func RootRepo(name string) func(opt *New) {
+// RootSyncWithGitSource tells the test case that a RootSync should be applied
+// that points to an empty Git Repository.
+// TODO: Add another option that allows specifying an existing Repository
+func RootSyncWithGitSource(name string) func(opt *New) {
 	return func(opt *New) {
-		opt.RootRepos[name] = RepoOpts{}
+		id := core.RootSyncID(name)
+		opt.SyncSources[id] = &syncsource.GitSyncSource{}
 	}
 }
 

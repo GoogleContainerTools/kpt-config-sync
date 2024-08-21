@@ -224,8 +224,10 @@ func TestDisableWebhookConfigurationUpdateHierarchy(t *testing.T) {
 }
 
 func TestDisableWebhookConfigurationUpdateUnstructured(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.NamespaceRepo(namespaceRepo, configsync.RepoSyncName), ntopts.RepoSyncPermissions(policy.CoreAdmin()))
-	repoSyncID := nomostest.RepoSyncID(configsync.RepoSyncName, namespaceRepo)
+	nt := nomostest.New(t, nomostesting.SyncSource,
+		ntopts.RepoSyncWithGitSource(namespaceRepo, configsync.RepoSyncName),
+		ntopts.RepoSyncPermissions(policy.CoreAdmin()))
+	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, namespaceRepo)
 	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
 
 	sa := k8sobjects.ServiceAccountObject("store", core.Namespace(namespaceRepo))

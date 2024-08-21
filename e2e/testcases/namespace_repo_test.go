@@ -52,11 +52,11 @@ func TestNamespaceRepo_Centralized(t *testing.T) {
 	nt := nomostest.New(
 		t,
 		nomostesting.MultiRepos,
-		ntopts.NamespaceRepo(bsNamespace, configsync.RepoSyncName),
+		ntopts.RepoSyncWithGitSource(bsNamespace, configsync.RepoSyncName),
 		ntopts.RepoSyncPermissions(policy.CoreAdmin()), // NS Reconciler manages ServiceAccounts
 		ntopts.WithCentralizedControl,
 	)
-	repoSyncID := nomostest.RepoSyncID(configsync.RepoSyncName, bsNamespace)
+	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, bsNamespace)
 	repoSyncKey := repoSyncID.ObjectKey
 	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
 
@@ -324,11 +324,11 @@ func TestNamespaceRepo_Delegated(t *testing.T) {
 	nt := nomostest.New(
 		t,
 		nomostesting.MultiRepos,
-		ntopts.NamespaceRepo(bsNamespaceRepo, configsync.RepoSyncName),
+		ntopts.RepoSyncWithGitSource(bsNamespaceRepo, configsync.RepoSyncName),
 		ntopts.WithDelegatedControl,
 		ntopts.RepoSyncPermissions(policy.CoreAdmin()), // NS Reconciler manages ServiceAccounts
 	)
-	repoSyncID := nomostest.RepoSyncID(configsync.RepoSyncName, bsNamespaceRepo)
+	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, bsNamespaceRepo)
 	repoSyncKey := repoSyncID.ObjectKey
 	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
 
@@ -369,7 +369,7 @@ func TestDeleteRepoSync_Delegated_AndRepoSyncV1Alpha1(t *testing.T) {
 	nt := nomostest.New(
 		t,
 		nomostesting.MultiRepos,
-		ntopts.NamespaceRepo(bsNamespace, configsync.RepoSyncName),
+		ntopts.RepoSyncWithGitSource(bsNamespace, configsync.RepoSyncName),
 		ntopts.WithDelegatedControl,
 	)
 
@@ -403,11 +403,11 @@ func TestDeleteRepoSync_Centralized_AndRepoSyncV1Alpha1(t *testing.T) {
 	nt := nomostest.New(
 		t,
 		nomostesting.MultiRepos,
-		ntopts.NamespaceRepo(bsNamespace, configsync.RepoSyncName),
+		ntopts.RepoSyncWithGitSource(bsNamespace, configsync.RepoSyncName),
 		ntopts.WithCentralizedControl,
 	)
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
-	repoSyncID := nomostest.RepoSyncID(configsync.RepoSyncName, bsNamespace)
+	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, bsNamespace)
 	repoSyncKey := repoSyncID.ObjectKey
 
 	secretNames := getNsReconcilerSecrets(nt, bsNamespace)
@@ -472,8 +472,8 @@ func TestManageSelfRepoSync(t *testing.T) {
 	bsNamespace := "bookstore"
 	nt := nomostest.New(t, nomostesting.MultiRepos,
 		ntopts.RepoSyncPermissions(policy.CoreAdmin()), // NS Reconciler manages ServiceAccounts
-		ntopts.NamespaceRepo(bsNamespace, configsync.RepoSyncName))
-	repoSyncID := nomostest.RepoSyncID(configsync.RepoSyncName, bsNamespace)
+		ntopts.RepoSyncWithGitSource(bsNamespace, configsync.RepoSyncName))
+	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, bsNamespace)
 	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
 
 	rs := &v1beta1.RepoSync{}
@@ -540,13 +540,13 @@ func TestDeleteNamespaceReconcilerDeployment(t *testing.T) {
 	nt := nomostest.New(
 		t,
 		nomostesting.MultiRepos,
-		ntopts.NamespaceRepo(bsNamespace, configsync.RepoSyncName),
+		ntopts.RepoSyncWithGitSource(bsNamespace, configsync.RepoSyncName),
 		ntopts.WithCentralizedControl,
 	)
 	rootSyncID := nomostest.DefaultRootSyncID
 	rootSyncKey := rootSyncID.ObjectKey
 	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
-	repoSyncID := nomostest.RepoSyncID(configsync.RepoSyncName, bsNamespace)
+	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, bsNamespace)
 	repoSyncKey := repoSyncID.ObjectKey
 	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
 

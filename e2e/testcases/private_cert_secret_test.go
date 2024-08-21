@@ -68,9 +68,9 @@ func secretDataDeletePatch(key string) string {
 
 func TestCACertSecretRefV1Alpha1(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.RequireLocalGitProvider,
-		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName))
+		ntopts.RepoSyncWithGitSource(backendNamespace, configsync.RepoSyncName))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
-	repoSyncID := nomostest.RepoSyncID(configsync.RepoSyncName, backendNamespace)
+	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, backendNamespace)
 	repoSyncKey := repoSyncID.ObjectKey
 	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
 	rootSyncReconcilerName := nomostest.DefaultRootReconcilerName
@@ -190,9 +190,9 @@ func TestCACertSecretRefV1Alpha1(t *testing.T) {
 
 func TestCACertSecretRefV1Beta1(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.RequireLocalGitProvider,
-		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName))
+		ntopts.RepoSyncWithGitSource(backendNamespace, configsync.RepoSyncName))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
-	repoSyncID := nomostest.RepoSyncID(configsync.RepoSyncName, backendNamespace)
+	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, backendNamespace)
 	repoSyncKey := repoSyncID.ObjectKey
 	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
 	rootSyncReconcilerName := nomostest.DefaultRootReconcilerName
@@ -317,9 +317,9 @@ func TestCACertSecretRefV1Beta1(t *testing.T) {
 
 func TestCACertSecretWatch(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.RequireLocalGitProvider,
-		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName))
+		ntopts.RepoSyncWithGitSource(backendNamespace, configsync.RepoSyncName))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
-	repoSyncID := nomostest.RepoSyncID(configsync.RepoSyncName, backendNamespace)
+	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, backendNamespace)
 	repoSyncKey := repoSyncID.ObjectKey
 	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
 	rootSyncReconcilerName := nomostest.DefaultRootReconcilerName
@@ -441,10 +441,10 @@ func TestOCICACertSecretRefRootRepo(t *testing.T) {
 func TestOCICACertSecretRefNamespaceRepo(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
 		ntopts.RequireLocalOCIProvider,
-		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName),
+		ntopts.RepoSyncWithGitSource(backendNamespace, configsync.RepoSyncName),
 		ntopts.RepoSyncPermissions(policy.CoreAdmin()))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
-	repoSyncID := nomostest.RepoSyncID(configsync.RepoSyncName, backendNamespace)
+	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, backendNamespace)
 	repoSyncKey := repoSyncID.ObjectKey
 	repoSyncReconcilerName := core.NsReconcilerName(repoSyncID.Namespace, repoSyncID.Name)
 
@@ -559,7 +559,7 @@ func TestHelmCACertSecretRefRootRepo(t *testing.T) {
 func TestHelmCACertSecretRefNamespaceRepo(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
 		ntopts.RequireLocalHelmProvider,
-		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName),
+		ntopts.RepoSyncWithGitSource(backendNamespace, configsync.RepoSyncName),
 		ntopts.RepoSyncPermissions(policy.CoreAdmin()))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 

@@ -20,6 +20,8 @@ import (
 	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -67,4 +69,32 @@ func GKNNs(objs []client.Object) []string {
 	}
 	sort.Strings(result)
 	return result
+}
+
+// RootSyncID returns an ID for the specified RootSync object.
+func RootSyncID(name string) ID {
+	return ID{
+		GroupKind: schema.GroupKind{
+			Group: v1beta1.SchemeGroupVersion.Group,
+			Kind:  configsync.RootSyncKind,
+		},
+		ObjectKey: client.ObjectKey{
+			Name:      name,
+			Namespace: configsync.ControllerNamespace,
+		},
+	}
+}
+
+// RepoSyncID returns an ID for the specified RepoSync object.
+func RepoSyncID(name, namespace string) ID {
+	return ID{
+		GroupKind: schema.GroupKind{
+			Group: v1beta1.SchemeGroupVersion.Group,
+			Kind:  configsync.RepoSyncKind,
+		},
+		ObjectKey: client.ObjectKey{
+			Name:      name,
+			Namespace: namespace,
+		},
+	}
 }

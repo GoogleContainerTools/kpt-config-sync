@@ -63,7 +63,7 @@ func TestReconcilerManagerNormalTeardown(t *testing.T) {
 	testNamespace := "teardown"
 	nt := nomostest.New(t, nomostesting.ACMController,
 		ntopts.WithDelegatedControl, ntopts.Unstructured,
-		ntopts.NamespaceRepo(testNamespace, configsync.RepoSyncName))
+		ntopts.RepoSyncWithGitSource(testNamespace, configsync.RepoSyncName))
 
 	t.Log("Validate the reconciler-manager deployment")
 	reconcilerManager := &appsv1.Deployment{}
@@ -122,7 +122,7 @@ func TestReconcilerManagerTeardownInvalidRSyncs(t *testing.T) {
 	testNamespace := "invalid-teardown"
 	nt := nomostest.New(t, nomostesting.ACMController,
 		ntopts.WithDelegatedControl, ntopts.Unstructured,
-		ntopts.NamespaceRepo(testNamespace, configsync.RepoSyncName))
+		ntopts.RepoSyncWithGitSource(testNamespace, configsync.RepoSyncName))
 
 	t.Log("Validate the reconciler-manager deployment")
 	reconcilerManager := &appsv1.Deployment{}
@@ -295,7 +295,7 @@ func TestReconcilerManagerTeardownRepoSyncWithReconcileTimeout(t *testing.T) {
 	testNamespace := "reconcile-timeout"
 	nt := nomostest.New(t, nomostesting.ACMController,
 		ntopts.WithDelegatedControl, ntopts.Unstructured,
-		ntopts.NamespaceRepo(testNamespace, configsync.RepoSyncName))
+		ntopts.RepoSyncWithGitSource(testNamespace, configsync.RepoSyncName))
 
 	repoSync := &v1beta1.RepoSync{}
 	repoSync.Name = configsync.RepoSyncName
@@ -1171,11 +1171,11 @@ func filterResourceMap(resourceMap map[string]v1beta1.ContainerResourcesSpec, co
 func TestReconcilerManagerRootSyncCRDMissing(t *testing.T) {
 	rootSyncID := nomostest.DefaultRootSyncID
 	repoSyncNS := "bookstore"
-	repoSyncID := nomostest.RepoSyncID(configsync.RepoSyncName, repoSyncNS)
+	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, repoSyncNS)
 	nt := nomostest.New(t, nomostesting.ACMController,
 		ntopts.WithDelegatedControl, // Delegated so deleting the RootSync doesn't delete the RepoSyncs.
 		ntopts.Unstructured,
-		ntopts.NamespaceRepo(repoSyncID.Namespace, repoSyncID.Name),
+		ntopts.RepoSyncWithGitSource(repoSyncID.Namespace, repoSyncID.Name),
 		ntopts.RepoSyncPermissions(policy.CoreAdmin()), // NS Reconciler manages ServiceAccounts
 	)
 	rootSyncKey := rootSyncID.ObjectKey

@@ -407,7 +407,7 @@ func (nt *NT) SyncSourceGitRepository(id core.ID) *gitproviders.Repository {
 // DefaultRootSha1Fn is the default function to retrieve the commit hash of the root repo.
 func DefaultRootSha1Fn(nt *NT, nn types.NamespacedName) (string, error) {
 	// Get the repository this RootSync is syncing to, and ensure it is synced to HEAD.
-	source, exists := nt.SyncSources[RootSyncID(nn.Name)]
+	source, exists := nt.SyncSources[core.RootSyncID(nn.Name)]
 	if !exists {
 		return "", fmt.Errorf("nt.SyncSources doesn't include RootSync %q", nn)
 	}
@@ -418,7 +418,7 @@ func DefaultRootSha1Fn(nt *NT, nn types.NamespacedName) (string, error) {
 func DefaultRepoSha1Fn(nt *NT, nn types.NamespacedName) (string, error) {
 	// Get the repository this RepoSync is syncing to, and ensure it is synced
 	// to HEAD.
-	source, exists := nt.SyncSources[RepoSyncID(nn.Name, nn.Namespace)]
+	source, exists := nt.SyncSources[core.RepoSyncID(nn.Name, nn.Namespace)]
 	if !exists {
 		return "", fmt.Errorf("nt.SyncSources doesn't include RepoSync %q", nn)
 	}

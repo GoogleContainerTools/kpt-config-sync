@@ -1194,10 +1194,10 @@ func TestNomosStatusNameFilter(t *testing.T) {
 		t,
 		nomostesting.NomosCLI,
 		ntopts.Unstructured,
-		ntopts.RootRepo(crontab),
+		ntopts.RootSyncWithGitSource(crontab),
 		ntopts.RepoSyncPermissions(policy.RepoSyncAdmin()),
-		ntopts.NamespaceRepo(bookRepo.Namespace, bookRepo.Name),
-		ntopts.NamespaceRepo(crontabRepo.Namespace, crontabRepo.Name),
+		ntopts.RepoSyncWithGitSource(bookRepo.Namespace, bookRepo.Name),
+		ntopts.RepoSyncWithGitSource(crontabRepo.Namespace, crontabRepo.Name),
 	)
 
 	// get status with only name filter crontab-sync

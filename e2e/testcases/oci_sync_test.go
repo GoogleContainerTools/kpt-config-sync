@@ -113,13 +113,13 @@ func TestSwitchFromGitToOciCentralized(t *testing.T) {
 	namespace := testNs
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
 		ntopts.RequireOCIProvider,
-		ntopts.NamespaceRepo(namespace, configsync.RepoSyncName),
+		ntopts.RepoSyncWithGitSource(namespace, configsync.RepoSyncName),
 		// bookinfo image contains RoleBinding
 		// bookinfo repo contains ServiceAccount
 		ntopts.RepoSyncPermissions(policy.RBACAdmin(), policy.CoreAdmin()),
 	)
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
-	repoSyncID := nomostest.RepoSyncID(configsync.RepoSyncName, namespace)
+	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, namespace)
 	repoSyncKey := repoSyncID.ObjectKey
 	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
 
@@ -179,12 +179,12 @@ func TestSwitchFromGitToOciDelegated(t *testing.T) {
 	namespace := testNs
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
 		ntopts.WithDelegatedControl, ntopts.RequireOCIProvider,
-		ntopts.NamespaceRepo(namespace, configsync.RepoSyncName),
+		ntopts.RepoSyncWithGitSource(namespace, configsync.RepoSyncName),
 		// bookinfo image contains RoleBinding
 		// bookinfo repo contains ServiceAccount
 		ntopts.RepoSyncPermissions(policy.RBACAdmin(), policy.CoreAdmin()),
 	)
-	repoSyncID := nomostest.RepoSyncID(configsync.RepoSyncName, namespace)
+	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, namespace)
 	repoSyncKey := repoSyncID.ObjectKey
 	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
 

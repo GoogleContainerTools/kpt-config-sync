@@ -34,7 +34,7 @@ import (
 
 func TestNoSSLVerifyV1Alpha1(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.OverrideAPI,
-		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName))
+		ntopts.RepoSyncWithGitSource(backendNamespace, configsync.RepoSyncName))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -115,7 +115,7 @@ func TestNoSSLVerifyV1Alpha1(t *testing.T) {
 
 func TestNoSSLVerifyV1Beta1(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.OverrideAPI,
-		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName))
+		ntopts.RepoSyncWithGitSource(backendNamespace, configsync.RepoSyncName))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	if err := nt.WatchForAllSyncs(); err != nil {

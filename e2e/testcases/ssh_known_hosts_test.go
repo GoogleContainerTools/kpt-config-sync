@@ -34,6 +34,8 @@ import (
 
 func TestRootSyncSSHKnownHost(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.RequireLocalGitProvider, ntopts.Unstructured)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+
 	var err error
 	rootSecret := &corev1.Secret{}
 	nt.T.Cleanup(func() {
@@ -86,8 +88,8 @@ func TestRootSyncSSHKnownHost(t *testing.T) {
 	cmName := "configmap-test"
 	cmPath := "acme/configmap.yaml"
 	cm := k8sobjects.ConfigMapObject(core.Name(cmName))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding test ConfigMap"))
+	nt.Must(rootSyncGitRepo.Add(cmPath, cm))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Adding test ConfigMap"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -95,8 +97,8 @@ func TestRootSyncSSHKnownHost(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(cmPath))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing test ConfigMap"))
+	nt.Must(rootSyncGitRepo.Remove(cmPath))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Removing test ConfigMap"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -125,13 +127,15 @@ func TestRootSyncSSHKnownHost(t *testing.T) {
 }
 
 func TestRepoSyncSSHKnownHost(t *testing.T) {
+	repoSyncID := nomostest.RepoSyncID(configsync.RepoSyncName, backendNamespace)
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.RequireLocalGitProvider, ntopts.Unstructured,
-		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName), ntopts.WithDelegatedControl,
+		ntopts.NamespaceRepo(repoSyncID.Namespace, repoSyncID.Name), ntopts.WithDelegatedControl,
 		ntopts.RepoSyncPermissions(policy.AppsAdmin(), policy.CoreAdmin()))
+	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
+
 	var err error
 	repoSecret := &corev1.Secret{}
-	repoReconcilerName := core.NsReconcilerName(backendNamespace, configsync.RepoSyncName)
-	repoSyncNN := nomostest.RepoSyncNN(backendNamespace, configsync.RepoSyncName)
+	repoReconcilerName := core.NsReconcilerName(repoSyncID.Namespace, repoSyncID.Name)
 	nt.T.Cleanup(func() {
 		nt.MustMergePatch(repoSecret, secretDataDeletePatch(controllers.KnownHostsKey))
 		err = nt.Watcher.WatchObject(kinds.Deployment(),
@@ -182,8 +186,8 @@ func TestRepoSyncSSHKnownHost(t *testing.T) {
 	cmName := "configmap-test"
 	cmPath := "acme/configmap.yaml"
 	cm := k8sobjects.ConfigMapObject(core.Name(cmName))
-	nt.Must(nt.NonRootRepos[repoSyncNN].Add(cmPath, cm))
-	nt.Must(nt.NonRootRepos[repoSyncNN].CommitAndPush("Adding test ConfigMap"))
+	nt.Must(repoSyncGitRepo.Add(cmPath, cm))
+	nt.Must(repoSyncGitRepo.CommitAndPush("Adding test ConfigMap"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -191,8 +195,8 @@ func TestRepoSyncSSHKnownHost(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.Must(nt.NonRootRepos[repoSyncNN].Remove(cmPath))
-	nt.Must(nt.NonRootRepos[repoSyncNN].CommitAndPush("Removing test ConfigMap"))
+	nt.Must(repoSyncGitRepo.Remove(cmPath))
+	nt.Must(repoSyncGitRepo.CommitAndPush("Removing test ConfigMap"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

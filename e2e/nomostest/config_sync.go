@@ -31,12 +31,14 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/registryproviders"
+	"kpt.dev/configsync/e2e/nomostest/syncsource"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
@@ -87,7 +89,58 @@ var (
 	reconcilerPollingPeriod time.Duration
 	// hydrationPollingPeriod specifies hydration-controller polling period as time.Duration
 	hydrationPollingPeriod time.Duration
+
+	// DefaultRootReconcilerName is the root-reconciler name of the default RootSync object: "root-sync".
+	DefaultRootReconcilerName = core.RootReconcilerName(configsync.RootSyncName)
+	// DefaultRootRepoNamespacedName is the NamespacedName of the default RootSync object.
+	DefaultRootRepoNamespacedName = RootSyncNN(configsync.RootSyncName)
+	// DefaultRootSyncID is the ID of the default RootSync object.
+	DefaultRootSyncID = RootSyncID(configsync.RootSyncName)
 )
+
+// RootSyncNN returns the NamespacedName of the RootSync object.
+func RootSyncNN(name string) types.NamespacedName {
+	return types.NamespacedName{
+		Namespace: configsync.ControllerNamespace,
+		Name:      name,
+	}
+}
+
+// RepoSyncNN returns the NamespacedName of the RepoSync object.
+func RepoSyncNN(ns, name string) types.NamespacedName {
+	return types.NamespacedName{
+		Namespace: ns,
+		Name:      name,
+	}
+}
+
+// RootSyncID returns an ID for the specified RootSync object.
+func RootSyncID(name string) core.ID {
+	return core.ID{
+		GroupKind: schema.GroupKind{
+			Group: v1beta1.SchemeGroupVersion.Group,
+			Kind:  configsync.RootSyncKind,
+		},
+		ObjectKey: client.ObjectKey{
+			Name:      name,
+			Namespace: configsync.ControllerNamespace,
+		},
+	}
+}
+
+// RepoSyncID returns an ID for the specified RepoSync object.
+func RepoSyncID(name, namespace string) core.ID {
+	return core.ID{
+		GroupKind: schema.GroupKind{
+			Group: v1beta1.SchemeGroupVersion.Group,
+			Kind:  configsync.RepoSyncKind,
+		},
+		ObjectKey: client.ObjectKey{
+			Name:      name,
+			Namespace: namespace,
+		},
+	}
+}
 
 // IsReconcilerTemplateConfigMap returns true if passed obj is the
 // reconciler-manager ConfigMap reconciler-manager-cm in config-management namespace.
@@ -360,8 +413,19 @@ func multiRepoObjects(objects []client.Object, opts ...func(obj client.Object) e
 // RootSync root-sync will be re-created, if not found.
 func ValidateMultiRepoDeployments(nt *NT) error {
 	// Create root-sync RootSync, if registered.
-	if _, found := nt.RootRepos[configsync.RootSyncName]; found {
-		rs := RootSyncObjectV1Beta1FromRootRepo(nt, configsync.RootSyncName)
+	if source, found := nt.SyncSources[DefaultRootSyncID]; found {
+		id := DefaultRootSyncID
+		var rs *v1beta1.RootSync
+		switch tSource := source.(type) {
+		case *syncsource.GitSyncSource:
+			rs = RootSyncObjectV1Beta1FromRootRepo(nt, id.Name)
+		case *syncsource.HelmSyncSource:
+			rs = nt.RootSyncObjectHelm(id.Name, tSource.ChartID)
+		// case *syncsource.OCISyncSource:
+		// TODO: setup OCI RootSyncs
+		default:
+			nt.T.Fatalf("Invalid RootSync source %T: %s", source, id.Name)
+		}
 		if err := nt.KubeClient.Create(rs); err != nil {
 			if !apierrors.IsAlreadyExists(err) {
 				nt.T.Fatal(err)
@@ -618,31 +682,53 @@ func setupDelegatedControl(nt *NT) {
 		nt.T.Fatal(err)
 	}
 
-	for rsName := range nt.RootRepos {
+	// Apply all the RootSyncs
+	for id, source := range nt.SyncSources.RootSyncs() {
 		// The default RootSync is created manually, no need to set up again.
-		if rsName == configsync.RootSyncName {
+		if id.Name == configsync.RootSyncName {
 			continue
 		}
-		rs := RootSyncObjectV1Beta1FromRootRepo(nt, rsName)
+		var rs *v1beta1.RootSync
+		switch source.(type) {
+		case *syncsource.GitSyncSource:
+			rs = RootSyncObjectV1Beta1FromRootRepo(nt, id.Name)
+		// case *syncsource.HelmSyncSource:
+		// 	rs = nt.RootSyncObjectHelm(id.Name, tSource.ChartID)
+		// case *syncsource.OCISyncSource:
+		// TODO: setup OCI & Helm RootSyncs
+		default:
+			nt.T.Fatalf("Invalid %s source %T: %s", id.Kind, source, id.Name)
+		}
 		if err := nt.KubeClient.Apply(rs); err != nil {
 			nt.T.Fatal(err)
 		}
 	}
 
-	for nn := range nt.NonRootRepos {
+	// Then apply the RepoSyncs
+	for id, source := range nt.SyncSources.RepoSyncs() {
 		// create namespace for namespace reconciler.
-		err := nt.KubeClient.Create(k8sobjects.NamespaceObject(nn.Namespace))
+		err := nt.KubeClient.Create(k8sobjects.NamespaceObject(id.Namespace))
 		if err != nil {
 			nt.T.Fatal(err)
 		}
 
-		nt.Must(CreateNamespaceSecretForNonCSR(nt, nn.Namespace))
+		nt.Must(CreateNamespaceSecretForNonCSR(nt, id.Namespace))
 
-		if err := setupRepoSyncRoleBinding(nt, nn); err != nil {
+		if err := setupRepoSyncRoleBinding(nt, id.ObjectKey); err != nil {
 			nt.T.Fatal(err)
 		}
 
-		rs := RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)
+		var rs *v1beta1.RepoSync
+		switch source.(type) {
+		case *syncsource.GitSyncSource:
+			rs = RepoSyncObjectV1Beta1FromNonRootRepo(nt, id.ObjectKey)
+		// case *syncsource.HelmSyncSource:
+		// 	rs = nt.RepoSyncObjectHelm(id.ObjectKey, tSource.ChartID)
+		// case *syncsource.OCISyncSource:
+		// TODO: setup OCI & Helm RootSyncs
+		default:
+			nt.T.Fatalf("Invalid %s source %T: %s", id.Kind, source, id.Name)
+		}
 		if err := nt.KubeClient.Apply(rs); err != nil {
 			nt.T.Fatal(err)
 		}
@@ -681,23 +767,26 @@ func RootSyncObjectV1Alpha1(name, repoURL string, sourceFormat configsync.Source
 }
 
 // RootSyncObjectV1Alpha1FromRootRepo returns a v1alpha1 RootSync object which
-// uses a repo from nt.RootRepos.
+// uses a RootSync repo from nt.SyncSources.
 func RootSyncObjectV1Alpha1FromRootRepo(nt *NT, name string) *v1alpha1.RootSync {
-	repo, found := nt.RootRepos[name]
+	// TODO: Allow supplying the Repository, instead of requiring it to already exist
+	id := RootSyncID(name)
+	source, found := nt.SyncSources[id]
 	if !found {
-		nt.T.Fatal("nonexistent root repo: %s", name)
+		nt.T.Fatal("nonexistent %s source: %s", id.Kind, id.ObjectKey)
 	}
-	repoURL := nt.GitProvider.SyncURL(repo.RemoteRepoName)
-	sourceFormat := repo.Format
+	gitSource, ok := source.(*syncsource.GitSyncSource)
+	if !ok {
+		nt.T.Fatal("expected SyncSources for %s to have *GitSyncSource, but got %T", id, source)
+	}
+	repoURL := nt.GitProvider.SyncURL(gitSource.Repository.RemoteRepoName)
+	sourceFormat := gitSource.Repository.Format
 	rs := RootSyncObjectV1Alpha1(name, repoURL, sourceFormat)
 	if nt.DefaultReconcileTimeout != nil {
 		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*nt.DefaultReconcileTimeout)
 	} else if rs.Spec.Override != nil {
 		rs.Spec.Override.ReconcileTimeout = nil
 	}
-	// Unregister the Helm repo for syncing, if any
-	rsKey := client.ObjectKeyFromObject(rs)
-	delete(nt.RootSyncHelmCharts, rsKey) // TODO: delete repo?
 	return rs
 }
 
@@ -733,44 +822,50 @@ func RootSyncObjectV1Beta1(name, repoURL string, sourceFormat configsync.SourceF
 }
 
 // RootSyncObjectV1Beta1FromRootRepo returns a v1beta1 RootSync object which
-// uses a repo from nt.RootRepos.
+// uses a RootSync repo from nt.SyncSources.
 func RootSyncObjectV1Beta1FromRootRepo(nt *NT, name string) *v1beta1.RootSync {
-	repo, found := nt.RootRepos[name]
+	// TODO: Allow supplying the Repository, instead of requiring it to already exist
+	id := RootSyncID(name)
+	source, found := nt.SyncSources[id]
 	if !found {
-		nt.T.Fatalf("nonexistent root repo: %s", name)
+		nt.T.Fatal("nonexistent %s source: %s", id.Kind, id.ObjectKey)
 	}
-	repoURL := nt.GitProvider.SyncURL(repo.RemoteRepoName)
-	sourceFormat := repo.Format
+	gitSource, ok := source.(*syncsource.GitSyncSource)
+	if !ok {
+		nt.T.Fatal("expected SyncSources for %s to have *GitSyncSource, but got %T", id, source)
+	}
+	repoURL := nt.GitProvider.SyncURL(gitSource.Repository.RemoteRepoName)
+	sourceFormat := gitSource.Repository.Format
 	rs := RootSyncObjectV1Beta1(name, repoURL, sourceFormat)
 	if nt.DefaultReconcileTimeout != nil {
 		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*nt.DefaultReconcileTimeout)
 	} else if rs.Spec.Override != nil {
 		rs.Spec.Override.ReconcileTimeout = nil
 	}
-	// Unregister the Helm repo for syncing, if any
-	rsKey := client.ObjectKeyFromObject(rs)
-	delete(nt.RootSyncHelmCharts, rsKey) // TODO: delete repo?
 	return rs
 }
 
 // RootSyncObjectV1Beta1FromOtherRootRepo returns a v1beta1 RootSync object which
 // uses a repo from a specific nt.RootRepo.
 func RootSyncObjectV1Beta1FromOtherRootRepo(nt *NT, syncName, repoName string) *v1beta1.RootSync {
-	repo, found := nt.RootRepos[repoName]
+	// TODO: Allow supplying the Repository, instead of requiring it to already exist
+	repoID := RootSyncID(repoName)
+	source, found := nt.SyncSources[repoID]
 	if !found {
-		nt.T.Fatalf("nonexistent root repo: %s", repoName)
+		nt.T.Fatal("nonexistent %s source: %s", repoID.Kind, repoID.ObjectKey)
 	}
-	repoURL := nt.GitProvider.SyncURL(repo.RemoteRepoName)
-	sourceFormat := repo.Format
+	gitSource, ok := source.(*syncsource.GitSyncSource)
+	if !ok {
+		nt.T.Fatal("expected SyncSources for %s to have *GitSyncSource, but got %T", repoID, source)
+	}
+	repoURL := nt.GitProvider.SyncURL(gitSource.Repository.RemoteRepoName)
+	sourceFormat := gitSource.Repository.Format
 	rs := RootSyncObjectV1Beta1(syncName, repoURL, sourceFormat)
 	if nt.DefaultReconcileTimeout != nil {
 		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*nt.DefaultReconcileTimeout)
 	} else if rs.Spec.Override != nil {
 		rs.Spec.Override.ReconcileTimeout = nil
 	}
-	// Unregister the Helm repo for syncing, if any
-	rsKey := client.ObjectKeyFromObject(rs)
-	delete(nt.RootSyncHelmCharts, rsKey) // TODO: delete repo?
 	return rs
 }
 
@@ -811,13 +906,19 @@ func RepoSyncObjectV1Alpha1(nn types.NamespacedName, repoURL string) *v1alpha1.R
 }
 
 // RepoSyncObjectV1Alpha1FromNonRootRepo returns a v1alpha1 RepoSync object which
-// uses a repo from nt.NonRootRepos.
+// uses a RepoSync repo from nt.SyncSources.
 func RepoSyncObjectV1Alpha1FromNonRootRepo(nt *NT, nn types.NamespacedName) *v1alpha1.RepoSync {
-	repo, found := nt.NonRootRepos[nn]
+	// TODO: Allow supplying the Repository, instead of requiring it to already exist
+	id := RepoSyncID(nn.Name, nn.Namespace)
+	source, found := nt.SyncSources[id]
 	if !found {
-		nt.T.Fatal("nonexistent non-root repo: %s", nn)
+		nt.T.Fatal("nonexistent %s source: %s", id.Kind, id.ObjectKey)
 	}
-	repoURL := nt.GitProvider.SyncURL(repo.RemoteRepoName)
+	gitSource, ok := source.(*syncsource.GitSyncSource)
+	if !ok {
+		nt.T.Fatal("expected SyncSources for %s to have *GitSyncSource, but got %T", id, source)
+	}
+	repoURL := nt.GitProvider.SyncURL(gitSource.Repository.RemoteRepoName)
 	// RepoSync is always Unstructured. So ignore repo.Format.
 	rs := RepoSyncObjectV1Alpha1(nn, repoURL)
 	if nt.DefaultReconcileTimeout != nil {
@@ -832,8 +933,6 @@ func RepoSyncObjectV1Alpha1FromNonRootRepo(nt *NT, nn types.NamespacedName) *v1a
 	if err := SetRepoSyncDependencies(nt, rs); err != nil {
 		nt.T.Fatal(err)
 	}
-	// Unregister the Helm repo for syncing, if any
-	delete(nt.RepoSyncHelmCharts, nn) // TODO: delete repo?
 	return rs
 }
 
@@ -929,6 +1028,21 @@ func (nt *NT) RepoSyncObjectOCI(nn types.NamespacedName, image *registryprovider
 
 // RootSyncObjectHelm returns a RootSync object that syncs the provided HelmPackage
 func (nt *NT) RootSyncObjectHelm(name string, chartID registryproviders.HelmChartID) *v1beta1.RootSync {
+	id := RootSyncID(name)
+	source, found := nt.SyncSources[id]
+	if found {
+		if helmSource, ok := source.(*syncsource.HelmSyncSource); ok {
+			if helmSource.ChartID != chartID {
+				nt.T.Logf("Updating existing %s %T: %s", id.Kind, source, id.ObjectKey)
+			}
+		} else {
+			nt.T.Logf("Replacing existing %s %T with HelmSyncSource: %s", id.Kind, source, id.ObjectKey)
+		}
+	}
+	// Register the Helm chart for syncing
+	nt.SyncSources[id] = &syncsource.HelmSyncSource{
+		ChartID: chartID,
+	}
 	chartRepoURL, err := nt.HelmProvider.RepositoryRemoteURL()
 	if err != nil {
 		nt.T.Fatalf("HelmProvider.RepositoryRemoteURL: %v", err)
@@ -966,16 +1080,26 @@ func (nt *NT) RootSyncObjectHelm(name string, chartID registryproviders.HelmChar
 	// Enable automatic deletion of managed objects by default.
 	// This helps ensure that test artifacts are cleaned up.
 	EnableDeletionPropagation(rs)
-	// Register the Helm chart for syncing
-	rsKey := client.ObjectKeyFromObject(rs)
-	nt.RootSyncHelmCharts[rsKey] = chartID
-	// Unregister the Git repo for syncing, if any
-	delete(nt.RootRepos, rsKey.Name) // TODO: delete repo?
 	return rs
 }
 
 // RepoSyncObjectHelm returns a RepoSync object that syncs the provided HelmPackage
 func (nt *NT) RepoSyncObjectHelm(nn types.NamespacedName, chartID registryproviders.HelmChartID) *v1beta1.RepoSync {
+	id := RepoSyncID(nn.Name, nn.Namespace)
+	source, found := nt.SyncSources[id]
+	if found {
+		if helmSource, ok := source.(*syncsource.HelmSyncSource); ok {
+			if helmSource.ChartID != chartID {
+				nt.T.Logf("Updating existing %s %T: %s", id.Kind, source, id.ObjectKey)
+			}
+		} else {
+			nt.T.Logf("Replacing existing %s %T with HelmSyncSource: %s", id.Kind, source, id.ObjectKey)
+		}
+	}
+	// Register the Helm chart for syncing
+	nt.SyncSources[id] = &syncsource.HelmSyncSource{
+		ChartID: chartID,
+	}
 	chartRepoURL, err := nt.HelmProvider.RepositoryRemoteURL()
 	if err != nil {
 		nt.T.Fatalf("HelmProvider.RepositoryRemoteURL: %v", err)
@@ -1017,23 +1141,24 @@ func (nt *NT) RepoSyncObjectHelm(nn types.NamespacedName, chartID registryprovid
 	// Enable automatic deletion of managed objects by default.
 	// This helps ensure that test artifacts are cleaned up.
 	EnableDeletionPropagation(rs)
-	// Register the Helm chart for syncing
-	rsKey := client.ObjectKeyFromObject(rs)
-	nt.RepoSyncHelmCharts[rsKey] = chartID
-	// Unregister the Git repo for syncing, if any
-	delete(nt.NonRootRepos, rsKey) // TODO: delete repo?
 	return rs
 }
 
 // RepoSyncObjectV1Beta1FromNonRootRepo returns a v1beta1 RepoSync object which
-// uses a repo from nt.NonRootRepos.
+// uses a RepoSync repo from nt.SyncSources.
 func RepoSyncObjectV1Beta1FromNonRootRepo(nt *NT, nn types.NamespacedName) *v1beta1.RepoSync {
-	repo, found := nt.NonRootRepos[nn]
+	// TODO: Allow supplying the Repository, instead of requiring it to already exist
+	id := RepoSyncID(nn.Name, nn.Namespace)
+	source, found := nt.SyncSources[id]
 	if !found {
-		nt.T.Fatalf("nonexistent non-root repo: %s", nn)
+		nt.T.Fatal("nonexistent %s source: %s", id.Kind, id.ObjectKey)
 	}
-	repoURL := nt.GitProvider.SyncURL(repo.RemoteRepoName)
-	sourceFormat := repo.Format
+	gitSource, ok := source.(*syncsource.GitSyncSource)
+	if !ok {
+		nt.T.Fatal("expected SyncSources for %s to have *GitSyncSource, but got %T", id, source)
+	}
+	repoURL := nt.GitProvider.SyncURL(gitSource.Repository.RemoteRepoName)
+	sourceFormat := gitSource.Repository.Format
 	rs := RepoSyncObjectV1Beta1(nn, repoURL, sourceFormat)
 	if nt.DefaultReconcileTimeout != nil {
 		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*nt.DefaultReconcileTimeout)
@@ -1044,20 +1169,24 @@ func RepoSyncObjectV1Beta1FromNonRootRepo(nt *NT, nn types.NamespacedName) *v1be
 	if err := SetRepoSyncDependencies(nt, rs); err != nil {
 		nt.T.Fatal(err)
 	}
-	// Unregister the Helm repo for syncing, if any
-	delete(nt.RepoSyncHelmCharts, nn) // TODO: delete repo?
 	return rs
 }
 
 // RepoSyncObjectV1Beta1FromOtherRootRepo returns a v1beta1 RepoSync object which
-// uses a repo from nt.RootRepos.
+// uses a RootSync repo from nt.SyncSources.
 func RepoSyncObjectV1Beta1FromOtherRootRepo(nt *NT, nn types.NamespacedName, repoName string) *v1beta1.RepoSync {
-	repo, found := nt.RootRepos[repoName]
+	// TODO: Allow supplying the Repository, instead of requiring it to already exist
+	repoID := RootSyncID(repoName)
+	source, found := nt.SyncSources[repoID]
 	if !found {
-		nt.T.Fatal("nonexistent root repo: %s", repoName)
+		nt.T.Fatal("nonexistent %s source: %s", repoID.Kind, repoID.ObjectKey)
 	}
-	repoURL := nt.GitProvider.SyncURL(repo.RemoteRepoName)
-	sourceFormat := repo.Format
+	gitSource, ok := source.(*syncsource.GitSyncSource)
+	if !ok {
+		nt.T.Fatal("expected SyncSources for %s to have *GitSyncSource, but got %T", repoID, source)
+	}
+	repoURL := nt.GitProvider.SyncURL(gitSource.Repository.RemoteRepoName)
+	sourceFormat := gitSource.Repository.Format
 	rs := RepoSyncObjectV1Beta1(nn, repoURL, sourceFormat)
 	if nt.DefaultReconcileTimeout != nil {
 		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*nt.DefaultReconcileTimeout)
@@ -1068,8 +1197,6 @@ func RepoSyncObjectV1Beta1FromOtherRootRepo(nt *NT, nn types.NamespacedName, rep
 	if err := SetRepoSyncDependencies(nt, rs); err != nil {
 		nt.T.Fatal(err)
 	}
-	// Unregister the Helm repo for syncing, if any
-	delete(nt.RepoSyncHelmCharts, nn) // TODO: delete repo?
 	return rs
 }
 
@@ -1078,77 +1205,86 @@ func RepoSyncObjectV1Beta1FromOtherRootRepo(nt *NT, nn types.NamespacedName, rep
 func setupCentralizedControl(nt *NT) {
 	nt.T.Log("[SETUP] Centralized control")
 
-	rootSyncNN := RootSyncNN(configsync.RootSyncName)
+	rootSyncID := RootSyncID(configsync.RootSyncName)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
 
 	// Add any RootSyncs specified by the test options
-	rootSyncs := make(map[types.NamespacedName]*v1beta1.RootSync, len(nt.RootRepos)+len(nt.RootSyncHelmCharts))
-	for rsName := range nt.RootRepos {
+	rootSyncSources := nt.SyncSources.RootSyncs()
+	rootSyncs := make(map[core.ID]*v1beta1.RootSync, len(rootSyncSources))
+	for id, source := range rootSyncSources {
 		// The default RootSync is created manually, don't check it in the repo.
-		if rsName == configsync.RootSyncName {
+		if id.Name == configsync.RootSyncName {
 			continue
 		}
-		rsNN := RootSyncNN(rsName)
-		rootSyncs[rsNN] = RootSyncObjectV1Beta1FromRootRepo(nt, rsName)
-	}
-	for rsNN, chartID := range nt.RootSyncHelmCharts {
-		// The default RootSync is created manually, don't check it in the repo.
-		if rsNN.Name == configsync.RootSyncName {
-			continue
+		switch source.(type) {
+		case *syncsource.GitSyncSource:
+			rootSyncs[id] = RootSyncObjectV1Beta1FromRootRepo(nt, id.Name)
+		// case *syncsource.HelmSyncSource:
+		// 	rootSyncs[id] = nt.RootSyncObjectHelm(id.Name, tSource.ChartID)
+		// case *syncsource.OCISyncSource:
+		// TODO: setup OCI & Helm RootSyncs
+		default:
+			nt.T.Fatalf("Invalid %s source %T: %s", id.Kind, source, id.Name)
 		}
-		rootSyncs[rsNN] = nt.RootSyncObjectHelm(rsNN.Name, chartID)
 	}
-	for rsNN, rs := range rootSyncs {
+	for id, rs := range rootSyncs {
 		// Add RootSync
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/%s.yaml", configsync.ControllerNamespace, rsNN.Name), rs))
-		nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rs)
+		nt.Must(rootSyncGitRepo.Add(fmt.Sprintf("acme/namespaces/%s/%s.yaml", id.Namespace, id.Name), rs))
+		nt.MetricsExpectations.AddObjectApply(metrics.SyncKind(rootSyncID.Kind), rootSyncID.ObjectKey, rs)
 	}
 	if len(rootSyncs) > 0 {
-		nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding RootSyncs"))
+		nt.Must(rootSyncGitRepo.CommitAndPush("Adding RootSyncs"))
 	}
 
-	if len(nt.NonRootRepos) == 0 && len(nt.RepoSyncHelmCharts) == 0 {
+	repoSyncSources := nt.SyncSources.RepoSyncs()
+	if len(repoSyncSources) == 0 {
 		return
 	}
 
 	// Add ClusterRole for all RepoSync reconcilers to use.
 	// TODO: Test different permissions for different RepoSyncs.
 	cr := nt.RepoSyncClusterRole()
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cluster/cr.yaml", cr))
-	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, cr)
+	nt.Must(rootSyncGitRepo.Add("acme/cluster/cr.yaml", cr))
+	nt.MetricsExpectations.AddObjectApply(metrics.SyncKind(rootSyncID.Kind), rootSyncID.ObjectKey, cr)
 
 	// Use a map to record the number of RepoSync namespaces
 	rsNamespaces := map[string]struct{}{}
 
 	// Add any RootSyncs specified by the test options
-	repoSyncs := make(map[types.NamespacedName]*v1beta1.RepoSync, len(nt.NonRootRepos)+len(nt.RepoSyncHelmCharts))
-	for rsNN := range nt.NonRootRepos {
-		repoSyncs[rsNN] = RepoSyncObjectV1Beta1FromNonRootRepo(nt, rsNN)
+	repoSyncs := make(map[core.ID]*v1beta1.RepoSync, len(repoSyncSources))
+	for id, source := range repoSyncSources {
+		switch source.(type) {
+		case *syncsource.GitSyncSource:
+			repoSyncs[id] = RepoSyncObjectV1Beta1FromNonRootRepo(nt, id.ObjectKey)
+		// case *syncsource.HelmSyncSource:
+		// 	repoSyncs[id] = nt.RepoSyncObjectHelm(id.ObjectKey, tSource.ChartID)
+		// case *syncsource.OCISyncSource:
+		// TODO: setup OCI & Helm RootSyncs
+		default:
+			nt.T.Fatalf("Invalid %s source %T: %s", id.Kind, source, id.Name)
+		}
 	}
-	for rsNN, chartID := range nt.RepoSyncHelmCharts {
-		repoSyncs[rsNN] = nt.RepoSyncObjectHelm(rsNN, chartID)
-	}
-	for rsNN, rs := range repoSyncs {
-		ns := rsNN.Namespace
-		rsNamespaces[ns] = struct{}{}
+	for id, rs := range repoSyncs {
+		rsNamespaces[id.Namespace] = struct{}{}
 
 		// Add Namespace for this RepoSync.
 		// This may replace an existing Namespace, if there are multiple
 		// RepoSyncs in the same namespace.
-		nsObj := k8sobjects.NamespaceObject(ns)
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, ns), nsObj))
-		nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
+		nsObj := k8sobjects.NamespaceObject(id.Namespace)
+		nt.Must(rootSyncGitRepo.Add(StructuredNSPath(id.Namespace, id.Namespace), nsObj))
+		nt.MetricsExpectations.AddObjectApply(metrics.SyncKind(rootSyncID.Kind), rootSyncID.ObjectKey, nsObj)
 
 		// Add RoleBinding to bind the ClusterRole to the RepoSync reconciler ServiceAccount
-		rb := RepoSyncRoleBinding(rsNN)
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, fmt.Sprintf("rb-%s", rsNN.Name)), rb))
-		nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rb)
+		rb := RepoSyncRoleBinding(id.ObjectKey)
+		nt.Must(rootSyncGitRepo.Add(StructuredNSPath(id.Namespace, fmt.Sprintf("rb-%s", id.Name)), rb))
+		nt.MetricsExpectations.AddObjectApply(metrics.SyncKind(rootSyncID.Kind), rootSyncID.ObjectKey, rb)
 
 		// Add RepoSync
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(StructuredNSPath(ns, rsNN.Name), rs))
-		nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rs)
+		nt.Must(rootSyncGitRepo.Add(StructuredNSPath(id.Namespace, id.Name), rs))
+		nt.MetricsExpectations.AddObjectApply(metrics.SyncKind(rootSyncID.Kind), rootSyncID.ObjectKey, rs)
 	}
 	if len(repoSyncs) > 0 {
-		nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding RepoSyncs, Namespaces, ClusterRoles, RoleBindings, and ClusterRoleBindings"))
+		nt.Must(rootSyncGitRepo.CommitAndPush("Adding RepoSyncs, Namespaces, ClusterRoles, RoleBindings, and ClusterRoleBindings"))
 	}
 
 	// Convert namespace set to list
@@ -1169,18 +1305,18 @@ func setupCentralizedControl(nt *NT) {
 
 func validateRootSyncsExist(nt *NT) error {
 	var err error
-	for rsName := range nt.RootRepos {
+	for id := range nt.SyncSources.RootSyncs() {
 		err = multierr.Append(err,
-			nt.Validate(rsName, configsync.ControllerNamespace, &v1beta1.RootSync{}))
+			nt.Validate(id.Name, id.Namespace, &v1beta1.RootSync{}))
 	}
 	return err
 }
 
 func validateRepoSyncsExist(nt *NT) error {
 	var err error
-	for nn := range nt.NonRootRepos {
+	for id := range nt.SyncSources.RepoSyncs() {
 		err = multierr.Append(err,
-			nt.Validate(nn.Name, nn.Namespace, &v1beta1.RepoSync{}))
+			nt.Validate(id.Name, id.Namespace, &v1beta1.RepoSync{}))
 	}
 	return err
 }

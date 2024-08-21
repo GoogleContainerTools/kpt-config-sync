@@ -89,6 +89,7 @@ func TestDeleteRootSyncAndRootSyncV1Alpha1(t *testing.T) {
 func TestUpdateRootSyncGitDirectory(t *testing.T) {
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.SyncSource)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	// Validate RootSync is present.
 	var rs v1beta1.RootSync
@@ -101,21 +102,21 @@ func TestUpdateRootSyncGitDirectory(t *testing.T) {
 	auditNS := "audit"
 	auditNSObj := k8sobjects.NamespaceObject(auditNS)
 	auditNSPath := fmt.Sprintf("%s/namespaces/%s/ns.yaml", rs.Spec.Git.Dir, auditNS)
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(auditNSPath, auditNSObj))
+	nt.Must(rootSyncGitRepo.Add(auditNSPath, auditNSObj))
 
 	// Add namespace in policy directory 'foo'.
 	fooDir := "foo"
 	fooNS := "shipping"
 	fooNSPath := fmt.Sprintf("%s/namespaces/%s/ns.yaml", fooDir, fooNS)
 	fooNSObj := k8sobjects.NamespaceObject(fooNS)
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fooNSPath, fooNSObj))
+	nt.Must(rootSyncGitRepo.Add(fooNSPath, fooNSObj))
 
 	// Add repo resource in policy directory 'foo'.
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
+	nt.Must(rootSyncGitRepo.Add(
 		fmt.Sprintf("%s/system/repo.yaml", fooDir),
 		k8sobjects.RepoObject()))
 
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add namespace to acme directory"))
+	nt.Must(rootSyncGitRepo.CommitAndPush("add namespace to acme directory"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -179,6 +180,7 @@ func TestUpdateRootSyncGitDirectory(t *testing.T) {
 func TestUpdateRootSyncGitBranch(t *testing.T) {
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.SyncSource)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	nsA := "ns-a"
 	nsB := "ns-b"
@@ -188,8 +190,8 @@ func TestUpdateRootSyncGitBranch(t *testing.T) {
 	branchB := "test-branch"
 
 	// Add "ns-a" namespace.
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/ns.yaml", nsA), nsAObj))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add namespace to acme directory"))
+	nt.Must(rootSyncGitRepo.Add(fmt.Sprintf("acme/namespaces/%s/ns.yaml", nsA), nsAObj))
+	nt.Must(rootSyncGitRepo.CommitAndPush("add namespace to acme directory"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -211,14 +213,14 @@ func TestUpdateRootSyncGitBranch(t *testing.T) {
 	}
 
 	// Add a 'test-branch' branch with 'ns-b' namespace.
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CreateBranch(branchB))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CheckoutBranch(branchB))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(fmt.Sprintf("acme/namespaces/%s/ns.yaml", nsA)))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("acme/namespaces/%s/ns.yaml", nsB), nsBObj))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPushBranch("add ns-b to acme directory", branchB))
+	nt.Must(rootSyncGitRepo.CreateBranch(branchB))
+	nt.Must(rootSyncGitRepo.CheckoutBranch(branchB))
+	nt.Must(rootSyncGitRepo.Remove(fmt.Sprintf("acme/namespaces/%s/ns.yaml", nsA)))
+	nt.Must(rootSyncGitRepo.Add(fmt.Sprintf("acme/namespaces/%s/ns.yaml", nsB), nsBObj))
+	nt.Must(rootSyncGitRepo.CommitAndPushBranch("add ns-b to acme directory", branchB))
 
 	// Checkout back to 'main' branch to get the correct HEAD commit sha1.
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CheckoutBranch(branchA))
+	nt.Must(rootSyncGitRepo.CheckoutBranch(branchA))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -248,7 +250,7 @@ func TestUpdateRootSyncGitBranch(t *testing.T) {
 	nomostest.SetGitBranch(nt, configsync.RootSyncName, branchB)
 
 	// Checkout 'test-branch' branch to get the correct HEAD commit sha1.
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CheckoutBranch(branchB))
+	nt.Must(rootSyncGitRepo.CheckoutBranch(branchB))
 
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -280,7 +282,7 @@ func TestUpdateRootSyncGitBranch(t *testing.T) {
 	nomostest.SetGitBranch(nt, configsync.RootSyncName, branchA)
 
 	// Checkout back to 'main' branch to get the correct HEAD commit sha1.
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CheckoutBranch(branchA))
+	nt.Must(rootSyncGitRepo.CheckoutBranch(branchA))
 
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -311,9 +313,10 @@ func TestUpdateRootSyncGitBranch(t *testing.T) {
 
 func TestForceRevert(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/system/repo.yaml"))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Cause source error"))
+	nt.Must(rootSyncGitRepo.Remove("acme/system/repo.yaml"))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Cause source error"))
 
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, system.MissingRepoErrorCode, "")
 
@@ -322,7 +325,7 @@ func TestForceRevert(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	commitHash := nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
+	commitHash := rootSyncGitRepo.MustHash(nt.T)
 
 	err = nomostest.ValidateMetrics(nt,
 		nomostest.ReconcilerErrorMetrics(nt, rootSyncLabels, commitHash, metrics.ErrorSummary{
@@ -332,8 +335,8 @@ func TestForceRevert(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Git("reset", "--hard", "HEAD^"))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Push(syncBranch, "-f"))
+	nt.Must(rootSyncGitRepo.Git("reset", "--hard", "HEAD^"))
+	nt.Must(rootSyncGitRepo.Push(syncBranch, "-f"))
 
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -368,14 +371,15 @@ func TestRootSyncReconcilingStatus(t *testing.T) {
 
 func TestManageSelfRootSync(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.ACMController, ntopts.Unstructured)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 	rs := &v1beta1.RootSync{}
 	if err := nt.KubeClient.Get(configsync.RootSyncName, configsync.ControllerNamespace, rs); err != nil {
 		nt.T.Fatal(err)
 	}
 	sanitizedRs := k8sobjects.RootSyncObjectV1Beta1(rs.Name)
 	sanitizedRs.Spec = rs.Spec
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/root-sync.yaml", sanitizedRs))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add the root-sync object that configures the reconciler"))
+	nt.Must(rootSyncGitRepo.Add("acme/root-sync.yaml", sanitizedRs))
+	nt.Must(rootSyncGitRepo.CommitAndPush("add the root-sync object that configures the reconciler"))
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, validate.SelfReconcileErrorCode, "RootSync config-management-system/root-sync must not manage itself in its repo")
 }
 

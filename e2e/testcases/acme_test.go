@@ -20,7 +20,6 @@ import (
 
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configmanagement"
-	"kpt.dev/configsync/pkg/api/configsync"
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -45,15 +44,18 @@ func configSyncManagementLabels(namespace, folder string) map[string]string {
 func TestAcmeCorpRepo(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1)
 
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+
 	nsToFolder := map[string]string{
-		"analytics": "eng",
-		"backend":   "eng",
-		"frontend":  "eng",
-		"new-prj":   "rnd",
-		"newer-prj": "rnd",
-		nt.RootRepos[configsync.RootSyncName].SafetyNSName: ""}
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../../examples/acme", "."))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Initialize the acme directory"))
+		"analytics":                  "eng",
+		"backend":                    "eng",
+		"frontend":                   "eng",
+		"new-prj":                    "rnd",
+		"newer-prj":                  "rnd",
+		rootSyncGitRepo.SafetyNSName: "",
+	}
+	nt.Must(rootSyncGitRepo.Copy("../../examples/acme", "."))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Initialize the acme directory"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -170,10 +172,10 @@ func TestAcmeCorpRepo(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/cluster"))
+	nt.Must(rootSyncGitRepo.Remove("acme/cluster"))
 	// Add back the safety ClusterRole to pass the safety check (KNV2006).
-	nt.Must(nt.RootRepos[configsync.RootSyncName].AddSafetyClusterRole())
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Reset the acme directory"))
+	nt.Must(rootSyncGitRepo.AddSafetyClusterRole())
+	nt.Must(rootSyncGitRepo.CommitAndPush("Reset the acme directory"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -183,8 +185,10 @@ func TestAcmeCorpRepo(t *testing.T) {
 func TestObjectInCMSNamespace(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured)
 
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/object-in-cms-namespace", "acme"))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("adding resource to config-management-system namespace"))
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+
+	nt.Must(rootSyncGitRepo.Copy("../testdata/object-in-cms-namespace", "acme"))
+	nt.Must(rootSyncGitRepo.CommitAndPush("adding resource to config-management-system namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

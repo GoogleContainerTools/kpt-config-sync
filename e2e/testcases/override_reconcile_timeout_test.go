@@ -37,6 +37,7 @@ import (
 // TestOverrideReconcileTimeout tests that a misconfigured pod will never reconcile (timeout).
 func TestOverrideReconcileTimeout(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.Unstructured)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 	rootSync := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 
 	// Override reconcileTimeout to a short time 30s, only actuation should succeed, reconcile should time out.
@@ -93,9 +94,9 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 	pod1 := k8sobjects.PodObject(pod1Name, []corev1.Container{container}, core.Namespace(namespaceName))
 	idToVerify := core.IDOf(pod1)
 
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/pod-1.yaml", pod1))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/ns-1.yaml", k8sobjects.NamespaceObject(namespaceName)))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("Add namespace/%s & pod/%s (never ready)", namespaceName, pod1Name)))
+	nt.Must(rootSyncGitRepo.Add("acme/pod-1.yaml", pod1))
+	nt.Must(rootSyncGitRepo.Add("acme/ns-1.yaml", k8sobjects.NamespaceObject(namespaceName)))
+	nt.Must(rootSyncGitRepo.CommitAndPush(fmt.Sprintf("Add namespace/%s & pod/%s (never ready)", namespaceName, pod1Name)))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -116,8 +117,8 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 			testpredicates.RootSyncHasObservedGenerationNoLessThan(rootSync.Generation),
 		}))
 
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/pod-1.yaml"))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("Remove pod/%s", pod1Name)))
+	nt.Must(rootSyncGitRepo.Remove("acme/pod-1.yaml"))
+	nt.Must(rootSyncGitRepo.CommitAndPush(fmt.Sprintf("Remove pod/%s", pod1Name)))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -127,8 +128,8 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	pod1.Spec.Containers[0].ReadinessProbe.InitialDelaySeconds = 30
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/pod-1.yaml", pod1))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("Add pod/%s (ready after 30s)", pod1Name)))
+	nt.Must(rootSyncGitRepo.Add("acme/pod-1.yaml", pod1))
+	nt.Must(rootSyncGitRepo.CommitAndPush(fmt.Sprintf("Add pod/%s (ready after 30s)", pod1Name)))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

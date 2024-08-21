@@ -489,6 +489,8 @@ func testNomosHydrateWithClusterSelectors(t *testing.T, configPath string, sourc
 }
 
 func testSyncFromNomosHydrateOutput(nt *nomostest.NT, config string) {
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+
 	if err := nt.ValidateNotFound("bookstore1", "", &corev1.Namespace{}); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -497,8 +499,8 @@ func testSyncFromNomosHydrateOutput(nt *nomostest.NT, config string) {
 		nt.T.Fatal(err)
 	}
 
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy(config, "acme"))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add cluster-dev configs"))
+	nt.Must(rootSyncGitRepo.Copy(config, "acme"))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Add cluster-dev configs"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

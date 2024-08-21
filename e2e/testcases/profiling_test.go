@@ -44,6 +44,7 @@ func TestProfilingResourcesByObjectCount(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured,
 		ntopts.ProfilingTest,
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	syncPath := filepath.Join(gitproviders.DefaultSyncDir, "stress-test")
 	ns := "stress-test-ns"
@@ -69,16 +70,16 @@ func TestProfilingResourcesByObjectCount(t *testing.T) {
 		deployCount := deploysPerStep * step
 
 		nt.T.Logf("Adding a test namespace and %d deployments", deployCount)
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/ns-%s.yaml", syncPath, ns), k8sobjects.NamespaceObject(ns)))
+		nt.Must(rootSyncGitRepo.Add(fmt.Sprintf("%s/ns-%s.yaml", syncPath, ns), k8sobjects.NamespaceObject(ns)))
 
 		for i := 1; i <= deployCount; i++ {
 			name := fmt.Sprintf("pause-%d", i)
-			nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile(
+			nt.Must(rootSyncGitRepo.AddFile(
 				fmt.Sprintf("%s/namespaces/%s/deployment-%s.yaml", syncPath, ns, name),
 				[]byte(pauseDeploymentYAML(name, ns))))
 		}
 
-		nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("Adding a test namespace and %d deployments", deployCount)))
+		nt.Must(rootSyncGitRepo.CommitAndPush(fmt.Sprintf("Adding a test namespace and %d deployments", deployCount)))
 
 		// Validate that the resources sync without the reconciler running out of
 		// memory, getting OOMKilled, and crash looping.
@@ -90,8 +91,8 @@ func TestProfilingResourcesByObjectCount(t *testing.T) {
 			client.InNamespace(ns)))
 
 		nt.T.Log("Removing resources from Git")
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(syncPath))
-		nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing resources from Git"))
+		nt.Must(rootSyncGitRepo.Remove(syncPath))
+		nt.Must(rootSyncGitRepo.CommitAndPush("Removing resources from Git"))
 
 		// Validate that the resources sync without the reconciler running out of
 		// memory, getting OOMKilled, and crash looping.
@@ -109,6 +110,7 @@ func TestProfilingResourcesByObjectCountWithMultiSync(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured,
 		ntopts.ProfilingTest,
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	steps := 4
 	deploysPerStep := 1000
@@ -118,7 +120,7 @@ func TestProfilingResourcesByObjectCountWithMultiSync(t *testing.T) {
 	// Use the same namespace for all other RSyncs to ensure they all show up in watches, whether it's cluster-scope or namespace-scope.
 	ns := "stress-test-ns"
 	nt.T.Logf("Adding test namespace: %s", ns)
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/ns-%s.yaml", gitproviders.DefaultSyncDir, ns), k8sobjects.NamespaceObject(ns)))
+	nt.Must(rootSyncGitRepo.Add(fmt.Sprintf("%s/ns-%s.yaml", gitproviders.DefaultSyncDir, ns), k8sobjects.NamespaceObject(ns)))
 
 	for syncIndex := 1; syncIndex <= syncCount; syncIndex++ {
 		syncName := fmt.Sprintf("sync-%d", syncIndex)
@@ -133,7 +135,7 @@ func TestProfilingResourcesByObjectCountWithMultiSync(t *testing.T) {
 			},
 		}
 		// Manage the RootSyncs with the parent root-sync
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
+		nt.Must(rootSyncGitRepo.Add(
 			fmt.Sprintf("%s/namespaces/%s/rootsync-%s.yaml", gitproviders.DefaultSyncDir, configsync.ControllerNamespace, syncName),
 			syncObj))
 	}
@@ -165,12 +167,12 @@ func TestProfilingResourcesByObjectCountWithMultiSync(t *testing.T) {
 
 			for deployIndex := 1; deployIndex <= deployCount; deployIndex++ {
 				deployName := fmt.Sprintf("pause-%d-%d", syncIndex, deployIndex)
-				nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile(
+				nt.Must(rootSyncGitRepo.AddFile(
 					fmt.Sprintf("%s/namespaces/%s/deployment-%s.yaml", syncPath, ns, deployName),
 					[]byte(pauseDeploymentYAML(deployName, ns))))
 			}
 
-			nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("Adding %d deployments for %d RootSyncs", deployCount, syncCount)))
+			nt.Must(rootSyncGitRepo.CommitAndPush(fmt.Sprintf("Adding %d deployments for %d RootSyncs", deployCount, syncCount)))
 
 			// Add child RootSync
 			rSyncRefs = append(rSyncRefs, rSyncRef{
@@ -194,11 +196,11 @@ func TestProfilingResourcesByObjectCountWithMultiSync(t *testing.T) {
 		for syncIndex := 1; syncIndex <= syncCount; syncIndex++ {
 			syncName := fmt.Sprintf("sync-%d", syncIndex)
 			syncPath := syncName
-			nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(syncPath))
+			nt.Must(rootSyncGitRepo.Remove(syncPath))
 			// Add an empty sync directory so the reconciler doesn't error that it can't find it.
-			nt.Must(nt.RootRepos[configsync.RootSyncName].AddEmptyDir(syncPath))
+			nt.Must(rootSyncGitRepo.AddEmptyDir(syncPath))
 		}
-		nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing resources from Git"))
+		nt.Must(rootSyncGitRepo.CommitAndPush("Removing resources from Git"))
 
 		// Validate that the resources sync without the reconciler running out of
 		// memory, getting OOMKilled, and crash looping.
@@ -213,13 +215,13 @@ func TestProfilingResourcesByObjectCountWithMultiSync(t *testing.T) {
 	nt.T.Log("Removing RootSyncs from Git")
 	for syncIndex := 1; syncIndex <= syncCount; syncIndex++ {
 		syncName := fmt.Sprintf("sync-%d", syncIndex)
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(
+		nt.Must(rootSyncGitRepo.Remove(
 			fmt.Sprintf("%s/namespaces/%s/rootsync-%s.yaml", gitproviders.DefaultSyncDir, configsync.ControllerNamespace, syncName)))
 	}
 
 	nt.T.Logf("Removing test namespace: %s", ns)
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(fmt.Sprintf("%s/ns-%s.yaml", gitproviders.DefaultSyncDir, ns)))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing RootSyncs and test namespace"))
+	nt.Must(rootSyncGitRepo.Remove(fmt.Sprintf("%s/ns-%s.yaml", gitproviders.DefaultSyncDir, ns)))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Removing RootSyncs and test namespace"))
 
 	// Wait for root-sync to sync
 	nt.Must(nt.WatchForAllSyncs())
@@ -236,6 +238,7 @@ func TestProfilingByObjectCountAndSyncCount(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured,
 		ntopts.ProfilingTest,
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	steps := 5
 	syncsPerStep := 1
@@ -245,7 +248,7 @@ func TestProfilingByObjectCountAndSyncCount(t *testing.T) {
 	// Use the same namespace for all other RSyncs to ensure they all show up in watches, whether it's cluster-scope or namespace-scope.
 	ns := "stress-test-ns"
 	nt.T.Logf("Adding test namespace: %s", ns)
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/ns-%s.yaml", gitproviders.DefaultSyncDir, ns), k8sobjects.NamespaceObject(ns)))
+	nt.Must(rootSyncGitRepo.Add(fmt.Sprintf("%s/ns-%s.yaml", gitproviders.DefaultSyncDir, ns), k8sobjects.NamespaceObject(ns)))
 
 	syncIndex := 0
 
@@ -284,19 +287,19 @@ func TestProfilingByObjectCountAndSyncCount(t *testing.T) {
 			},
 		}
 		// Manage the RootSyncs with the parent root-sync
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
+		nt.Must(rootSyncGitRepo.Add(
 			fmt.Sprintf("%s/namespaces/%s/rootsync-%s.yaml", gitproviders.DefaultSyncDir, configsync.ControllerNamespace, syncName),
 			syncObj))
 
 		nt.T.Logf("Adding %d deployments for RootSync %s", deployCount, syncName)
 		for deployIndex := 1; deployIndex <= deployCount; deployIndex++ {
 			deployName := fmt.Sprintf("pause-%d-%d", syncIndex, deployIndex)
-			nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile(
+			nt.Must(rootSyncGitRepo.AddFile(
 				fmt.Sprintf("%s/namespaces/%s/deployment-%s.yaml", syncPath, ns, deployName),
 				[]byte(pauseDeploymentYAML(deployName, ns))))
 		}
 
-		nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("Adding %d deployments each for %d RootSyncs", deployCount, syncCount)))
+		nt.Must(rootSyncGitRepo.CommitAndPush(fmt.Sprintf("Adding %d deployments each for %d RootSyncs", deployCount, syncCount)))
 
 		// Add child RootSync
 		rSyncRefs = append(rSyncRefs, rSyncRef{
@@ -319,13 +322,13 @@ func TestProfilingByObjectCountAndSyncCount(t *testing.T) {
 	nt.T.Log("Removing RootSyncs from Git")
 	for syncIndex := 1; syncIndex <= (syncsPerStep * steps); syncIndex++ {
 		syncName := fmt.Sprintf("sync-%d", syncIndex)
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(
+		nt.Must(rootSyncGitRepo.Remove(
 			fmt.Sprintf("%s/namespaces/%s/rootsync-%s.yaml", gitproviders.DefaultSyncDir, configsync.ControllerNamespace, syncName)))
 	}
 
 	nt.T.Logf("Removing test namespace: %s", ns)
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(fmt.Sprintf("%s/ns-%s.yaml", gitproviders.DefaultSyncDir, ns)))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing RootSyncs and test namespace"))
+	nt.Must(rootSyncGitRepo.Remove(fmt.Sprintf("%s/ns-%s.yaml", gitproviders.DefaultSyncDir, ns)))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Removing RootSyncs and test namespace"))
 
 	// Wait for root-sync to sync
 	nt.Must(nt.WatchForAllSyncs())
@@ -341,12 +344,13 @@ func TestProfilingResourcesByRootSyncCount(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured,
 		ntopts.ProfilingTest,
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	// Create the namespace using the default root-sync.
 	// Use the same namespace for all other RSyncs to ensure they all show up in watches, whether it's cluster-scope or namespace-scope.
 	ns := "stress-test-ns"
 	nt.T.Logf("Adding test namespace: %s", ns)
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(fmt.Sprintf("%s/ns-%s.yaml", gitproviders.DefaultSyncDir, ns), k8sobjects.NamespaceObject(ns)))
+	nt.Must(rootSyncGitRepo.Add(fmt.Sprintf("%s/ns-%s.yaml", gitproviders.DefaultSyncDir, ns), k8sobjects.NamespaceObject(ns)))
 
 	syncCount := 10
 	deployCount := 1000
@@ -364,27 +368,27 @@ func TestProfilingResourcesByRootSyncCount(t *testing.T) {
 			},
 		}
 		// Manage the RootSyncs with the parent root-sync
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
+		nt.Must(rootSyncGitRepo.Add(
 			fmt.Sprintf("%s/namespaces/%s/rootsync-%s.yaml", gitproviders.DefaultSyncDir, configsync.ControllerNamespace, syncName),
 			syncObj))
 
 		// For each RootSync, make 100 Deployments with unique names
 		for j := 1; j <= deployCount; j++ {
 			deployName := fmt.Sprintf("pause-%d-%d", i, j)
-			nt.Must(nt.RootRepos[configsync.RootSyncName].AddFile(
+			nt.Must(rootSyncGitRepo.AddFile(
 				fmt.Sprintf("%s/namespaces/%s/deployment-%s.yaml", syncPath, ns, deployName),
 				[]byte(pauseDeploymentYAML(deployName, ns))))
 		}
 	}
 
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush(fmt.Sprintf("Adding %d RootSyncs each with %d deployments", syncCount, deployCount)))
+	nt.Must(rootSyncGitRepo.CommitAndPush(fmt.Sprintf("Adding %d RootSyncs each with %d deployments", syncCount, deployCount)))
 
 	// Wait for root-sync to sync
 	nt.Must(nt.WatchForAllSyncs())
 
 	// Wait for the other RootSyncs to sync
 	nt.T.Log("Waiting for RootSyncs to be synced...")
-	latestCommit := commitForRepo(nt.RootRepos[configsync.RootSyncName])
+	latestCommit := commitForRepo(rootSyncGitRepo)
 	for i := 1; i <= syncCount; i++ {
 		syncName := fmt.Sprintf("sync-%d", i)
 		syncPath := syncName
@@ -401,11 +405,11 @@ func TestProfilingResourcesByRootSyncCount(t *testing.T) {
 	nt.T.Log("Removing Deployments from Git")
 	for i := 1; i <= syncCount; i++ {
 		syncPath := fmt.Sprintf("sync-%d", i)
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(syncPath))
+		nt.Must(rootSyncGitRepo.Remove(syncPath))
 		// Add an empty sync directory so the reconciler doesn't error that it can't find it.
-		nt.Must(nt.RootRepos[configsync.RootSyncName].AddEmptyDir(syncPath))
+		nt.Must(rootSyncGitRepo.AddEmptyDir(syncPath))
 	}
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Removing resources from Git"))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Removing resources from Git"))
 
 	// Validate that the resources sync without the reconciler running out of
 	// memory, getting OOMKilled, and crash looping.
@@ -414,7 +418,7 @@ func TestProfilingResourcesByRootSyncCount(t *testing.T) {
 	nt.T.Log("Removing RootSyncs from Git")
 	for i := 1; i <= syncCount; i++ {
 		syncName := fmt.Sprintf("sync-%d", i)
-		nt.Must(nt.RootRepos[configsync.RootSyncName].Remove(
+		nt.Must(rootSyncGitRepo.Remove(
 			fmt.Sprintf("%s/namespaces/%s/rootsync-%s.yaml", gitproviders.DefaultSyncDir, configsync.ControllerNamespace, syncName)))
 	}
 

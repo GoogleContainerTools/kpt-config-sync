@@ -56,14 +56,18 @@ func TestGCENodeCSR(t *testing.T) {
 		ntopts.NamespaceRepo(testNs, configsync.RepoSyncName),
 		ntopts.RepoSyncPermissions(policy.AllAdmin()), // NS reconciler manages a bunch of resources.
 		ntopts.WithDelegatedControl)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	repoSyncID := nomostest.RepoSyncID(configsync.RepoSyncName, testNs)
+	repoSyncKey := repoSyncID.ObjectKey
+	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
 
 	if err := workloadidentity.ValidateDisabled(nt); err != nil {
 		nt.T.Fatal(err)
 	}
 
 	nt.T.Log("Add the kustomize-components root directory to RootSync's repo")
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../testdata/hydration/kustomize-components", "."))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add DRY configs to the repository"))
+	nt.Must(rootSyncGitRepo.Copy("../testdata/hydration/kustomize-components", "."))
+	nt.Must(rootSyncGitRepo.CommitAndPush("add DRY configs to the repository"))
 	rootSync := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.MustMergePatch(rootSync, `{
 		"spec": {
@@ -75,9 +79,8 @@ func TestGCENodeCSR(t *testing.T) {
 
 	nt.T.Log("Add the namespace-repo directory to RepoSync's repo")
 	repoSync := k8sobjects.RepoSyncObjectV1Beta1(testNs, configsync.RepoSyncName)
-	repoSyncRef := nomostest.RepoSyncNN(testNs, configsync.RepoSyncName)
-	nt.Must(nt.NonRootRepos[repoSyncRef].Copy("../testdata/hydration/namespace-repo", "."))
-	nt.Must(nt.NonRootRepos[repoSyncRef].CommitAndPush("add DRY configs to the repository"))
+	nt.Must(repoSyncGitRepo.Copy("../testdata/hydration/namespace-repo", "."))
+	nt.Must(repoSyncGitRepo.CommitAndPush("add DRY configs to the repository"))
 	nt.MustMergePatch(repoSync, `{
 		"spec": {
 			"git": {
@@ -89,7 +92,7 @@ func TestGCENodeCSR(t *testing.T) {
 	err := nt.WatchForAllSyncs(
 		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
 			nomostest.DefaultRootRepoNamespacedName: "kustomize-components",
-			repoSyncRef:                             "namespace-repo",
+			repoSyncKey:                             "namespace-repo",
 		}))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -98,7 +101,7 @@ func TestGCENodeCSR(t *testing.T) {
 	if err := testutils.ReconcilerPodMissingFWICredsAnnotation(nt, nomostest.DefaultRootReconcilerName); err != nil {
 		nt.T.Fatal(err)
 	}
-	kustomizecomponents.ValidateTenant(nt, repoSyncRef.Namespace, repoSyncRef.Namespace, "base")
+	kustomizecomponents.ValidateTenant(nt, repoSyncKey.Namespace, repoSyncKey.Namespace, "base")
 }
 
 // TestGCENodeOCI tests the `gcenode` auth type for the OCI image.

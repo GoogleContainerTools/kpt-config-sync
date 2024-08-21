@@ -45,9 +45,11 @@ import (
 func TestAdmission(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl)
 
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/hello/ns.yaml",
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+
+	nt.Must(rootSyncGitRepo.Add("acme/namespaces/hello/ns.yaml",
 		k8sobjects.NamespaceObject("hello", core.Annotation("goodbye", "moon"))))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add Namespace"))
+	nt.Must(rootSyncGitRepo.CommitAndPush("add Namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -155,8 +157,10 @@ func TestDisableWebhookConfigurationUpdateHierarchy(t *testing.T) {
 	// Test starts with Admission Webhook already installed
 	nomostest.WaitForWebhookReadiness(nt)
 
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespaces/hello/ns.yaml", k8sobjects.NamespaceObject("hello")))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("add test namespace"))
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+
+	nt.Must(rootSyncGitRepo.Add("acme/namespaces/hello/ns.yaml", k8sobjects.NamespaceObject("hello")))
+	nt.Must(rootSyncGitRepo.CommitAndPush("add test namespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -221,10 +225,12 @@ func TestDisableWebhookConfigurationUpdateHierarchy(t *testing.T) {
 
 func TestDisableWebhookConfigurationUpdateUnstructured(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.NamespaceRepo(namespaceRepo, configsync.RepoSyncName), ntopts.RepoSyncPermissions(policy.CoreAdmin()))
-	repoSyncNN := nomostest.RepoSyncNN(namespaceRepo, configsync.RepoSyncName)
+	repoSyncID := nomostest.RepoSyncID(configsync.RepoSyncName, namespaceRepo)
+	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
+
 	sa := k8sobjects.ServiceAccountObject("store", core.Namespace(namespaceRepo))
-	nt.Must(nt.NonRootRepos[repoSyncNN].Add("acme/sa.yaml", sa))
-	nt.Must(nt.NonRootRepos[repoSyncNN].CommitAndPush("Adding test service account"))
+	nt.Must(repoSyncGitRepo.Add("acme/sa.yaml", sa))
+	nt.Must(repoSyncGitRepo.CommitAndPush("Adding test service account"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

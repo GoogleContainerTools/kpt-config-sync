@@ -35,6 +35,7 @@ func TestMissingRepoErrorWithHierarchicalFormat(t *testing.T) {
 
 func TestPolicyDirUnset(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 	// There are 6 cluster-scoped objects under `../../examples/acme/cluster`.
 	//
 	// Copying the whole `../../examples/acme/cluster` dir would cause the Config Sync mono-repo mode CI job to fail,
@@ -45,10 +46,10 @@ func TestPolicyDirUnset(t *testing.T) {
 	// and generates a KNV 2006 error (as shown in http://b/210525686#comment3 and http://b/210525686#comment5).
 	//
 	// Therefore, we only copy `../../examples/acme/cluster/admin-clusterrole.yaml` here.
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../../examples/acme/cluster/admin-clusterrole.yaml", "./cluster"))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../../examples/acme/namespaces", "."))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Copy("../../examples/acme/system", "."))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Initialize the root directory"))
+	nt.Must(rootSyncGitRepo.Copy("../../examples/acme/cluster/admin-clusterrole.yaml", "./cluster"))
+	nt.Must(rootSyncGitRepo.Copy("../../examples/acme/namespaces", "."))
+	nt.Must(rootSyncGitRepo.Copy("../../examples/acme/system", "."))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Initialize the root directory"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

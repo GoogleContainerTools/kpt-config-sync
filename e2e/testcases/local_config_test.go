@@ -20,7 +20,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"kpt.dev/configsync/e2e/nomostest"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
-	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/metadata"
@@ -31,17 +30,18 @@ var LocalConfigValue = "true"
 
 func TestLocalConfig(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Lifecycle)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	ns := "local-config"
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
+	nt.Must(rootSyncGitRepo.Add(
 		"acme/namespaces/local-config/ns.yaml",
 		k8sobjects.NamespaceObject(ns)))
 
 	cmName := "e2e-test-configmap"
 	cmPath := "acme/namespaces/local-config/configmap.yaml"
 	cm := k8sobjects.ConfigMapObject(core.Name(cmName), core.Annotation(metadata.LocalConfigAnnotationKey, LocalConfigValue))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding ConfigMap as local config"))
+	nt.Must(rootSyncGitRepo.Add(cmPath, cm))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Adding ConfigMap as local config"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -54,8 +54,8 @@ func TestLocalConfig(t *testing.T) {
 
 	// Remove the local-config annotation
 	cm = k8sobjects.ConfigMapObject(core.Name(cmName))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding ConfigMap without local-config annotation"))
+	nt.Must(rootSyncGitRepo.Add(cmPath, cm))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Adding ConfigMap without local-config annotation"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -69,8 +69,8 @@ func TestLocalConfig(t *testing.T) {
 	// Add the local-config annotation again.
 	// This will make the object pruned.
 	cm = k8sobjects.ConfigMapObject(core.Name(cmName), core.Annotation(metadata.LocalConfigAnnotationKey, LocalConfigValue))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Changing ConfigMap to local config"))
+	nt.Must(rootSyncGitRepo.Add(cmPath, cm))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Changing ConfigMap to local config"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -84,17 +84,18 @@ func TestLocalConfig(t *testing.T) {
 
 func TestLocalConfigWithManagementDisabled(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Lifecycle)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	ns := "local-config"
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
+	nt.Must(rootSyncGitRepo.Add(
 		"acme/namespaces/local-config/ns.yaml",
 		k8sobjects.NamespaceObject(ns)))
 
 	cmName := "e2e-test-configmap"
 	cmPath := "acme/namespaces/local-config/configmap.yaml"
 	cm := k8sobjects.ConfigMapObject(core.Name(cmName))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Adding ConfigMap"))
+	nt.Must(rootSyncGitRepo.Add(cmPath, cm))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Adding ConfigMap"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -107,8 +108,8 @@ func TestLocalConfigWithManagementDisabled(t *testing.T) {
 
 	// Add the management disabled annotation.
 	cm = k8sobjects.ConfigMapObject(core.Name(cmName), syncertest.ManagementDisabled)
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Disable the management of ConfigMap"))
+	nt.Must(rootSyncGitRepo.Add(cmPath, cm))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Disable the management of ConfigMap"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -122,8 +123,8 @@ func TestLocalConfigWithManagementDisabled(t *testing.T) {
 	// Add the local-config annotation to the unmanaged configmap
 	cm = k8sobjects.ConfigMapObject(core.Name(cmName), syncertest.ManagementDisabled,
 		core.Annotation(metadata.LocalConfigAnnotationKey, LocalConfigValue))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Change the ConfigMap to local config"))
+	nt.Must(rootSyncGitRepo.Add(cmPath, cm))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Change the ConfigMap to local config"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -136,8 +137,8 @@ func TestLocalConfigWithManagementDisabled(t *testing.T) {
 
 	// Remove the management disabled annotation
 	cm = k8sobjects.ConfigMapObject(core.Name(cmName), core.Annotation(metadata.LocalConfigAnnotationKey, LocalConfigValue))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(cmPath, cm))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Remove the managed disabled annotation and keep the local-config annotation"))
+	nt.Must(rootSyncGitRepo.Add(cmPath, cm))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Remove the managed disabled annotation and keep the local-config annotation"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

@@ -48,6 +48,7 @@ import (
 // - Prune "cm1" from git. The Namespace and ConfigMap should be successfully pruned.
 func TestNamespaceStrategy(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.Unstructured)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	rootReconcilerNN := core.RootReconcilerObjectKey(rootSyncNN.Name)
@@ -70,8 +71,8 @@ func TestNamespaceStrategy(t *testing.T) {
 	// add a resource for which the namespace is not declared/created
 	fooNamespace := k8sobjects.NamespaceObject("foo-implicit")
 	cm1 := k8sobjects.ConfigMapObject(core.Name("cm1"), core.Namespace(fooNamespace.Name))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/cm1.yaml", cm1))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add cm1"))
+	nt.Must(rootSyncGitRepo.Add("acme/cm1.yaml", cm1))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Add cm1"))
 
 	// check for error
 	nt.WaitForRootSyncSyncError(rootSyncNN.Name, applier.ApplierErrorCode,
@@ -117,8 +118,8 @@ func TestNamespaceStrategy(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	// explicitly declare the namespace in git
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add("acme/namespace-foo.yaml", fooNamespace))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Explicitly manage fooNamespace"))
+	nt.Must(rootSyncGitRepo.Add("acme/namespace-foo.yaml", fooNamespace))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Explicitly manage fooNamespace"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -137,14 +138,14 @@ func TestNamespaceStrategy(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	// prune the namespace
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/namespace-foo.yaml"))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Prune namespace-foo"))
+	nt.Must(rootSyncGitRepo.Remove("acme/namespace-foo.yaml"))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Prune namespace-foo"))
 	// check for error
 	nt.WaitForRootSyncSyncError(rootSyncNN.Name, applier.ApplierErrorCode,
 		"skipped delete of Namespace, /foo-implicit: namespace still in use: foo-implicit", nil)
 	// prune the ConfigMap
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Remove("acme/cm1.yaml"))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Prune cm1"))
+	nt.Must(rootSyncGitRepo.Remove("acme/cm1.yaml"))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Prune cm1"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -166,33 +167,42 @@ func TestNamespaceStrategy(t *testing.T) {
 // When using multiple RootSyncs that declare resources in the same namespace,
 // the namespace should only be created if declared explicitly in a sync source.
 func TestNamespaceStrategyMultipleRootSyncs(t *testing.T) {
+	rootSyncID := nomostest.DefaultRootSyncID
+	rootSyncAID := nomostest.RootSyncID("sync-a")
+	rootSyncXID := nomostest.RootSyncID("sync-x")
+	rootSyncYID := nomostest.RootSyncID("sync-y")
 	namespaceA := k8sobjects.NamespaceObject("namespace-a")
 	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.Unstructured,
-		ntopts.RootRepo("sync-a"), // will declare namespace-a explicitly
-		ntopts.RootRepo("sync-x"), // will declare resources in namespace-a, but not namespace-a itself
-		ntopts.RootRepo("sync-y"), // will declare resources in namespace-a, but not namespace-a itself
+		ntopts.RootRepo(rootSyncAID.Name), // will declare namespace-a explicitly
+		ntopts.RootRepo(rootSyncXID.Name), // will declare resources in namespace-a, but not namespace-a itself
+		ntopts.RootRepo(rootSyncYID.Name), // will declare resources in namespace-a, but not namespace-a itself
 	)
-	rootSyncA := nomostest.RootSyncObjectV1Beta1FromRootRepo(nt, "sync-a")
-	rootSyncX := nomostest.RootSyncObjectV1Beta1FromRootRepo(nt, "sync-x")
-	rootSyncY := nomostest.RootSyncObjectV1Beta1FromRootRepo(nt, "sync-y")
+	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
+	rootSyncAGitRepo := nt.SyncSourceGitRepository(rootSyncAID)
+	rootSyncXGitRepo := nt.SyncSourceGitRepository(rootSyncXID)
+	rootSyncYGitRepo := nt.SyncSourceGitRepository(rootSyncYID)
+
+	rootSyncA := nomostest.RootSyncObjectV1Beta1FromRootRepo(nt, rootSyncAID.Name)
+	rootSyncX := nomostest.RootSyncObjectV1Beta1FromRootRepo(nt, rootSyncXID.Name)
+	rootSyncY := nomostest.RootSyncObjectV1Beta1FromRootRepo(nt, rootSyncYID.Name)
 	rootSyncA.Spec.SafeOverride().NamespaceStrategy = configsync.NamespaceStrategyExplicit
 	rootSyncX.Spec.SafeOverride().NamespaceStrategy = configsync.NamespaceStrategyExplicit
 	rootSyncY.Spec.SafeOverride().NamespaceStrategy = configsync.NamespaceStrategyExplicit
 
 	// set the NamespaceStrategy to explicit
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
+	nt.Must(rootSyncGitRepo.Add(
 		fmt.Sprintf("acme/namespaces/%s/%s.yaml", configsync.ControllerNamespace, rootSyncA.Name),
 		rootSyncA,
 	))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
+	nt.Must(rootSyncGitRepo.Add(
 		fmt.Sprintf("acme/namespaces/%s/%s.yaml", configsync.ControllerNamespace, rootSyncX.Name),
 		rootSyncX,
 	))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
+	nt.Must(rootSyncGitRepo.Add(
 		fmt.Sprintf("acme/namespaces/%s/%s.yaml", configsync.ControllerNamespace, rootSyncY.Name),
 		rootSyncY,
 	))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush(
+	nt.Must(rootSyncGitRepo.CommitAndPush(
 		fmt.Sprintf("Adding RootSyncs (%s, %s, %s) with namespaceStrategy=explicit",
 			rootSyncA.Name, rootSyncX.Name, rootSyncY.Name),
 	))
@@ -221,19 +231,19 @@ func TestNamespaceStrategyMultipleRootSyncs(t *testing.T) {
 	}
 	// add a resource for which the namespace is not declared/created
 	cmX := k8sobjects.ConfigMapObject(core.Name("cm-x"), core.Namespace(namespaceA.Name))
-	nt.Must(nt.RootRepos[rootSyncX.Name].Add("acme/cm-x.yaml", cmX))
-	nt.Must(nt.RootRepos[rootSyncX.Name].CommitAndPush("Add cm-x"))
+	nt.Must(rootSyncXGitRepo.Add("acme/cm-x.yaml", cmX))
+	nt.Must(rootSyncXGitRepo.CommitAndPush("Add cm-x"))
 	cmY := k8sobjects.ConfigMapObject(core.Name("cm-y"), core.Namespace(namespaceA.Name))
-	nt.Must(nt.RootRepos[rootSyncY.Name].Add("acme/cm-y.yaml", cmY))
-	nt.Must(nt.RootRepos[rootSyncY.Name].CommitAndPush("Add cm-y"))
+	nt.Must(rootSyncYGitRepo.Add("acme/cm-y.yaml", cmY))
+	nt.Must(rootSyncYGitRepo.CommitAndPush("Add cm-y"))
 	// check for error
 	nt.WaitForRootSyncSyncError(rootSyncX.Name, applier.ApplierErrorCode,
 		"failed to apply ConfigMap, namespace-a/cm-x: namespaces \"namespace-a\" not found", nil)
 	nt.WaitForRootSyncSyncError(rootSyncY.Name, applier.ApplierErrorCode,
 		"failed to apply ConfigMap, namespace-a/cm-y: namespaces \"namespace-a\" not found", nil)
 	// declare the namespace in sync-a
-	nt.Must(nt.RootRepos[rootSyncA.Name].Add("acme/namespace-a.yaml", namespaceA))
-	nt.Must(nt.RootRepos[rootSyncA.Name].CommitAndPush("Add namespace-a"))
+	nt.Must(rootSyncAGitRepo.Add("acme/namespace-a.yaml", namespaceA))
+	nt.Must(rootSyncAGitRepo.CommitAndPush("Add namespace-a"))
 	// check for success
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)

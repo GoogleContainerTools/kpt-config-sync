@@ -35,6 +35,8 @@ import (
 func TestNoSSLVerifyV1Alpha1(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.OverrideAPI,
 		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName))
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -76,8 +78,8 @@ func TestNoSSLVerifyV1Alpha1(t *testing.T) {
 
 	// Set noSSLVerify to true for ns-reconciler-backend
 	repoSyncBackend.Spec.NoSSLVerify = true
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend RepoSync NoSSLVerify to true"))
+	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Update backend RepoSync NoSSLVerify to true"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -98,8 +100,8 @@ func TestNoSSLVerifyV1Alpha1(t *testing.T) {
 
 	// Set noSSLVerify to false from repoSyncBackend
 	repoSyncBackend.Spec.NoSSLVerify = false
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend RepoSync NoSSLVerify to false"))
+	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Update backend RepoSync NoSSLVerify to false"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -114,6 +116,8 @@ func TestNoSSLVerifyV1Alpha1(t *testing.T) {
 func TestNoSSLVerifyV1Beta1(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.OverrideAPI,
 		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName))
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -155,8 +159,8 @@ func TestNoSSLVerifyV1Beta1(t *testing.T) {
 
 	// Set noSSLVerify to true for ns-reconciler-backend
 	repoSyncBackend.Spec.NoSSLVerify = true
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend RepoSync NoSSLVerify to true"))
+	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Update backend RepoSync NoSSLVerify to true"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -177,8 +181,8 @@ func TestNoSSLVerifyV1Beta1(t *testing.T) {
 
 	// Set noSSLVerify to false from repoSyncBackend
 	repoSyncBackend.Spec.NoSSLVerify = false
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Update backend RepoSync NoSSLVerify to false"))
+	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(backendNamespace, configsync.RepoSyncName), repoSyncBackend))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Update backend RepoSync NoSSLVerify to false"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

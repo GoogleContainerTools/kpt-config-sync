@@ -30,17 +30,18 @@ import (
 
 func TestSurfaceFightError(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	nt.T.Logf("Stop the admission webhook to generate the fights")
 	nomostest.StopWebhook(nt)
 
 	ns := k8sobjects.NamespaceObject("test-ns", core.Annotation("foo", "bar"))
 	rb := roleBinding("test-rb", ns.Name, map[string]string{"foo": "bar"})
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
+	nt.Must(rootSyncGitRepo.Add(
 		fmt.Sprintf("acme/namespaces/%s/ns.yaml", ns.Name), ns))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].Add(
+	nt.Must(rootSyncGitRepo.Add(
 		fmt.Sprintf("acme/namespaces/%s/rb.yaml", ns.Name), rb))
-	nt.Must(nt.RootRepos[configsync.RootSyncName].CommitAndPush("Add Namespace and RoleBinding"))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Add Namespace and RoleBinding"))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -63,7 +64,7 @@ func TestSurfaceFightError(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	commitHash := nt.RootRepos[configsync.RootSyncName].MustHash(nt.T)
+	commitHash := rootSyncGitRepo.MustHash(nt.T)
 
 	err = nomostest.ValidateMetrics(nt,
 		nomostest.ReconcilerErrorMetrics(nt, rootSyncLabels, commitHash, metrics.ErrorSummary{

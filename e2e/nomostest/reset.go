@@ -418,17 +418,17 @@ func stringSliceContains(list []string, value string) bool {
 }
 
 // ResetRepository creates or re-initializes a remote repository.
-func ResetRepository(nt *NT, repoType gitproviders.RepoType, nn types.NamespacedName, sourceFormat configsync.SourceFormat) *gitproviders.Repository {
-	repo := initRepository(nt, repoType, nn, sourceFormat)
-	initialCommit(nt, repoType, nn, sourceFormat)
+func ResetRepository(nt *NT, syncKind string, nn types.NamespacedName, sourceFormat configsync.SourceFormat) *gitproviders.Repository {
+	repo := initRepository(nt, syncKind, nn, sourceFormat)
+	initialCommit(nt, syncKind, nn, sourceFormat)
 	return repo
 }
 
 // initRepository inits a local repository and ensures its remote exists
-func initRepository(nt *NT, repoType gitproviders.RepoType, nn types.NamespacedName, sourceFormat configsync.SourceFormat) *gitproviders.Repository {
+func initRepository(nt *NT, syncKind string, nn types.NamespacedName, sourceFormat configsync.SourceFormat) *gitproviders.Repository {
 	repo, found := nt.RemoteRepositories[nn]
 	if !found {
-		repo = gitproviders.NewRepository(repoType, nn, sourceFormat, nt.Scheme,
+		repo = gitproviders.NewRepository(syncKind, nn, sourceFormat, nt.Scheme,
 			nt.Logger, nt.GitProvider, nt.TmpDir, nt.gitPrivateKeyPath, nt.DefaultWaitTimeout)
 		if err := repo.Create(); err != nil {
 			nt.T.Fatal(err)
@@ -443,7 +443,7 @@ func initRepository(nt *NT, repoType gitproviders.RepoType, nn types.NamespacedN
 }
 
 // initialCommit creates an initial commit and pushes it to the remote
-func initialCommit(nt *NT, repoType gitproviders.RepoType, nn types.NamespacedName, sourceFormat configsync.SourceFormat) {
+func initialCommit(nt *NT, syncKind string, nn types.NamespacedName, sourceFormat configsync.SourceFormat) {
 	repo, found := nt.RemoteRepositories[nn]
 	if !found {
 		nt.T.Fatal("repo %s not found", nn.String())
@@ -453,12 +453,15 @@ func initialCommit(nt *NT, repoType gitproviders.RepoType, nn types.NamespacedNa
 	}
 	// Reset expected objects.
 	// These are used to offset metrics expectations.
-	if repoType == gitproviders.RootRepo {
+	switch syncKind {
+	case configsync.RootSyncKind:
 		nt.MetricsExpectations.ResetRootSync(nn.Name)
 		nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, nn, repo.MustGet(nt.T, repo.SafetyNSPath))
 		nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, nn, repo.MustGet(nt.T, repo.SafetyClusterRolePath))
-	} else {
+	case configsync.RepoSyncKind:
 		nt.MetricsExpectations.ResetRepoSync(nn)
+	default:
+		nt.T.Fatalf("Invalid sync kind: %s", syncKind)
 	}
 }
 

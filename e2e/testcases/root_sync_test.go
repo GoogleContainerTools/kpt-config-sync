@@ -370,7 +370,8 @@ func TestRootSyncReconcilingStatus(t *testing.T) {
 }
 
 func TestManageSelfRootSync(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.ACMController, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.ACMController,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 	rs := &v1beta1.RootSync{}
 	if err := nt.KubeClient.Get(configsync.RootSyncName, configsync.ControllerNamespace, rs); err != nil {

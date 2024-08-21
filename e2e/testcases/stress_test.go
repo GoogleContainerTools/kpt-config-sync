@@ -75,7 +75,8 @@ func crontabCR(namespace, name string) (*unstructured.Unstructured, error) {
 // TestStressCRD tests Config Sync can sync one CRD and 1000 namespaces successfully.
 // Every namespace includes a ConfigMap and a CR.
 func TestStressCRD(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.StressTest,
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.StressTest,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
@@ -138,7 +139,8 @@ func TestStressCRD(t *testing.T) {
 
 // TestStressLargeNamespace tests that Config Sync can sync a namespace including 5000 resources successfully.
 func TestStressLargeNamespace(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.StressTest,
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.StressTest,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
@@ -177,7 +179,8 @@ func TestStressLargeNamespace(t *testing.T) {
 
 // TestStressFrequentGitCommits adds 100 Git commits, and verifies that Config Sync can sync the changes in these commits successfully.
 func TestStressFrequentGitCommits(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.StressTest,
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.StressTest,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
@@ -216,7 +219,8 @@ func TestStressFrequentGitCommits(t *testing.T) {
 // This test creates a RootSync pointed at https://github.com/config-sync-examples/crontab-crs
 // This repository contains 13,000+ objects, which takes a long time to reconcile
 func TestStressLargeRequest(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.StressTest,
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.StressTest,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
 
 	crdName := "crontabs.stable.example.com"
@@ -294,7 +298,8 @@ func TestStressLargeRequest(t *testing.T) {
 // This simulates a scenario similar to using Config Connector or Crossplane.
 // This test also validates that nomos status does not use client-side throttling.
 func TestStress100CRDs(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.StressTest,
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.StressTest,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
@@ -348,8 +353,8 @@ func TestStress100CRDs(t *testing.T) {
 // plane is autoscaling up to meet demand. This requires cluster autoscaling to
 // be enabled.
 func TestStressManyDeployments(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured,
-		ntopts.StressTest,
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.StressTest,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
@@ -396,7 +401,8 @@ func TestStressManyDeployments(t *testing.T) {
 // resource. This stressed both the number of watches and the number of objects,
 // which increases memory usage.
 func TestStressMemoryUsageGit(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured, ntopts.StressTest,
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.StressTest,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
@@ -470,8 +476,9 @@ func TestStressMemoryUsageGit(t *testing.T) {
 // 6. IAM for the GSA to read from the Artifact Registry repo
 // 7. IAM for the test runner to write to Artifact Registry repo
 func TestStressMemoryUsageOCI(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.WorkloadIdentity, ntopts.Unstructured,
-		ntopts.StressTest, ntopts.RequireOCIProvider,
+	nt := nomostest.New(t, nomostesting.WorkloadIdentity, ntopts.StressTest,
+		ntopts.RequireOCIProvider,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
 
 	if err := workloadidentity.ValidateEnabled(nt); err != nil {
@@ -577,8 +584,9 @@ func TestStressMemoryUsageOCI(t *testing.T) {
 func TestStressMemoryUsageHelm(t *testing.T) {
 	rootSyncID := nomostest.DefaultRootSyncID
 	rootSyncKey := rootSyncID.ObjectKey
-	nt := nomostest.New(t, nomostesting.WorkloadIdentity, ntopts.Unstructured,
-		ntopts.StressTest, ntopts.RequireHelmProvider,
+	nt := nomostest.New(t, nomostesting.WorkloadIdentity, ntopts.StressTest,
+		ntopts.RequireHelmProvider,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.WithReconcileTimeout(30*time.Second))
 
 	if err := workloadidentity.ValidateEnabled(nt); err != nil {

@@ -62,7 +62,8 @@ const (
 // TestPublicHelm can run on both Kind and GKE clusters.
 // It tests Config Sync can pull from public Helm repo without any authentication.
 func TestPublicHelm(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.SyncSource,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 
 	rs := rootSyncForWordpressHelmChart(nt, nil)
 	nt.T.Log("Update RootSync to sync from a public Helm Chart with specified release namespace and multiple inline values")
@@ -140,7 +141,8 @@ func TestPublicHelm(t *testing.T) {
 // It tests that helm-sync properly watches ConfigMaps in the RSync namespace if the RSync is created before
 // the ConfigMap.
 func TestHelmWatchConfigMap(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.SyncSource,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 
 	rs := rootSyncForWordpressHelmChart(nt, func(m map[string]interface{}) {
 		delete(m, "wordpressUsername") // omit username so it can be set with values file
@@ -258,7 +260,8 @@ service:
 // TestHelmConfigMapOverride can run on both Kind and GKE clusters.
 // It tests ConfigSync behavior when multiple valuesFiles are provided
 func TestHelmConfigMapOverride(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.SyncSource,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	cmName := "helm-config-map-override"
 
 	cm := k8sobjects.ConfigMapObject(core.Name(cmName), core.Namespace(configsync.ControllerNamespace))
@@ -318,7 +321,7 @@ image:
 func TestHelmDefaultNamespace(t *testing.T) {
 	nt := nomostest.New(t,
 		nomostesting.SyncSource,
-		ntopts.Unstructured,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.RequireHelmProvider,
 	)
 
@@ -360,7 +363,7 @@ func TestHelmLatestVersion(t *testing.T) {
 	rootSyncID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t,
 		nomostesting.WorkloadIdentity,
-		ntopts.Unstructured,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.RequireHelmProvider,
 	)
 
@@ -428,7 +431,8 @@ func TestHelmLatestVersion(t *testing.T) {
 // TestHelmVersionRange verifies the Config Sync behavior for helm charts when helm.spec.version is specified as a range.
 // Helm-sync should pull the latest helm chart version within the range.
 func TestHelmVersionRange(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.SyncSource,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 
 	nt.T.Log("Create RootSync to sync from a public Helm Chart with specified version range")
 	rs := rootSyncForWordpressHelmChart(nt, nil)
@@ -615,7 +619,7 @@ type ServiceAccountFile struct {
 func TestHelmARTokenAuth(t *testing.T) {
 	nt := nomostest.New(t,
 		nomostesting.SyncSource,
-		ntopts.Unstructured,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.RequireGKE(t),
 		ntopts.RequireHelmArtifactRegistry(t),
 	)
@@ -674,7 +678,7 @@ func TestHelmARTokenAuth(t *testing.T) {
 func TestHelmEmptyChart(t *testing.T) {
 	nt := nomostest.New(t,
 		nomostesting.SyncSource,
-		ntopts.Unstructured,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.RequireHelmProvider,
 	)
 

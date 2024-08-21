@@ -590,7 +590,8 @@ func TestDoNotRemoveManagedByLabelExceptForConfigManagement(t *testing.T) {
 }
 
 func TestDeclareImplicitNamespace(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation2, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.Reconciliation2,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	var unixMilliseconds = time.Now().UnixNano() / 1000000

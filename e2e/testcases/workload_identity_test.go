@@ -277,10 +277,13 @@ func TestWorkloadIdentity(t *testing.T) {
 			rootSyncKey := rootSyncID.ObjectKey
 			repoSyncKey := repoSyncID.ObjectKey
 			var err error
-			opts := []ntopts.Opt{ntopts.Unstructured, ntopts.RequireGKE(t),
+			opts := []ntopts.Opt{
+				ntopts.RequireGKE(t),
+				ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 				ntopts.SyncWithGitSource(repoSyncID),
 				ntopts.RepoSyncPermissions(policy.AllAdmin()), // NS reconciler manages a bunch of resources.
-				ntopts.WithDelegatedControl}
+				ntopts.WithDelegatedControl,
+			}
 			if tc.requireHelmGAR {
 				opts = append(opts, ntopts.RequireHelmArtifactRegistry(t))
 			}

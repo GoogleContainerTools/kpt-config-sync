@@ -36,7 +36,8 @@ import (
 
 // TestOverrideReconcileTimeout tests that a misconfigured pod will never reconcile (timeout).
 func TestOverrideReconcileTimeout(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.OverrideAPI,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 	rootSync := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 

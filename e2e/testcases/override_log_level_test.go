@@ -33,7 +33,8 @@ import (
 )
 
 func TestOverrideRootSyncLogLevel(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.OverrideAPI,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	rootSyncName := nomostest.RootSyncNN(configsync.RootSyncName)
@@ -145,7 +146,8 @@ func TestOverrideRootSyncLogLevel(t *testing.T) {
 
 func TestOverrideRepoSyncLogLevel(t *testing.T) {
 	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, frontendNamespace)
-	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.Unstructured,
+	nt := nomostest.New(t, nomostesting.OverrideAPI,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.SyncWithGitSource(repoSyncID))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 	repoSyncKey := repoSyncID.ObjectKey

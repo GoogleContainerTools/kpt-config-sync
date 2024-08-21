@@ -38,7 +38,8 @@ import (
 // or disable status in the kpt applier.
 
 func TestStatusEnabledAndDisabled(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.OverrideAPI,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 	id := applier.InventoryID(configsync.RootSyncName, configsync.ControllerNamespace)
 

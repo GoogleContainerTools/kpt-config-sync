@@ -54,7 +54,8 @@ import (
 // TestDriftKubectlApplyClusterScoped tests drift correction after
 // cluster-scoped changes are made with kubectl.
 func TestDriftKubectlApplyClusterScoped(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.DriftControl,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	rootSync2Name := "abcdef"
@@ -244,7 +245,8 @@ func TestDriftKubectlApplyClusterScoped(t *testing.T) {
 // TestDriftKubectlApplyNamespaceScoped tests drift correction after
 // namespace-scoped changes are made with kubectl.
 func TestDriftKubectlApplyNamespaceScoped(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.DriftControl,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	rootSync2Name := "abcdef"
@@ -493,7 +495,8 @@ func TestDriftKubectlApplyNamespaceScoped(t *testing.T) {
 // TestDriftKubectlDelete deletes an object managed by Config Sync, and verifies
 // that Config Sync recreates the deleted object.
 func TestDriftKubectlDelete(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.DriftControl,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	namespace := k8sobjects.NamespaceObject("bookstore")
@@ -554,7 +557,8 @@ func TestDriftKubectlDelete(t *testing.T) {
 // by Config Sync that has the `client.lifecycle.config.k8s.io/mutation`
 // annotation, and verifies that Config Sync recreates the deleted object.
 func TestDriftKubectlDeleteWithIgnoreMutationAnnotation(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.DriftControl,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	namespace := k8sobjects.NamespaceObject("bookstore", core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation))
@@ -615,7 +619,8 @@ func TestDriftKubectlDeleteWithIgnoreMutationAnnotation(t *testing.T) {
 // resource managed by Config Sync, and verifies that Config Sync
 // does not remove this field.
 func TestDriftKubectlAnnotateUnmanagedField(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.DriftControl,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	namespace := k8sobjects.NamespaceObject("bookstore")
@@ -676,7 +681,8 @@ func TestDriftKubectlAnnotateUnmanagedField(t *testing.T) {
 // `client.lifecycle.config.k8s.io/mutation` annotation, and verifies that
 // Config Sync does not remove this field.
 func TestDriftKubectlAnnotateUnmanagedFieldWithIgnoreMutationAnnotation(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.DriftControl,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	namespace := k8sobjects.NamespaceObject("bookstore", core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation))
@@ -706,7 +712,8 @@ func TestDriftKubectlAnnotateUnmanagedFieldWithIgnoreMutationAnnotation(t *testi
 // TestDriftKubectlAnnotateManagedField modifies a managed field, and verifies
 // that Config Sync corrects it.
 func TestDriftKubectlAnnotateManagedField(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.DriftControl,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	namespace := k8sobjects.NamespaceObject("bookstore", core.Annotation("season", "summer"))
@@ -769,7 +776,8 @@ func TestDriftKubectlAnnotateManagedField(t *testing.T) {
 // `client.lifecycle.config.k8s.io/mutation` annotation, and verifies that
 // Config Sync does not correct it.
 func TestDriftKubectlAnnotateManagedFieldWithIgnoreMutationAnnotation(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.DriftControl,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	namespace := k8sobjects.NamespaceObject("bookstore",
@@ -817,7 +825,8 @@ func TestDriftKubectlAnnotateManagedFieldWithIgnoreMutationAnnotation(t *testing
 // TestDriftKubectlAnnotateDeleteManagedFields deletes a managed field, and
 // verifies that Config Sync corrects it.
 func TestDriftKubectlAnnotateDeleteManagedFields(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.DriftControl,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	namespace := k8sobjects.NamespaceObject("bookstore", core.Annotation("season", "summer"))
@@ -880,7 +889,8 @@ func TestDriftKubectlAnnotateDeleteManagedFields(t *testing.T) {
 // `client.lifecycle.config.k8s.io/mutation` annotation, and verifies that
 // Config Sync does not correct it.
 func TestDriftKubectlAnnotateDeleteManagedFieldsWithIgnoreMutationAnnotation(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.DriftControl,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	namespace := k8sobjects.NamespaceObject("bookstore",
@@ -929,7 +939,8 @@ func TestDriftKubectlAnnotateDeleteManagedFieldsWithIgnoreMutationAnnotation(t *
 // `applyset.kubernetes.io/part-of` label, and verifies that
 // Config Sync re-adds it.
 func TestDriftRemoveApplySetPartOfLabel(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.DriftControl,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	rootSync1ApplySetID := applyset.IDFromSync(configsync.RootSyncName, declared.RootScope)

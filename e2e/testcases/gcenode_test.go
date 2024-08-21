@@ -30,6 +30,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testutils"
 	"kpt.dev/configsync/e2e/nomostest/workloadidentity"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/declared"
 )
@@ -53,11 +54,11 @@ func TestGCENodeCSR(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
 		ntopts.RequireGKE(t), ntopts.GCENodeTest,
 		ntopts.RequireCloudSourceRepository(t),
-		ntopts.NamespaceRepo(testNs, configsync.RepoSyncName),
+		ntopts.RepoSyncWithGitSource(testNs, configsync.RepoSyncName),
 		ntopts.RepoSyncPermissions(policy.AllAdmin()), // NS reconciler manages a bunch of resources.
 		ntopts.WithDelegatedControl)
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
-	repoSyncID := nomostest.RepoSyncID(configsync.RepoSyncName, testNs)
+	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, testNs)
 	repoSyncKey := repoSyncID.ObjectKey
 	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
 
@@ -114,7 +115,7 @@ func TestGCENodeOCI(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
 		ntopts.RequireGKE(t), ntopts.GCENodeTest,
 		ntopts.RequireOCIArtifactRegistry(t),
-		ntopts.NamespaceRepo(testNs, configsync.RepoSyncName),
+		ntopts.RepoSyncWithGitSource(testNs, configsync.RepoSyncName),
 		ntopts.RepoSyncPermissions(policy.AllAdmin()), // NS reconciler manages a bunch of resources.
 		ntopts.WithDelegatedControl)
 
@@ -189,7 +190,7 @@ func TestGCENodeHelm(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
 		ntopts.RequireGKE(t), ntopts.GCENodeTest,
 		ntopts.RequireHelmArtifactRegistry(t),
-		ntopts.NamespaceRepo(testNs, configsync.RepoSyncName),
+		ntopts.RepoSyncWithGitSource(testNs, configsync.RepoSyncName),
 		ntopts.RepoSyncPermissions(policy.AllAdmin()), // NS reconciler manages a bunch of resources.
 		ntopts.WithDelegatedControl)
 

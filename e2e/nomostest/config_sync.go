@@ -31,7 +31,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
@@ -95,7 +94,7 @@ var (
 	// DefaultRootRepoNamespacedName is the NamespacedName of the default RootSync object.
 	DefaultRootRepoNamespacedName = RootSyncNN(configsync.RootSyncName)
 	// DefaultRootSyncID is the ID of the default RootSync object.
-	DefaultRootSyncID = RootSyncID(configsync.RootSyncName)
+	DefaultRootSyncID = core.RootSyncID(configsync.RootSyncName)
 )
 
 // RootSyncNN returns the NamespacedName of the RootSync object.
@@ -111,34 +110,6 @@ func RepoSyncNN(ns, name string) types.NamespacedName {
 	return types.NamespacedName{
 		Namespace: ns,
 		Name:      name,
-	}
-}
-
-// RootSyncID returns an ID for the specified RootSync object.
-func RootSyncID(name string) core.ID {
-	return core.ID{
-		GroupKind: schema.GroupKind{
-			Group: v1beta1.SchemeGroupVersion.Group,
-			Kind:  configsync.RootSyncKind,
-		},
-		ObjectKey: client.ObjectKey{
-			Name:      name,
-			Namespace: configsync.ControllerNamespace,
-		},
-	}
-}
-
-// RepoSyncID returns an ID for the specified RepoSync object.
-func RepoSyncID(name, namespace string) core.ID {
-	return core.ID{
-		GroupKind: schema.GroupKind{
-			Group: v1beta1.SchemeGroupVersion.Group,
-			Kind:  configsync.RepoSyncKind,
-		},
-		ObjectKey: client.ObjectKey{
-			Name:      name,
-			Namespace: namespace,
-		},
 	}
 }
 
@@ -770,14 +741,14 @@ func RootSyncObjectV1Alpha1(name, repoURL string, sourceFormat configsync.Source
 // uses a RootSync repo from nt.SyncSources.
 func RootSyncObjectV1Alpha1FromRootRepo(nt *NT, name string) *v1alpha1.RootSync {
 	// TODO: Allow supplying the Repository, instead of requiring it to already exist
-	id := RootSyncID(name)
+	id := core.RootSyncID(name)
 	source, found := nt.SyncSources[id]
 	if !found {
-		nt.T.Fatal("nonexistent %s source: %s", id.Kind, id.ObjectKey)
+		nt.T.Fatalf("nonexistent %s source: %s", id.Kind, id.ObjectKey)
 	}
 	gitSource, ok := source.(*syncsource.GitSyncSource)
 	if !ok {
-		nt.T.Fatal("expected SyncSources for %s to have *GitSyncSource, but got %T", id, source)
+		nt.T.Fatalf("expected SyncSources for %s to have *GitSyncSource, but got %T", id, source)
 	}
 	repoURL := nt.GitProvider.SyncURL(gitSource.Repository.RemoteRepoName)
 	sourceFormat := gitSource.Repository.Format
@@ -825,14 +796,14 @@ func RootSyncObjectV1Beta1(name, repoURL string, sourceFormat configsync.SourceF
 // uses a RootSync repo from nt.SyncSources.
 func RootSyncObjectV1Beta1FromRootRepo(nt *NT, name string) *v1beta1.RootSync {
 	// TODO: Allow supplying the Repository, instead of requiring it to already exist
-	id := RootSyncID(name)
+	id := core.RootSyncID(name)
 	source, found := nt.SyncSources[id]
 	if !found {
-		nt.T.Fatal("nonexistent %s source: %s", id.Kind, id.ObjectKey)
+		nt.T.Fatalf("nonexistent %s source: %s", id.Kind, id.ObjectKey)
 	}
 	gitSource, ok := source.(*syncsource.GitSyncSource)
 	if !ok {
-		nt.T.Fatal("expected SyncSources for %s to have *GitSyncSource, but got %T", id, source)
+		nt.T.Fatalf("expected SyncSources for %s to have *GitSyncSource, but got %T", id, source)
 	}
 	repoURL := nt.GitProvider.SyncURL(gitSource.Repository.RemoteRepoName)
 	sourceFormat := gitSource.Repository.Format
@@ -849,14 +820,14 @@ func RootSyncObjectV1Beta1FromRootRepo(nt *NT, name string) *v1beta1.RootSync {
 // uses a repo from a specific nt.RootRepo.
 func RootSyncObjectV1Beta1FromOtherRootRepo(nt *NT, syncName, repoName string) *v1beta1.RootSync {
 	// TODO: Allow supplying the Repository, instead of requiring it to already exist
-	repoID := RootSyncID(repoName)
+	repoID := core.RootSyncID(repoName)
 	source, found := nt.SyncSources[repoID]
 	if !found {
-		nt.T.Fatal("nonexistent %s source: %s", repoID.Kind, repoID.ObjectKey)
+		nt.T.Fatalf("nonexistent %s source: %s", repoID.Kind, repoID.ObjectKey)
 	}
 	gitSource, ok := source.(*syncsource.GitSyncSource)
 	if !ok {
-		nt.T.Fatal("expected SyncSources for %s to have *GitSyncSource, but got %T", repoID, source)
+		nt.T.Fatalf("expected SyncSources for %s to have *GitSyncSource, but got %T", repoID, source)
 	}
 	repoURL := nt.GitProvider.SyncURL(gitSource.Repository.RemoteRepoName)
 	sourceFormat := gitSource.Repository.Format
@@ -909,14 +880,14 @@ func RepoSyncObjectV1Alpha1(nn types.NamespacedName, repoURL string) *v1alpha1.R
 // uses a RepoSync repo from nt.SyncSources.
 func RepoSyncObjectV1Alpha1FromNonRootRepo(nt *NT, nn types.NamespacedName) *v1alpha1.RepoSync {
 	// TODO: Allow supplying the Repository, instead of requiring it to already exist
-	id := RepoSyncID(nn.Name, nn.Namespace)
+	id := core.RepoSyncID(nn.Name, nn.Namespace)
 	source, found := nt.SyncSources[id]
 	if !found {
-		nt.T.Fatal("nonexistent %s source: %s", id.Kind, id.ObjectKey)
+		nt.T.Fatalf("nonexistent %s source: %s", id.Kind, id.ObjectKey)
 	}
 	gitSource, ok := source.(*syncsource.GitSyncSource)
 	if !ok {
-		nt.T.Fatal("expected SyncSources for %s to have *GitSyncSource, but got %T", id, source)
+		nt.T.Fatalf("expected SyncSources for %s to have *GitSyncSource, but got %T", id, source)
 	}
 	repoURL := nt.GitProvider.SyncURL(gitSource.Repository.RemoteRepoName)
 	// RepoSync is always Unstructured. So ignore repo.Format.
@@ -1028,7 +999,7 @@ func (nt *NT) RepoSyncObjectOCI(nn types.NamespacedName, image *registryprovider
 
 // RootSyncObjectHelm returns a RootSync object that syncs the provided HelmPackage
 func (nt *NT) RootSyncObjectHelm(name string, chartID registryproviders.HelmChartID) *v1beta1.RootSync {
-	id := RootSyncID(name)
+	id := core.RootSyncID(name)
 	source, found := nt.SyncSources[id]
 	if found {
 		if helmSource, ok := source.(*syncsource.HelmSyncSource); ok {
@@ -1085,7 +1056,7 @@ func (nt *NT) RootSyncObjectHelm(name string, chartID registryproviders.HelmChar
 
 // RepoSyncObjectHelm returns a RepoSync object that syncs the provided HelmPackage
 func (nt *NT) RepoSyncObjectHelm(nn types.NamespacedName, chartID registryproviders.HelmChartID) *v1beta1.RepoSync {
-	id := RepoSyncID(nn.Name, nn.Namespace)
+	id := core.RepoSyncID(nn.Name, nn.Namespace)
 	source, found := nt.SyncSources[id]
 	if found {
 		if helmSource, ok := source.(*syncsource.HelmSyncSource); ok {
@@ -1148,7 +1119,7 @@ func (nt *NT) RepoSyncObjectHelm(nn types.NamespacedName, chartID registryprovid
 // uses a RepoSync repo from nt.SyncSources.
 func RepoSyncObjectV1Beta1FromNonRootRepo(nt *NT, nn types.NamespacedName) *v1beta1.RepoSync {
 	// TODO: Allow supplying the Repository, instead of requiring it to already exist
-	id := RepoSyncID(nn.Name, nn.Namespace)
+	id := core.RepoSyncID(nn.Name, nn.Namespace)
 	source, found := nt.SyncSources[id]
 	if !found {
 		nt.T.Fatal("nonexistent %s source: %s", id.Kind, id.ObjectKey)
@@ -1176,7 +1147,7 @@ func RepoSyncObjectV1Beta1FromNonRootRepo(nt *NT, nn types.NamespacedName) *v1be
 // uses a RootSync repo from nt.SyncSources.
 func RepoSyncObjectV1Beta1FromOtherRootRepo(nt *NT, nn types.NamespacedName, repoName string) *v1beta1.RepoSync {
 	// TODO: Allow supplying the Repository, instead of requiring it to already exist
-	repoID := RootSyncID(repoName)
+	repoID := core.RootSyncID(repoName)
 	source, found := nt.SyncSources[repoID]
 	if !found {
 		nt.T.Fatal("nonexistent %s source: %s", repoID.Kind, repoID.ObjectKey)
@@ -1205,7 +1176,7 @@ func RepoSyncObjectV1Beta1FromOtherRootRepo(nt *NT, nn types.NamespacedName, rep
 func setupCentralizedControl(nt *NT) {
 	nt.T.Log("[SETUP] Centralized control")
 
-	rootSyncID := RootSyncID(configsync.RootSyncName)
+	rootSyncID := core.RootSyncID(configsync.RootSyncName)
 	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
 
 	// Add any RootSyncs specified by the test options

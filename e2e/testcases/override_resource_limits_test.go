@@ -38,8 +38,8 @@ import (
 
 func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.SkipAutopilotCluster,
-		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName),
-		ntopts.NamespaceRepo(frontendNamespace, configsync.RepoSyncName))
+		ntopts.RepoSyncWithGitSource(backendNamespace, configsync.RepoSyncName),
+		ntopts.RepoSyncWithGitSource(frontendNamespace, configsync.RepoSyncName))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
@@ -407,8 +407,8 @@ func lookupAlphaRepoSyncReconcilerContainerResources(nt *nomostest.NT, rs *v1alp
 
 func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.SkipAutopilotCluster,
-		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName),
-		ntopts.NamespaceRepo(frontendNamespace, configsync.RepoSyncName))
+		ntopts.RepoSyncWithGitSource(backendNamespace, configsync.RepoSyncName),
+		ntopts.RepoSyncWithGitSource(frontendNamespace, configsync.RepoSyncName))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)

@@ -604,10 +604,10 @@ func TestImporterIgnoresNonSelectedCustomResources(t *testing.T) {
 func TestClusterSelectorOnNamespaceRepos(t *testing.T) {
 	nt := nomostest.New(t,
 		nomostesting.Selector,
-		ntopts.NamespaceRepo(namespaceRepo, configsync.RepoSyncName),
+		ntopts.RepoSyncWithGitSource(namespaceRepo, configsync.RepoSyncName),
 		ntopts.RepoSyncPermissions(policy.RBACAdmin()), // NS reconciler manages rolebindings
 	)
-	repoSyncID := nomostest.RepoSyncID(configsync.RepoSyncName, namespaceRepo)
+	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, namespaceRepo)
 	repoSyncKey := repoSyncID.ObjectKey
 	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
 

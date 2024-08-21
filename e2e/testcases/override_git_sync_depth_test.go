@@ -36,7 +36,7 @@ import (
 
 func TestOverrideGitSyncDepthV1Alpha1(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.OverrideAPI,
-		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName))
+		ntopts.RepoSyncWithGitSource(backendNamespace, configsync.RepoSyncName))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	if err := nt.WatchForAllSyncs(); err != nil {
@@ -136,7 +136,7 @@ func TestOverrideGitSyncDepthV1Alpha1(t *testing.T) {
 
 func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.OverrideAPI,
-		ntopts.NamespaceRepo(backendNamespace, configsync.RepoSyncName))
+		ntopts.RepoSyncWithGitSource(backendNamespace, configsync.RepoSyncName))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	if err := nt.WatchForAllSyncs(); err != nil {

@@ -547,17 +547,20 @@ func testSyncFromNomosHydrateOutput(nt *nomostest.NT, config string) {
 }
 
 func TestSyncFromNomosHydrateOutputYAMLDir(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.NomosCLI, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.NomosCLI,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	testSyncFromNomosHydrateOutput(nt, "../../examples/repo-with-cluster-selectors-compiled/cluster-dev/.")
 }
 
 func TestSyncFromNomosHydrateOutputJSONDir(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.NomosCLI, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.NomosCLI,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	testSyncFromNomosHydrateOutput(nt, "../../examples/repo-with-cluster-selectors-compiled-json/cluster-dev/.")
 }
 
 func testSyncFromNomosHydrateOutputFlat(t *testing.T, sourceFormat configsync.SourceFormat, outputFormat string) {
-	nt := nomostest.New(t, nomostesting.NomosCLI, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.NomosCLI,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 
 	configPath := fmt.Sprintf("../../examples/%s-repo-with-cluster-selectors", sourceFormat)
 	compiledConfigFile := fmt.Sprintf("%s/compiled.%s", nt.TmpDir, outputFormat)
@@ -1192,8 +1195,8 @@ func TestNomosStatusNameFilter(t *testing.T) {
 	nt := nomostest.New(
 		t,
 		nomostesting.NomosCLI,
-		ntopts.Unstructured,
-		ntopts.SyncWithGitSource(rootSync1ID),
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
+		ntopts.SyncWithGitSource(rootSync1ID, ntopts.Unstructured),
 		ntopts.RepoSyncPermissions(policy.RepoSyncAdmin()),
 		ntopts.SyncWithGitSource(repoSync1ID),
 		ntopts.SyncWithGitSource(repoSync2ID),

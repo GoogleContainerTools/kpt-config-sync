@@ -123,7 +123,8 @@ func TestNamespaceSelectorHierarchicalFormat(t *testing.T) {
 }
 
 func TestNamespaceSelectorUnstructuredFormat(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Selector, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.Selector,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	bookstoreNSS := k8sobjects2.NamespaceSelectorObject(core.Name(bookstoreNSSName))

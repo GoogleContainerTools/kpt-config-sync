@@ -44,7 +44,7 @@ var expectedBuiltinOrigin = "configuredIn: kustomization.yaml\nconfiguredBy:\n  
 func TestHydrateKustomizeComponents(t *testing.T) {
 	nt := nomostest.New(t,
 		nomostesting.Hydration,
-		ntopts.Unstructured,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 	)
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
@@ -174,7 +174,7 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 func TestHydrateExternalFiles(t *testing.T) {
 	nt := nomostest.New(t,
 		nomostesting.Hydration,
-		ntopts.Unstructured,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 	)
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
@@ -206,7 +206,7 @@ func TestHydrateExternalFiles(t *testing.T) {
 func TestHydrateHelmComponents(t *testing.T) {
 	nt := nomostest.New(t,
 		nomostesting.Hydration,
-		ntopts.Unstructured,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 	)
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
@@ -267,7 +267,7 @@ func TestHydrateHelmComponents(t *testing.T) {
 func TestHydrateHelmOverlay(t *testing.T) {
 	nt := nomostest.New(t,
 		nomostesting.Hydration,
-		ntopts.Unstructured,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 	)
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
@@ -325,7 +325,7 @@ func TestHydrateHelmOverlay(t *testing.T) {
 func TestHydrateRemoteResources(t *testing.T) {
 	nt := nomostest.New(t,
 		nomostesting.Hydration,
-		ntopts.Unstructured,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 	)
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
@@ -398,7 +398,7 @@ func TestHydrateRemoteResources(t *testing.T) {
 func TestHydrateResourcesInRelativePath(t *testing.T) {
 	nt := nomostest.New(t,
 		nomostesting.Hydration,
-		ntopts.Unstructured,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 	)
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 

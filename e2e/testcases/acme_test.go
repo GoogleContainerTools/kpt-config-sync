@@ -183,7 +183,8 @@ func TestAcmeCorpRepo(t *testing.T) {
 
 // TestObjectInCMSNamespace will test that user can sync object to CMS namespace
 func TestObjectInCMSNamespace(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.Reconciliation1,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 

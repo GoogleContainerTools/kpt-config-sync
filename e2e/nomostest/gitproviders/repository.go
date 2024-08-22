@@ -61,16 +61,6 @@ const (
 	DefaultSyncDir = "acme"
 )
 
-// RepoType represents the type of the source repository.
-type RepoType string
-
-const (
-	// RootRepo indicates the resources in the repository are cluster-scoped.
-	RootRepo RepoType = "root"
-	// NamespaceRepo indicates the resources in the repository are namespace-scoped.
-	NamespaceRepo RepoType = "namespace"
-)
-
 // Repository is a local git repository with a connection to a repository
 // on the git-server for the test.
 //
@@ -89,8 +79,8 @@ type Repository struct {
 	// PrivateKeyPath is the local path to the private key on disk to use to
 	// authenticate with the git server.
 	PrivateKeyPath string
-	// Type refers to the type of the repository, i.e. if it is a root repo or a namespace repo.
-	Type RepoType
+	// SyncKind refers to the kind of the RSync using the repository: RootSync or RepoSync.
+	SyncKind string
 	// SafetyNSPath is the path to the safety namespace yaml file.
 	SafetyNSPath string
 	// SafetyNSName is the name of the safety namespace.
@@ -119,7 +109,7 @@ type Repository struct {
 // Locally, it writes the repository to `tmpdir`/repos/`name`.
 // Name is the <NAMESPACE>/<NAME> of the RootSync|RepoSync.
 func NewRepository(
-	repoType RepoType,
+	syncKind string,
 	syncNN types.NamespacedName,
 	sourceFormat configsync.SourceFormat,
 	scheme *runtime.Scheme,
@@ -135,7 +125,7 @@ func NewRepository(
 		Name:                  namespacedName,
 		Root:                  filepath.Join(tmpDir, "repos", namespacedName),
 		Format:                sourceFormat,
-		Type:                  repoType,
+		SyncKind:              syncKind,
 		SafetyNSName:          safetyName,
 		SafetyNSPath:          fmt.Sprintf("acme/namespaces/%s/ns.yaml", safetyName),
 		SafetyClusterRoleName: safetyName,
@@ -197,7 +187,8 @@ func (g *Repository) InitialCommit(sourceFormat configsync.SourceFormat) error {
 	if err := g.AddEmptyDir(DefaultSyncDir); err != nil {
 		return err
 	}
-	if g.Type == RootRepo {
+	switch g.SyncKind {
+	case configsync.RootSyncKind:
 		// Add safety Namespace and ClusterRole to avoid errors from the safety
 		// check (KNV2006) when deleting all the other remaining objects.
 		if err := g.AddSafetyNamespace(); err != nil {
@@ -206,6 +197,10 @@ func (g *Repository) InitialCommit(sourceFormat configsync.SourceFormat) error {
 		if err := g.AddSafetyClusterRole(); err != nil {
 			return err
 		}
+	case configsync.RepoSyncKind:
+		// Nothing extra
+	default:
+		return fmt.Errorf("invalid sync kind: %s", g.SyncKind)
 	}
 	switch sourceFormat {
 	case configsync.SourceFormatHierarchy:

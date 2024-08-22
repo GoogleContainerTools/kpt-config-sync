@@ -27,8 +27,6 @@ import (
 // If NonRootRepos is non-empty, the test is assumed to be running in
 // multi-repo mode.
 type MultiRepo struct {
-	configsync.SourceFormat
-
 	// SyncSources is the set of RootSyncs and RepoSync and their source config
 	// for this test.
 	SyncSources syncsource.Set
@@ -59,12 +57,35 @@ type MultiRepo struct {
 	RepoSyncPermissions []rbacv1.PolicyRule
 }
 
+// GitSourceOption mutates a GitSyncSource
+type GitSourceOption func(*syncsource.GitSyncSource)
+
+// Unstructured mutates a GitSyncSource to use the unstructured SourceFormat.
+func Unstructured(source *syncsource.GitSyncSource) {
+	source.SourceFormat = configsync.SourceFormatUnstructured
+}
+
 // SyncWithGitSource tells the test case that a RootSync or RepoSync should be
 // applied that points to an empty Git Repository.
 // TODO: Add another option that allows specifying an existing Repository
-func SyncWithGitSource(id core.ID) func(opt *New) {
+func SyncWithGitSource(id core.ID, gitOpts ...GitSourceOption) func(opt *New) {
 	return func(opt *New) {
-		opt.SyncSources[id] = &syncsource.GitSyncSource{}
+		source := &syncsource.GitSyncSource{}
+		// Set the default source options
+		switch id.Kind {
+		case configsync.RootSyncKind:
+			// RootSyncs use Hierarchy by default
+			source.SourceFormat = configsync.SourceFormatHierarchy
+		case configsync.RepoSyncKind:
+			// RepoSync only ever use unstructured
+			source.SourceFormat = configsync.SourceFormatUnstructured
+		}
+		// Modify the default source with user specified options
+		for _, gitOpt := range gitOpts {
+			gitOpt(source)
+		}
+		// Register the RSync with the specified source
+		opt.SyncSources[id] = source
 	}
 }
 
@@ -139,9 +160,4 @@ func RepoSyncPermissions(policy ...rbacv1.PolicyRule) Opt {
 	return func(opt *New) {
 		opt.RepoSyncPermissions = append(opt.RepoSyncPermissions, policy...)
 	}
-}
-
-// Unstructured will set the option for unstructured repo.
-func Unstructured(opts *New) {
-	opts.SourceFormat = configsync.SourceFormatUnstructured
 }

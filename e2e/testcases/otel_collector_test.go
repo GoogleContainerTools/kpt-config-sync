@@ -114,7 +114,7 @@ func TestOtelCollectorDeployment(t *testing.T) {
 	nt := nomostest.New(t,
 		nomostesting.Reconciliation1,
 		ntopts.RequireGKE(t),
-		ntopts.Unstructured,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 	)
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 	nt.T.Cleanup(func() {
@@ -236,7 +236,7 @@ func TestGCMMetrics(t *testing.T) {
 	nt := nomostest.New(t,
 		nomostesting.Reconciliation1,
 		ntopts.RequireGKE(t),
-		ntopts.Unstructured,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 	)
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 	nt.T.Cleanup(func() {

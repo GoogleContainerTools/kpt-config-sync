@@ -64,7 +64,8 @@ func TestReconcilerManagerNormalTeardown(t *testing.T) {
 	rootSyncID := nomostest.DefaultRootSyncID
 	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, testNamespace)
 	nt := nomostest.New(t, nomostesting.ACMController,
-		ntopts.WithDelegatedControl, ntopts.Unstructured,
+		ntopts.WithDelegatedControl,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.SyncWithGitSource(repoSyncID))
 
 	t.Log("Validate the reconciler-manager deployment")
@@ -124,7 +125,8 @@ func TestReconcilerManagerTeardownInvalidRSyncs(t *testing.T) {
 	testNamespace := "invalid-teardown"
 	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, testNamespace)
 	nt := nomostest.New(t, nomostesting.ACMController,
-		ntopts.WithDelegatedControl, ntopts.Unstructured,
+		ntopts.WithDelegatedControl,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.SyncWithGitSource(repoSyncID))
 
 	t.Log("Validate the reconciler-manager deployment")
@@ -214,7 +216,8 @@ func TestReconcilerManagerTeardownInvalidRSyncs(t *testing.T) {
 // the deletions fail to reconcile.
 func TestReconcilerManagerTeardownRootSyncWithReconcileTimeout(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.ACMController,
-		ntopts.WithDelegatedControl, ntopts.Unstructured)
+		ntopts.WithDelegatedControl,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 
 	rootSync := &v1beta1.RootSync{}
 	rootSync.Name = configsync.RootSyncName
@@ -298,7 +301,8 @@ func TestReconcilerManagerTeardownRepoSyncWithReconcileTimeout(t *testing.T) {
 	testNamespace := "reconcile-timeout"
 	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, testNamespace)
 	nt := nomostest.New(t, nomostesting.ACMController,
-		ntopts.WithDelegatedControl, ntopts.Unstructured,
+		ntopts.WithDelegatedControl,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.SyncWithGitSource(repoSyncID))
 
 	repoSync := &v1beta1.RepoSync{}
@@ -882,7 +886,8 @@ func totalExpectedContainerResources(resourceMap map[string]v1beta1.ContainerRes
 }
 
 func TestAutopilotReconcilerAdjustment(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.ACMController, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.ACMController,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	reconcilerNN := core.RootReconcilerObjectKey(rootSyncNN.Name)
@@ -1177,7 +1182,7 @@ func TestReconcilerManagerRootSyncCRDMissing(t *testing.T) {
 	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, repoSyncNS)
 	nt := nomostest.New(t, nomostesting.ACMController,
 		ntopts.WithDelegatedControl, // Delegated so deleting the RootSync doesn't delete the RepoSyncs.
-		ntopts.Unstructured,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.SyncWithGitSource(repoSyncID),
 		ntopts.RepoSyncPermissions(policy.CoreAdmin()), // NS Reconciler manages ServiceAccounts
 	)

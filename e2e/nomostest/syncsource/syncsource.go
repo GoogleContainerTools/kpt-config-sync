@@ -38,6 +38,7 @@ type GitSyncSource struct {
 	// the current/latest commit.
 	Repository *gitproviders.Repository
 	// TODO: Add SyncPath and Branch/Revision to uniquely identify part of a repo
+	SourceFormat configsync.SourceFormat
 }
 
 // Type returns the SourceType of this source.

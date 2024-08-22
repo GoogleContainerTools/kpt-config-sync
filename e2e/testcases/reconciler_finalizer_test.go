@@ -515,10 +515,10 @@ func TestReconcileFinalizerReconcileTimeout(t *testing.T) {
 	namespaceNN := types.NamespacedName{Name: "managed-ns"}
 	contrivedFinalizer := "e2e-test"
 	nt := nomostest.New(t, nomostesting.MultiRepos,
-		ntopts.Unstructured,
-		ntopts.SyncWithGitSource(rootSync2ID),       // Create a nested RootSync to delete mid-test
-		ntopts.WithCentralizedControl,               // This test assumes centralized control
-		ntopts.WithReconcileTimeout(10*time.Second), // Reconcile expected to fail, so use a short timeout
+		ntopts.WithCentralizedControl, // This test assumes centralized control
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
+		ntopts.SyncWithGitSource(rootSync2ID, ntopts.Unstructured), // Create a nested RootSync to delete mid-test
+		ntopts.WithReconcileTimeout(10*time.Second),                // Reconcile expected to fail, so use a short timeout
 	)
 	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
 	rootSync2GitRepo := nt.SyncSourceGitRepository(rootSync2ID)

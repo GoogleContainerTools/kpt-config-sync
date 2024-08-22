@@ -27,5 +27,5 @@ mapfile -t check_files < <(
 )
 
 echo "Linting scripts..."
-shellcheck "${check_files[@]}"
+shellcheck -x "${check_files[@]}"
 echo "PASS"

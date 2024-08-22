@@ -18,7 +18,7 @@ import (
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"kpt.dev/configsync/clientgen/apis/scheme"
+	"kpt.dev/configsync/pkg/generated/clientset/versioned/scheme"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/testing/openapitest"
 	"kpt.dev/configsync/pkg/validate/fileobjects"

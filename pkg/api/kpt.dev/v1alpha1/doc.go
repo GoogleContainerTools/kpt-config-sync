@@ -1,4 +1,4 @@
-// Copyright 2022 Google LLC
+// Copyright 2024 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,15 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package v1 contains the version 1 data definition for the ConfigManagement custom
-// resources.
+// Package v1alpha1 contains the version v1alpha1 data definition for the
+// ResourceGroup custom resources.
 //
 // To regenerate clientset and deepcopy run:
 //
 //	make clientgen
 //
 // DO NOT MOVE THESE OUT OF THE PACKAGE DOCSTRING, GENERATING CODE PROPERLY DEPENDS ON THEM BEING HERE.
+// +genclient
 // +kubebuilder:object:generate=true
 // +k8s:deepcopy-gen=package
-// +groupName=configmanagement.gke.io
-package v1
+// +groupName=kpt.dev
+package v1alpha1

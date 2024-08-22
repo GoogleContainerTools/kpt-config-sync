@@ -42,7 +42,7 @@ configsync-crds: "$(CONTROLLER_GEN)" "$(KUSTOMIZE)" "$(ADDLICENSE)"
 	&& rm ./manifests/configmanagement.gke.io_namespaceconfigs.yaml \
 	&& rm ./manifests/configmanagement.gke.io_repoes.yaml \
 	&& rm ./manifests/configmanagement.gke.io_syncs.yaml \
-	&& "$(ADDLICENSE)" ./manifests
+	&& "$(ADDLICENSE)" -y 2024 ./manifests
 
 "$(CONTROLLER_GEN)": buildenv-dirs
 	GOPATH="$(GO_DIR)" go install sigs.k8s.io/controller-tools/cmd/controller-gen

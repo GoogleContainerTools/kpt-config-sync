@@ -29,6 +29,7 @@ import (
 // +genclient:nonNamespaced
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope=Cluster
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ClusterConfig is the top-level object for the config data definition.
 //
@@ -89,6 +90,7 @@ type ClusterConfigStatus struct {
 }
 
 // +kubebuilder:object:root=true
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ClusterConfigList holds a list of cluster level configs, returned as response to a List call on
 // the cluster config hierarchy.
@@ -107,6 +109,7 @@ type ClusterConfigList struct {
 // +genclient:nonNamespaced
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope=Cluster
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // NamespaceConfig is the top-level object for the config data definition.
 //
@@ -172,6 +175,7 @@ type NamespaceConfigStatus struct {
 }
 
 // +kubebuilder:object:root=true
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // NamespaceConfigList holds a list of NamespaceConfigs, as response to a List call on the config
 // hierarchy API.
@@ -212,6 +216,7 @@ type GenericVersionResources struct {
 // +genclient:nonNamespaced
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope=Cluster
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ClusterSelector specifies a LabelSelector applied to clusters that exist within a
 // cluster registry.
@@ -235,6 +240,7 @@ type ClusterSelectorSpec struct {
 }
 
 // +kubebuilder:object:root=true
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ClusterSelectorList holds a list of ClusterSelector resources.
 type ClusterSelectorList struct {
@@ -252,6 +258,7 @@ type ClusterSelectorList struct {
 // +genclient:nonNamespaced
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope=Cluster
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // NamespaceSelector specifies a LabelSelector applied to namespaces that exist within a
 // NamespaceConfig hierarchy.
@@ -284,6 +291,7 @@ type NamespaceSelectorSpec struct {
 }
 
 // +kubebuilder:object:root=true
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // NamespaceSelectorList holds a list of NamespaceSelector resources.
 type NamespaceSelectorList struct {
@@ -301,6 +309,7 @@ type NamespaceSelectorList struct {
 // +genclient:nonNamespaced
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope=Cluster
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // Sync is used for configuring sync of generic resources.
 type Sync struct {
@@ -367,6 +376,7 @@ type SyncStatus struct {
 }
 
 // +kubebuilder:object:root=true
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // SyncList holds a list of Sync resources.
 type SyncList struct {
@@ -384,6 +394,7 @@ type SyncList struct {
 // +genclient:nonNamespaced
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope=Cluster
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // Repo holds configuration and status about the Nomos source of truth.
 type Repo struct {
@@ -557,6 +568,7 @@ func ParseSchemaGVK(gvk schema.GroupVersionKind) GroupVersionKind {
 }
 
 // +kubebuilder:object:root=true
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // RepoList holds a list of Repo resources.
 type RepoList struct {
@@ -574,6 +586,7 @@ type RepoList struct {
 // +genclient:nonNamespaced
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:scope=Cluster
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // HierarchyConfig is used for configuring the HierarchyModeType for managed resources.
 type HierarchyConfig struct {
@@ -588,6 +601,7 @@ type HierarchyConfig struct {
 }
 
 // +kubebuilder:object:root=true
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // HierarchyConfigList holds a list of HierarchyConfig resources.
 type HierarchyConfigList struct {

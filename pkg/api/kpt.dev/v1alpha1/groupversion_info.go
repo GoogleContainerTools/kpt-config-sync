@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package v1alpha1 contains API Schema definitions for the kpt.dev v1alpha1 API group
-// +kubebuilder:object:generate=true
-// +groupName=kpt.dev
 package v1alpha1
 
 import (

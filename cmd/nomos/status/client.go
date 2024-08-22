@@ -33,8 +33,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
-	"kpt.dev/configsync/clientgen/apis"
-	typedv1 "kpt.dev/configsync/clientgen/apis/typed/configmanagement/v1"
 	"kpt.dev/configsync/cmd/nomos/flags"
 	"kpt.dev/configsync/cmd/nomos/util"
 	"kpt.dev/configsync/pkg/api/configmanagement"
@@ -42,6 +40,8 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/client/restconfig"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/generated/clientset/versioned"
+	typedv1 "kpt.dev/configsync/pkg/generated/clientset/versioned/typed/configmanagement/v1"
 	"kpt.dev/configsync/pkg/kinds"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
@@ -494,7 +494,7 @@ func ClusterClients(ctx context.Context, contexts []string) (map[string]*Cluster
 			continue
 		}
 
-		policyHierarchyClientSet, err := apis.NewForConfig(cfg)
+		policyHierarchyClientSet, err := versioned.NewForConfig(cfg)
 		if err != nil {
 			fmt.Printf("Failed to generate Repo client for %q: %v\n", name, err)
 			continue
@@ -514,7 +514,7 @@ func ClusterClients(ctx context.Context, contexts []string) (map[string]*Cluster
 
 		wg.Add(1)
 
-		go func(pcs *apis.Clientset, kcs *kubernetes.Clientset, cmc *util.ConfigManagementClient, cfgName string) {
+		go func(pcs *versioned.Clientset, kcs *kubernetes.Clientset, cmc *util.ConfigManagementClient, cfgName string) {
 			if isReachable(ctx, pcs, cfgName) {
 				mapMutex.Lock()
 				clientMap[cfgName] = &ClusterClient{
@@ -546,7 +546,7 @@ func ClusterClients(ctx context.Context, contexts []string) (map[string]*Cluster
 }
 
 // isReachable returns true if the given ClientSet points to a reachable cluster.
-func isReachable(ctx context.Context, clientset *apis.Clientset, cluster string) bool {
+func isReachable(ctx context.Context, clientset *versioned.Clientset, cluster string) bool {
 	_, err := clientset.RESTClient().Get().DoRaw(ctx)
 	if err == nil {
 		return true

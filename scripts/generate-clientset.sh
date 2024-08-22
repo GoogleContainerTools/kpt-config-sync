@@ -32,91 +32,25 @@
 # Alternatively, make a symlink from the GOPATH package source directory to the
 # repo directory.
 
-set -euox pipefail
+set -euo pipefail
 
-GOPATH="${GOPATH:-$(go env GOPATH)}"
+SCRIPT_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
+CODEGEN_PKG=${CODEGEN_PKG:-"${SCRIPT_ROOT}/vendor/k8s.io/code-generator"}
 
-NOMOS_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
-
-GOMOD_NAME="$(grep "^module" "${NOMOS_ROOT}/go.mod" | cut -d' ' -f2)"
-
-# Comma separted list of APIs to generate for clientset.
-INPUT_BASE="${GOMOD_NAME}/pkg/api"
-INPUT_APIS=$(
-  find "$NOMOS_ROOT/pkg/api" -mindepth 2 -maxdepth 2 -type d |
-    sed -e "s|^$NOMOS_ROOT/pkg/api/||" |
-    tr '\n' ',' |
-    sed -e 's/,$//'
-)
-echo "Found input APIs: ${INPUT_APIS}"
+# Helper script is vendored from k8s.io/code-generator
+# shellcheck source=vendor/k8s.io/code-generator/kube_codegen.sh
+source "${CODEGEN_PKG}/kube_codegen.sh"
 
 # Where to put the generated client set
-OUTPUT_DIR="${NOMOS_ROOT}/clientgen"
-OUTPUT_PKG="${GOMOD_NAME}/clientgen"
+GOMOD_NAME="$(grep "^module" "${SCRIPT_ROOT}/go.mod" | cut -d' ' -f2)"
 
-LOGGING_FLAGS=()
-LOGGING_FLAGS+=("--logtostderr")
-LOGGING_FLAGS+=("-v=5")
+kube::codegen::gen_helpers \
+    --boilerplate "${SCRIPT_ROOT}/hack/boilerplate.txt" \
+    "${SCRIPT_ROOT}/pkg/api"
 
-for tool in client-gen deepcopy-gen informer-gen lister-gen conversion-gen; do
-  if [[ -z "$(which "${tool}")" ]]; then
-    echo "${tool} not in PATH"
-    exit 1
-  fi
-done
-
-for i in apis informer listers; do
-  echo "Removing ${NOMOS_ROOT}/clientgen/$i"
-  rm -rf "${NOMOS_ROOT}/clientgen/$i"
-done
-
-echo "Generating APIs"
-client-gen \
-  --input-base "${INPUT_BASE}" \
-  --input="${INPUT_APIS}" \
-  --clientset-name="apis" \
-  --output-dir="${OUTPUT_DIR}" \
-  --output-pkg="${OUTPUT_PKG}" \
-  --clientset-path "${OUTPUT_PKG}" \
-  --go-header-file="hack/boilerplate.txt"
-
-input_pkgs=()
-for api in $(echo "${INPUT_APIS}" | tr ',' ' '); do
-  input_pkgs+=("${INPUT_BASE}/${api}")
-done
-
-echo "informer"
-informer-gen \
-  "${LOGGING_FLAGS[@]}" \
-  --versioned-clientset-package="${OUTPUT_PKG}/apis" \
-  --listers-package="${OUTPUT_PKG}/listers" \
-  --output-dir="${OUTPUT_DIR}/informer" \
-  --output-pkg="${OUTPUT_PKG}/informer" \
-  --go-header-file="hack/boilerplate.txt" \
-  --single-directory \
-  "${input_pkgs[@]}"
-
-echo "deepcopy"
-# Creates types.generated.go
-deepcopy-gen \
-  "${LOGGING_FLAGS[@]}" \
-  --output-file zz_generated.deepcopy.go \
-  --go-header-file="hack/boilerplate.txt" \
-  "${input_pkgs[@]}"
-
-echo "lister"
-lister-gen \
-  "${LOGGING_FLAGS[@]}" \
-  --output-dir="${OUTPUT_DIR}/listers" \
-  --output-pkg="${OUTPUT_PKG}/listers" \
-  --go-header-file="hack/boilerplate.txt" \
-  "${input_pkgs[@]}"
-
-echo "conversion"
-conversion-gen \
-  "${LOGGING_FLAGS[@]}" \
-  --output-file zz_generated.conversion.go \
-  --go-header-file="hack/boilerplate.txt" \
-  "${input_pkgs[@]}"
-
-echo "Generation Completed!"
+kube::codegen::gen_client \
+    --with-watch \
+    --output-dir "${SCRIPT_ROOT}/pkg/generated" \
+    --output-pkg "${GOMOD_NAME}/pkg/generated" \
+    --boilerplate "${SCRIPT_ROOT}/hack/boilerplate.txt" \
+    "${SCRIPT_ROOT}/pkg/api"

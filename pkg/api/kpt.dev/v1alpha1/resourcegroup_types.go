@@ -29,6 +29,7 @@ import (
 // +kubebuilder:printcolumn:name="Reconciling",type="string",JSONPath=".status.conditions[0].status"
 // +kubebuilder:printcolumn:name="Stalled",type="string",JSONPath=".status.conditions[1].status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ResourceGroup is the Schema for the resourcegroups API
 type ResourceGroup struct {
@@ -282,6 +283,7 @@ func ToGroupStatuses(statuses []ResourceStatus) []GroupStatus {
 }
 
 // +kubebuilder:object:root=true
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ResourceGroupList contains a list of ResourceGroup
 type ResourceGroupList struct {

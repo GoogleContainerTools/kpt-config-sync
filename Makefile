@@ -295,7 +295,7 @@ all: buildenv-dirs
 
 .PHONY: all-local
 # Run tests, cleanup dependencies, and generate CRDs locally
-all-local: test deps configsync-crds
+all-local: test deps clientgen configsync-crds
 
 # Cleans all artifacts.
 .PHONY: clean

@@ -20,6 +20,7 @@
 //	make clientgen
 //
 // DO NOT MOVE THESE OUT OF THE PACKAGE DOCSTRING, GENERATING CODE PROPERLY DEPENDS ON THEM BEING HERE.
+// +genclient
 // +kubebuilder:object:generate=true
 // +k8s:deepcopy-gen=package
 // +groupName=configsync.gke.io

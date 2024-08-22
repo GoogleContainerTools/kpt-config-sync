@@ -33,6 +33,7 @@ type MembershipOwner struct {
 }
 
 //+kubebuilder:object:root=true
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // Membership is the Schema for the memberships API
 type Membership struct {
@@ -43,6 +44,7 @@ type Membership struct {
 }
 
 //+kubebuilder:object:root=true
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // MembershipList contains a list of Membership
 type MembershipList struct {

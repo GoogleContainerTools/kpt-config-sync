@@ -67,12 +67,15 @@ func newOptStruct(testName, tmpDir string, ntOptions ...ntopts.Opt) *ntopts.New 
 			SyncSources: syncsource.Set{
 				// All tests default to having a RootSync named root-sync using
 				// a Git repository, unless otherwise specified.
-				DefaultRootSyncID: &syncsource.GitSyncSource{},
+				DefaultRootSyncID: &syncsource.GitSyncSource{
+					// RootSync root-sync defaults to using hierarchy.
+					// Use ntopts.SyncWithGitSource with ntopts.Unstructured to change.
+					SourceFormat: configsync.SourceFormatHierarchy,
+				},
 			},
 			// Default to 1m to keep tests fast.
 			// To override, use WithReconcileTimeout.
 			ReconcileTimeout: ptr.To(1 * time.Minute),
-			SourceFormat:     configsync.SourceFormatHierarchy,
 		},
 	}
 	for _, opt := range ntOptions {
@@ -425,30 +428,17 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 	// init all repositories. This ensures that:
 	// - local repo is initialized and empty
 	// - remote repo exists (except for LocalProvider, which is done in portForwardGitServer)
-	for id, source := range opts.SyncSources.RootSyncs() {
-		switch source.(type) {
+	for id, source := range opts.SyncSources {
+		switch tSource := source.(type) {
 		case *syncsource.GitSyncSource:
 			nt.SyncSources[id] = &syncsource.GitSyncSource{
-				Repository: initRepository(nt, gitproviders.RootRepo, id.ObjectKey, opts.SourceFormat),
+				Repository: initRepository(nt, id.Kind, id.ObjectKey, tSource.SourceFormat),
 			}
 		// case *syncsource.HelmSyncSource:
 		// case *syncsource.OCISyncSource:
 		// TODO: setup OCI & Helm RootSyncs
 		default:
-			nt.T.Fatalf("Invalid %s source %T: %s", id.Kind, source, id.Name)
-		}
-	}
-	for id, source := range opts.SyncSources.RepoSyncs() {
-		switch source.(type) {
-		case *syncsource.GitSyncSource:
-			nt.SyncSources[id] = &syncsource.GitSyncSource{
-				Repository: initRepository(nt, gitproviders.NamespaceRepo, id.ObjectKey, configsync.SourceFormatUnstructured),
-			}
-		// case *syncsource.HelmSyncSource:
-		// case *syncsource.OCISyncSource:
-		// TODO: setup OCI & Helm RootSyncs
-		default:
-			nt.T.Fatalf("Invalid %s source %T: %s", id.Kind, source, id.Name)
+			nt.T.Fatalf("Invalid SyncSource source for %v: %T", id, source)
 		}
 	}
 	// set up port forward if using in-cluster git server
@@ -463,21 +453,10 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 	// - local repo initialized
 	// - remote repo exists
 	// - port forward started (only applicable to in-cluster git server)
-	for id, source := range opts.SyncSources.RootSyncs() {
-		switch source.(type) {
+	for id, source := range opts.SyncSources {
+		switch tSource := source.(type) {
 		case *syncsource.GitSyncSource:
-			initialCommit(nt, gitproviders.RootRepo, id.ObjectKey, opts.SourceFormat)
-		// case *syncsource.HelmSyncSource:
-		// case *syncsource.OCISyncSource:
-		// TODO: setup OCI & Helm RootSyncs
-		default:
-			nt.T.Fatalf("Invalid %s source %T: %s", id.Kind, source, id.Name)
-		}
-	}
-	for id, source := range opts.SyncSources.RepoSyncs() {
-		switch source.(type) {
-		case *syncsource.GitSyncSource:
-			initialCommit(nt, gitproviders.NamespaceRepo, id.ObjectKey, configsync.SourceFormatUnstructured)
+			initialCommit(nt, id.Kind, id.ObjectKey, tSource.SourceFormat)
 		// case *syncsource.HelmSyncSource:
 		// case *syncsource.OCISyncSource:
 		// TODO: setup OCI & Helm RootSyncs

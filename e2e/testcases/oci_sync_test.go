@@ -79,7 +79,8 @@ func gsaGCRReaderEmail() string {
 // TestPublicOCI can run on both Kind and GKE clusters.
 // It tests Config Sync can pull from public OCI images without any authentication.
 func TestPublicOCI(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.SyncSource,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 
 	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.T.Log("Update RootSync to sync from a public OCI image in AR")
@@ -112,8 +113,9 @@ func TestPublicOCI(t *testing.T) {
 func TestSwitchFromGitToOciCentralized(t *testing.T) {
 	namespace := testNs
 	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, namespace)
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
+	nt := nomostest.New(t, nomostesting.SyncSource,
 		ntopts.RequireOCIProvider,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.SyncWithGitSource(repoSyncID),
 		// bookinfo image contains RoleBinding
 		// bookinfo repo contains ServiceAccount
@@ -178,8 +180,9 @@ func TestSwitchFromGitToOciCentralized(t *testing.T) {
 func TestSwitchFromGitToOciDelegated(t *testing.T) {
 	namespace := testNs
 	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, namespace)
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
+	nt := nomostest.New(t, nomostesting.SyncSource,
 		ntopts.WithDelegatedControl, ntopts.RequireOCIProvider,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.SyncWithGitSource(repoSyncID),
 		// bookinfo image contains RoleBinding
 		// bookinfo repo contains ServiceAccount
@@ -267,7 +270,8 @@ func isSourceType(sourceType configsync.SourceType) testpredicates.Predicate {
 
 func TestOciSyncWithDigest(t *testing.T) {
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
+	nt := nomostest.New(t, nomostesting.SyncSource,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.RequireOCIProvider,
 	)
 	var err error
@@ -344,7 +348,7 @@ func TestOciSyncWithDigest(t *testing.T) {
 // and permission to push new image to `config-sync-test-public` in the Container Registry.
 // The test uses the current credentials (gcloud auth) when running on the GKE clusters to push new images.
 func TestDigestUpdate(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured, ntopts.RequireGKE(t))
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured), ntopts.RequireGKE(t))
 
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 

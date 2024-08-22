@@ -35,8 +35,9 @@ import (
 
 func TestRootSyncRoleRefs(t *testing.T) {
 	rootSyncAID := core.RootSyncID("sync-a")
-	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.Unstructured,
-		ntopts.SyncWithGitSource(rootSyncAID),
+	nt := nomostest.New(t, nomostesting.OverrideAPI,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
+		ntopts.SyncWithGitSource(rootSyncAID, ntopts.Unstructured),
 	)
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 	rootSyncA := nomostest.RootSyncObjectV1Beta1FromRootRepo(nt, rootSyncAID.Name)

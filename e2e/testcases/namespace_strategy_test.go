@@ -47,7 +47,8 @@ import (
 // - Prune "foo-implicit" from git. Should error because cm1 depends on the Namespace
 // - Prune "cm1" from git. The Namespace and ConfigMap should be successfully pruned.
 func TestNamespaceStrategy(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.OverrideAPI,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
@@ -172,10 +173,11 @@ func TestNamespaceStrategyMultipleRootSyncs(t *testing.T) {
 	rootSyncXID := core.RootSyncID("sync-x")
 	rootSyncYID := core.RootSyncID("sync-y")
 	namespaceA := k8sobjects.NamespaceObject("namespace-a")
-	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.Unstructured,
-		ntopts.SyncWithGitSource(rootSyncAID), // will declare namespace-a explicitly
-		ntopts.SyncWithGitSource(rootSyncXID), // will declare resources in namespace-a, but not namespace-a itself
-		ntopts.SyncWithGitSource(rootSyncYID), // will declare resources in namespace-a, but not namespace-a itself
+	nt := nomostest.New(t, nomostesting.OverrideAPI,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
+		ntopts.SyncWithGitSource(rootSyncAID, ntopts.Unstructured), // will declare namespace-a explicitly
+		ntopts.SyncWithGitSource(rootSyncXID, ntopts.Unstructured), // will declare resources in namespace-a, but not namespace-a itself
+		ntopts.SyncWithGitSource(rootSyncYID, ntopts.Unstructured), // will declare resources in namespace-a, but not namespace-a itself
 	)
 	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
 	rootSyncAGitRepo := nt.SyncSourceGitRepository(rootSyncAID)

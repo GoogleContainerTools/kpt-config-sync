@@ -31,7 +31,8 @@ const (
 )
 
 func TestCreateAPIServiceAndEndpointInTheSameCommit(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured,
+	nt := nomostest.New(t, nomostesting.Reconciliation1,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		// Increase the timeout from 1m to 5m to avoid reconcile timeout for the
 		// custom-metrics-stackdriver-adapter Deployment on Autopilot cluster.
 		ntopts.WithReconcileTimeout(5*time.Minute))
@@ -76,7 +77,7 @@ func TestCreateAPIServiceAndEndpointInTheSameCommit(t *testing.T) {
 
 func TestReconcilerResilientToFlakyAPIService(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1,
-		ntopts.Unstructured,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		// Increase the timeout from 1m to 5m to avoid reconcile timeout for the
 		// custom-metrics-stackdriver-adapter Deployment on Autopilot cluster.
 		ntopts.WithReconcileTimeout(5*time.Minute))

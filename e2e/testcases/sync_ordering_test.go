@@ -44,7 +44,8 @@ import (
 // The sync ordering feature is only supported in the multi-repo mode.
 
 func TestMultiDependencies(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Lifecycle, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.Lifecycle,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	namespaceName := "bookstore"
@@ -337,7 +338,8 @@ func TestMultiDependencies(t *testing.T) {
 }
 
 func TestExternalDependencyError(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Lifecycle, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.Lifecycle,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	namespaceName := "bookstore"
@@ -447,7 +449,8 @@ func TestExternalDependencyError(t *testing.T) {
 
 func TestDependencyWithReconciliation(t *testing.T) {
 	// Increase reconcile timeout to account for slow pod scheduling due to cluster autoscaling.
-	nt := nomostest.New(t, nomostesting.Lifecycle, ntopts.Unstructured,
+	nt := nomostest.New(t, nomostesting.Lifecycle,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.WithReconcileTimeout(5*time.Minute))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 

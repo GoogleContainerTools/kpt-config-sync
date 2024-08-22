@@ -315,7 +315,8 @@ func skipAutopilotManagedNamespace(nt *nomostest.NT, ns string) bool {
 }
 
 func TestPreventDeletionSpecialNamespaces(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Lifecycle, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.Lifecycle,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	// Build list of special namespaces to test.

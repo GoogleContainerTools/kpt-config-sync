@@ -80,10 +80,9 @@ func TestComposition(t *testing.T) {
 	lvl0ID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t,
 		nomostesting.MultiRepos,
-		ntopts.Unstructured,
 		ntopts.WithDelegatedControl,
-		ntopts.RepoSyncPermissions(policy.RepoSyncAdmin(), policy.CoreAdmin()), // NS reconciler manages RepoSyncs and ConfigMaps
-		ntopts.SyncWithGitSource(lvl0ID))
+		ntopts.SyncWithGitSource(lvl0ID, ntopts.Unstructured),
+		ntopts.RepoSyncPermissions(policy.RepoSyncAdmin(), policy.CoreAdmin())) // NS reconciler manages RepoSyncs and ConfigMaps
 
 	lvl0NN := lvl0ID.ObjectKey
 	lvl1NN := nomostest.RootSyncNN("level-1")

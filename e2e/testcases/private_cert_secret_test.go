@@ -404,7 +404,8 @@ func TestCACertSecretWatch(t *testing.T) {
 // TestOCICACertSecretRefRootRepo can run only run on KinD clusters.
 // It tests RootSyncs can pull from OCI images using a CA certificate.
 func TestOCICACertSecretRefRootRepo(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
+	nt := nomostest.New(t, nomostesting.SyncSource,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.RequireLocalOCIProvider)
 
 	caCertSecret := nomostest.PublicCertSecretName(nomostest.RegistrySyncSource)
@@ -440,8 +441,9 @@ func TestOCICACertSecretRefRootRepo(t *testing.T) {
 // It tests RepoSyncs can pull from OCI images using a CA certificate.
 func TestOCICACertSecretRefNamespaceRepo(t *testing.T) {
 	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, backendNamespace)
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
+	nt := nomostest.New(t, nomostesting.SyncSource,
 		ntopts.RequireLocalOCIProvider,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.SyncWithGitSource(repoSyncID),
 		ntopts.RepoSyncPermissions(policy.CoreAdmin()))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
@@ -517,7 +519,8 @@ func TestOCICACertSecretRefNamespaceRepo(t *testing.T) {
 // TestHelmCACertSecretRefRootRepo can run only run on KinD clusters.
 // It tests RootSyncs can pull from OCI images using a CA certificate.
 func TestHelmCACertSecretRefRootRepo(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
+	nt := nomostest.New(t, nomostesting.SyncSource,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.RequireLocalHelmProvider)
 
 	caCertSecret := nomostest.PublicCertSecretName(nomostest.RegistrySyncSource)
@@ -558,8 +561,9 @@ func TestHelmCACertSecretRefRootRepo(t *testing.T) {
 // It tests RepoSyncs can pull from OCI images using a CA certificate.
 func TestHelmCACertSecretRefNamespaceRepo(t *testing.T) {
 	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, backendNamespace)
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
+	nt := nomostest.New(t, nomostesting.SyncSource,
 		ntopts.RequireLocalHelmProvider,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.SyncWithGitSource(repoSyncID),
 		ntopts.RepoSyncPermissions(policy.CoreAdmin()))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)

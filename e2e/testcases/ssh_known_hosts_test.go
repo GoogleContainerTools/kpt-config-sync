@@ -33,7 +33,8 @@ import (
 )
 
 func TestRootSyncSSHKnownHost(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.RequireLocalGitProvider, ntopts.Unstructured)
+	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.RequireLocalGitProvider,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	var err error
@@ -130,7 +131,8 @@ func TestRepoSyncSSHKnownHost(t *testing.T) {
 	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, backendNamespace)
 	nt := nomostest.New(t,
 		nomostesting.SyncSource, ntopts.RequireLocalGitProvider,
-		ntopts.Unstructured, ntopts.WithDelegatedControl,
+		ntopts.WithDelegatedControl,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.SyncWithGitSource(repoSyncID),
 		ntopts.RepoSyncPermissions(policy.AppsAdmin(), policy.CoreAdmin()))
 	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)

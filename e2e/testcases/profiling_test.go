@@ -41,8 +41,8 @@ import (
 // managed objects.
 // Skipped by default, because it needs cluster autoscaling and a lot of quota.
 func TestProfilingResourcesByObjectCount(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured,
-		ntopts.ProfilingTest,
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.ProfilingTest,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
@@ -107,8 +107,8 @@ func TestProfilingResourcesByObjectCount(t *testing.T) {
 // relative to the number of managed objects.
 // Skipped by default, because it needs cluster autoscaling and a lot of quota.
 func TestProfilingResourcesByObjectCountWithMultiSync(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured,
-		ntopts.ProfilingTest,
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.ProfilingTest,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
@@ -235,8 +235,8 @@ func TestProfilingResourcesByObjectCountWithMultiSync(t *testing.T) {
 // cluster.
 // Skipped by default, because it needs cluster autoscaling and a lot of quota.
 func TestProfilingByObjectCountAndSyncCount(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured,
-		ntopts.ProfilingTest,
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.ProfilingTest,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
@@ -341,8 +341,8 @@ func TestProfilingByObjectCountAndSyncCount(t *testing.T) {
 // resource type, in the same namespace.
 // Skipped by default, because it needs cluster autoscaling and a lot of quota.
 func TestProfilingResourcesByRootSyncCount(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.Unstructured,
-		ntopts.ProfilingTest,
+	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.ProfilingTest,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 

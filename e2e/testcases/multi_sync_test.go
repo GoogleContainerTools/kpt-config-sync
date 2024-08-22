@@ -28,7 +28,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
-	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/policy"
@@ -84,9 +83,10 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	testNs2 := "ns-2"
 	repoSync6ID := core.RepoSyncID(repoSync1ID.Name, testNs2)
 
-	nt := nomostest.New(t, nomostesting.MultiRepos, ntopts.Unstructured,
+	nt := nomostest.New(t, nomostesting.MultiRepos,
 		ntopts.WithDelegatedControl,
-		ntopts.SyncWithGitSource(rootSync1ID),
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
+		ntopts.SyncWithGitSource(rootSync1ID, ntopts.Unstructured),
 		// NS reconciler allowed to manage RepoSyncs but not RoleBindings
 		ntopts.RepoSyncPermissions(policy.RepoSyncAdmin()),
 		ntopts.SyncWithGitSource(repoSync1ID),
@@ -131,12 +131,12 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 		nomostest.InitGitRepos(nt, newRepos...)
 	}
 
-	rootSync2GitRepo := nomostest.ResetRepository(nt, gitproviders.RootRepo, rootSync2Key, configsync.SourceFormatUnstructured)
-	rootSync3GitRepo := nomostest.ResetRepository(nt, gitproviders.RootRepo, rootSync3Key, configsync.SourceFormatUnstructured)
-	repoSync2GitRepo := nomostest.ResetRepository(nt, gitproviders.NamespaceRepo, repoSync2Key, configsync.SourceFormatUnstructured)
-	repoSync3GitRepo := nomostest.ResetRepository(nt, gitproviders.NamespaceRepo, repoSync3Key, configsync.SourceFormatUnstructured)
-	repoSync4GitRepo := nomostest.ResetRepository(nt, gitproviders.NamespaceRepo, repoSync4Key, configsync.SourceFormatUnstructured)
-	repoSync5GitRepo := nomostest.ResetRepository(nt, gitproviders.NamespaceRepo, repoSync5Key, configsync.SourceFormatUnstructured)
+	rootSync2GitRepo := nomostest.ResetRepository(nt, configsync.RootSyncKind, rootSync2Key, configsync.SourceFormatUnstructured)
+	rootSync3GitRepo := nomostest.ResetRepository(nt, configsync.RootSyncKind, rootSync3Key, configsync.SourceFormatUnstructured)
+	repoSync2GitRepo := nomostest.ResetRepository(nt, configsync.RepoSyncKind, repoSync2Key, configsync.SourceFormatUnstructured)
+	repoSync3GitRepo := nomostest.ResetRepository(nt, configsync.RepoSyncKind, repoSync3Key, configsync.SourceFormatUnstructured)
+	repoSync4GitRepo := nomostest.ResetRepository(nt, configsync.RepoSyncKind, repoSync4Key, configsync.SourceFormatUnstructured)
+	repoSync5GitRepo := nomostest.ResetRepository(nt, configsync.RepoSyncKind, repoSync5Key, configsync.SourceFormatUnstructured)
 
 	nt.SyncSources[rootSync2ID] = &syncsource.GitSyncSource{Repository: rootSync2GitRepo}
 	nt.SyncSources[rootSync3ID] = &syncsource.GitSyncSource{Repository: rootSync3GitRepo}
@@ -554,8 +554,9 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	rootSync2ID := core.RootSyncID("root-test")
 	// If declaring RootSync in a Root repo, the source format has to be unstructured.
 	// Otherwise, the hierarchical validator will complain that the config-management-system has configs but missing a Namespace config.
-	nt := nomostest.New(t, nomostesting.MultiRepos, ntopts.Unstructured,
-		ntopts.SyncWithGitSource(rootSync2ID))
+	nt := nomostest.New(t, nomostesting.MultiRepos,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
+		ntopts.SyncWithGitSource(rootSync2ID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
 	rootSync2GitRepo := nt.SyncSourceGitRepository(rootSync2ID)
 

@@ -52,9 +52,10 @@ const (
 // https://cloud.google.com/anthos-config-management/docs/how-to/installing-config-sync#git-creds-secret
 func TestGCENodeCSR(t *testing.T) {
 	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, testNs)
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
+	nt := nomostest.New(t, nomostesting.SyncSource,
 		ntopts.RequireGKE(t), ntopts.GCENodeTest,
 		ntopts.RequireCloudSourceRepository(t),
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.SyncWithGitSource(repoSyncID),
 		ntopts.RepoSyncPermissions(policy.AllAdmin()), // NS reconciler manages a bunch of resources.
 		ntopts.WithDelegatedControl)
@@ -113,9 +114,10 @@ func TestGCENodeCSR(t *testing.T) {
 //   - `roles/containerregistry.ServiceAgent` for access image in Container Registry.
 func TestGCENodeOCI(t *testing.T) {
 	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, testNs)
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
+	nt := nomostest.New(t, nomostesting.SyncSource,
 		ntopts.RequireGKE(t), ntopts.GCENodeTest,
 		ntopts.RequireOCIArtifactRegistry(t),
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.SyncWithGitSource(repoSyncID),
 		ntopts.RepoSyncPermissions(policy.AllAdmin()), // NS reconciler manages a bunch of resources.
 		ntopts.WithDelegatedControl)
@@ -189,9 +191,10 @@ func TestGCENodeOCI(t *testing.T) {
 //   - `roles/artifactregistry.reader` for access image in Artifact Registry.
 func TestGCENodeHelm(t *testing.T) {
 	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, testNs)
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.Unstructured,
+	nt := nomostest.New(t, nomostesting.SyncSource,
 		ntopts.RequireGKE(t), ntopts.GCENodeTest,
 		ntopts.RequireHelmArtifactRegistry(t),
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.SyncWithGitSource(repoSyncID),
 		ntopts.RepoSyncPermissions(policy.AllAdmin()), // NS reconciler manages a bunch of resources.
 		ntopts.WithDelegatedControl)

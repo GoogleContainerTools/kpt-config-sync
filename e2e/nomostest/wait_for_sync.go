@@ -283,6 +283,7 @@ func (nt *NT) WatchForSync(
 
 // WaitForRootSyncSourceError waits until the given error (code and message) is present on the RootSync resource
 func (nt *NT) WaitForRootSyncSourceError(rsName, code string, message string, opts ...WaitOption) {
+	nt.T.Helper()
 	Wait(nt.T, fmt.Sprintf("RootSync %s source error code %s", rsName, code), nt.DefaultWaitTimeout,
 		func() error {
 			nt.T.Helper()
@@ -302,6 +303,7 @@ func (nt *NT) WaitForRootSyncSourceError(rsName, code string, message string, op
 
 // WaitForRootSyncSyncError waits until the given error (code and message) is present on the RootSync resource
 func (nt *NT) WaitForRootSyncSyncError(rsName, code string, message string, resources []v1beta1.ResourceRef, opts ...WaitOption) {
+	nt.T.Helper()
 	Wait(nt.T, fmt.Sprintf("RootSync %s rendering error code %s", rsName, code), nt.DefaultWaitTimeout,
 		func() error {
 			nt.T.Helper()
@@ -322,6 +324,7 @@ func (nt *NT) WaitForRootSyncSyncError(rsName, code string, message string, reso
 
 // WaitForRepoSyncSyncError waits until the given error (code and message) is present on the RepoSync resource
 func (nt *NT) WaitForRepoSyncSyncError(ns, rsName, code string, message string, resources []v1beta1.ResourceRef, opts ...WaitOption) {
+	nt.T.Helper()
 	Wait(nt.T, fmt.Sprintf("RepoSync %s/%s rendering error code %s", ns, rsName, code), nt.DefaultWaitTimeout,
 		func() error {
 			nt.T.Helper()
@@ -342,6 +345,7 @@ func (nt *NT) WaitForRepoSyncSyncError(ns, rsName, code string, message string, 
 
 // WaitForRepoSyncSourceError waits until the given error (code and message) is present on the RepoSync resource
 func (nt *NT) WaitForRepoSyncSourceError(ns, rsName, code, message string, opts ...WaitOption) {
+	nt.T.Helper()
 	Wait(nt.T, fmt.Sprintf("RepoSync %s/%s source error code %s", ns, rsName, code), nt.DefaultWaitTimeout,
 		func() error {
 			nt.T.Helper()
@@ -437,6 +441,7 @@ func (nt *NT) WaitForRepoImportErrorCode(code string, opts ...WaitOption) {
 
 // WaitForRootSyncStalledError waits until the given Stalled error is present on the RootSync resource.
 func (nt *NT) WaitForRootSyncStalledError(rsName, reason, message string) {
+	nt.T.Helper()
 	Wait(nt.T, fmt.Sprintf("RootSync %s/%s stalled error", configsync.ControllerNamespace, rsName), nt.DefaultWaitTimeout,
 		func() error {
 			rs := &v1beta1.RootSync{
@@ -468,6 +473,7 @@ func (nt *NT) WaitForRootSyncStalledError(rsName, reason, message string) {
 
 // WaitForRepoSyncStalledError waits until the given Stalled error is present on the RepoSync resource.
 func (nt *NT) WaitForRepoSyncStalledError(rsNamespace, rsName, reason, message string) {
+	nt.T.Helper()
 	Wait(nt.T, fmt.Sprintf("RepoSync %s/%s stalled error", rsNamespace, rsName), nt.DefaultWaitTimeout,
 		func() error {
 			rs := &v1beta1.RepoSync{

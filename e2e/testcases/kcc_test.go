@@ -29,7 +29,6 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testresourcegroup"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
-	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
@@ -41,21 +40,17 @@ import (
 // It then deletes KCC resources and verifies the GCP resources
 // are removed successfully.
 func TestKCCResourcesOnCSR(t *testing.T) {
+	rootSyncID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.KCCTest, ntopts.RequireGKE(t))
 
-	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rs := k8sobjects.RootSyncObjectV1Beta1(rootSyncID.Name)
 	nt.T.Log("sync to the kcc resources from a CSR repo")
 	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "kcc", "branch": "main", "repo": "%s/p/%s/r/configsync-kcc", "auth": "gcpserviceaccount","gcpServiceAccountEmail": "e2e-test-csr-reader@%s.iam.gserviceaccount.com", "secretRef": {"name": ""}}, "sourceFormat": "unstructured"}}`,
 		nomostesting.CSRHost, *e2e.GCPProject, *e2e.GCPProject))
+	nomostest.SetExpectedSyncPath(nt, rootSyncID, "kcc")
 
-	err := nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(nomostest.RemoteRootRepoSha1Fn),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
-			nomostest.DefaultRootRepoNamespacedName: "kcc",
-		}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs(
+		nomostest.WithRootSha1Func(nomostest.RemoteRootRepoSha1Fn)))
 
 	// Verify that the GCP resources are created.
 	gvkPubSubTopic := schema.GroupVersionKind{
@@ -104,14 +99,9 @@ func TestKCCResourcesOnCSR(t *testing.T) {
 	// Remove the kcc resources
 	nt.T.Log("sync to an empty directory from a CSR repo")
 	nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "kcc-empty"}}}`)
-	err = nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(nomostest.RemoteRootRepoSha1Fn),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
-			nomostest.DefaultRootRepoNamespacedName: "kcc-empty",
-		}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nomostest.SetExpectedSyncPath(nt, rootSyncID, "kcc-empty")
+	nt.Must(nt.WatchForAllSyncs(
+		nomostest.WithRootSha1Func(nomostest.RemoteRootRepoSha1Fn)))
 
 	// Wait until all objects are not found
 	tg = taskgroup.New()

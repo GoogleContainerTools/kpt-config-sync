@@ -15,21 +15,27 @@
 package testing
 
 const (
-	// ARHost is the host address of the Artifact Registry
-	ARHost = "us-docker.pkg.dev"
-
-	// GCRHost is the host address of the Container Registry
-	GCRHost = "gcr.io"
-
+	// ArtifactRegistryHost is the host address of the Artifact Registry
+	ArtifactRegistryHost = "us-docker.pkg.dev"
+	// GoogleContainerRegistryHost is the host address of the Container Registry
+	GoogleContainerRegistryHost = "gcr.io"
 	// CSRHost is the host address of the Cloud Source Repositories
 	CSRHost = "https://source.developers.google.com"
 
-	// TestInfraContainerRegistry is the Config Sync test-infra registry hosted on GCR
-	TestInfraContainerRegistry = GCRHost + "/kpt-config-sync-ci-artifacts"
-	// TestInfraArtifactRegistry is the Config Sync test-infra registry hosted on GAR
-	TestInfraArtifactRegistry = ARHost + "/kpt-config-sync-ci-artifacts/test-infra"
-	// ConfigSyncTestPublicRegistry is the Config Sync config-sync-test-public registry hosted on GAR
-	ConfigSyncTestPublicRegistry = ARHost + "/kpt-config-sync-ci-artifacts/config-sync-test-public"
+	// TestInfraContainerRepositoryPath is the Config Sync test-infra repository path
+	TestInfraContainerRepositoryPath = "kpt-config-sync-ci-artifacts"
+	// TestInfraArtifactRepositoryPath is the Config Sync test-infra repository path
+	TestInfraArtifactRepositoryPath = "kpt-config-sync-ci-artifacts/test-infra"
+	// ConfigSyncTestPublicRepositoryPath is the Config Sync config-sync-test-public repository path
+	ConfigSyncTestPublicRepositoryPath = "kpt-config-sync-ci-artifacts/config-sync-test-public"
+
+	// TestInfraContainerRepositoryAddress is the Config Sync test-infra repository hosted on GCR
+	TestInfraContainerRepositoryAddress = GoogleContainerRegistryHost + "/" + TestInfraContainerRepositoryPath
+	// TestInfraArtifactRepositoryAddress is the Config Sync test-infra repository hosted on GAR
+	TestInfraArtifactRepositoryAddress = ArtifactRegistryHost + "/" + TestInfraArtifactRepositoryPath
+	// ConfigSyncTestPublicRepositoryAddress is the Config Sync config-sync-test-public repository hosted on GAR
+	ConfigSyncTestPublicRepositoryAddress = ArtifactRegistryHost + "/" + ConfigSyncTestPublicRepositoryPath
+
 	// HTTPDImage is the httpd image used by on-cluster test components
 	HTTPDImage = "httpd:2"
 	// RegistryImage is the registry image used by on-cluster test components

@@ -34,7 +34,7 @@ func TestInvalidRootSyncBranchStatus(t *testing.T) {
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	// Update RootSync to invalid branch name
-	nomostest.SetGitBranch(nt, configsync.RootSyncName, "invalid-branch")
+	nomostest.SetRootSyncGitBranch(nt, configsync.RootSyncName, "invalid-branch")
 
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "")
 
@@ -54,7 +54,7 @@ func TestInvalidRootSyncBranchStatus(t *testing.T) {
 	}
 
 	// Update RootSync to valid branch name
-	nomostest.SetGitBranch(nt, configsync.RootSyncName, gitproviders.MainBranch)
+	nomostest.SetRootSyncGitBranch(nt, configsync.RootSyncName, gitproviders.MainBranch)
 
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -138,7 +138,7 @@ func TestSyncFailureAfterSuccessfulSyncs(t *testing.T) {
 	nt.T.Cleanup(func() {
 		nt.T.Log("Resetting all RootSync branches to main")
 		nt.Must(rootSyncGitRepo.CheckoutBranch(gitproviders.MainBranch))
-		nomostest.SetGitBranch(nt, configsync.RootSyncName, gitproviders.MainBranch)
+		nomostest.SetRootSyncGitBranch(nt, configsync.RootSyncName, gitproviders.MainBranch)
 		if err := nt.WatchForAllSyncs(); err != nil {
 			nt.T.Fatal(err)
 		}
@@ -157,7 +157,7 @@ func TestSyncFailureAfterSuccessfulSyncs(t *testing.T) {
 	nt.Must(rootSyncGitRepo.CommitAndPushBranch("add namespace to acme directory", devBranch))
 
 	// Update RootSync to sync from the dev branch
-	nomostest.SetGitBranch(nt, configsync.RootSyncName, devBranch)
+	nomostest.SetRootSyncGitBranch(nt, configsync.RootSyncName, devBranch)
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
 	}

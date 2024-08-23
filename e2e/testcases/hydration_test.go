@@ -15,13 +15,14 @@
 package e2e
 
 import (
+	"fmt"
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
+	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/kustomizecomponents"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
@@ -42,30 +43,27 @@ import (
 var expectedBuiltinOrigin = "configuredIn: kustomization.yaml\nconfiguredBy:\n  apiVersion: builtin\n  kind: HelmChartInflationGenerator\n"
 
 func TestHydrateKustomizeComponents(t *testing.T) {
+	rootSyncID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t,
 		nomostesting.Hydration,
-		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
+		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured),
 	)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
-
-	syncDirMap := map[types.NamespacedName]string{
-		nomostest.DefaultRootRepoNamespacedName: "kustomize-components",
-	}
+	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
 
 	// Dry configs not yet added to repo, assert that hydration is disabled
 	tg := taskgroup.New()
 	tg.Go(func() error {
 		return nt.Validate(
-			configsync.RootSyncName,
-			configsync.ControllerNamespace,
+			rootSyncID.Name,
+			rootSyncID.Namespace,
 			&v1beta1.RootSync{},
 			testpredicates.MissingAnnotation(metadata.RequiresRenderingAnnotationKey),
 		)
 	})
 	tg.Go(func() error {
 		return nt.Validate(
-			core.RootReconcilerName(configsync.RootSyncName),
-			configsync.ControllerNamespace,
+			core.RootReconcilerName(rootSyncID.Name),
+			rootSyncID.Namespace,
 			&appsv1.Deployment{},
 			testpredicates.DeploymentMissingContainer(reconcilermanager.HydrationController),
 			testpredicates.DeploymentHasEnvVar(reconcilermanager.Reconciler, reconcilermanager.RenderingEnabled, "false"),
@@ -78,24 +76,25 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 	nt.Must(rootSyncGitRepo.CommitAndPush("add DRY configs to the repository"))
 
 	nt.T.Log("Update RootSync to sync from the kustomize-components directory")
-	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rs := k8sobjects.RootSyncObjectV1Beta1(rootSyncID.Name)
 	nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "kustomize-components"}}}`)
-	nt.Must(nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(syncDirMap)))
+	nomostest.SetExpectedSyncPath(nt, rootSyncID, "kustomize-components")
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Dry configs added to repo, assert that hydration is enabled
 	tg = taskgroup.New()
 	tg.Go(func() error {
 		return nt.Validate(
-			configsync.RootSyncName,
-			configsync.ControllerNamespace,
+			rootSyncID.Name,
+			rootSyncID.Namespace,
 			&v1beta1.RootSync{},
 			testpredicates.HasAnnotation(metadata.RequiresRenderingAnnotationKey, "true"),
 		)
 	})
 	tg.Go(func() error {
 		return nt.Validate(
-			core.RootReconcilerName(configsync.RootSyncName),
-			configsync.ControllerNamespace,
+			core.RootReconcilerName(rootSyncID.Name),
+			rootSyncID.Namespace,
 			&appsv1.Deployment{},
 			testpredicates.DeploymentHasContainer(reconcilermanager.HydrationController),
 			testpredicates.DeploymentHasEnvVar(reconcilermanager.Reconciler, reconcilermanager.RenderingEnabled, "true"),
@@ -105,7 +104,7 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 
 	// Validate nomos status
 	latestCommit := rootSyncGitRepo.MustHash(nt.T)
-	nt.Must(nt.Validate(configsync.RootSyncName, configsync.ControllerNamespace, &v1beta1.RootSync{},
+	nt.Must(nt.Validate(rootSyncID.Name, rootSyncID.Namespace, &v1beta1.RootSync{},
 		testpredicates.RootSyncHasNomosStatus(latestCommit, "SYNCED")))
 
 	kustomizecomponents.ValidateAllTenants(nt, string(declared.RootScope), "base", "tenant-a", "tenant-b", "tenant-c")
@@ -114,7 +113,7 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Remove("./kustomize-components/kustomization.yml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("remove the Kustomize configuration to make the sync fail"))
 	latestCommit = rootSyncGitRepo.MustHash(nt.T)
-	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
+	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, rootSyncID.Namespace,
 		[]testpredicates.Predicate{
 			testpredicates.RootSyncHasRenderingError(status.ActionableHydrationErrorCode, "Kustomization config file is missing from the sync directory"),
 			testpredicates.RootSyncHasNomosStatus(latestCommit, "ERROR"),
@@ -124,18 +123,18 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Copy("../testdata/hydration/kustomize-components/kustomization.yml", "./kustomize-components/kustomization.yml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("add kustomization.yml back"))
 
-	nt.Must(nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(syncDirMap)))
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Validate nomos status
 	latestCommit = rootSyncGitRepo.MustHash(nt.T)
-	nt.Must(nt.Validate(configsync.RootSyncName, configsync.ControllerNamespace, &v1beta1.RootSync{},
+	nt.Must(nt.Validate(rootSyncID.Name, rootSyncID.Namespace, &v1beta1.RootSync{},
 		testpredicates.RootSyncHasNomosStatus(latestCommit, "SYNCED")))
 
 	nt.T.Log("Make kustomization.yaml invalid")
 	nt.Must(rootSyncGitRepo.Copy("../testdata/hydration/invalid-kustomization.yaml", "./kustomize-components/kustomization.yml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("update kustomization.yaml to make it invalid"))
 	latestCommit = rootSyncGitRepo.MustHash(nt.T)
-	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
+	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, rootSyncID.Namespace,
 		[]testpredicates.Predicate{
 			testpredicates.RootSyncHasRenderingError(status.ActionableHydrationErrorCode, "failed to run kustomize build"),
 			testpredicates.RootSyncHasNomosStatus(latestCommit, "ERROR"),
@@ -146,22 +145,22 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Remove("./kustomize-components"))
 	nt.Must(rootSyncGitRepo.Copy("../testdata/hydration/compiled/kustomize-components", "."))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Replace dry configs with wet configs"))
-	nt.Must(nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(syncDirMap)))
+	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("Verify the hydration-controller is omitted after dry configs were removed")
 	// Dry configs removed from repo, assert that hydration is disabled again
 	tg = taskgroup.New()
 	tg.Go(func() error {
 		return nt.Validate(
-			configsync.RootSyncName,
-			configsync.ControllerNamespace,
+			rootSyncID.Name,
+			rootSyncID.Namespace,
 			&v1beta1.RootSync{},
 			testpredicates.HasAnnotation(metadata.RequiresRenderingAnnotationKey, "false"),
 		)
 	})
 	tg.Go(func() error {
 		return nt.Validate(
-			core.RootReconcilerName(configsync.RootSyncName),
+			core.RootReconcilerName(rootSyncID.Name),
 			configsync.ControllerNamespace,
 			&appsv1.Deployment{},
 			testpredicates.DeploymentMissingContainer(reconcilermanager.HydrationController),
@@ -172,24 +171,22 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 }
 
 func TestHydrateExternalFiles(t *testing.T) {
+	rootSyncID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t,
 		nomostesting.Hydration,
-		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
+		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured),
 	)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
-
-	syncDirMap := map[types.NamespacedName]string{
-		nomostest.DefaultRootRepoNamespacedName: "external-files",
-	}
+	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
 
 	nt.T.Log("Add the external files root directory")
 	nt.Must(rootSyncGitRepo.Copy("../testdata/hydration/external-files", "."))
 	nt.Must(rootSyncGitRepo.CommitAndPush("add DRY configs to the repository"))
 
 	nt.T.Log("Update RootSync to sync from the external-files directory")
-	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rs := k8sobjects.RootSyncObjectV1Beta1(rootSyncID.Name)
 	nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "external-files"}}}`)
-	nt.Must(nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(syncDirMap)))
+	nomostest.SetExpectedSyncPath(nt, rootSyncID, "external-files")
+	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("Validating resources are synced")
 	tg := taskgroup.New()
@@ -204,30 +201,32 @@ func TestHydrateExternalFiles(t *testing.T) {
 }
 
 func TestHydrateHelmComponents(t *testing.T) {
+	rootSyncID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t,
 		nomostesting.Hydration,
-		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
+		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured),
 	)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
 
 	nt.T.Log("Add the helm components root directory")
 	nt.Must(rootSyncGitRepo.Copy("../testdata/hydration/helm-components", "."))
 	nt.Must(rootSyncGitRepo.CommitAndPush("add DRY configs to the repository"))
 
 	nt.T.Log("Update RootSync to sync from the helm-components directory")
-	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rs := k8sobjects.RootSyncObjectV1Beta1(rootSyncID.Name)
 	if nt.IsGKEAutopilot {
 		// b/209458334: set a higher memory of the hydration-controller on Autopilot clusters to avoid the kustomize build failure
 		nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "helm-components"}, "override": {"resources": [{"containerName": "hydration-controller", "memoryRequest": "200Mi"}]}}}`)
 	} else {
 		nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "helm-components"}}}`)
 	}
+	nomostest.SetExpectedSyncPath(nt, rootSyncID, "helm-components")
 
-	nt.Must(nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "helm-components"})))
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Validate nomos status
 	latestCommit := rootSyncGitRepo.MustHash(nt.T)
-	nt.Must(nt.Validate(configsync.RootSyncName, configsync.ControllerNamespace, &v1beta1.RootSync{},
+	nt.Must(nt.Validate(rootSyncID.Name, rootSyncID.Namespace, &v1beta1.RootSync{},
 		testpredicates.RootSyncHasNomosStatus(latestCommit, "SYNCED")))
 
 	nt.T.Log("Validate resources are synced")
@@ -251,7 +250,7 @@ func TestHydrateHelmComponents(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Copy("../testdata/hydration/helm-components-remote-values-kustomization.yaml", "./helm-components/kustomization.yaml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Render with a remote values.yaml file from a public repo"))
 
-	nt.Must(nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "helm-components"})))
+	nt.Must(nt.WatchForAllSyncs())
 
 	nt.Must(nt.Validate("my-coredns-coredns", "coredns", &appsv1.Deployment{},
 		testpredicates.DeploymentContainerPullPolicyEquals("coredns", "Always"),
@@ -260,31 +259,33 @@ func TestHydrateHelmComponents(t *testing.T) {
 
 	// Validate nomos status
 	latestCommit = rootSyncGitRepo.MustHash(nt.T)
-	nt.Must(nt.Validate(configsync.RootSyncName, configsync.ControllerNamespace, &v1beta1.RootSync{},
+	nt.Must(nt.Validate(rootSyncID.Name, rootSyncID.Namespace, &v1beta1.RootSync{},
 		testpredicates.RootSyncHasNomosStatus(latestCommit, "SYNCED")))
 }
 
 func TestHydrateHelmOverlay(t *testing.T) {
+	rootSyncID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t,
 		nomostesting.Hydration,
-		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
+		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured),
 	)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
 
 	nt.T.Log("Add the helm-overlay root directory")
 	nt.Must(rootSyncGitRepo.Copy("../testdata/hydration/helm-overlay", "."))
 	nt.Must(rootSyncGitRepo.CommitAndPush("add DRY configs to the repository"))
 
 	nt.T.Log("Update RootSync to sync from the helm-overlay directory")
-	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rs := k8sobjects.RootSyncObjectV1Beta1(rootSyncID.Name)
 	if nt.IsGKEAutopilot {
 		// b/209458334: set a higher memory of the hydration-controller on Autopilot clusters to avoid the kustomize build failure
 		nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "helm-overlay"}, "override": {"resources": [{"containerName": "hydration-controller", "memoryRequest": "200Mi"}]}}}`)
 	} else {
 		nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "helm-overlay"}}}`)
 	}
+	nomostest.SetExpectedSyncPath(nt, rootSyncID, "helm-overlay")
 
-	nt.Must(nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "helm-overlay"})))
+	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("Validate resources are synced")
 	nt.Must(nt.Validate("my-coredns-coredns", "coredns", &appsv1.Deployment{},
@@ -297,7 +298,7 @@ func TestHydrateHelmOverlay(t *testing.T) {
 
 	// Validate nomos status
 	latestCommit := rootSyncGitRepo.MustHash(nt.T)
-	nt.Must(nt.Validate(configsync.RootSyncName, configsync.ControllerNamespace, &v1beta1.RootSync{},
+	nt.Must(nt.Validate(rootSyncID.Name, rootSyncID.Namespace, &v1beta1.RootSync{},
 		testpredicates.RootSyncHasNomosStatus(latestCommit, "SYNCED")))
 
 	nt.T.Log("Make the hydration fail by checking in an invalid kustomization.yaml")
@@ -305,7 +306,7 @@ func TestHydrateHelmOverlay(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Copy("../testdata/hydration/resource-duplicate/namespace_tenant-a.yaml", "./helm-overlay/namespace_tenant-a.yaml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Update kustomization.yaml with duplicated resources"))
 	latestCommit = rootSyncGitRepo.MustHash(nt.T)
-	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
+	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, rootSyncID.Namespace,
 		[]testpredicates.Predicate{
 			testpredicates.RootSyncHasRenderingError(status.ActionableHydrationErrorCode, "failed to run kustomize build"),
 			testpredicates.RootSyncHasNomosStatus(latestCommit, "ERROR"),
@@ -315,7 +316,7 @@ func TestHydrateHelmOverlay(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Copy("../testdata/hydration/deprecated-GK/kustomization.yaml", "./helm-overlay/kustomization.yaml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Update kustomization.yaml to render a deprecated group and kind"))
 	latestCommit = rootSyncGitRepo.MustHash(nt.T)
-	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
+	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, rootSyncID.Namespace,
 		[]testpredicates.Predicate{
 			testpredicates.RootSyncHasSourceError(nonhierarchical.DeprecatedGroupKindErrorCode, "The config is using a deprecated Group and Kind"),
 			testpredicates.RootSyncHasNomosStatus(latestCommit, "ERROR"),
@@ -323,19 +324,21 @@ func TestHydrateHelmOverlay(t *testing.T) {
 }
 
 func TestHydrateRemoteResources(t *testing.T) {
+	rootSyncID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t,
 		nomostesting.Hydration,
-		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
+		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured),
 	)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
 
 	nt.T.Log("Add the remote-base root directory")
 	nt.Must(rootSyncGitRepo.Copy("../testdata/hydration/remote-base", "."))
 	nt.Must(rootSyncGitRepo.CommitAndPush("add DRY configs to the repository"))
 	nt.T.Log("Update RootSync to sync from the remote-base directory without enable shell in hydration controller")
-	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rs := k8sobjects.RootSyncObjectV1Beta1(rootSyncID.Name)
 	nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "remote-base"}}}`)
-	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
+	nomostest.SetExpectedSyncPath(nt, rootSyncID, "remote-base")
+	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, rootSyncID.Namespace,
 		[]testpredicates.Predicate{
 			testpredicates.RootSyncHasRenderingError(status.ActionableHydrationErrorCode, ""),
 		}))
@@ -349,7 +352,7 @@ func TestHydrateRemoteResources(t *testing.T) {
 	nt.T.Log("Enable shell in hydration controller")
 	nt.MustMergePatch(rs, `{"spec": {"override": {"enableShellInRendering": true}}}`)
 
-	nt.Must(nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "remote-base"})))
+	nt.Must(nt.WatchForAllSyncs())
 	nt.Must(nt.Validate(nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace, &appsv1.Deployment{},
 		testpredicates.HasExactlyImage(reconcilermanager.HydrationController, reconcilermanager.HydrationControllerWithShell, "", "")))
 	expectedOrigin := "path: base/namespace.yaml\nrepo: https://github.com/config-sync-examples/kustomize-components\nref: main\n"
@@ -361,7 +364,7 @@ func TestHydrateRemoteResources(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Copy("../testdata/hydration/remote-overlay-kustomization.yaml", "./remote-base/kustomization.yaml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Update kustomization.yaml to use a remote overlay"))
 
-	nt.Must(nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "remote-base"})))
+	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("Validate resources are synced")
 	expectedNamespaces = []string{"tenant-b"}
@@ -370,7 +373,7 @@ func TestHydrateRemoteResources(t *testing.T) {
 	// Update kustomization.yaml to use remote resources
 	nt.Must(rootSyncGitRepo.Copy("../testdata/hydration/remote-resources-kustomization.yaml", "./remote-base/kustomization.yaml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Update kustomization.yaml to use remote resources"))
-	nt.Must(nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "remote-base"})))
+	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("Validate resources are synced")
 	expectedNamespaces = []string{"tenant-a", "tenant-b", "tenant-c"}
@@ -380,14 +383,16 @@ func TestHydrateRemoteResources(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Remove("./remote-base"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Remove remote-base repository"))
 	nt.T.Log("Disable shell in hydration controller")
-	nt.MustMergePatch(rs, `{"spec": {"override": {"enableShellInRendering": false}, "git": {"dir": "acme"}}}`)
+	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"override": {"enableShellInRendering": false}, "git": {"dir": %q}}}`,
+		gitproviders.DefaultSyncDir))
+	nomostest.SetExpectedSyncPath(nt, rootSyncID, gitproviders.DefaultSyncDir)
 	nt.Must(nt.WatchForAllSyncs())
 
 	nt.Must(rootSyncGitRepo.Copy("../testdata/hydration/remote-base", "."))
 	nt.Must(rootSyncGitRepo.CommitAndPush("add DRY configs to the repository"))
 	nt.T.Log("Update RootSync to sync from the remote-base directory when disable shell in hydration controller")
 	nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "remote-base"}}}`)
-	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
+	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, rootSyncID.Namespace,
 		[]testpredicates.Predicate{
 			testpredicates.RootSyncHasRenderingError(status.ActionableHydrationErrorCode, ""),
 		}))
@@ -396,25 +401,27 @@ func TestHydrateRemoteResources(t *testing.T) {
 }
 
 func TestHydrateResourcesInRelativePath(t *testing.T) {
+	rootSyncID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t,
 		nomostesting.Hydration,
-		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
+		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured),
 	)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
 
 	nt.T.Log("Add the root directory")
 	nt.Must(rootSyncGitRepo.Copy("../testdata/hydration/relative-path", "."))
 	nt.Must(rootSyncGitRepo.CommitAndPush("add DRY configs to the repository"))
 
 	nt.T.Log("Update RootSync to sync from the relative-path directory")
-	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rs := k8sobjects.RootSyncObjectV1Beta1(rootSyncID.Name)
 	nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "relative-path/overlays/dev"}}}`)
+	nomostest.SetExpectedSyncPath(nt, rootSyncID, "relative-path/overlays/dev")
 
-	nt.Must(nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "relative-path/overlays/dev"})))
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Validate nomos status
 	latestCommit := rootSyncGitRepo.MustHash(nt.T)
-	nt.Must(nt.Validate(configsync.RootSyncName, configsync.ControllerNamespace, &v1beta1.RootSync{},
+	nt.Must(nt.Validate(rootSyncID.Name, rootSyncID.Namespace, &v1beta1.RootSync{},
 		testpredicates.RootSyncHasNomosStatus(latestCommit, "SYNCED")))
 
 	nt.T.Log("Validating resources are synced")

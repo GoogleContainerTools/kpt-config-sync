@@ -22,8 +22,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"kpt.dev/configsync/e2e/nomostest/gitproviders"
-	"kpt.dev/configsync/e2e/nomostest/syncsource"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
@@ -45,7 +43,6 @@ type watchForAllSyncsOptions struct {
 	skipNonRootRepos   map[types.NamespacedName]bool
 	rootSha1Fn         Sha1Func
 	repoSha1Fn         Sha1Func
-	syncDirectoryMap   map[types.NamespacedName]string
 }
 
 // WatchForAllSyncsOptions is an optional parameter for WaitForRepoSyncs.
@@ -116,27 +113,10 @@ func SkipReadyCheck() WatchForAllSyncsOptions {
 	}
 }
 
-// SyncDirPredicatePair is a pair of the sync directory and the predicate.
-type SyncDirPredicatePair struct {
-	Dir       string
+// SyncPathPredicatePair is a pair of the sync directory and the predicate.
+type SyncPathPredicatePair struct {
+	Path      string
 	Predicate func(string) testpredicates.Predicate
-}
-
-// WithSyncDirectoryMap provides a map of RootSync|RepoSync and the corresponding sync directory.
-// The function is used to get the sync directory based on different RootSync|RepoSync name.
-func WithSyncDirectoryMap(syncDirectoryMap map[types.NamespacedName]string) WatchForAllSyncsOptions {
-	return func(options *watchForAllSyncsOptions) {
-		options.syncDirectoryMap = syncDirectoryMap
-	}
-}
-
-// syncDirectory returns the sync directory if RootSync|RepoSync is in the map.
-// Otherwise, it returns the default sync directory: acme.
-func syncDirectory(syncDirectoryMap map[types.NamespacedName]string, nn types.NamespacedName) string {
-	if syncDir, found := syncDirectoryMap[nn]; found {
-		return syncDir
-	}
-	return gitproviders.DefaultSyncDir
 }
 
 // WatchForAllSyncs calls WatchForSync on all Syncs in nt.SyncSources.
@@ -154,7 +134,6 @@ func (nt *NT) WatchForAllSyncs(options ...WatchForAllSyncsOptions) error {
 		skipNonRootRepos:   make(map[types.NamespacedName]bool),
 		rootSha1Fn:         DefaultRootSha1Fn,
 		repoSha1Fn:         DefaultRepoSha1Fn,
-		syncDirectoryMap:   map[types.NamespacedName]string{},
 	}
 	// Override defaults with specified options
 	for _, option := range options {
@@ -174,23 +153,11 @@ func (nt *NT) WatchForAllSyncs(options ...WatchForAllSyncsOptions) error {
 			if _, ok := opts.skipRootRepos[id.Name]; ok {
 				continue
 			}
-			// TODO: Move SyncPath logic into a SyncSource method
-			var syncPath string
-			switch tSource := source.(type) {
-			case *syncsource.GitSyncSource:
-				syncPath = syncDirectory(opts.syncDirectoryMap, id.ObjectKey)
-			case *syncsource.HelmSyncSource:
-				syncPath = tSource.ChartID.Name
-			// case *syncsource.OCISyncSource:
-			// TODO: setup OCI RootSyncs
-			default:
-				nt.T.Fatalf("Invalid %s source %T: %s", id.Kind, source, id.Name)
-			}
 			idPtr := id
 			tg.Go(func() error {
 				return nt.WatchForSync(kinds.RootSyncV1Beta1(), idPtr.Name, idPtr.Namespace,
 					opts.rootSha1Fn, RootSyncHasStatusSyncCommit,
-					&SyncDirPredicatePair{Dir: syncPath, Predicate: RootSyncHasStatusSyncDirectory},
+					&SyncPathPredicatePair{Path: source.Path(), Predicate: RootSyncHasStatusSyncPath},
 					testwatcher.WatchTimeout(opts.timeout))
 			})
 		}
@@ -201,23 +168,11 @@ func (nt *NT) WatchForAllSyncs(options ...WatchForAllSyncsOptions) error {
 			if _, ok := opts.skipNonRootRepos[id.ObjectKey]; ok {
 				continue
 			}
-			// TODO: Move SyncPath logic into a SyncSource method
-			var syncPath string
-			switch tSource := source.(type) {
-			case *syncsource.GitSyncSource:
-				syncPath = syncDirectory(opts.syncDirectoryMap, id.ObjectKey)
-			case *syncsource.HelmSyncSource:
-				syncPath = tSource.ChartID.Name
-			// case *syncsource.OCISyncSource:
-			// TODO: setup OCI RootSyncs
-			default:
-				nt.T.Fatalf("Invalid %s source %T: %s", id.Kind, source, id.Name)
-			}
 			idPtr := id
 			tg.Go(func() error {
 				return nt.WatchForSync(kinds.RepoSyncV1Beta1(), idPtr.Name, idPtr.Namespace,
 					opts.repoSha1Fn, RepoSyncHasStatusSyncCommit,
-					&SyncDirPredicatePair{Dir: syncPath, Predicate: RepoSyncHasStatusSyncDirectory},
+					&SyncPathPredicatePair{Path: source.Path(), Predicate: RepoSyncHasStatusSyncPath},
 					testwatcher.WatchTimeout(opts.timeout))
 			})
 		}
@@ -242,7 +197,7 @@ func (nt *NT) WatchForSync(
 	name, namespace string,
 	sha1Func Sha1Func,
 	syncSha1 func(string) testpredicates.Predicate,
-	syncDirPair *SyncDirPredicatePair,
+	syncDirPair *SyncPathPredicatePair,
 	opts ...testwatcher.WatchOption,
 ) error {
 	nt.T.Helper()
@@ -268,7 +223,7 @@ func (nt *NT) WatchForSync(
 		syncSha1(sha1),
 	}
 	if syncDirPair != nil {
-		predicates = append(predicates, syncDirPair.Predicate(syncDirPair.Dir))
+		predicates = append(predicates, syncDirPair.Predicate(syncDirPair.Path))
 	}
 
 	err = nt.Watcher.WatchObject(gvk, name, namespace, predicates, opts...)

@@ -19,6 +19,8 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"kpt.dev/configsync/pkg/core"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
@@ -30,4 +32,18 @@ func Lookup(obj runtime.Object, scheme *runtime.Scheme) (schema.GroupVersionKind
 		return schema.GroupVersionKind{}, fmt.Errorf("failed to lookup object type: %w", err)
 	}
 	return gvk, nil
+}
+
+// LookupID returns the object's ID. If the GK isn't already populated, the
+// Scheme is used to look it up by object type.
+func LookupID(obj client.Object, scheme *runtime.Scheme) (core.ID, error) {
+	id := core.IDOf(obj)
+	if id.GroupKind.Empty() {
+		gvk, err := Lookup(obj, scheme)
+		if err != nil {
+			return id, err
+		}
+		id.GroupKind = gvk.GroupKind()
+	}
+	return id, nil
 }

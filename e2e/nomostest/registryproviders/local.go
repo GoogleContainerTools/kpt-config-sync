@@ -86,13 +86,7 @@ func (l *LocalProvider) repositoryLocalAddress() (string, error) {
 // repositoryLocalAddressWithProxy returns address of the repository using the
 // specified proxy address.
 func (l *LocalProvider) repositoryLocalAddressWithProxy(proxyAddress string) string {
-	return fmt.Sprintf("%s/%s/%s", proxyAddress, l.repositoryName, l.repositorySuffix)
-}
-
-// repositoryRemoteAddress returns the address of the repository in the
-// registry for use by remote clients, like Kubernetes or Config Sync.
-func (l *LocalProvider) repositoryRemoteAddress() (string, error) {
-	return fmt.Sprintf("test-registry-server.test-registry-system/%s/%s", l.repositoryName, l.repositorySuffix), nil
+	return fmt.Sprintf("%s/%s", proxyAddress, l.RepositoryPath())
 }
 
 // ImageLocalAddress returns the local port forwarded address that proxies to
@@ -120,17 +114,31 @@ func (l *LocalProvider) ProxyAddress(localPort int) string {
 	return fmt.Sprintf("localhost:%d", localPort)
 }
 
+// RegistryRemoteAddress returns the remote address of the registry.
+func (l *LocalProvider) RegistryRemoteAddress() string {
+	return "test-registry-server.test-registry-system"
+}
+
+// RepositoryPath returns the name or path of the repository, without the
+// registry or image details.
+func (l *LocalProvider) RepositoryPath() string {
+	return fmt.Sprintf("%s/%s", l.repositoryName, l.repositorySuffix)
+}
+
+// RepositoryRemoteAddress returns the address of the repository in the
+// registry for use by remote clients, like Kubernetes or Config Sync.
+func (l *LocalProvider) RepositoryRemoteAddress() string {
+	return fmt.Sprintf("%s/%s", l.RegistryRemoteAddress(), l.RepositoryPath())
+}
+
 // ImageRemoteAddress returns the address of the registry service from within
 // the cluster. Fit for use from the *-sync containers inside the cluster.
-func (l *LocalProvider) ImageRemoteAddress(imageName string) (string, error) {
-	address, err := l.repositoryRemoteAddress()
-	if err != nil {
-		return "", err
-	}
+func (l *LocalProvider) ImageRemoteAddress(imageName string) string {
+	address := l.RepositoryRemoteAddress()
 	if imageName != "" {
 		address = fmt.Sprintf("%s/%s", address, imageName)
 	}
-	return address, nil
+	return address
 }
 
 // LocalOCIProvider provides methods for interacting with the test registry-server
@@ -251,12 +259,8 @@ func (l *LocalHelmProvider) RepositoryLocalURL() (string, error) {
 
 // RepositoryRemoteURL is the repositoryRemoteAddress prepended with oci://
 // For pulling with RSync's `.spec.helm.repo`
-func (l *LocalHelmProvider) RepositoryRemoteURL() (string, error) {
-	repoAddr, err := l.repositoryRemoteAddress()
-	if err != nil {
-		return repoAddr, err
-	}
-	return ociURL(repoAddr), nil
+func (l *LocalHelmProvider) RepositoryRemoteURL() string {
+	return ociURL(l.RepositoryRemoteAddress())
 }
 
 // Restore the proxy and re-push any previously pushed images.

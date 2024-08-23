@@ -76,21 +76,27 @@ func (a *ArtifactRegistryProvider) Teardown() error {
 	return nil
 }
 
-// registryHost returns the domain of the artifact registry
-func (a *ArtifactRegistryProvider) registryHost() string {
+// RegistryRemoteAddress returns the remote address of the registry.
+func (a *ArtifactRegistryProvider) RegistryRemoteAddress() string {
 	return fmt.Sprintf("%s-docker.pkg.dev", a.location)
+}
+
+// RepositoryPath returns the name or path of the repository, without the
+// registry or image details.
+func (a *ArtifactRegistryProvider) RepositoryPath() string {
+	return fmt.Sprintf("%s/%s/%s", a.project, a.repositoryName, a.repositorySuffix)
 }
 
 // repositoryLocalAddress returns the address of the repository in the
 // registry for use by local clients, like the helm or crane clients.
 func (a *ArtifactRegistryProvider) repositoryLocalAddress() (string, error) {
-	return a.repositoryRemoteAddress()
+	return a.repositoryRemoteAddress(), nil
 }
 
 // repositoryRemoteAddress returns the address of the repository in the
 // registry for use by remote clients, like Kubernetes or Config Sync.
-func (a *ArtifactRegistryProvider) repositoryRemoteAddress() (string, error) {
-	return fmt.Sprintf("%s/%s/%s/%s", a.registryHost(), a.project, a.repositoryName, a.repositorySuffix), nil
+func (a *ArtifactRegistryProvider) repositoryRemoteAddress() string {
+	return fmt.Sprintf("%s/%s", a.RegistryRemoteAddress(), a.RepositoryPath())
 }
 
 // ImageLocalAddress returns the address of the image in the registry for
@@ -105,12 +111,8 @@ func (a *ArtifactRegistryProvider) ImageLocalAddress(imageName string) (string, 
 
 // ImageRemoteAddress returns the address of the image in the registry for
 // use by remote clients, like Kubernetes or Config Sync.
-func (a *ArtifactRegistryProvider) ImageRemoteAddress(imageName string) (string, error) {
-	repoAddr, err := a.repositoryRemoteAddress()
-	if err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("%s/%s", repoAddr, imageName), nil
+func (a *ArtifactRegistryProvider) ImageRemoteAddress(imageName string) string {
+	return fmt.Sprintf("%s/%s", a.repositoryRemoteAddress(), imageName)
 }
 
 // createRepository uses gcloud to create the repository, if it doesn't exist.
@@ -146,11 +148,7 @@ func (a *ArtifactRegistryProvider) createRepository() error {
 // Helm doesn't provide a way to delete remote package images, so we're using
 // gcloud instead. For helm charts, the image name is the chart name.
 func (a *ArtifactRegistryProvider) deleteImage(imageName, digest string) error {
-	imageAddress, err := a.ImageRemoteAddress(imageName)
-	if err != nil {
-		return err
-	}
-	imageAddress = fmt.Sprintf("%s@%s", imageAddress, digest)
+	imageAddress := fmt.Sprintf("%s@%s", a.ImageRemoteAddress(imageName), digest)
 	if _, err := a.gcloudClient.Gcloud("artifacts", "docker", "images", "delete", imageAddress, "--delete-tags", "--project", a.project); err != nil {
 		return fmt.Errorf("deleting image from registry %s: %w", imageAddress, err)
 	}
@@ -174,7 +172,7 @@ func (a *ArtifactRegistryOCIProvider) Client() CraneClient {
 
 // Login to the registry with the crane client
 func (a *ArtifactRegistryOCIProvider) Login() error {
-	registryHost := a.registryHost()
+	registryHost := a.RegistryRemoteAddress()
 	if err := a.OCIClient.Login(registryHost); err != nil {
 		return fmt.Errorf("OCIClient.Login(%q): %w", registryHost, err)
 	}
@@ -183,7 +181,7 @@ func (a *ArtifactRegistryOCIProvider) Login() error {
 
 // Logout of the registry with the crane client
 func (a *ArtifactRegistryOCIProvider) Logout() error {
-	registryHost := a.registryHost()
+	registryHost := a.RegistryRemoteAddress()
 	if err := a.OCIClient.Logout(registryHost); err != nil {
 		return fmt.Errorf("OCIClient.Logout(%q): %w", registryHost, err)
 	}
@@ -253,7 +251,7 @@ func (a *ArtifactRegistryHelmProvider) Client() HelmClient {
 
 // Login to the registry with the HelmClient
 func (a *ArtifactRegistryHelmProvider) Login() error {
-	registryHost := a.registryHost()
+	registryHost := a.RegistryRemoteAddress()
 	if err := a.HelmClient.Login(registryHost); err != nil {
 		return fmt.Errorf("HelmClient.Login(%q): %w", registryHost, err)
 	}
@@ -262,7 +260,7 @@ func (a *ArtifactRegistryHelmProvider) Login() error {
 
 // Logout of the registry with the HelmClient
 func (a *ArtifactRegistryHelmProvider) Logout() error {
-	registryHost := a.registryHost()
+	registryHost := a.RegistryRemoteAddress()
 	if err := a.HelmClient.Logout(registryHost); err != nil {
 		return fmt.Errorf("HelmClient.Logout(%q): %w", registryHost, err)
 	}
@@ -287,12 +285,8 @@ func (a *ArtifactRegistryHelmProvider) RepositoryLocalURL() (string, error) {
 
 // RepositoryRemoteURL is the repositoryRemoteAddress prepended with oci://
 // For pulling with RSync's `.spec.helm.repo`
-func (a *ArtifactRegistryHelmProvider) RepositoryRemoteURL() (string, error) {
-	repoAddr, err := a.repositoryRemoteAddress()
-	if err != nil {
-		return "", err
-	}
-	return ociURL(repoAddr), nil
+func (a *ArtifactRegistryHelmProvider) RepositoryRemoteURL() string {
+	return ociURL(a.repositoryRemoteAddress())
 }
 
 // PushPackage pushes the local helm chart as an OCI image to the remote registry.

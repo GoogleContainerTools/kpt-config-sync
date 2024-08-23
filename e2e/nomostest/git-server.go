@@ -34,9 +34,9 @@ import (
 const testGitNamespace = "config-management-system-test"
 const testGitServer = "test-git-server"
 
-const testGitServerImage = testing.TestInfraArtifactRegistry + "/git-server:v1.0.0-68df304c"
+const testGitServerImage = testing.TestInfraArtifactRepositoryAddress + "/git-server:v1.0.0-68df304c"
 const testGitHTTPServer = "http-git-server"
-const testGitHTTPServerImage = testing.TestInfraArtifactRegistry + "/http-git-server:v1.0.0-b3b4984cd"
+const testGitHTTPServerImage = testing.TestInfraArtifactRepositoryAddress + "/http-git-server:v1.0.0-b3b4984cd"
 const safeToEvictAnnotation = "cluster-autoscaler.kubernetes.io/safe-to-evict"
 
 func testGitServerSelector() map[string]string {

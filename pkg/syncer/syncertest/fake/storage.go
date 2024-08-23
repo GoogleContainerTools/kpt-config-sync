@@ -154,7 +154,7 @@ func (ms *MemoryStorage) TestPut(obj client.Object) error {
 	ms.lock.Lock()
 	defer ms.lock.Unlock()
 
-	id, err := lookupObjectID(obj, ms.scheme)
+	id, err := kinds.LookupID(obj, ms.scheme)
 	if err != nil {
 		return err
 	}
@@ -173,7 +173,7 @@ func (ms *MemoryStorage) TestPutAll(objs ...client.Object) error {
 	defer ms.lock.Unlock()
 
 	for _, obj := range objs {
-		id, err := lookupObjectID(obj, ms.scheme)
+		id, err := kinds.LookupID(obj, ms.scheme)
 		if err != nil {
 			return err
 		}
@@ -470,7 +470,7 @@ func (ms *MemoryStorage) Create(ctx context.Context, obj client.Object, opts *cl
 		return err
 	}
 
-	id, err := lookupObjectID(tObj, ms.scheme)
+	id, err := kinds.LookupID(tObj, ms.scheme)
 	if err != nil {
 		return err
 	}
@@ -529,7 +529,7 @@ func (ms *MemoryStorage) deleteWithoutLock(ctx context.Context, obj client.Objec
 		return err
 	}
 
-	id, err := lookupObjectID(obj, ms.scheme)
+	id, err := kinds.LookupID(obj, ms.scheme)
 	if err != nil {
 		return err
 	}
@@ -717,7 +717,7 @@ func (ms *MemoryStorage) updateWithoutLock(ctx context.Context, obj client.Objec
 		return err
 	}
 
-	id, err := lookupObjectID(obj, ms.scheme)
+	id, err := kinds.LookupID(obj, ms.scheme)
 	if err != nil {
 		return err
 	}
@@ -832,7 +832,7 @@ func (ms *MemoryStorage) Patch(ctx context.Context, obj client.Object, patch cli
 		return fmt.Errorf("failed to build patch: %w", err)
 	}
 
-	id, err := lookupObjectID(obj, ms.scheme)
+	id, err := kinds.LookupID(obj, ms.scheme)
 	if err != nil {
 		return err
 	}

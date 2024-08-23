@@ -61,20 +61,6 @@ func toTypedClientObject(obj client.Object, scheme *runtime.Scheme) (client.Obje
 	return cObj, nil
 }
 
-// lookupObjectID returns the object's ID.
-// If the GK isn't set, the Scheme is used to look it up by object type.
-func lookupObjectID(obj client.Object, scheme *runtime.Scheme) (core.ID, error) {
-	id := core.IDOf(obj)
-	if id.GroupKind.Empty() {
-		gvk, err := kinds.Lookup(obj, scheme)
-		if err != nil {
-			return id, err
-		}
-		id.GroupKind = gvk.GroupKind()
-	}
-	return id, nil
-}
-
 // matchesListFilters returns true if the object matches the constraints
 // specified by the ListOptions: Namespace, LabelSelector, and FieldSelector.
 func matchesListFilters(obj runtime.Object, opts *client.ListOptions, scheme *runtime.Scheme) (bool, error) {

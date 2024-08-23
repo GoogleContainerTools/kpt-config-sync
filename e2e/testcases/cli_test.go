@@ -1680,9 +1680,9 @@ func TestNomosMigrateMonoRepo(t *testing.T) {
 	err = nt.WatchForSync(kinds.RootSyncV1Beta1(),
 		configsync.RootSyncName, configsync.ControllerNamespace,
 		nomostest.RemoteRootRepoSha1Fn, nomostest.RootSyncHasStatusSyncCommit,
-		&nomostest.SyncDirPredicatePair{
-			Dir:       expectedRootSyncSpec.Dir,
-			Predicate: nomostest.RootSyncHasStatusSyncDirectory,
+		&nomostest.SyncPathPredicatePair{
+			Path:      expectedRootSyncSpec.Dir,
+			Predicate: nomostest.RootSyncHasStatusSyncPath,
 		}, testwatcher.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Fatal(err)

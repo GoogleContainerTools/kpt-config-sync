@@ -1261,12 +1261,10 @@ func TestReconcilerManagerRootSyncCRDMissing(t *testing.T) {
 	// Change RepoSync sync dir to trigger reconciler-manager to update the reconciler
 	repoSync := k8sobjects.RepoSyncObjectV1Beta1(repoSyncKey.Namespace, repoSyncKey.Name)
 	nt.MustMergePatch(repoSync, fmt.Sprintf(`{"spec":{"git":{"dir":%q}}}`, repoSyncDir2))
+	nomostest.SetExpectedSyncPath(nt, repoSyncID, repoSyncDir2)
 	nt.Must(nt.WatchForAllSyncs(
 		nomostest.SkipReadyCheck(), // Skip ready check because it requires the RootSync CRD to exist.
-		nomostest.RepoSyncOnly(),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
-			repoSyncKey: repoSyncDir2,
-		})))
+		nomostest.RepoSyncOnly()))
 	nt.Must(nt.Validate(saName2, repoSyncNS, &corev1.ServiceAccount{}))
 
 	nt.Must(nomostest.InstallRootSyncCRD(nt))
@@ -1284,10 +1282,6 @@ func TestReconcilerManagerRootSyncCRDMissing(t *testing.T) {
 	rootSync.Status = v1beta1.RootSyncStatus{}
 	// Re-create RootSync with same spec as before
 	nt.Must(nt.KubeClient.Create(rootSync))
-	nt.Must(nt.WatchForAllSyncs(
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
-			rootSyncKey: rootSyncDir1,
-			repoSyncKey: repoSyncDir2,
-		})))
+	nt.Must(nt.WatchForAllSyncs())
 	nt.Must(nt.Validate(nsName1, "", &corev1.Namespace{}))
 }

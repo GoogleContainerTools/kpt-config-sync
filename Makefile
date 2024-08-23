@@ -72,7 +72,7 @@ CRANE := $(BIN_DIR)/crane
 # End vendored tools
 
 # golangci-lint is GPL, so it must not be vendored.
-GOLANGCI_LINT_VERSION := v1.59.1
+GOLANGCI_LINT_VERSION := v1.60.3
 GOLANGCI_LINT := $(BIN_DIR)/golangci-lint
 
 KUSTOMIZE_VERSION := v5.4.2-gke.0

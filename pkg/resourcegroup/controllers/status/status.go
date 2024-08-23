@@ -60,7 +60,7 @@ func ComputeStatus(obj *unstructured.Unstructured) *resourcemap.CachedStatus {
 		// It should be removed after KCC resources implement the stalled conditions.
 		conditions, cErr := ReadKCCResourceConditions(obj)
 		if cErr != nil {
-			klog.Errorf(cErr.Error())
+			klog.Error(cErr.Error())
 			// fallback to use the kstatus conditions for this resource.
 			resStatus.Conditions = ConvertKstatusConditions(result.Conditions)
 		} else {

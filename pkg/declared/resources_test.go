@@ -219,7 +219,7 @@ func TestResources_InternalErrorMetricValidation(t *testing.T) {
 		},
 	}
 	if diff := m.ValidateMetrics(metrics.InternalErrorsView, wantMetrics); diff != "" {
-		t.Errorf(diff)
+		t.Error(diff)
 	}
 }
 

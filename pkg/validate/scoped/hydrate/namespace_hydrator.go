@@ -236,8 +236,8 @@ func setDynamicNSSelectorEnabled(ctx context.Context, c client.Client, fieldMana
 	existing := rs.DeepCopy()
 	core.SetAnnotation(rs, metadata.DynamicNSSelectorEnabledAnnotationKey, newVal)
 	if err := c.Patch(ctx, rs, client.MergeFrom(existing), client.FieldOwner(fieldManager)); err != nil {
-		return status.APIServerErrorf(err, fmt.Sprintf("failed to patch RootSync %s to set the %s annotation to %s",
-			objKey, metadata.DynamicNSSelectorEnabledAnnotationKey, newVal))
+		return status.APIServerErrorf(err, "failed to patch RootSync %s to set the %s annotation to %s",
+			objKey, metadata.DynamicNSSelectorEnabledAnnotationKey, newVal)
 	}
 	return nil
 }

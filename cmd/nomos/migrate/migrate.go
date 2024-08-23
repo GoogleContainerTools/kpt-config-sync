@@ -243,7 +243,7 @@ func waitForPodToBeRunning(ctx context.Context, k8sclient *kubernetes.Clientset,
 		}
 		errMsg := fmt.Sprintf("%sHaven't detected running Pods with the label selector %q", util.Indent, labelSelector)
 		printInfo(errMsg)
-		return fmt.Errorf(errMsg)
+		return errors.New(errMsg)
 	})
 }
 

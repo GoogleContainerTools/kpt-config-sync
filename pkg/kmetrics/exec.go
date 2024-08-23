@@ -19,6 +19,7 @@ package kmetrics
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -147,7 +148,7 @@ func runCommand(cmd *exec.Cmd) (int64, string, error) {
 	err := cmd.Run()
 	executionTime := time.Since(now).Nanoseconds()
 	if err != nil {
-		return executionTime, stdout.String(), fmt.Errorf(stderr.String())
+		return executionTime, stdout.String(), errors.New(stderr.String())
 	}
 	return executionTime, stdout.String(), nil
 }

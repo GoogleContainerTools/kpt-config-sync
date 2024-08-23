@@ -16,6 +16,7 @@ package e2e
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -449,9 +450,10 @@ func TestExternalDependencyError(t *testing.T) {
 
 func TestDependencyWithReconciliation(t *testing.T) {
 	// Increase reconcile timeout to account for slow pod scheduling due to cluster autoscaling.
+	longTimeout := 5 * time.Minute
 	nt := nomostest.New(t, nomostesting.Lifecycle,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
-		ntopts.WithReconcileTimeout(5*time.Minute))
+		ntopts.WithReconcileTimeout(longTimeout))
 	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
 
 	namespaceName := "bookstore"
@@ -630,6 +632,9 @@ func TestDependencyWithReconciliation(t *testing.T) {
 	}
 
 	nt.T.Log("add pod3 and pod4, pod3's image is not valid, pod4 depends on pod3")
+	rs := k8sobjects.RootSyncObjectV1Beta1(nomostest.DefaultRootSyncID.Name)
+	nt.T.Log("Set a shorter reconcileTimeout, since the scenario is expected to not reconcile")
+	nt.Must(nt.KubeClient.MergePatch(rs, `{"spec": {"override": {"reconcileTimeout": "30s"}}}`))
 	invalidImageContainer := container
 	invalidImageContainer.Image = "does-not-exist"
 	nt.Must(rootSyncGitRepo.Add("acme/pod3.yaml",
@@ -651,6 +656,9 @@ func TestDependencyWithReconciliation(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
+	nt.T.Log("Restore the longer reconcileTimeout override")
+	nt.Must(nt.KubeClient.MergePatch(rs,
+		fmt.Sprintf(`{"spec": {"override": {"reconcileTimeout": "%s"}}}`, longTimeout)))
 
 	nt.T.Log("cleanup")
 	nt.Must(rootSyncGitRepo.Remove("acme/pod3.yaml"))

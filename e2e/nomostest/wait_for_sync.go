@@ -27,14 +27,12 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/reposync"
 	"kpt.dev/configsync/pkg/rootsync"
-	"kpt.dev/configsync/pkg/util/repo"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 )
 
@@ -359,81 +357,6 @@ func (nt *NT) WaitForRepoSyncSourceError(ns, rsName, code, message string, opts 
 			return testpredicates.ValidateError(rs.Status.Source.Errors, code, message, nil)
 			// syncingCondition := reposync.GetCondition(rs.Status.Conditions, v1beta1.RepoSyncSyncing)
 			// return validateRepoSyncError(rs.Status.Source.Errors, syncingCondition, code, message, []v1beta1.ErrorSource{v1beta1.SourceError})
-		},
-		opts...,
-	)
-}
-
-// WaitForRepoSourceError waits until the given error (code and message) is present on the Repo resource
-func (nt *NT) WaitForRepoSourceError(code string, opts ...WaitOption) {
-	Wait(nt.T, fmt.Sprintf("Repo source error code %s", code), nt.DefaultWaitTimeout,
-		func() error {
-			obj := &v1.Repo{}
-			err := nt.KubeClient.Get(repo.DefaultName, "", obj)
-			if err != nil {
-				return err
-			}
-			errs := obj.Status.Source.Errors
-			if len(errs) == 0 {
-				return fmt.Errorf("no errors present")
-			}
-			var codes []string
-			for _, e := range errs {
-				if e.Code == fmt.Sprintf("KNV%s", code) {
-					return nil
-				}
-				codes = append(codes, e.Code)
-			}
-			return fmt.Errorf("error %s not present, got %s", code, strings.Join(codes, ", "))
-		},
-		opts...,
-	)
-}
-
-// WaitForRepoSourceErrorClear waits until the given error code disappears from the Repo resource
-func (nt *NT) WaitForRepoSourceErrorClear(opts ...WaitOption) {
-	Wait(nt.T, "Repo source errors cleared", nt.DefaultWaitTimeout,
-		func() error {
-			obj := &v1.Repo{}
-			err := nt.KubeClient.Get(repo.DefaultName, "", obj)
-			if err != nil {
-				return err
-			}
-			errs := obj.Status.Source.Errors
-			if len(errs) == 0 {
-				return nil
-			}
-			var messages []string
-			for _, e := range errs {
-				messages = append(messages, e.ErrorMessage)
-			}
-			return fmt.Errorf("got errors %s", strings.Join(messages, ", "))
-		},
-		opts...,
-	)
-}
-
-// WaitForRepoImportErrorCode waits until the given error code is present on the Repo resource.
-func (nt *NT) WaitForRepoImportErrorCode(code string, opts ...WaitOption) {
-	Wait(nt.T, fmt.Sprintf("Repo import error code %s", code), nt.DefaultWaitTimeout,
-		func() error {
-			obj := &v1.Repo{}
-			err := nt.KubeClient.Get(repo.DefaultName, "", obj)
-			if err != nil {
-				return err
-			}
-			errs := obj.Status.Import.Errors
-			if len(errs) == 0 {
-				return fmt.Errorf("no errors present")
-			}
-			var codes []string
-			for _, e := range errs {
-				if e.Code == fmt.Sprintf("KNV%s", code) {
-					return nil
-				}
-				codes = append(codes, e.Code)
-			}
-			return fmt.Errorf("error %s not present, got %s", code, strings.Join(codes, ", "))
 		},
 		opts...,
 	)

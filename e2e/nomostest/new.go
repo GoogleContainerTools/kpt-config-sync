@@ -296,7 +296,7 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 	// Speed up the delay between sync attempts to speed up testing
 	// (default: 15s), but leave the remediator (paused while syncing) and retry
 	// code (1s delay) time to execute between sync attempts.
-	nt.ReconcilerPollingPeriod = 15 * time.Second
+	nt.ReconcilerPollingPeriod = 5 * time.Second
 	// Speed up the delay between rendering attempts to speed up testing (default: 5s)
 	nt.HydrationPollingPeriod = 5 * time.Second
 

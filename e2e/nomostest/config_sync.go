@@ -70,6 +70,10 @@ const (
 
 	// clusterRoleName imitates a user-created (Cluster)Role for NS reconcilers.
 	clusterRoleName = "cs-e2e"
+
+	// shortSyncPollingPeriod is the default override for the git-sync/oci-sync
+	// polling period used by tests. Using a shorter period speeds up the e2e tests.
+	shortSyncPollingPeriod = 5 * time.Second
 )
 
 var (
@@ -715,6 +719,7 @@ func RootSyncObjectV1Alpha1(name, repoURL string, sourceFormat configsync.Source
 		Repo:   repoURL,
 		Branch: gitproviders.MainBranch,
 		Dir:    gitproviders.DefaultSyncDir,
+		Period: metav1.Duration{Duration: shortSyncPollingPeriod},
 	}
 	switch *e2e.GitProvider {
 	case e2e.CSR:
@@ -770,6 +775,7 @@ func RootSyncObjectV1Beta1(name, repoURL string, sourceFormat configsync.SourceF
 		Repo:   repoURL,
 		Branch: gitproviders.MainBranch,
 		Dir:    gitproviders.DefaultSyncDir,
+		Period: metav1.Duration{Duration: shortSyncPollingPeriod},
 	}
 	switch *e2e.GitProvider {
 	case e2e.CSR:
@@ -854,6 +860,7 @@ func RepoSyncObjectV1Alpha1(nn types.NamespacedName, repoURL string) *v1alpha1.R
 		Repo:   repoURL,
 		Branch: gitproviders.MainBranch,
 		Dir:    gitproviders.DefaultSyncDir,
+		Period: metav1.Duration{Duration: shortSyncPollingPeriod},
 	}
 	switch *e2e.GitProvider {
 	case e2e.CSR:
@@ -917,6 +924,7 @@ func RepoSyncObjectV1Beta1(nn types.NamespacedName, repoURL string, sourceFormat
 		Repo:   repoURL,
 		Branch: gitproviders.MainBranch,
 		Dir:    gitproviders.DefaultSyncDir,
+		Period: metav1.Duration{Duration: shortSyncPollingPeriod},
 	}
 	switch *e2e.GitProvider {
 	case e2e.CSR:
@@ -949,8 +957,9 @@ func (nt *NT) RootSyncObjectOCI(name string, image *registryproviders.OCIImage) 
 	rs := RootSyncObjectV1Beta1FromRootRepo(nt, name)
 	rs.Spec.SourceType = configsync.OciSource
 	rs.Spec.Oci = &v1beta1.Oci{
-		Image: imageURL,
-		Auth:  configsync.AuthNone,
+		Image:  imageURL,
+		Auth:   configsync.AuthNone,
+		Period: metav1.Duration{Duration: shortSyncPollingPeriod},
 	}
 	switch *e2e.OCIProvider {
 	case e2e.Local:
@@ -978,8 +987,9 @@ func (nt *NT) RepoSyncObjectOCI(nn types.NamespacedName, image *registryprovider
 	rs := RepoSyncObjectV1Beta1FromNonRootRepo(nt, nn)
 	rs.Spec.SourceType = configsync.OciSource
 	rs.Spec.Oci = &v1beta1.Oci{
-		Image: imageURL,
-		Auth:  configsync.AuthNone,
+		Image:  imageURL,
+		Auth:   configsync.AuthNone,
+		Period: metav1.Duration{Duration: shortSyncPollingPeriod},
 	}
 	switch *e2e.OCIProvider {
 	case e2e.Local:

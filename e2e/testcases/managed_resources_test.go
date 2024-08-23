@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
@@ -36,6 +37,8 @@ import (
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
+	"kpt.dev/configsync/pkg/reconcilermanager"
+	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -776,9 +779,10 @@ func TestDriftKubectlAnnotateManagedField(t *testing.T) {
 // `client.lifecycle.config.k8s.io/mutation` annotation, and verifies that
 // Config Sync does not correct it.
 func TestDriftKubectlAnnotateManagedFieldWithIgnoreMutationAnnotation(t *testing.T) {
+	rootSyncID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t, nomostesting.DriftControl,
-		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured))
+	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
 
 	namespace := k8sobjects.NamespaceObject("bookstore",
 		core.Annotation("season", "summer"),
@@ -792,7 +796,7 @@ func TestDriftKubectlAnnotateManagedFieldWithIgnoreMutationAnnotation(t *testing
 	// Modify a managed field
 	out, err := nt.Shell.Kubectl("annotate", "namespace", "bookstore", "--overwrite", "season=winter")
 	if err != nil {
-		nt.T.Fatalf("got `kubectl annotate namespace bookstore --overrite season=winter` error %v %s, want return nil", err, out)
+		nt.T.Fatalf("got `kubectl annotate namespace bookstore --overwrite season=winter` error %v %s, want return nil", err, out)
 	}
 
 	time.Sleep(10 * time.Second)
@@ -806,6 +810,25 @@ func TestDriftKubectlAnnotateManagedFieldWithIgnoreMutationAnnotation(t *testing
 	// The reason we need to stop the webhook here is that the webhook denies a request to modify Config Sync metadata
 	// even if the resource has the `client.lifecycle.config.k8s.io/mutation` annotation.
 	nomostest.StopWebhook(nt)
+	// Stopping the webhook causes the reconciler to restart. Wait so that we aren't
+	// racing with the applier and are actually testing the remediator.
+	tg := taskgroup.New()
+	tg.Go(func() error {
+		predicates := []testpredicates.Predicate{
+			testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
+			testpredicates.DeploymentMissingEnvVar(reconcilermanager.Reconciler, reconcilermanager.WebhookEnabled),
+		}
+		return nt.Watcher.WatchObject(kinds.Deployment(),
+			core.RootReconcilerName(rootSyncID.Name), configsync.ControllerNamespace, predicates)
+	})
+	tg.Go(func() error {
+		// Note: this proves that the applier does not currently honor the ignore-mutation annotation.
+		return nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
+			[]testpredicates.Predicate{
+				testpredicates.HasAnnotation("season", "summer"),
+			})
+	})
+	nt.Must(tg.Wait())
 
 	// Modify a Config Sync annotation
 	out, err = nt.Shell.Kubectl("annotate", "namespace", "bookstore", "--overwrite", fmt.Sprintf("%s=winter", metadata.ResourceManagementKey))
@@ -889,9 +912,10 @@ func TestDriftKubectlAnnotateDeleteManagedFields(t *testing.T) {
 // `client.lifecycle.config.k8s.io/mutation` annotation, and verifies that
 // Config Sync does not correct it.
 func TestDriftKubectlAnnotateDeleteManagedFieldsWithIgnoreMutationAnnotation(t *testing.T) {
+	rootSyncID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t, nomostesting.DriftControl,
-		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured))
+	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
 
 	namespace := k8sobjects.NamespaceObject("bookstore",
 		core.Annotation("season", "summer"),
@@ -919,6 +943,25 @@ func TestDriftKubectlAnnotateDeleteManagedFieldsWithIgnoreMutationAnnotation(t *
 	// The reason we need to stop the webhook here is that the webhook denies a request to modify Config Sync metadata
 	// even if the resource has the `client.lifecycle.config.k8s.io/mutation` annotation.
 	nomostest.StopWebhook(nt)
+	// Stopping the webhook causes the reconciler to restart. Wait so that we aren't
+	// racing with the applier and are actually testing the remediator.
+	tg := taskgroup.New()
+	tg.Go(func() error {
+		predicates := []testpredicates.Predicate{
+			testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
+			testpredicates.DeploymentMissingEnvVar(reconcilermanager.Reconciler, reconcilermanager.WebhookEnabled),
+		}
+		return nt.Watcher.WatchObject(kinds.Deployment(),
+			core.RootReconcilerName(rootSyncID.Name), configsync.ControllerNamespace, predicates)
+	})
+	tg.Go(func() error {
+		// Note: this proves that the applier does not currently honor the ignore-mutation annotation.
+		return nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
+			[]testpredicates.Predicate{
+				testpredicates.HasAnnotation("season", "summer"),
+			})
+	})
+	nt.Must(tg.Wait())
 
 	// Delete a Config Sync annotation
 	out, err = nt.Shell.Kubectl("annotate", "namespace", "bookstore", fmt.Sprintf("%s-", metadata.ResourceManagementKey))

@@ -74,7 +74,7 @@ func TestAddAnnotationsAndLabels(t *testing.T) {
 				t.Fatalf("Failed to add annotations and labels: %v", err)
 			}
 			if diff := cmp.Diff(tc.expected, tc.actual, ast.CompareFileObject); diff != "" {
-				t.Errorf(diff)
+				t.Error(diff)
 			}
 		})
 	}

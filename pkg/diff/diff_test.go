@@ -556,7 +556,7 @@ func TestThreeWay(t *testing.T) {
 			diffs := ThreeWay(newDeclared, previousDeclared, actual)
 			if diff := cmp.Diff(diffs, tc.want,
 				cmpopts.SortSlices(func(x, y Diff) bool { return x.GetName() < y.GetName() })); diff != "" {
-				t.Errorf(diff)
+				t.Error(diff)
 			}
 		})
 	}

@@ -1080,7 +1080,7 @@ func unzip(dir, zipName string) error {
 	}(archive)
 
 	for _, f := range archive.File {
-		klog.Infof(fmt.Sprintf("processing and unzipping %s", f.Name))
+		klog.Infof("processing and unzipping %s", f.Name)
 		filePath := path.Join(dir, f.Name)
 		if f.FileInfo().IsDir() {
 			fmt.Println("creating directory...")

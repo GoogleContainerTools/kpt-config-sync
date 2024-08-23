@@ -124,7 +124,7 @@ func TestVersion(t *testing.T) {
 			versionInternal(ctx, test.configs, &b)
 			actuals := strings.Split(b.String(), "\n")
 			if diff := cmp.Diff(test.expected, actuals); diff != "" {
-				t.Errorf(diff)
+				t.Error(diff)
 			}
 		})
 	}

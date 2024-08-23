@@ -949,7 +949,7 @@ func TestHierarchical(t *testing.T) {
 				t.Errorf("got Hierarchical() error %v; want %v", errs, tc.wantErrs)
 			}
 			if diff := cmp.Diff(tc.want, got); diff != "" {
-				t.Errorf(diff)
+				t.Error(diff)
 			}
 		})
 	}

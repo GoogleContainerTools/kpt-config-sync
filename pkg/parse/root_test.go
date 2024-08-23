@@ -1305,7 +1305,7 @@ func TestRoot_SourceReconcilerErrorsMetricValidation(t *testing.T) {
 			testerrors.AssertEqual(t, tc.expectedError, err, "expected error to match")
 
 			if diff := m.ValidateMetrics(metrics.ReconcilerErrorsView, tc.expectedMetrics); diff != "" {
-				t.Errorf(diff)
+				t.Error(diff)
 			}
 		})
 	}
@@ -1397,7 +1397,7 @@ func TestRoot_SourceAndSyncReconcilerErrorsMetricValidation(t *testing.T) {
 			testerrors.AssertEqual(t, tc.expectedError, err, "expected error to match")
 
 			if diff := m.ValidateMetrics(metrics.ReconcilerErrorsView, tc.expectedMetrics); diff != "" {
-				t.Errorf(diff)
+				t.Error(diff)
 			}
 		})
 	}

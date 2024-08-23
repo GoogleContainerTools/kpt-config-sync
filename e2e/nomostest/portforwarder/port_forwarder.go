@@ -180,7 +180,7 @@ func (pf *PortForwarder) portForwardToPod(pod string) error {
 		return err
 	}
 	if stderr.Len() != 0 {
-		return fmt.Errorf(stderr.String())
+		return errors.New(stderr.String())
 	}
 
 	localPort := 0

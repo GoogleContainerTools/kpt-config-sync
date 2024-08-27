@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -142,24 +143,27 @@ type OCIImage struct {
 	Provider           OCIRegistryProvider
 }
 
+// OCIImageID returns the ID of the OCI image.
+func (o *OCIImage) OCIImageID() OCIImageID {
+	return OCIImageID{
+		Registry:   o.Provider.RegistryRemoteAddress(),
+		Repository: o.Provider.RepositoryPath(),
+		Name:       o.Name,
+		Tag:        o.Tag,
+		Digest:     o.Digest,
+	}
+}
+
 // RemoteAddressWithTag returns the image address with version tag.
 // For pulling with RSync's `.spec.oci.image`
 func (o *OCIImage) RemoteAddressWithTag() (string, error) {
-	imageAddr, err := o.Provider.ImageRemoteAddress(o.Name)
-	if err != nil {
-		return "", fmt.Errorf("OCIProvider.ImageRemoteAddress: %w", err)
-	}
-	return fmt.Sprintf("%s:%s", imageAddr, o.Tag), nil
+	return fmt.Sprintf("%s:%s", o.Provider.ImageRemoteAddress(o.Name), o.Tag), nil
 }
 
 // RemoteAddressWithDigest returns the image address with digest.
 // For pulling with RSync's `.spec.oci.image`
 func (o *OCIImage) RemoteAddressWithDigest() (string, error) {
-	imageAddr, err := o.Provider.ImageRemoteAddress(o.Name)
-	if err != nil {
-		return "", fmt.Errorf("OCIProvider.ImageRemoteAddress: %w", err)
-	}
-	return fmt.Sprintf("%s@%s", imageAddr, o.Digest), nil
+	return fmt.Sprintf("%s@%s", o.Provider.ImageRemoteAddress(o.Name), o.Digest), nil
 }
 
 // Delete the image from the remote registry using the provided registry endpoint.
@@ -171,4 +175,76 @@ func (o *OCIImage) Delete() error {
 // ociURL prepends the `oci://` scheme onto the provided address.
 func ociURL(address string) string {
 	return fmt.Sprintf("oci://%s", address)
+}
+
+// OCIImageID represents the minimum information required to pull an OCI image.
+type OCIImageID struct {
+	// Registry address (optional, default dockerhub) without the repository or
+	// scheme.
+	Registry string
+	// Repository name or path (optional) used for namespacing and hierarchy.
+	Repository string
+	// Name of the image.
+	Name string
+	// Tag of the image (optional, default latest).
+	Tag string
+	// Digest of the image (optional), including the "sha256:"" prefix.
+	Digest string
+}
+
+// Address returns the address of the image
+// [REGISTRY/][REPOSITORY/]NAME[:TAG][@DIGEST],
+// WITHOUT the "oci://" scheme.
+func (id OCIImageID) Address() string {
+	sb := strings.Builder{}
+	if id.Registry != "" {
+		sb.WriteString(id.Registry)
+		sb.WriteRune('/')
+	}
+	if id.Repository != "" {
+		sb.WriteString(id.Repository)
+		sb.WriteRune('/')
+	}
+	sb.WriteString(id.Name)
+	if id.Tag != "" {
+		sb.WriteRune(':')
+		sb.WriteString(id.Tag)
+	}
+	if id.Digest != "" {
+		sb.WriteRune('@')
+		sb.WriteString(id.Digest)
+	}
+	return sb.String()
+}
+
+// URL returns the URL of the image
+// SCHEME://[REGISTRY/][REPOSITORY/]NAME[:TAG][@DIGEST],
+// WITH the "oci://" scheme.
+func (id OCIImageID) URL() string {
+	return ociURL(id.Address())
+}
+
+// String returns the URL of the image.
+func (id OCIImageID) String() string {
+	return id.URL()
+}
+
+// WithoutDigest returns a copy of the OCIImageID without the digest.
+func (id OCIImageID) WithoutDigest() OCIImageID {
+	return OCIImageID{
+		Registry:   id.Registry,
+		Repository: id.Repository,
+		Name:       id.Name,
+		Tag:        id.Tag,
+	}
+}
+
+// WithoutTag returns a copy of the OCIImageID without the tag.
+func (id OCIImageID) WithoutTag() OCIImageID {
+	return OCIImageID{
+		Registry:   id.Registry,
+		Repository: id.Repository,
+		Name:       id.Name,
+		Digest:     id.Digest,
+	}
 }

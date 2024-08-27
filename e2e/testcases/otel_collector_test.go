@@ -28,7 +28,6 @@ import (
 	"google.golang.org/api/iterator"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/iam"
@@ -111,12 +110,13 @@ var GCMMetricTypes = []string{
 //   - e2e-test-metric-writer GSA with roles/monitoring.metricWriter IAM
 //   - roles/iam.workloadIdentityUser on config-management-monitoring/default for e2e-test-metric-writer
 func TestOtelCollectorDeployment(t *testing.T) {
+	rootSyncID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t,
 		nomostesting.Reconciliation1,
 		ntopts.RequireGKE(t),
-		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
+		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured),
 	)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
 	nt.T.Cleanup(func() {
 		if t.Failed() {
 			nt.PodLogs("config-management-monitoring", csmetrics.OtelCollectorName, "", false)
@@ -190,12 +190,8 @@ func TestOtelCollectorDeployment(t *testing.T) {
 	nt.T.Log("Update RootSync to sync from the kustomize-components directory")
 	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "kustomize-components"}}}`)
-	syncDirMap := map[types.NamespacedName]string{
-		nomostest.DefaultRootRepoNamespacedName: "kustomize-components",
-	}
-	if err := nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(syncDirMap)); err != nil {
-		nt.T.Fatal(err)
-	}
+	nomostest.SetExpectedSyncPath(nt, rootSyncID, "kustomize-components")
+	nt.Must(nt.WatchForAllSyncs())
 
 	// retry for 2 minutes until metric is accessible from GCM
 	_, err = retry.Retry(120*time.Second, func() error {

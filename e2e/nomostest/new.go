@@ -64,15 +64,7 @@ func newOptStruct(testName, tmpDir string, ntOptions ...ntopts.Opt) *ntopts.New 
 		Name:   testName,
 		TmpDir: tmpDir,
 		MultiRepo: ntopts.MultiRepo{
-			SyncSources: syncsource.Set{
-				// All tests default to having a RootSync named root-sync using
-				// a Git repository, unless otherwise specified.
-				DefaultRootSyncID: &syncsource.GitSyncSource{
-					// RootSync root-sync defaults to using hierarchy.
-					// Use ntopts.SyncWithGitSource with ntopts.Unstructured to change.
-					SourceFormat: configsync.SourceFormatHierarchy,
-				},
-			},
+			SyncSources: syncsource.Set{},
 			// Default to 1m to keep tests fast.
 			// To override, use WithReconcileTimeout.
 			ReconcileTimeout: ptr.To(1 * time.Minute),
@@ -425,15 +417,36 @@ func applyAutoPilotKeepAlive(nt *NT) error {
 
 func setupTestCase(nt *NT, opts *ntopts.New) {
 	nt.T.Log("[SETUP] New test case")
+	// Expect default RootSync root-sync
+	if _, found := opts.SyncSources[DefaultRootSyncID]; !found {
+		opts.SyncSources[DefaultRootSyncID] = &syncsource.GitSyncSource{}
+	}
 	// init all repositories. This ensures that:
 	// - local repo is initialized and empty
 	// - remote repo exists (except for LocalProvider, which is done in portForwardGitServer)
 	for id, source := range opts.SyncSources {
 		switch tSource := source.(type) {
 		case *syncsource.GitSyncSource:
-			nt.SyncSources[id] = &syncsource.GitSyncSource{
-				Repository: initRepository(nt, id.Kind, id.ObjectKey, tSource.SourceFormat),
+			if tSource.Repository == nil {
+				// Initialize the Repository
+				tSource.Repository = initRepository(nt, id.Kind, id.ObjectKey, tSource.SourceFormat)
 			}
+			if tSource.Directory == "" {
+				// Set the default Directory
+				tSource.Directory = gitproviders.DefaultSyncDir
+			}
+			if tSource.SourceFormat == "" {
+				// Set the default SourceFormat
+				switch id.Kind {
+				case configsync.RootSyncKind:
+					// RootSyncs use Hierarchy by default
+					tSource.SourceFormat = configsync.SourceFormatHierarchy
+				case configsync.RepoSyncKind:
+					// RepoSync only ever use unstructured
+					tSource.SourceFormat = configsync.SourceFormatUnstructured
+				}
+			}
+			nt.SyncSources[id] = tSource
 		// case *syncsource.HelmSyncSource:
 		// case *syncsource.OCISyncSource:
 		// TODO: setup OCI & Helm RootSyncs

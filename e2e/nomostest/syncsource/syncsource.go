@@ -15,7 +15,7 @@
 package syncsource
 
 import (
-	"fmt"
+	"strings"
 
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/registryproviders"
@@ -27,9 +27,13 @@ type SyncSource interface {
 	// Type returns the SourceType of this source.
 	Type() configsync.SourceType
 	// Commit returns the current/latest "commit" for this source.
-	// The commit value is used to validate RSync status and metrics.
+	// The value is used to validate RSync status and metrics.
 	Commit() (string, error)
-	// TODO: Add SourceFormat
+	// Path within the source to sync to the cluster.
+	// For Helm charts, the value represents the chart name instead.
+	// The value is used to validate RSync status.
+	Path() string
+	// TODO: Add SourceFormat?
 }
 
 // GitSyncSource is the "git" source, backed by a Git repository.
@@ -39,6 +43,8 @@ type GitSyncSource struct {
 	Repository *gitproviders.Repository
 	// TODO: Add SyncPath and Branch/Revision to uniquely identify part of a repo
 	SourceFormat configsync.SourceFormat
+	// Directory is the path within the source to sync to the cluster.
+	Directory string
 }
 
 // Type returns the SourceType of this source.
@@ -49,6 +55,11 @@ func (s *GitSyncSource) Type() configsync.SourceType {
 // Commit returns the current commit hash targeted by the local git repository.
 func (s *GitSyncSource) Commit() (string, error) {
 	return s.Repository.Hash()
+}
+
+// Path within the git repository to sync to the cluster.
+func (s *GitSyncSource) Path() string {
+	return s.Directory
 }
 
 // HelmSyncSource is the "helm" source, backed by a Helm chart.
@@ -67,8 +78,26 @@ func (s *HelmSyncSource) Commit() (string, error) {
 	return s.ChartID.Version, nil
 }
 
+// Path returns the name of the current chart.
+func (s *HelmSyncSource) Path() string {
+	return s.ChartID.Name
+}
+
 // OCISyncSource is the "oci" source, backed by an OCI image.
 type OCISyncSource struct {
+	// ImageID is the ID of the OCI image.
+	//
+	// This must use the "remote" address used by the reconciler, not the
+	// "local" address using the kubectl proxy.
+	//
+	// Since this is used to configure syncing, the image digest should only be
+	// specified if it should be used when pulling.
+	ImageID registryproviders.OCIImageID
+	// Digest of the OCI image, including "sha256:" prefix.
+	// This is the digest used for validating the image after pulling/syncing.
+	Digest string
+	// Directory is the path within the OCI image to sync to the cluster.
+	Directory string
 	// TODO: add an OCI-specific image ID & migrate OCI RSyncs to use OCISyncSource
 	// TODO: Add OCIRegistryProvider to allow for chart modifications
 }
@@ -80,5 +109,10 @@ func (s *OCISyncSource) Type() configsync.SourceType {
 
 // Commit is not yet implemented.
 func (s *OCISyncSource) Commit() (string, error) {
-	return "", fmt.Errorf("not yet implemented: OCISyncSource.Commit")
+	return strings.TrimPrefix(s.Digest, "sha256:"), nil
+}
+
+// Path within the OCI image to sync to the cluster.
+func (s *OCISyncSource) Path() string {
+	return s.Directory
 }

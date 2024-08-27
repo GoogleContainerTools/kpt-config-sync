@@ -19,7 +19,6 @@ import (
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/kustomizecomponents"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
@@ -51,15 +50,16 @@ const (
 // Public documentation:
 // https://cloud.google.com/anthos-config-management/docs/how-to/installing-config-sync#git-creds-secret
 func TestGCENodeCSR(t *testing.T) {
+	rootSyncID := nomostest.DefaultRootSyncID
 	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, testNs)
 	nt := nomostest.New(t, nomostesting.SyncSource,
 		ntopts.RequireGKE(t), ntopts.GCENodeTest,
 		ntopts.RequireCloudSourceRepository(t),
-		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
+		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured),
 		ntopts.SyncWithGitSource(repoSyncID),
 		ntopts.RepoSyncPermissions(policy.AllAdmin()), // NS reconciler manages a bunch of resources.
 		ntopts.WithDelegatedControl)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
 	repoSyncKey := repoSyncID.ObjectKey
 	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
 
@@ -78,6 +78,7 @@ func TestGCENodeCSR(t *testing.T) {
 			}
 		}
 	}`)
+	nomostest.SetExpectedSyncPath(nt, rootSyncID, "kustomize-components")
 
 	nt.T.Log("Add the namespace-repo directory to RepoSync's repo")
 	repoSync := k8sobjects.RepoSyncObjectV1Beta1(testNs, configsync.RepoSyncName)
@@ -90,19 +91,11 @@ func TestGCENodeCSR(t *testing.T) {
 			}
 		}
 	}`)
+	nomostest.SetExpectedSyncPath(nt, repoSyncID, "namespace-repo")
 
-	err := nt.WatchForAllSyncs(
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
-			nomostest.DefaultRootRepoNamespacedName: "kustomize-components",
-			repoSyncKey:                             "namespace-repo",
-		}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	kustomizecomponents.ValidateAllTenants(nt, string(declared.RootScope), "base", "tenant-a", "tenant-b", "tenant-c")
-	if err := testutils.ReconcilerPodMissingFWICredsAnnotation(nt, nomostest.DefaultRootReconcilerName); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(testutils.ReconcilerPodMissingFWICredsAnnotation(nt, nomostest.DefaultRootReconcilerName))
 	kustomizecomponents.ValidateTenant(nt, repoSyncKey.Namespace, repoSyncKey.Namespace, "base")
 }
 
@@ -113,11 +106,12 @@ func TestGCENodeCSR(t *testing.T) {
 //   - `roles/artifactregistry.reader` for access image in Artifact Registry.
 //   - `roles/containerregistry.ServiceAgent` for access image in Container Registry.
 func TestGCENodeOCI(t *testing.T) {
+	rootSyncID := nomostest.DefaultRootSyncID
 	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, testNs)
 	nt := nomostest.New(t, nomostesting.SyncSource,
 		ntopts.RequireGKE(t), ntopts.GCENodeTest,
 		ntopts.RequireOCIArtifactRegistry(t),
-		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
+		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured),
 		ntopts.SyncWithGitSource(repoSyncID),
 		ntopts.RepoSyncPermissions(policy.AllAdmin()), // NS reconciler manages a bunch of resources.
 		ntopts.WithDelegatedControl)
@@ -126,20 +120,16 @@ func TestGCENodeOCI(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	rootSync := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
-	rootSyncRef := nomostest.RootSyncNN(rootSync.Name)
 	rootImage, err := nt.BuildAndPushOCIImage(
-		rootSyncRef,
+		rootSyncID.ObjectKey,
 		registryproviders.ImageSourcePackage("hydration/kustomize-components"),
 		registryproviders.ImageVersion("v1"))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 	nt.T.Log("Update RootSync to sync from an OCI image in Artifact Registry")
-	rootSyncOCI := nt.RootSyncObjectOCI(configsync.RootSyncName, rootImage)
-	if err = nt.KubeClient.Apply(rootSyncOCI); err != nil {
-		nt.T.Fatal(err)
-	}
+	rootSyncOCI := nt.RootSyncObjectOCI(rootSyncID.Name, rootImage.OCIImageID().WithoutDigest(), "", rootImage.Digest)
+	nt.Must(nt.KubeClient.Apply(rootSyncOCI))
 
 	repoSyncRef := repoSyncID.ObjectKey
 	nsImage, err := nt.BuildAndPushOCIImage(
@@ -150,37 +140,22 @@ func TestGCENodeOCI(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	nt.T.Log("Update RepoSync to sync from an OCI image in Artifact Registry")
-	repoSyncOCI := nt.RepoSyncObjectOCI(repoSyncRef, nsImage)
-	if err = nt.KubeClient.Apply(repoSyncOCI); err != nil {
-		nt.T.Fatal(err)
-	}
+	repoSyncOCI := nt.RepoSyncObjectOCI(repoSyncRef, nsImage.OCIImageID().WithoutDigest(), "", nsImage.Digest)
+	nt.Must(nt.KubeClient.Apply(repoSyncOCI))
 
-	err = nt.WatchForAllSyncs(
+	nt.Must(nt.WatchForAllSyncs(
 		nomostest.WithRootSha1Func(imageDigestFuncByDigest(rootImage.Digest)),
-		nomostest.WithRepoSha1Func(imageDigestFuncByDigest(nsImage.Digest)),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
-			nomostest.DefaultRootRepoNamespacedName: ".",
-			repoSyncRef:                             ".",
-		}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		nomostest.WithRepoSha1Func(imageDigestFuncByDigest(nsImage.Digest))))
 	kustomizecomponents.ValidateAllTenants(nt, string(declared.RootScope), "base", "tenant-a", "tenant-b", "tenant-c")
 	kustomizecomponents.ValidateTenant(nt, repoSyncRef.Namespace, repoSyncRef.Namespace, "base")
 
 	tenant := "tenant-b"
 	nt.T.Log("Update RootSync to sync from an OCI image in a private Google Container Registry")
-	nt.MustMergePatch(rootSync, fmt.Sprintf(`{"spec": {"oci": {"image": "%s", "dir": "%s"}}}`, privateGCRImage("kustomize-components"), tenant))
-	err = nt.WatchForAllSyncs(
+	nt.MustMergePatch(rootSyncOCI, fmt.Sprintf(`{"spec": {"oci": {"image": "%s", "dir": "%s"}}}`, privateGCRImage("kustomize-components"), tenant))
+	nomostest.SetExpectedSyncPath(nt, rootSyncID, tenant)
+	nt.Must(nt.WatchForAllSyncs(
 		nomostest.WithRootSha1Func(imageDigestFuncByName(privateGCRImage("kustomize-components"))),
-		nomostest.WithRepoSha1Func(imageDigestFuncByDigest(nsImage.Digest)),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
-			nomostest.DefaultRootRepoNamespacedName: tenant,
-			repoSyncRef:                             ".",
-		}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		nomostest.WithRepoSha1Func(imageDigestFuncByDigest(nsImage.Digest))))
 	kustomizecomponents.ValidateAllTenants(nt, string(declared.RootScope), "../base", tenant)
 }
 

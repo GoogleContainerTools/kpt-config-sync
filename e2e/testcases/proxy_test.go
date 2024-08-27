@@ -19,13 +19,10 @@ import (
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
-	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
-	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
@@ -33,6 +30,7 @@ import (
 )
 
 func TestSyncingThroughAProxy(t *testing.T) {
+	rootSyncID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t, nomostesting.SyncSource)
 
 	nt.T.Logf("Set up the tiny proxy service and Override the RootSync object with proxy setting")
@@ -50,13 +48,13 @@ func TestSyncingThroughAProxy(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	nt.T.Log("Verify the NoOpProxyError")
-	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rs := k8sobjects.RootSyncObjectV1Beta1(rootSyncID.Name)
 	nt.WaitForRootSyncStalledError(rs.Name, "Validation", `KNV1061: RootSyncs which specify spec.git.proxy must also specify spec.git.auth as one of "none", "cookiefile" or "token"`)
 
 	nt.T.Log("Set auth type to cookiefile")
 	nt.MustMergePatch(rs, `{"spec": {"git": {"auth": "cookiefile"}}}`)
 	nt.T.Log("Verify the secretRef error")
-	if err = nomostest.SetupFakeSSHCreds(nt, rs.Kind, nomostest.RootSyncNN(rs.Name), configsync.AuthCookieFile, controllers.GitCredentialVolume); err != nil {
+	if err = nomostest.SetupFakeSSHCreds(nt, rootSyncID.Kind, rootSyncID.ObjectKey, configsync.AuthCookieFile, controllers.GitCredentialVolume); err != nil {
 		nt.T.Fatal(err)
 	}
 	nt.WaitForRootSyncStalledError(rs.Name, "Validation", `git secretType was set as "cookiefile" but cookie_file key is not present`)
@@ -68,19 +66,12 @@ func TestSyncingThroughAProxy(t *testing.T) {
 
 	nt.T.Log("Set auth type to none")
 	nt.MustMergePatch(rs, `{"spec": {"git": {"auth": "none", "secretRef": {"name":""}}}}`)
+
 	nt.T.Log("Verify no errors")
-	rs = &v1beta1.RootSync{}
-	if err = nt.KubeClient.Get("root-sync", configmanagement.ControllerNamespace, rs); err != nil {
-		nt.T.Fatal(err)
-	}
-	err = nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(nomostest.RemoteRootRepoSha1Fn),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
-			nomostest.DefaultRootRepoNamespacedName: "hierarchical-format/config",
-		}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	// Sync dir value set by testdata/proxy/proxy-enabled.yaml
+	nomostest.SetExpectedSyncPath(nt, rootSyncID, "hierarchical-format/config")
+	nt.Must(nt.WatchForAllSyncs(
+		nomostest.WithRootSha1Func(nomostest.RemoteRootRepoSha1Fn)))
 }
 
 func hasReadyReplicas(replicas int32) testpredicates.Predicate {

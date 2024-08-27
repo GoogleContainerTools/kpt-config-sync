@@ -17,25 +17,26 @@ package e2e
 import (
 	"testing"
 
-	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/system"
+	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/status"
 )
 
 func TestMissingRepoErrorWithHierarchicalFormat(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource)
 
-	nomostest.SetPolicyDir(nt, configsync.RootSyncName, "")
+	nomostest.SetRootSyncGitDir(nt, configsync.RootSyncName, "")
 
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, system.MissingRepoErrorCode, "")
 }
 
 func TestPolicyDirUnset(t *testing.T) {
+	rootSyncID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t, nomostesting.SyncSource)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
 	// There are 6 cluster-scoped objects under `../../examples/acme/cluster`.
 	//
 	// Copying the whole `../../examples/acme/cluster` dir would cause the Config Sync mono-repo mode CI job to fail,
@@ -50,30 +51,24 @@ func TestPolicyDirUnset(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Copy("../../examples/acme/namespaces", "."))
 	nt.Must(rootSyncGitRepo.Copy("../../examples/acme/system", "."))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Initialize the root directory"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
-	nomostest.SetPolicyDir(nt, configsync.RootSyncName, "")
-	err := nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{nomostest.DefaultRootRepoNamespacedName: "."}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nomostest.SetRootSyncGitDir(nt, rootSyncID.Name, "")
+	nomostest.SetExpectedSyncPath(nt, rootSyncID, controllers.DefaultSyncDir)
+	nt.Must(nt.WatchForAllSyncs())
 }
 
 func TestInvalidPolicyDir(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource)
 
 	nt.T.Log("Break the policydir in the repo")
-	nomostest.SetPolicyDir(nt, configsync.RootSyncName, "some-nonexistent-policydir")
+	nomostest.SetRootSyncGitDir(nt, configsync.RootSyncName, "some-nonexistent-policydir")
 
 	nt.T.Log("Expect an error to be present in status.source.errors")
 	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "")
 
 	nt.T.Log("Fix the policydir in the repo")
-	nomostest.SetPolicyDir(nt, configsync.RootSyncName, "acme")
+	nomostest.SetRootSyncGitDir(nt, configsync.RootSyncName, "acme")
 	nt.T.Log("Expect repo to recover from the error in source message")
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 }

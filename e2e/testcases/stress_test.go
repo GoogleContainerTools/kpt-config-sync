@@ -38,12 +38,10 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/iam"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/registryproviders"
-	"kpt.dev/configsync/e2e/nomostest/syncsource"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testresourcegroup"
 	"kpt.dev/configsync/e2e/nomostest/workloadidentity"
-	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
@@ -219,8 +217,9 @@ func TestStressFrequentGitCommits(t *testing.T) {
 // This test creates a RootSync pointed at https://github.com/config-sync-examples/crontab-crs
 // This repository contains 13,000+ objects, which takes a long time to reconcile
 func TestStressLargeRequest(t *testing.T) {
+	rootSyncID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.StressTest,
-		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
+		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured),
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
 
 	crdName := "crontabs.stable.example.com"
@@ -236,7 +235,7 @@ func TestStressLargeRequest(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	rootSync := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	rootSync := k8sobjects.RootSyncObjectV1Beta1(rootSyncID.Name)
 	reconcilerOverride := v1beta1.ContainerResourcesSpec{
 		ContainerName: reconcilermanager.Reconciler,
 		MemoryLimit:   resource.MustParse("1500Mi"),
@@ -264,9 +263,10 @@ func TestStressLargeRequest(t *testing.T) {
 	if err := nt.KubeClient.Apply(rootSync); err != nil {
 		nt.T.Fatal(err)
 	}
+	nomostest.SetExpectedSyncPath(nt, rootSyncID, "configs")
 
 	nt.T.Logf("Verify that the source errors are truncated")
-	err = nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), "root-sync", configmanagement.ControllerNamespace,
+	err = nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, rootSyncID.Namespace,
 		[]testpredicates.Predicate{truncateSourceErrors()})
 	if err != nil {
 		nt.T.Fatal(err)
@@ -284,14 +284,8 @@ func TestStressLargeRequest(t *testing.T) {
 	}
 
 	nt.T.Logf("Wait for the sync to complete")
-	err = nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(nomostest.RemoteRootRepoSha1Fn),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
-			nomostest.DefaultRootRepoNamespacedName: "configs",
-		}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs(
+		nomostest.WithRootSha1Func(nomostest.RemoteRootRepoSha1Fn)))
 }
 
 // TestStress100CRDs applies 100 CRDs and validates that syncing still works.
@@ -476,9 +470,10 @@ func TestStressMemoryUsageGit(t *testing.T) {
 // 6. IAM for the GSA to read from the Artifact Registry repo
 // 7. IAM for the test runner to write to Artifact Registry repo
 func TestStressMemoryUsageOCI(t *testing.T) {
+	rootSyncID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t, nomostesting.WorkloadIdentity, ntopts.StressTest,
 		ntopts.RequireOCIProvider,
-		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
+		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured),
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
 
 	if err := workloadidentity.ValidateEnabled(nt); err != nil {
@@ -514,28 +509,20 @@ func TestStressMemoryUsageOCI(t *testing.T) {
 		}
 	}
 
-	image, err := nt.BuildAndPushOCIImage(nomostest.RootSyncNN(configsync.RootSyncName),
+	image, err := nt.BuildAndPushOCIImage(rootSyncID.ObjectKey,
 		registryproviders.ImageInputObjects(nt.Scheme, packageObjs...))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
 	nt.T.Log("Update RootSync to sync from the OCI image in Artifact Registry")
-	rs := nt.RootSyncObjectOCI(configsync.RootSyncName, image)
-	if err := nt.KubeClient.Apply(rs); err != nil {
-		nt.T.Fatal(err)
-	}
+	rs := nt.RootSyncObjectOCI(rootSyncID.Name, image.OCIImageID().WithoutDigest(), "", image.Digest)
+	nt.Must(nt.KubeClient.Apply(rs))
 
 	// Validate that the resources sync without the reconciler running out of
 	// memory, getting OOMKilled, and crash looping.
-	err = nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(imageDigestFuncByDigest(image.Digest)),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
-			nomostest.DefaultRootRepoNamespacedName: ".",
-		}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs(
+		nomostest.WithRootSha1Func(imageDigestFuncByDigest(image.Digest))))
 
 	nt.T.Logf("Verify the number of Anvil objects")
 	for i := 1; i <= crdCount; i++ {
@@ -551,21 +538,15 @@ func TestStressMemoryUsageOCI(t *testing.T) {
 	}
 
 	nt.T.Log("Remove all files and publish an empty OCI image")
-	emptyImage, err := nt.BuildAndPushOCIImage(nomostest.RootSyncNN(configsync.RootSyncName))
+	emptyImage, err := nt.BuildAndPushOCIImage(rootSyncID.ObjectKey)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
 	// Validate that the resources sync without the reconciler running out of
 	// memory, getting OOMKilled, and crash looping.
-	err = nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(imageDigestFuncByDigest(emptyImage.Digest)),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
-			nomostest.DefaultRootRepoNamespacedName: ".",
-		}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs(
+		nomostest.WithRootSha1Func(imageDigestFuncByDigest(emptyImage.Digest))))
 }
 
 // TestStressMemoryUsageHelm applies 100 CRDs and then 50 objects for each
@@ -649,10 +630,7 @@ func TestStressMemoryUsageHelm(t *testing.T) {
 		emptyChart.Name, emptyChart.Version))
 
 	// Update the expected helm chart
-	nt.SyncSources[rootSyncID] = &syncsource.HelmSyncSource{
-		ChartID: emptyChart.HelmChartID,
-	}
-
+	nomostest.SetExpectedHelmSource(nt, rootSyncID, emptyChart.HelmChartID)
 	// Validate that the resources sync without the reconciler running out of
 	// memory, getting OOMKilled, and crash looping.
 	nt.Must(nt.WatchForAllSyncs(nomostest.WithTimeout(5 * time.Minute)))

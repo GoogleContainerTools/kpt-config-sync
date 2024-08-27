@@ -58,7 +58,7 @@ func (ss *SubresourceStorage) Update(ctx context.Context, obj client.Object, opt
 		return err
 	}
 
-	id, err := lookupObjectID(obj, ss.Storage.scheme)
+	id, err := kinds.LookupID(obj, ss.Storage.scheme)
 	if err != nil {
 		return err
 	}

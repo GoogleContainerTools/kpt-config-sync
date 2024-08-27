@@ -366,18 +366,18 @@ func waitForSync(nt *nomostest.NT, sha1Func nomostest.Sha1Func, objs ...client.O
 			tg.Go(func() error {
 				return nt.WatchForSync(kinds.RootSyncV1Beta1(), rsync.Name, rsync.Namespace,
 					sha1Func, nomostest.RootSyncHasStatusSyncCommit,
-					&nomostest.SyncDirPredicatePair{
-						Dir:       rsync.Spec.Git.Dir,
-						Predicate: nomostest.RootSyncHasStatusSyncDirectory,
+					&nomostest.SyncPathPredicatePair{
+						Path:      rsync.Spec.Git.Dir,
+						Predicate: nomostest.RootSyncHasStatusSyncPath,
 					})
 			})
 		case *v1beta1.RepoSync:
 			tg.Go(func() error {
 				return nt.WatchForSync(kinds.RepoSyncV1Beta1(), rsync.Name, rsync.Namespace,
 					sha1Func, nomostest.RepoSyncHasStatusSyncCommit,
-					&nomostest.SyncDirPredicatePair{
-						Dir:       rsync.Spec.Git.Dir,
-						Predicate: nomostest.RepoSyncHasStatusSyncDirectory,
+					&nomostest.SyncPathPredicatePair{
+						Path:      rsync.Spec.Git.Dir,
+						Predicate: nomostest.RepoSyncHasStatusSyncPath,
 					})
 			})
 		default:

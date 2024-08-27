@@ -61,9 +61,16 @@ type ProxiedRegistryProvider interface {
 type OCIRegistryProvider interface {
 	RegistryProvider
 
+	// RegistryRemoteAddress returns the address of the registry.
+	RegistryRemoteAddress() string
+
+	// RepositoryPath returns the name or path of the repository, without the
+	// registry or image details.
+	RepositoryPath() string
+
 	// ImageRemoteAddress returns the address of the image in the registry.
 	// For pulling with RSync's `.spec.oci.image`
-	ImageRemoteAddress(imageName string) (string, error)
+	ImageRemoteAddress(imageName string) string
 
 	// PushImage pushes a local tarball as an OCI image to the remote registry.
 	PushImage(imageName, tag, localSourceTgzPath string) (*OCIImage, error)
@@ -81,7 +88,7 @@ type HelmRegistryProvider interface {
 
 	// RepositoryRemoteURL is the RepositoryRemoteAddress prepended with oci://
 	// For pulling with RSync's `.spec.helm.repo`
-	RepositoryRemoteURL() (string, error)
+	RepositoryRemoteURL() string
 
 	// PushPackage pushes a local helm chart as an OCI image to the remote registry.
 	PushPackage(localChartTgzPath string) (*HelmPackage, error)

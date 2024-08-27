@@ -71,15 +71,6 @@ func Unstructured(source *syncsource.GitSyncSource) {
 func SyncWithGitSource(id core.ID, gitOpts ...GitSourceOption) func(opt *New) {
 	return func(opt *New) {
 		source := &syncsource.GitSyncSource{}
-		// Set the default source options
-		switch id.Kind {
-		case configsync.RootSyncKind:
-			// RootSyncs use Hierarchy by default
-			source.SourceFormat = configsync.SourceFormatHierarchy
-		case configsync.RepoSyncKind:
-			// RepoSync only ever use unstructured
-			source.SourceFormat = configsync.SourceFormatUnstructured
-		}
 		// Modify the default source with user specified options
 		for _, gitOpt := range gitOpts {
 			gitOpt(source)

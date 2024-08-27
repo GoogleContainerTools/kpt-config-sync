@@ -32,10 +32,12 @@ type ID struct {
 }
 
 // IDOf converts an Object to its ID.
+//
+// TODO: Replace usage with LookupID, unless explicitly Unstructured.
 func IDOf(o client.Object) ID {
 	return ID{
 		GroupKind: o.GetObjectKind().GroupVersionKind().GroupKind(),
-		ObjectKey: client.ObjectKey{Namespace: o.GetNamespace(), Name: o.GetName()},
+		ObjectKey: client.ObjectKeyFromObject(o),
 	}
 }
 

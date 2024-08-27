@@ -53,19 +53,10 @@ import (
 // references resources for tenant-a, tenant-b, and tenant-c.
 // Each tenant includes a NetworkPolicy, a Role and a RoleBinding.
 
-const (
-	// publicGCRImage pulls the public OCI image by the default `latest` tag
-	// The test-infra GCR is public.
-	publicGCRImage = nomostesting.TestInfraContainerRegistry + "/kustomize-components"
-
-	// publicARImage pulls the public OCI image by the default `latest` tag
-	publicARImage = nomostesting.ConfigSyncTestPublicRegistry + "/kustomize-components"
-)
-
 // privateGCRImage pulls the private OCI image by tag
 // The test environment GCR is assumed to be private.
 func privateGCRImage(sourcePackage string) string {
-	return fmt.Sprintf("%s/%s/config-sync-test/%s:v1", nomostesting.GCRHost, *e2e.GCPProject, sourcePackage)
+	return fmt.Sprintf("%s/%s/config-sync-test/%s:v1", nomostesting.GoogleContainerRegistryHost, *e2e.GCPProject, sourcePackage)
 }
 
 func gsaARReaderEmail() string {
@@ -79,49 +70,60 @@ func gsaGCRReaderEmail() string {
 // TestPublicOCI can run on both Kind and GKE clusters.
 // It tests Config Sync can pull from public OCI images without any authentication.
 func TestPublicOCI(t *testing.T) {
+	rootSyncID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t, nomostesting.SyncSource,
-		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
+		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured))
+	var err error
 
-	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
-	nt.T.Log("Update RootSync to sync from a public OCI image in AR")
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"sourceType": "%s", "oci": {"image": "%s", "auth": "none"}, "git": null}}`,
-		configsync.OciSource, publicARImage))
-	err := nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(imageDigestFuncByName(publicARImage)),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
-			nomostest.DefaultRootRepoNamespacedName: ".",
-		}))
+	publicARImageID := registryproviders.OCIImageID{
+		Registry:   nomostesting.ArtifactRegistryHost,
+		Repository: nomostesting.ConfigSyncTestPublicRepositoryPath,
+		Name:       "kustomize-components",
+	}
+	publicARImageID.Digest, err = getImageDigest(nt, publicARImageID.Address())
 	if err != nil {
 		nt.T.Fatal(err)
 	}
+
+	nt.T.Log("Update RootSync to sync from a public OCI image in AR")
+	rs := nt.RootSyncObjectOCI(rootSyncID.Name, publicARImageID.WithoutDigest(), "", publicARImageID.Digest)
+	rs.Spec.Oci.Auth = configsync.AuthNone
+	nt.Must(nt.KubeClient.Apply(rs))
+	nt.Must(nt.WatchForAllSyncs())
 	kustomizecomponents.ValidateAllTenants(nt, string(declared.RootScope), "base", "tenant-a", "tenant-b", "tenant-c")
+
+	publicGCRImageID := registryproviders.OCIImageID{
+		Registry:   nomostesting.GoogleContainerRegistryHost,
+		Repository: nomostesting.TestInfraContainerRepositoryPath,
+		Name:       "kustomize-components",
+	}
+	publicGCRImageID.Digest, err = getImageDigest(nt, publicGCRImageID.Address())
+	if err != nil {
+		nt.T.Fatal(err)
+	}
 
 	tenant := "tenant-a"
 	nt.T.Logf("Update RootSync to sync %s from a public OCI image in GCR", tenant)
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"oci": {"image": "%s", "dir": "%s"}}}`, publicGCRImage, tenant))
-	err = nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(imageDigestFuncByName(publicGCRImage)),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
-			nomostest.DefaultRootRepoNamespacedName: "tenant-a",
-		}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	rs = nt.RootSyncObjectOCI(rootSyncID.Name, publicGCRImageID.WithoutDigest(), tenant, publicGCRImageID.Digest)
+	rs.Spec.Oci.Auth = configsync.AuthNone
+	nt.Must(nt.KubeClient.Apply(rs))
+	nt.Must(nt.WatchForAllSyncs())
 	kustomizecomponents.ValidateAllTenants(nt, string(declared.RootScope), "../base", tenant)
 }
 
 func TestSwitchFromGitToOciCentralized(t *testing.T) {
 	namespace := testNs
+	rootSyncID := nomostest.DefaultRootSyncID
 	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, namespace)
 	nt := nomostest.New(t, nomostesting.SyncSource,
 		ntopts.RequireOCIProvider,
-		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
+		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured),
 		ntopts.SyncWithGitSource(repoSyncID),
 		// bookinfo image contains RoleBinding
 		// bookinfo repo contains ServiceAccount
 		ntopts.RepoSyncPermissions(policy.RBACAdmin(), policy.CoreAdmin()),
 	)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
 	repoSyncKey := repoSyncID.ObjectKey
 	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
 
@@ -154,27 +156,16 @@ func TestSwitchFromGitToOciCentralized(t *testing.T) {
 
 	// Switch from Git to OCI
 	nt.T.Log("Update the RepoSync object to sync from OCI")
-	repoSyncOCI := nt.RepoSyncObjectOCI(repoSyncKey, image)
+	repoSyncOCI := nt.RepoSyncObjectOCI(repoSyncKey, image.OCIImageID().WithoutDigest(), "", image.Digest)
 	nt.Must(rootSyncGitRepo.Add(repoSyncPath, repoSyncOCI))
 	nt.Must(rootSyncGitRepo.CommitAndPush("configure RepoSync to sync from OCI in the root repository"))
 
-	if err := nt.WatchForAllSyncs(
-		nomostest.WithRepoSha1Func(imageDigestFuncByDigest(image.Digest)),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
-			repoSyncKey: ".",
-		})); err != nil {
-		nt.T.Fatal(err)
-	}
-	if err := nt.Validate(configsync.RepoSyncName, namespace, &v1beta1.RepoSync{}, isSourceType(configsync.OciSource)); err != nil {
-		nt.T.Error(err)
-	}
-	if err := nt.Validate(bookinfoRole.Name, namespace, &rbacv1.Role{},
-		testpredicates.HasAnnotation(metadata.ResourceManagerKey, namespace)); err != nil {
-		nt.T.Error(err)
-	}
-	if err := nt.ValidateNotFound(bookinfoSA.Name, namespace, &corev1.ServiceAccount{}); err != nil {
-		nt.T.Error(err)
-	}
+	nt.Must(nt.WatchForAllSyncs(
+		nomostest.WithRepoSha1Func(imageDigestFuncByDigest(image.Digest))))
+	nt.Must(nt.Validate(configsync.RepoSyncName, namespace, &v1beta1.RepoSync{}, isSourceType(configsync.OciSource)))
+	nt.Must(nt.Validate(bookinfoRole.Name, namespace, &rbacv1.Role{},
+		testpredicates.HasAnnotation(metadata.ResourceManagerKey, namespace)))
+	nt.Must(nt.ValidateNotFound(bookinfoSA.Name, namespace, &corev1.ServiceAccount{}))
 }
 
 func TestSwitchFromGitToOciDelegated(t *testing.T) {
@@ -218,27 +209,17 @@ func TestSwitchFromGitToOciDelegated(t *testing.T) {
 	}
 
 	// Switch from Git to OCI
-	repoSyncOCI := nt.RepoSyncObjectOCI(repoSyncKey, image)
+	repoSyncOCI := nt.RepoSyncObjectOCI(repoSyncKey, image.OCIImageID().WithoutDigest(), "", image.Digest)
 	nt.T.Log("Manually update the RepoSync object to sync from OCI")
-	if err := nt.KubeClient.Apply(repoSyncOCI); err != nil {
-		nt.T.Fatal(err)
-	}
-	if err := nt.Validate(configsync.RepoSyncName, namespace, &v1beta1.RepoSync{}, isSourceType(configsync.OciSource)); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.KubeClient.Apply(repoSyncOCI))
+
+	nt.Must(nt.Validate(configsync.RepoSyncName, namespace, &v1beta1.RepoSync{}, isSourceType(configsync.OciSource)))
 	nt.T.Log("Verify the namespace objects are synced")
-	err = nt.WatchForSync(kinds.RepoSyncV1Beta1(), configsync.RepoSyncName, namespace,
-		imageDigestFuncByDigest(image.Digest), nomostest.RepoSyncHasStatusSyncCommit, nil)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-	if err := nt.Validate(bookinfoRole.Name, namespace, &rbacv1.Role{},
-		testpredicates.HasAnnotation(metadata.ResourceManagerKey, namespace)); err != nil {
-		nt.T.Fatal(err)
-	}
-	if err := nt.ValidateNotFound(bookinfoSA.Name, namespace, &corev1.ServiceAccount{}); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForSync(kinds.RepoSyncV1Beta1(), configsync.RepoSyncName, namespace,
+		imageDigestFuncByDigest(image.Digest), nomostest.RepoSyncHasStatusSyncCommit, nil))
+	nt.Must(nt.Validate(bookinfoRole.Name, namespace, &rbacv1.Role{},
+		testpredicates.HasAnnotation(metadata.ResourceManagerKey, namespace)))
+	nt.Must(nt.ValidateNotFound(bookinfoSA.Name, namespace, &corev1.ServiceAccount{}))
 
 	// Invalid cases
 	rs := k8sobjects.RepoSyncObjectV1Beta1(repoSyncID.Namespace, repoSyncID.Name)
@@ -269,59 +250,48 @@ func isSourceType(sourceType configsync.SourceType) testpredicates.Predicate {
 }
 
 func TestOciSyncWithDigest(t *testing.T) {
-	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
+	rootSyncID := nomostest.DefaultRootSyncID
+	rootSyncKey := rootSyncID.ObjectKey
 	nt := nomostest.New(t, nomostesting.SyncSource,
-		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
+		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured),
 		ntopts.RequireOCIProvider,
 	)
 	var err error
 	// OCI image will only contain the bookinfo-admin role
 	bookinfoRole := k8sobjects.RoleObject(core.Name("bookinfo-admin"))
-	image, err := nt.BuildAndPushOCIImage(rootSyncNN, registryproviders.ImageInputObjects(nt.Scheme, bookinfoRole))
+	image, err := nt.BuildAndPushOCIImage(rootSyncKey, registryproviders.ImageInputObjects(nt.Scheme, bookinfoRole))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 	nt.T.Log("Create RootSync with OCI image")
-	rootSyncOCI := nt.RootSyncObjectOCI(rootSyncNN.Name, image)
+	rootSyncOCI := nt.RootSyncObjectOCI(rootSyncKey.Name, image.OCIImageID().WithoutDigest(), "", image.Digest)
 	rootSyncOCI.Spec.Oci.Period = metav1.Duration{Duration: 5 * time.Second}
 	nt.Must(nt.KubeClient.Apply(rootSyncOCI))
 	nt.Must(nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(imageDigestFuncByDigest(image.Digest)),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
-			rootSyncNN: ".",
-		}),
-	))
+		nomostest.WithRootSha1Func(imageDigestFuncByDigest(image.Digest))))
 
 	// Delete the remote image
 	nt.T.Log("Delete image from remote registry")
 	nt.Must(image.Delete())
 	// RootSync should fail because image can no longer be pulled
 	nt.T.Log("Wait for RootSync to have source error")
-	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
+	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, configsync.ControllerNamespace,
 		[]testpredicates.Predicate{testpredicates.RootSyncHasSourceError(status.SourceErrorCode, "failed to pull image")}))
-	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "failed to pull image")
+	nt.WaitForRootSyncSourceError(rootSyncID.Name, status.SourceErrorCode, "failed to pull image")
 	// Specify image with digest
-	image, err = nt.BuildAndPushOCIImage(rootSyncNN, registryproviders.ImageInputObjects(nt.Scheme, bookinfoRole))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-	imageWithDigest, err := image.RemoteAddressWithDigest()
+	image, err = nt.BuildAndPushOCIImage(rootSyncKey, registryproviders.ImageInputObjects(nt.Scheme, bookinfoRole))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 	nt.T.Log("Apply RootSync with fully specified OCI image digest")
-	rootSyncOCI = nt.RootSyncObjectOCI(rootSyncNN.Name, image)
-	rootSyncOCI.Spec.Oci.Image = imageWithDigest
+	// TODO: Test for just tag, tag+digest, and just digest independently
+	rootSyncOCI = nt.RootSyncObjectOCI(rootSyncKey.Name, image.OCIImageID().WithoutTag(), "", image.Digest)
 	rootSyncOCI.Spec.Oci.Period = metav1.Duration{Duration: 5 * time.Second}
 	nt.Must(nt.KubeClient.Apply(rootSyncOCI))
 	nt.Must(nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(imageDigestFuncByDigest(image.Digest)),
-		nomostest.WithSyncDirectoryMap(map[types.NamespacedName]string{
-			rootSyncNN: ".",
-		}),
-	))
+		nomostest.WithRootSha1Func(imageDigestFuncByDigest(image.Digest))))
 	nt.T.Log("Check for log message in oci-sync container")
-	out, err := nt.Shell.Kubectl("logs", fmt.Sprintf("deployment/%s", core.RootReconcilerName(rootSyncNN.Name)),
+	out, err := nt.Shell.Kubectl("logs", fmt.Sprintf("deployment/%s", core.RootReconcilerName(rootSyncKey.Name)),
 		"-n", configsync.ControllerNamespace, "-c", reconcilermanager.OciSync)
 	if err != nil {
 		nt.T.Fatal(err)
@@ -334,7 +304,7 @@ func TestOciSyncWithDigest(t *testing.T) {
 	nt.Must(image.Delete())
 	nt.T.Log("Make sure RootSync remains healthy for 30 seconds")
 	// RootSync should remain healthy as long as the Pod isn't restarted (could be flaky)
-	err = nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
+	err = nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, configsync.ControllerNamespace,
 		[]testpredicates.Predicate{testpredicates.RootSyncHasSourceError(status.SourceErrorCode, "failed to pull image")},
 		testwatcher.WatchTimeout(30*time.Second)) // wait for source error to occur (it shouldn't)
 	if err == nil {
@@ -394,6 +364,7 @@ func testDigestUpdate(nt *nomostest.NT, image string) {
 // This allows reading the image digest without pulling the whole image.
 // Requires a sha256 image digest.
 func getImageDigest(nt *nomostest.NT, imageName string) (string, error) {
+	nt.T.Logf("Pulling image to get digest: %s", imageName)
 	args := []string{
 		"gcloud", "container", "images", "describe",
 		imageName,

@@ -22,7 +22,6 @@ import (
 	"go.uber.org/multierr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
@@ -87,9 +86,10 @@ func TestDeleteRootSyncAndRootSyncV1Alpha1(t *testing.T) {
 }
 
 func TestUpdateRootSyncGitDirectory(t *testing.T) {
-	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
+	rootSyncID := nomostest.DefaultRootSyncID
+	rootSyncKey := rootSyncID.ObjectKey
 	nt := nomostest.New(t, nomostesting.SyncSource)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
 
 	// Validate RootSync is present.
 	var rs v1beta1.RootSync
@@ -133,22 +133,19 @@ func TestUpdateRootSyncGitDirectory(t *testing.T) {
 		nt.T.Errorf("%s present after deletion: %v", fooNS, err)
 	}
 
-	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, auditNSObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncKey, auditNSObj)
 
 	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
-		Sync: rootSyncNN,
+		Sync: rootSyncKey,
 	})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
 	// Update RootSync.
-	nomostest.SetPolicyDir(nt, configsync.RootSyncName, fooDir)
-	syncDirectoryMap := map[types.NamespacedName]string{rootSyncNN: fooDir}
-	err = nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(syncDirectoryMap))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nomostest.SetRootSyncGitDir(nt, configsync.RootSyncName, fooDir)
+	nomostest.SetExpectedSyncPath(nt, rootSyncID, fooDir)
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Validate namespace 'shipping' created with the correct sourcePath annotation.
 	if err := nt.Validate(fooNS, "", fooNSObj,
@@ -166,11 +163,11 @@ func TestUpdateRootSyncGitDirectory(t *testing.T) {
 	}
 
 	nt.MetricsExpectations.Reset() // Not using the default PolicyDir
-	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, auditNSObj)
-	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, fooNSObj)
+	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncKey, auditNSObj)
+	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncKey, fooNSObj)
 
 	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
-		Sync: rootSyncNN,
+		Sync: rootSyncKey,
 	})
 	if err != nil {
 		nt.T.Fatal(err)
@@ -247,7 +244,7 @@ func TestUpdateRootSyncGitBranch(t *testing.T) {
 	}
 
 	// Set branch to "test-branch"
-	nomostest.SetGitBranch(nt, configsync.RootSyncName, branchB)
+	nomostest.SetRootSyncGitBranch(nt, configsync.RootSyncName, branchB)
 
 	// Checkout 'test-branch' branch to get the correct HEAD commit sha1.
 	nt.Must(rootSyncGitRepo.CheckoutBranch(branchB))
@@ -279,7 +276,7 @@ func TestUpdateRootSyncGitBranch(t *testing.T) {
 	}
 
 	// Set branch to "main"
-	nomostest.SetGitBranch(nt, configsync.RootSyncName, branchA)
+	nomostest.SetRootSyncGitBranch(nt, configsync.RootSyncName, branchA)
 
 	// Checkout back to 'main' branch to get the correct HEAD commit sha1.
 	nt.Must(rootSyncGitRepo.CheckoutBranch(branchA))

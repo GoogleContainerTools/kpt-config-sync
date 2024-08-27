@@ -38,7 +38,6 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/policy"
 	"kpt.dev/configsync/e2e/nomostest/registryproviders"
-	"kpt.dev/configsync/e2e/nomostest/syncsource"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -400,9 +399,7 @@ func TestHelmLatestVersion(t *testing.T) {
 	}
 
 	nt.T.Logf("Wait for RootSync to sync from helm chart: %s", chart.HelmChartID)
-	nt.SyncSources[rootSyncID] = &syncsource.HelmSyncSource{
-		ChartID: chart.HelmChartID,
-	}
+	nomostest.SetExpectedHelmSource(nt, rootSyncID, chart.HelmChartID)
 	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("Validate version label of a deployment from the helm chart")
@@ -418,9 +415,7 @@ func TestHelmLatestVersion(t *testing.T) {
 	}
 
 	nt.T.Logf("Wait for RootSync to sync from helm chart: %s", chart.HelmChartID)
-	nt.SyncSources[rootSyncID] = &syncsource.HelmSyncSource{
-		ChartID: chart.HelmChartID,
-	}
+	nomostest.SetExpectedHelmSource(nt, rootSyncID, chart.HelmChartID)
 	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("Validate version label of a deployment from the helm chart")
@@ -450,9 +445,7 @@ func TestHelmVersionRange(t *testing.T) {
 		Version: "15.4.1", // latest minor+patch with the same major version
 	}
 	nt.T.Logf("Wait for RootSync to sync from helm chart: %s", chartID)
-	nt.SyncSources[rootSyncID] = &syncsource.HelmSyncSource{
-		ChartID: chartID,
-	}
+	nomostest.SetExpectedHelmSource(nt, rootSyncID, chartID)
 	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("Validate Deployment from chart exists")

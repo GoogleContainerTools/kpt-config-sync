@@ -18,7 +18,6 @@ import (
 	"strings"
 	"testing"
 
-	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
@@ -33,12 +32,12 @@ import (
 )
 
 func TestOverrideRootSyncLogLevel(t *testing.T) {
+	rootSyncID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t, nomostesting.OverrideAPI,
-		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured))
+	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
 
-	rootSyncName := nomostest.RootSyncNN(configsync.RootSyncName)
-	rootReconcilerName := core.RootReconcilerObjectKey(rootSyncName.Name)
+	rootReconcilerName := core.RootReconcilerObjectKey(rootSyncID.Name)
 	rootSyncV1 := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 
 	// add kustomize to enable hydration controller container in root-sync
@@ -48,13 +47,9 @@ func TestOverrideRootSyncLogLevel(t *testing.T) {
 
 	nt.T.Log("Update RootSync to sync from the kustomize-components directory")
 	nt.MustMergePatch(rootSyncV1, `{"spec": {"git": {"dir": "kustomize-components"}}}`)
-	syncDirMap := map[types.NamespacedName]string{
-		nomostest.DefaultRootRepoNamespacedName: "kustomize-components",
-	}
+	nomostest.SetExpectedSyncPath(nt, rootSyncID, "kustomize-components")
 
-	if err := nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(syncDirMap)); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// validate initial container log level value
 	err := nt.Watcher.WatchObject(kinds.Deployment(),
@@ -71,10 +66,7 @@ func TestOverrideRootSyncLogLevel(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-
-	if err := nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(syncDirMap)); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// apply override to one container and validate the others are unaffected
 	nt.MustMergePatch(rootSyncV1, `{"spec": {"override": {"logLevels": [{"containerName": "reconciler", "logLevel": 3}]}}}`)
@@ -90,9 +82,7 @@ func TestOverrideRootSyncLogLevel(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	if err := nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(syncDirMap)); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// apply override to all containers and validate
 	nt.MustMergePatch(rootSyncV1, `{"spec": {"override": {"logLevels": [{"containerName": "reconciler", "logLevel": 5}, {"containerName": "git-sync", "logLevel": 7}, {"containerName": "otel-agent", "logLevel": 0}, {"containerName": "hydration-controller", "logLevel": 9}]}}}`)
@@ -124,10 +114,7 @@ func TestOverrideRootSyncLogLevel(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-
-	if err := nt.WatchForAllSyncs(nomostest.WithSyncDirectoryMap(syncDirMap)); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// try invalid log level value
 	maxError := "logLevel in body should be less than or equal to 10"

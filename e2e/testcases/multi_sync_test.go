@@ -28,10 +28,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
+	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/policy"
-	"kpt.dev/configsync/e2e/nomostest/syncsource"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
@@ -67,9 +67,6 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	rootSync1ID := core.RootSyncID("rr1")
 	rootSync2ID := core.RootSyncID("rr2")
 	rootSync3ID := core.RootSyncID("rr3")
-	// rootSync1Key := rootSync1ID.ObjectKey // unused
-	rootSync2Key := rootSync2ID.ObjectKey
-	rootSync3Key := rootSync3ID.ObjectKey
 	repoSync1ID := core.RepoSyncID("nr1", testNs)
 	repoSync2ID := core.RepoSyncID("nr2", testNs)
 	repoSync3ID := core.RepoSyncID("nr3", testNs)
@@ -119,31 +116,15 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 		}
 	})
 
-	var newRepos []types.NamespacedName
-	newRepos = append(newRepos, rootSync2Key)
-	newRepos = append(newRepos, rootSync3Key)
-	newRepos = append(newRepos, repoSync2Key)
-	newRepos = append(newRepos, repoSync3Key)
-	newRepos = append(newRepos, repoSync4Key)
-	newRepos = append(newRepos, repoSync5Key)
+	resetExpectedGitSync(nt, rootSync2ID)
+	resetExpectedGitSync(nt, rootSync3ID)
+	resetExpectedGitSync(nt, repoSync2ID)
+	resetExpectedGitSync(nt, repoSync3ID)
+	resetExpectedGitSync(nt, repoSync4ID)
+	resetExpectedGitSync(nt, repoSync5ID)
 
-	if nt.GitProvider.Type() == e2e.Local {
-		nomostest.InitGitRepos(nt, newRepos...)
-	}
-
-	rootSync2GitRepo := nomostest.ResetRepository(nt, configsync.RootSyncKind, rootSync2Key, configsync.SourceFormatUnstructured)
-	rootSync3GitRepo := nomostest.ResetRepository(nt, configsync.RootSyncKind, rootSync3Key, configsync.SourceFormatUnstructured)
-	repoSync2GitRepo := nomostest.ResetRepository(nt, configsync.RepoSyncKind, repoSync2Key, configsync.SourceFormatUnstructured)
-	repoSync3GitRepo := nomostest.ResetRepository(nt, configsync.RepoSyncKind, repoSync3Key, configsync.SourceFormatUnstructured)
-	repoSync4GitRepo := nomostest.ResetRepository(nt, configsync.RepoSyncKind, repoSync4Key, configsync.SourceFormatUnstructured)
-	repoSync5GitRepo := nomostest.ResetRepository(nt, configsync.RepoSyncKind, repoSync5Key, configsync.SourceFormatUnstructured)
-
-	nt.SyncSources[rootSync2ID] = &syncsource.GitSyncSource{Repository: rootSync2GitRepo}
-	nt.SyncSources[rootSync3ID] = &syncsource.GitSyncSource{Repository: rootSync3GitRepo}
-	nt.SyncSources[repoSync2ID] = &syncsource.GitSyncSource{Repository: repoSync2GitRepo}
-	nt.SyncSources[repoSync3ID] = &syncsource.GitSyncSource{Repository: repoSync3GitRepo}
-	nt.SyncSources[repoSync4ID] = &syncsource.GitSyncSource{Repository: repoSync4GitRepo}
-	nt.SyncSources[repoSync5ID] = &syncsource.GitSyncSource{Repository: repoSync5GitRepo}
+	rootSync2GitRepo := nt.SyncSourceGitRepository(rootSync2ID)
+	repoSync2GitRepo := nt.SyncSourceGitRepository(repoSync2ID)
 
 	nrb2 := nomostest.RepoSyncRoleBinding(repoSync2Key)
 	nrb3 := nomostest.RepoSyncRoleBinding(repoSync3Key)
@@ -159,49 +140,40 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	nt.T.Logf("Add RootSync %s to the repository of RootSync %s", rootSync2ID.Name, configsync.RootSyncName)
 
 	rs2 := nomostest.RootSyncObjectV1Alpha1FromRootRepo(nt, rootSync2ID.Name)
-	rs2ConfigFile := fmt.Sprintf("acme/rootsyncs/%s.yaml", rootSync2ID.Name)
-	nt.Must(rootSync0GitRepo.Add(rs2ConfigFile, rs2))
+	nt.Must(rootSync0GitRepo.Add(fmt.Sprintf("acme/rootsyncs/%s.yaml", rootSync2ID.Name), rs2))
 	nt.Must(rootSync0GitRepo.CommitAndPush("Adding RootSync: " + rootSync2ID.Name))
 	// Wait for all RootSyncs and RepoSyncs to be synced, including the new rootSync2.
-	if err := nt.WatchForAllSyncs(nomostest.SkipRootRepos(rootSync3ID.Name), nomostest.SkipNonRootRepos(repoSync2Key, repoSync3Key, repoSync4Key, repoSync5Key)); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs(
+		nomostest.SkipRootRepos(rootSync3ID.Name),
+		nomostest.SkipNonRootRepos(repoSync2Key, repoSync3Key, repoSync4Key, repoSync5Key)))
 
 	nt.T.Logf("Add RootSync %s to the repository of RootSync %s", rootSync3ID.Name, rootSync2ID.Name)
 	rs3 := nomostest.RootSyncObjectV1Alpha1FromRootRepo(nt, rootSync3ID.Name)
-	rs3ConfigFile := fmt.Sprintf("acme/rootsyncs/%s.yaml", rootSync3ID.Name)
-	nt.Must(rootSync2GitRepo.Add(rs3ConfigFile, rs3))
+	nt.Must(rootSync2GitRepo.Add(fmt.Sprintf("acme/rootsyncs/%s.yaml", rootSync3ID.Name), rs3))
 	nt.Must(rootSync2GitRepo.CommitAndPush("Adding RootSync: " + rootSync3ID.Name))
 	// Wait for all RootSyncs and RepoSyncs to be synced, including the new rootSync3.
-	if err := nt.WatchForAllSyncs(nomostest.SkipNonRootRepos(repoSync2Key, repoSync3Key, repoSync4Key, repoSync5Key)); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs(
+		nomostest.SkipNonRootRepos(repoSync2Key, repoSync3Key, repoSync4Key, repoSync5Key)))
 
 	nt.T.Logf("Create RepoSync %s", repoSync2Key)
 	nrs2 := nomostest.RepoSyncObjectV1Alpha1FromNonRootRepo(nt, repoSync2Key)
-	if err := nt.KubeClient.Create(nrs2); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.KubeClient.Create(nrs2))
 	// RoleBinding (nrb2) managed by RootSync root-sync, because the namespace
 	// tenant does not have permission to manage RBAC.
 	// Wait for all RootSyncs and RepoSyncs to be synced, including the new RepoSync nr2.
-	if err := nt.WatchForAllSyncs(nomostest.SkipNonRootRepos(repoSync3Key, repoSync4Key, repoSync5Key)); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs(
+		nomostest.SkipNonRootRepos(repoSync3Key, repoSync4Key, repoSync5Key)))
 
 	nt.T.Logf("Add RepoSync %s to RootSync %s", repoSync3Key, configsync.RootSyncName)
 	nrs3 := nomostest.RepoSyncObjectV1Alpha1FromNonRootRepo(nt, repoSync3Key)
 	// Ensure the RoleBinding is deleted after the RepoSync
-	if err := nomostest.SetDependencies(nrs3, nrb3); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nomostest.SetDependencies(nrs3, nrb3))
 	nt.Must(rootSync0GitRepo.Add(fmt.Sprintf("acme/reposyncs/%s.yaml", repoSync3Key.Name), nrs3))
 	nt.Must(rootSync0GitRepo.Add(fmt.Sprintf("acme/namespaces/%s/rb-%s.yaml", testNs, repoSync3Key.Name), nrb3))
 	nt.Must(rootSync0GitRepo.CommitAndPush("Adding RepoSync: " + repoSync3Key.String()))
 	// Wait for all RootSyncs and RepoSyncs to be synced, including the new RepoSync nr3.
-	if err := nt.WatchForAllSyncs(nomostest.SkipNonRootRepos(repoSync4Key, repoSync5Key)); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs(
+		nomostest.SkipNonRootRepos(repoSync4Key, repoSync5Key)))
 
 	nt.T.Logf("Add RepoSync %s to RepoSync %s", repoSync4Key, repoSync2Key)
 	nrs4 := nomostest.RepoSyncObjectV1Alpha1FromNonRootRepo(nt, repoSync4Key)
@@ -210,23 +182,18 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	// does not have permission to manage RBAC.
 	nt.Must(repoSync2GitRepo.CommitAndPush("Adding RepoSync: " + repoSync4Key.String()))
 	// Wait for all RootSyncs and RepoSyncs to be synced, including the new RepoSync nr4.
-	if err := nt.WatchForAllSyncs(nomostest.SkipNonRootRepos(repoSync5Key)); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs(
+		nomostest.SkipNonRootRepos(repoSync5Key)))
 
 	nt.T.Logf("Add RepoSync %s to RootSync %s", repoSync5Key, rootSync1ID.Name)
 	nrs5 := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, repoSync5Key)
 	// Ensure the RoleBinding is deleted after the RepoSync
-	if err := nomostest.SetDependencies(nrs5, nrb5); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nomostest.SetDependencies(nrs5, nrb5))
 	nt.Must(rootSync1GitRepo.Add(fmt.Sprintf("acme/reposyncs/%s.yaml", repoSync5Key.Name), nrs5))
 	nt.Must(rootSync1GitRepo.Add(fmt.Sprintf("acme/namespaces/%s/rb-%s.yaml", testNs, repoSync5Key.Name), nrb5))
 	nt.Must(rootSync1GitRepo.CommitAndPush("Adding RepoSync: " + repoSync5Key.String()))
 	// Wait for all RootSyncs and RepoSyncs to be synced, including the new RepoSync nr5.
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Logf("Validate reconciler Deployment labels")
 	validateReconcilerResource(nt, kinds.Deployment(), map[string]string{"app": "reconciler"}, 10)
@@ -237,9 +204,8 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	validateReconcilerResource(nt, kinds.Deployment(), map[string]string{metadata.SyncNameLabel: repoSync1ID.Name}, 2)
 
 	// Deployments may still be reconciling, wait before checking Pods
-	if err := waitForResourcesCurrent(nt, kinds.Deployment(), map[string]string{"app": "reconciler"}, 10); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(waitForResourcesCurrent(nt, kinds.Deployment(), map[string]string{"app": "reconciler"}, 10))
+
 	validateReconcilerResource(nt, kinds.Pod(), map[string]string{"app": "reconciler"}, 10)
 	validateReconcilerResource(nt, kinds.Pod(), map[string]string{metadata.SyncNamespaceLabel: configsync.ControllerNamespace}, 4)
 	validateReconcilerResource(nt, kinds.Pod(), map[string]string{metadata.SyncNamespaceLabel: testNs}, 5)
@@ -263,6 +229,18 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	}
 
 	// TODO: validate sync-generation label
+}
+
+// resetExpectedGitSync creates, updates, or replaces the SyncSource for the
+// specified RootSync or RepoSync with a new or reset Git repository.
+func resetExpectedGitSync(nt *nomostest.NT, syncID core.ID) {
+	if nt.GitProvider.Type() == e2e.Local {
+		nomostest.InitGitRepos(nt, syncID.ObjectKey)
+	}
+	syncPath := gitproviders.DefaultSyncDir
+	sourceFormat := configsync.SourceFormatUnstructured
+	repo := nomostest.ResetRepository(nt, syncID.Kind, syncID.ObjectKey, sourceFormat)
+	nomostest.SetExpectedGitSource(nt, syncID, repo, syncPath, sourceFormat)
 }
 
 func validateReconcilerResource(nt *nomostest.NT, gvk schema.GroupVersionKind, labels map[string]string, expectedCount int) {
@@ -871,7 +849,7 @@ func TestControllerValidationErrors(t *testing.T) {
 
 	nt.T.Logf("Validate RepoSync is not allowed in the config-management-system namespace")
 	nnControllerNamespace := nomostest.RepoSyncNN(configsync.ControllerNamespace, configsync.RepoSyncName)
-	rs := nomostest.RepoSyncObjectV1Beta1(nnControllerNamespace, "", configsync.SourceFormatUnstructured)
+	rs := nomostest.RepoSyncObjectV1Beta1Git(nnControllerNamespace, "", configsync.SourceFormatUnstructured)
 	if err := nt.KubeClient.Create(rs); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -887,7 +865,7 @@ func TestControllerValidationErrors(t *testing.T) {
 	}
 	veryLongName := string(longBytes)
 	nnTooLong := nomostest.RepoSyncNN(testNs, veryLongName)
-	rs = nomostest.RepoSyncObjectV1Beta1(nnTooLong, "https://github.com/test/test", configsync.SourceFormatUnstructured)
+	rs = nomostest.RepoSyncObjectV1Beta1Git(nnTooLong, "https://github.com/test/test", configsync.SourceFormatUnstructured)
 	if err := nt.KubeClient.Create(rs); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -902,7 +880,7 @@ func TestControllerValidationErrors(t *testing.T) {
 
 	nt.T.Logf("Validate an invalid config with a long RepoSync Secret name")
 	nnInvalidSecretRef := nomostest.RepoSyncNN(testNs, "repo-test")
-	rsInvalidSecretRef := nomostest.RepoSyncObjectV1Beta1(nnInvalidSecretRef, "https://github.com/test/test", configsync.SourceFormatUnstructured)
+	rsInvalidSecretRef := nomostest.RepoSyncObjectV1Beta1Git(nnInvalidSecretRef, "https://github.com/test/test", configsync.SourceFormatUnstructured)
 	rsInvalidSecretRef.Spec.Auth = configsync.AuthSSH
 	rsInvalidSecretRef.Spec.SecretRef = &v1beta1.SecretReference{Name: veryLongName}
 	if err := nt.KubeClient.Create(rsInvalidSecretRef); err != nil {

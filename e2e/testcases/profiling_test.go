@@ -449,18 +449,18 @@ func watchForSyncedAndReconciled(nt *nomostest.NT, rsRefs []rSyncRef) error {
 			tg.Go(func() error {
 				return nt.WatchForSync(reRefPtr.GroupVersionKind, reRefPtr.Name, reRefPtr.Namespace,
 					reRefPtr.CommitFunc, nomostest.RootSyncHasStatusSyncCommit,
-					&nomostest.SyncDirPredicatePair{
-						Dir:       reRefPtr.SyncPath,
-						Predicate: nomostest.RootSyncHasStatusSyncDirectory,
+					&nomostest.SyncPathPredicatePair{
+						Path:      reRefPtr.SyncPath,
+						Predicate: nomostest.RootSyncHasStatusSyncPath,
 					})
 			})
 		case configsync.RepoSyncKind:
 			tg.Go(func() error {
 				return nt.WatchForSync(reRefPtr.GroupVersionKind, reRefPtr.Name, reRefPtr.Namespace,
 					reRefPtr.CommitFunc, nomostest.RepoSyncHasStatusSyncCommit,
-					&nomostest.SyncDirPredicatePair{
-						Dir:       reRefPtr.SyncPath,
-						Predicate: nomostest.RepoSyncHasStatusSyncDirectory,
+					&nomostest.SyncPathPredicatePair{
+						Path:      reRefPtr.SyncPath,
+						Predicate: nomostest.RepoSyncHasStatusSyncPath,
 					})
 			})
 		default:

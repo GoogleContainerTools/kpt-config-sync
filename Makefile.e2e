@@ -100,12 +100,12 @@ test-e2e-kind: config-sync-manifest-local build-kind-e2e
 # This target runs the first group of e2e tests.
 .PHONY: test-e2e-kind-test-group1
 test-e2e-kind-test-group1:
-	$(MAKE) E2E_ARGS="$(E2E_ARGS) --test-features=acm-controller,selector,lifecycle,nomos-cli" test-e2e-kind
+	$(MAKE) E2E_ARGS="$(E2E_ARGS) --test-features=acm-controller,selector,lifecycle,nomos-cli,drift-control" test-e2e-kind
 
 # This target runs the second group of e2e tests.
 .PHONY: test-e2e-kind-test-group2
 test-e2e-kind-test-group2:
-	$(MAKE) E2E_ARGS="$(E2E_ARGS) --test-features=sync-source,reconciliation-1,drift-control" test-e2e-kind
+	$(MAKE) E2E_ARGS="$(E2E_ARGS) --test-features=sync-source,reconciliation-1" test-e2e-kind
 
 # This target runs the third group of e2e tests.
 .PHONY: test-e2e-kind-test-group3

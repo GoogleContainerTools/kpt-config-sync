@@ -100,6 +100,7 @@ type reconcilerBase struct {
 	hydrationPollingPeriod  time.Duration
 	membership              *hubv1.Membership
 	knownHostExist          bool
+	githubApp               githubAppSpec
 	webhookEnabled          bool
 
 	// syncKind is the kind of the sync object: RootSync or RepoSync.

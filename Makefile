@@ -83,7 +83,7 @@ HELM_VERSION := v3.15.3-gke.0
 HELM := $(BIN_DIR)/helm
 HELM_STAGING_DIR := $(OUTPUT_DIR)/third_party/helm
 
-GIT_SYNC_VERSION := v4.2.3-gke.5__linux_amd64
+GIT_SYNC_VERSION := v4.2.4-gke.2__linux_amd64
 GIT_SYNC_IMAGE_NAME := gcr.io/config-management-release/git-sync:$(GIT_SYNC_VERSION)
 
 OTELCONTRIBCOL_VERSION := v0.103.0-gke.3

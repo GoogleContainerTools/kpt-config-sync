@@ -57,7 +57,7 @@ type Git struct {
 	// Must be one of ssh, cookiefile, gcenode, token, or none.
 	// The validation of this is case-sensitive. Required.
 	//
-	// +kubebuilder:validation:Enum=ssh;cookiefile;gcenode;gcpserviceaccount;token;none
+	// +kubebuilder:validation:Enum=ssh;cookiefile;gcenode;gcpserviceaccount;githubapp;token;none
 	Auth configsync.AuthType `json:"auth"`
 
 	// gcpServiceAccountEmail specifies the GCP service account used to annotate

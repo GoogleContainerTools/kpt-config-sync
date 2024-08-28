@@ -74,9 +74,9 @@ func TestProfilingResourcesByObjectCount(t *testing.T) {
 
 		for i := 1; i <= deployCount; i++ {
 			name := fmt.Sprintf("pause-%d", i)
-			nt.Must(rootSyncGitRepo.AddFile(
+			nt.Must(rootSyncGitRepo.Add(
 				fmt.Sprintf("%s/namespaces/%s/deployment-%s.yaml", syncPath, ns, name),
-				[]byte(pauseDeploymentYAML(name, ns))))
+				pauseDeploymentObject(nt, name, ns)))
 		}
 
 		nt.Must(rootSyncGitRepo.CommitAndPush(fmt.Sprintf("Adding a test namespace and %d deployments", deployCount)))
@@ -167,9 +167,9 @@ func TestProfilingResourcesByObjectCountWithMultiSync(t *testing.T) {
 
 			for deployIndex := 1; deployIndex <= deployCount; deployIndex++ {
 				deployName := fmt.Sprintf("pause-%d-%d", syncIndex, deployIndex)
-				nt.Must(rootSyncGitRepo.AddFile(
+				nt.Must(rootSyncGitRepo.Add(
 					fmt.Sprintf("%s/namespaces/%s/deployment-%s.yaml", syncPath, ns, deployName),
-					[]byte(pauseDeploymentYAML(deployName, ns))))
+					pauseDeploymentObject(nt, deployName, ns)))
 			}
 
 			nt.Must(rootSyncGitRepo.CommitAndPush(fmt.Sprintf("Adding %d deployments for %d RootSyncs", deployCount, syncCount)))
@@ -294,9 +294,9 @@ func TestProfilingByObjectCountAndSyncCount(t *testing.T) {
 		nt.T.Logf("Adding %d deployments for RootSync %s", deployCount, syncName)
 		for deployIndex := 1; deployIndex <= deployCount; deployIndex++ {
 			deployName := fmt.Sprintf("pause-%d-%d", syncIndex, deployIndex)
-			nt.Must(rootSyncGitRepo.AddFile(
+			nt.Must(rootSyncGitRepo.Add(
 				fmt.Sprintf("%s/namespaces/%s/deployment-%s.yaml", syncPath, ns, deployName),
-				[]byte(pauseDeploymentYAML(deployName, ns))))
+				pauseDeploymentObject(nt, deployName, ns)))
 		}
 
 		nt.Must(rootSyncGitRepo.CommitAndPush(fmt.Sprintf("Adding %d deployments each for %d RootSyncs", deployCount, syncCount)))
@@ -375,9 +375,9 @@ func TestProfilingResourcesByRootSyncCount(t *testing.T) {
 		// For each RootSync, make 100 Deployments with unique names
 		for j := 1; j <= deployCount; j++ {
 			deployName := fmt.Sprintf("pause-%d-%d", i, j)
-			nt.Must(rootSyncGitRepo.AddFile(
+			nt.Must(rootSyncGitRepo.Add(
 				fmt.Sprintf("%s/namespaces/%s/deployment-%s.yaml", syncPath, ns, deployName),
-				[]byte(pauseDeploymentYAML(deployName, ns))))
+				pauseDeploymentObject(nt, deployName, ns)))
 		}
 	}
 

@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -362,9 +363,9 @@ func TestStressManyDeployments(t *testing.T) {
 
 	for i := 1; i <= deployCount; i++ {
 		name := fmt.Sprintf("pause-%d", i)
-		nt.Must(rootSyncGitRepo.AddFile(
+		nt.Must(rootSyncGitRepo.Add(
 			fmt.Sprintf("%s/namespaces/%s/deployment-%s.yaml", syncPath, ns, name),
-			[]byte(pauseDeploymentYAML(name, ns))))
+			pauseDeploymentObject(nt, name, ns)))
 	}
 
 	nt.Must(rootSyncGitRepo.CommitAndPush(fmt.Sprintf("Adding a test namespace and %d deployments", deployCount)))
@@ -846,37 +847,59 @@ func validateNumberOfObjectsEquals(nt *nomostest.NT, gvk schema.GroupVersionKind
 	return nil
 }
 
-func pauseDeploymentYAML(name, namespace string) string {
-	return fmt.Sprintf(`
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: %s
-  namespace: %s
-  labels:
-    app: %s
-    nomos-test: enabled
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: %s
-  template:
-    metadata:
-      labels:
-        app: %s
-    spec:
-      containers:
-      - name: pause
-        image: registry.k8s.io/pause:3.7
-        ports:
-        - containerPort: 80
-        resources:
-          limits:
-            cpu: 250m
-            memory: 256Mi
-          requests:
-            cpu: 250m
-            memory: 256Mi
-`, name, namespace, name, name, name)
+func pauseDeploymentObject(nt *nomostest.NT, name, namespace string) *appsv1.Deployment {
+	labels := map[string]string{"app": name}
+	deployment := k8sobjects.DeploymentObject(
+		core.Name(name), core.Namespace(namespace), core.Labels(labels))
+	deployment.Spec = appsv1.DeploymentSpec{
+		Replicas: ptr.To(int32(1)),
+		Strategy: appsv1.DeploymentStrategy{Type: appsv1.RecreateDeploymentStrategyType},
+		Selector: &metav1.LabelSelector{MatchLabels: labels},
+		Template: v1.PodTemplateSpec{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels: labels,
+			},
+			Spec: v1.PodSpec{
+				Containers: []v1.Container{
+					{
+						Name:  "pause",
+						Image: "registry.k8s.io/pause:3.7",
+						Ports: []v1.ContainerPort{
+							{ContainerPort: 80},
+						},
+						// Default to minimum request for current autopilot clusters with bursting enabled
+						// https://cloud.google.com/kubernetes-engine/docs/concepts/autopilot-resource-requests#compute-class-min-max
+						Resources: v1.ResourceRequirements{
+							Requests: v1.ResourceList{
+								v1.ResourceCPU:              resource.MustParse("50m"),
+								v1.ResourceMemory:           resource.MustParse("52Mi"),
+								v1.ResourceEphemeralStorage: resource.MustParse("10Mi"), // otherwise defaults to 1Gi on autopilot
+							},
+							Limits: v1.ResourceList{
+								v1.ResourceCPU:              resource.MustParse("50m"),
+								v1.ResourceMemory:           resource.MustParse("52Mi"),
+								v1.ResourceEphemeralStorage: resource.MustParse("10Mi"),
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	// For autopilot clusters which do not support bursting, minimum CPU is 250m and memory is 512Mi
+	if nt.IsGKEAutopilot && !nt.ClusterSupportsBursting {
+		deployment.Spec.Template.Spec.Containers[0].Resources = v1.ResourceRequirements{
+			Requests: v1.ResourceList{
+				v1.ResourceCPU:              resource.MustParse("250m"),
+				v1.ResourceMemory:           resource.MustParse("512Mi"),
+				v1.ResourceEphemeralStorage: resource.MustParse("10Mi"), // otherwise defaults to 1Gi
+			},
+			Limits: v1.ResourceList{
+				v1.ResourceCPU:              resource.MustParse("250m"),
+				v1.ResourceMemory:           resource.MustParse("512Mi"),
+				v1.ResourceEphemeralStorage: resource.MustParse("10Mi"),
+			},
+		}
+	}
+	return deployment
 }

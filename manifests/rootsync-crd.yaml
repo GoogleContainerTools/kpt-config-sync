@@ -89,6 +89,7 @@ spec:
                     - cookiefile
                     - gcenode
                     - gcpserviceaccount
+                    - githubapp
                     - token
                     - none
                     type: string
@@ -1265,6 +1266,7 @@ spec:
                     - gcenode
                     - gcpserviceaccount
                     - token
+                    - githubapp
                     - none
                     type: string
                   branch:

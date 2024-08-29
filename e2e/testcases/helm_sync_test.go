@@ -38,6 +38,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/policy"
 	"kpt.dev/configsync/e2e/nomostest/registryproviders"
+	"kpt.dev/configsync/e2e/nomostest/syncsource"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -399,7 +400,9 @@ func TestHelmLatestVersion(t *testing.T) {
 	}
 
 	nt.T.Logf("Wait for RootSync to sync from helm chart: %s", chart.HelmChartID)
-	nomostest.SetExpectedHelmSource(nt, rootSyncID, chart.HelmChartID)
+	nomostest.SetExpectedSyncSource(nt, rootSyncID, &syncsource.HelmSyncSource{
+		ChartID: chart.HelmChartID,
+	})
 	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("Validate version label of a deployment from the helm chart")
@@ -415,7 +418,9 @@ func TestHelmLatestVersion(t *testing.T) {
 	}
 
 	nt.T.Logf("Wait for RootSync to sync from helm chart: %s", chart.HelmChartID)
-	nomostest.SetExpectedHelmSource(nt, rootSyncID, chart.HelmChartID)
+	nomostest.SetExpectedSyncSource(nt, rootSyncID, &syncsource.HelmSyncSource{
+		ChartID: chart.HelmChartID,
+	})
 	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("Validate version label of a deployment from the helm chart")
@@ -440,12 +445,14 @@ func TestHelmVersionRange(t *testing.T) {
 		GroupKind: nomostest.DefaultRootSyncID.GroupKind,
 		ObjectKey: client.ObjectKeyFromObject(rs),
 	}
-	chartID := registryproviders.HelmChartID{
-		Name:    rs.Spec.Helm.Chart,
-		Version: "15.4.1", // latest minor+patch with the same major version
-	}
-	nt.T.Logf("Wait for RootSync to sync from helm chart: %s", chartID)
-	nomostest.SetExpectedHelmSource(nt, rootSyncID, chartID)
+	nt.T.Log("Wait for RootSync to sync from helm chart")
+	nomostest.SetExpectedSyncSource(nt, rootSyncID, &syncsource.HelmSyncSource{
+		ChartID: registryproviders.HelmChartID{
+			Name:    rs.Spec.Helm.Chart,
+			Version: "^15.0.0",
+		},
+		ExpectedChartVersion: "15.4.1", // latest minor+patch with the same major version
+	})
 	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("Validate Deployment from chart exists")

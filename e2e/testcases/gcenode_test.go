@@ -143,9 +143,7 @@ func TestGCENodeOCI(t *testing.T) {
 	repoSyncOCI := nt.RepoSyncObjectOCI(repoSyncRef, nsImage.OCIImageID().WithoutDigest(), "", nsImage.Digest)
 	nt.Must(nt.KubeClient.Apply(repoSyncOCI))
 
-	nt.Must(nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(imageDigestFuncByDigest(rootImage.Digest)),
-		nomostest.WithRepoSha1Func(imageDigestFuncByDigest(nsImage.Digest))))
+	nt.Must(nt.WatchForAllSyncs())
 	kustomizecomponents.ValidateAllTenants(nt, string(declared.RootScope), "base", "tenant-a", "tenant-b", "tenant-c")
 	kustomizecomponents.ValidateTenant(nt, repoSyncRef.Namespace, repoSyncRef.Namespace, "base")
 
@@ -153,9 +151,7 @@ func TestGCENodeOCI(t *testing.T) {
 	nt.T.Log("Update RootSync to sync from an OCI image in a private Google Container Registry")
 	nt.MustMergePatch(rootSyncOCI, fmt.Sprintf(`{"spec": {"oci": {"image": "%s", "dir": "%s"}}}`, privateGCRImage("kustomize-components"), tenant))
 	nomostest.SetExpectedSyncPath(nt, rootSyncID, tenant)
-	nt.Must(nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(imageDigestFuncByName(privateGCRImage("kustomize-components"))),
-		nomostest.WithRepoSha1Func(imageDigestFuncByDigest(nsImage.Digest))))
+	nt.Must(nt.WatchForAllSyncs())
 	kustomizecomponents.ValidateAllTenants(nt, string(declared.RootScope), "../base", tenant)
 }
 

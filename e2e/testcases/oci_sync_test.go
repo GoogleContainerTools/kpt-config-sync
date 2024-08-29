@@ -158,8 +158,7 @@ func TestSwitchFromGitToOciCentralized(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Add(repoSyncPath, repoSyncOCI))
 	nt.Must(rootSyncGitRepo.CommitAndPush("configure RepoSync to sync from OCI in the root repository"))
 
-	nt.Must(nt.WatchForAllSyncs(
-		nomostest.WithRepoSha1Func(imageDigestFuncByDigest(image.Digest))))
+	nt.Must(nt.WatchForAllSyncs())
 	nt.Must(nt.Validate(configsync.RepoSyncName, namespace, &v1beta1.RepoSync{}, isSourceType(configsync.OciSource)))
 	nt.Must(nt.Validate(bookinfoRole.Name, namespace, &rbacv1.Role{},
 		testpredicates.HasAnnotation(metadata.ResourceManagerKey, namespace)))
@@ -263,8 +262,7 @@ func TestOciSyncWithDigest(t *testing.T) {
 	rootSyncOCI := nt.RootSyncObjectOCI(rootSyncKey.Name, image.OCIImageID().WithoutDigest(), "", image.Digest)
 	rootSyncOCI.Spec.Oci.Period = metav1.Duration{Duration: 5 * time.Second}
 	nt.Must(nt.KubeClient.Apply(rootSyncOCI))
-	nt.Must(nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(imageDigestFuncByDigest(image.Digest))))
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Delete the remote image
 	nt.T.Log("Delete image from remote registry")
@@ -284,8 +282,7 @@ func TestOciSyncWithDigest(t *testing.T) {
 	rootSyncOCI = nt.RootSyncObjectOCI(rootSyncKey.Name, image.OCIImageID().WithoutTag(), "", image.Digest)
 	rootSyncOCI.Spec.Oci.Period = metav1.Duration{Duration: 5 * time.Second}
 	nt.Must(nt.KubeClient.Apply(rootSyncOCI))
-	nt.Must(nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(imageDigestFuncByDigest(image.Digest))))
+	nt.Must(nt.WatchForAllSyncs())
 	nt.T.Log("Check for log message in oci-sync container")
 	out, err := nt.Shell.Kubectl("logs", fmt.Sprintf("deployment/%s", core.RootReconcilerName(rootSyncKey.Name)),
 		"-n", configsync.ControllerNamespace, "-c", reconcilermanager.OciSync)

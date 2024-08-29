@@ -41,8 +41,6 @@ type watchForAllSyncsOptions struct {
 	syncNamespaceRepos bool
 	skipRootRepos      map[string]bool
 	skipNonRootRepos   map[types.NamespacedName]bool
-	rootSha1Fn         Sha1Func
-	repoSha1Fn         Sha1Func
 }
 
 // WatchForAllSyncsOptions is an optional parameter for WaitForRepoSyncs.
@@ -57,20 +55,6 @@ func WithTimeout(timeout time.Duration) WatchForAllSyncsOptions {
 
 // Sha1Func is the function type that retrieves the commit sha1.
 type Sha1Func func(nt *NT, nn types.NamespacedName) (string, error)
-
-// WithRootSha1Func provides the function to get RootSync commit sha1 to WaitForRepoSyncs.
-func WithRootSha1Func(fn Sha1Func) WatchForAllSyncsOptions {
-	return func(options *watchForAllSyncsOptions) {
-		options.rootSha1Fn = fn
-	}
-}
-
-// WithRepoSha1Func provides the function to get RepoSync commit sha1 to WaitForRepoSyncs.
-func WithRepoSha1Func(fn Sha1Func) WatchForAllSyncsOptions {
-	return func(options *watchForAllSyncsOptions) {
-		options.repoSha1Fn = fn
-	}
-}
 
 // RootSyncOnly specifies that only the RootRepos should be synced.
 func RootSyncOnly() WatchForAllSyncsOptions {
@@ -132,8 +116,6 @@ func (nt *NT) WatchForAllSyncs(options ...WatchForAllSyncsOptions) error {
 		syncNamespaceRepos: true,
 		skipRootRepos:      make(map[string]bool),
 		skipNonRootRepos:   make(map[types.NamespacedName]bool),
-		rootSha1Fn:         DefaultRootSha1Fn,
-		repoSha1Fn:         DefaultRepoSha1Fn,
 	}
 	// Override defaults with specified options
 	for _, option := range options {
@@ -156,7 +138,7 @@ func (nt *NT) WatchForAllSyncs(options ...WatchForAllSyncsOptions) error {
 			idPtr := id
 			tg.Go(func() error {
 				return nt.WatchForSync(kinds.RootSyncV1Beta1(), idPtr.Name, idPtr.Namespace,
-					opts.rootSha1Fn, RootSyncHasStatusSyncCommit,
+					DefaultRootSha1Fn, RootSyncHasStatusSyncCommit,
 					&SyncPathPredicatePair{Path: source.Path(), Predicate: RootSyncHasStatusSyncPath},
 					testwatcher.WatchTimeout(opts.timeout))
 			})
@@ -171,7 +153,7 @@ func (nt *NT) WatchForAllSyncs(options ...WatchForAllSyncsOptions) error {
 			idPtr := id
 			tg.Go(func() error {
 				return nt.WatchForSync(kinds.RepoSyncV1Beta1(), idPtr.Name, idPtr.Namespace,
-					opts.repoSha1Fn, RepoSyncHasStatusSyncCommit,
+					DefaultRepoSha1Fn, RepoSyncHasStatusSyncCommit,
 					&SyncPathPredicatePair{Path: source.Path(), Predicate: RepoSyncHasStatusSyncPath},
 					testwatcher.WatchTimeout(opts.timeout))
 			})

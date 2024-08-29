@@ -15,15 +15,49 @@
 package nomostest
 
 import (
-	"kpt.dev/configsync/e2e/nomostest/gitproviders"
-	"kpt.dev/configsync/e2e/nomostest/registryproviders"
+	"reflect"
+
 	"kpt.dev/configsync/e2e/nomostest/syncsource"
-	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 )
 
+// SetExpectedSyncSource creates, updates, or replaces the SyncSource for the
+// specified RootSync or RepoSync.
+func SetExpectedSyncSource(nt *NT, syncID core.ID, source syncsource.SyncSource) {
+	oldSource, exists := nt.SyncSources[syncID]
+	if !exists {
+		nt.T.Logf("Creating expectation for %s %s to sync with %T (%s)",
+			syncID.Kind, syncID.ObjectKey, source, source)
+	} else if reflect.TypeOf(oldSource) == reflect.TypeOf(source) {
+		nt.T.Logf("Updating expectation for %s %s to sync with %T (%s)",
+			syncID.Kind, syncID.ObjectKey, source, source)
+	} else {
+		nt.T.Logf("Replacing expectation for %s %s to sync with %T (%s), instead of %T",
+			syncID.Kind, syncID.ObjectKey, source, source, oldSource)
+	}
+	nt.SyncSources[syncID] = source
+}
+
+// UpdateExpectedSyncSource executes the provided function on an existing
+// SyncSource in the SyncSources, allowing updating multiple fields.
+func UpdateExpectedSyncSource[T syncsource.SyncSource](nt *NT, syncID core.ID, mutateFn func(T)) {
+	source, exists := nt.SyncSources[syncID]
+	if !exists {
+		nt.T.Fatalf("Failed to update expectation for %s %s: nt.SyncSources not registered", syncID.Kind, syncID.ObjectKey)
+	}
+	switch tSource := source.(type) {
+	case T:
+		mutateFn(tSource)
+		nt.T.Logf("Updating expectation for %s %s to sync with %T (%s)",
+			syncID.Kind, syncID.ObjectKey, tSource, tSource)
+	default:
+		nt.T.Fatalf("Invalid %s source %T: %s", syncID.Kind, source, syncID.Name)
+	}
+}
+
 // SetExpectedSyncPath updates the SyncSource for the specified RootSync or
 // RepoSync with the provided Git dir, OCI dir.
+// Updates both the Directory & ExpectedDirectory.
 func SetExpectedSyncPath(nt *NT, syncID core.ID, syncPath string) {
 	source, exists := nt.SyncSources[syncID]
 	if !exists {
@@ -32,108 +66,31 @@ func SetExpectedSyncPath(nt *NT, syncID core.ID, syncPath string) {
 	switch tSource := source.(type) {
 	case *syncsource.GitSyncSource:
 		tSource.Directory = syncPath
+		tSource.ExpectedDirectory = ""
 	case *syncsource.OCISyncSource:
 		tSource.Directory = syncPath
+		tSource.ExpectedDirectory = ""
 	case *syncsource.HelmSyncSource:
-		nt.T.Fatalf("Failed to update expectation for %s %s: Use SetExpectedHelmChart instead", syncID.Kind, syncID.ObjectKey)
+		nt.T.Fatalf("Failed to update expectation for %s %s: Use SetExpectedSyncSource instead", syncID.Kind, syncID.ObjectKey)
 	default:
 		nt.T.Fatalf("Invalid %s source %T: %s", syncID.Kind, source, syncID.Name)
 	}
 }
 
-// SetExpectedGitSource creates, updates, or replaces the SyncSource for the
-// specified RootSync or RepoSync with the provided Git repo.
-func SetExpectedGitSource(nt *NT, syncID core.ID, repo *gitproviders.ReadWriteRepository, syncPath string, sourceFormat configsync.SourceFormat) {
-	source, exists := nt.SyncSources[syncID]
-	if !exists {
-		nt.T.Logf("Creating expectation for %s %s to sync with Git repo (repository: %q, directory: %q, sourceFormat: %q)",
-			syncID.Kind, syncID.ObjectKey, repo.Name, syncPath, sourceFormat)
-		nt.SyncSources[syncID] = &syncsource.GitSyncSource{
-			Repository:   repo,
-			SourceFormat: sourceFormat,
-			Directory:    syncPath,
-		}
-		return
-	}
-	switch tSource := source.(type) {
-	case *syncsource.GitSyncSource:
-		nt.T.Logf("Updating expectation for %s %s to sync with Git repo (repository: %q, directory: %q, sourceFormat: %q)",
-			syncID.Kind, syncID.ObjectKey, repo.Name, syncPath, sourceFormat)
-		tSource.Repository = repo
-		tSource.SourceFormat = sourceFormat
-		tSource.Directory = syncPath
-	case *syncsource.OCISyncSource, *syncsource.HelmSyncSource:
-		nt.T.Logf("Replacing expectation for %s %s to sync with Git repo (repository: %q, directory: %q, sourceFormat: %q), instead of %T",
-			syncID.Kind, syncID.ObjectKey, repo.Name, syncPath, sourceFormat, source)
-		nt.SyncSources[syncID] = &syncsource.GitSyncSource{
-			Repository:   repo,
-			SourceFormat: sourceFormat,
-			Directory:    syncPath,
-		}
-	default:
-		nt.T.Fatalf("Invalid %s source %T: %s", syncID.Kind, source, syncID.Name)
-	}
+// SetExpectedGitCommit updates the SyncSource for the specified RootSync or
+// RepoSync with the provided Git commit, without changing the git reference of
+// the source being pulled.
+func SetExpectedGitCommit(nt *NT, syncID core.ID, expectedCommit string) {
+	UpdateExpectedSyncSource(nt, syncID, func(source *syncsource.GitSyncSource) {
+		source.ExpectedCommit = expectedCommit
+	})
 }
 
-// SetExpectedOCISource creates, updates, or replaces the SyncSource for the
-// specified RootSync or RepoSync with the provided OCI image.
-// ImageID is used for pulling. ImageDigest is used for validating the result.
-func SetExpectedOCISource(nt *NT, syncID core.ID, imageID registryproviders.OCIImageID, imageDigest, syncPath string) {
-	source, exists := nt.SyncSources[syncID]
-	if !exists {
-		nt.T.Logf("Creating expectation for %s %s to sync with OCI image (image: %q, directory: %q)",
-			syncID.Kind, syncID.ObjectKey, imageID, syncPath)
-		nt.SyncSources[syncID] = &syncsource.OCISyncSource{
-			ImageID:   imageID,
-			Digest:    imageDigest,
-			Directory: syncPath,
-		}
-		return
-	}
-	switch tSource := source.(type) {
-	case *syncsource.OCISyncSource:
-		nt.T.Logf("Updating expectation for %s %s to sync with OCI image (image: %q, directory: %q)",
-			syncID.Kind, syncID.ObjectKey, imageID, syncPath)
-		tSource.ImageID = imageID
-		tSource.Digest = imageDigest
-		tSource.Directory = syncPath
-	case *syncsource.GitSyncSource, *syncsource.HelmSyncSource:
-		nt.T.Logf("Replacing expectation for %s %s to sync with OCI image (image: %q, directory: %q), instead of %T",
-			syncID.Kind, syncID.ObjectKey, imageID, syncPath, source)
-		nt.SyncSources[syncID] = &syncsource.OCISyncSource{
-			ImageID:   imageID,
-			Digest:    imageDigest,
-			Directory: syncPath,
-		}
-	default:
-		nt.T.Fatalf("Invalid %s source %T: %s", syncID.Kind, source, syncID.Name)
-	}
-}
-
-// SetExpectedHelmSource creates, updates, or replaces the SyncSource for the
-// specified RootSync or RepoSync with the provided Helm chart ID.
-func SetExpectedHelmSource(nt *NT, syncID core.ID, chartID registryproviders.HelmChartID) {
-	source, exists := nt.SyncSources[syncID]
-	if !exists {
-		nt.T.Logf("Creating expectation for %s %s to sync with helm chart (id: %q)",
-			syncID.Kind, syncID.ObjectKey, chartID)
-		nt.SyncSources[syncID] = &syncsource.HelmSyncSource{
-			ChartID: chartID,
-		}
-		return
-	}
-	switch tSource := source.(type) {
-	case *syncsource.HelmSyncSource:
-		nt.T.Logf("Updating expectation for %s %s to sync with helm chart (id: %q)",
-			syncID.Kind, syncID.ObjectKey, chartID)
-		tSource.ChartID = chartID
-	case *syncsource.GitSyncSource, *syncsource.OCISyncSource:
-		nt.T.Logf("Replacing expectation for %s %s to sync with helm chart (id: %q), instead of %T",
-			syncID.Kind, syncID.ObjectKey, chartID, source)
-		nt.SyncSources[syncID] = &syncsource.HelmSyncSource{
-			ChartID: chartID,
-		}
-	default:
-		nt.T.Fatalf("Invalid %s source %T: %s", syncID.Kind, source, syncID.Name)
-	}
+// SetExpectedOCIImageDigest updates the SyncSource for the specified RootSync
+// or RepoSync with the provided OCI image digest, without changing the ID of
+// the image being pulled.
+func SetExpectedOCIImageDigest(nt *NT, syncID core.ID, expectedImageDigest string) {
+	UpdateExpectedSyncSource(nt, syncID, func(source *syncsource.OCISyncSource) {
+		source.ExpectedImageDigest = expectedImageDigest
+	})
 }

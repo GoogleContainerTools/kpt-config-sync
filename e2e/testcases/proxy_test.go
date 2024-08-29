@@ -20,6 +20,8 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	"kpt.dev/configsync/e2e/nomostest"
+	"kpt.dev/configsync/e2e/nomostest/gitproviders"
+	"kpt.dev/configsync/e2e/nomostest/syncsource"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -37,16 +39,10 @@ func TestSyncingThroughAProxy(t *testing.T) {
 	nt.MustKubectl("apply", "-f", "../testdata/proxy")
 	nt.T.Cleanup(func() {
 		nt.MustKubectl("delete", "-f", "../testdata/proxy")
-		err := nt.Watcher.WatchForNotFound(kinds.Deployment(), "tinyproxy-deployment", "proxy-test")
-		if err != nil {
-			nt.T.Fatal(err)
-		}
+		nt.Must(nt.Watcher.WatchForNotFound(kinds.Deployment(), "tinyproxy-deployment", "proxy-test"))
 	})
-	err := nt.Watcher.WatchObject(kinds.Deployment(), "tinyproxy-deployment", "proxy-test",
-		[]testpredicates.Predicate{hasReadyReplicas(1)})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.Deployment(), "tinyproxy-deployment", "proxy-test",
+		[]testpredicates.Predicate{hasReadyReplicas(1)}))
 	nt.T.Log("Verify the NoOpProxyError")
 	rs := k8sobjects.RootSyncObjectV1Beta1(rootSyncID.Name)
 	nt.WaitForRootSyncStalledError(rs.Name, "Validation", `KNV1061: RootSyncs which specify spec.git.proxy must also specify spec.git.auth as one of "none", "cookiefile" or "token"`)
@@ -54,9 +50,7 @@ func TestSyncingThroughAProxy(t *testing.T) {
 	nt.T.Log("Set auth type to cookiefile")
 	nt.MustMergePatch(rs, `{"spec": {"git": {"auth": "cookiefile"}}}`)
 	nt.T.Log("Verify the secretRef error")
-	if err = nomostest.SetupFakeSSHCreds(nt, rootSyncID.Kind, rootSyncID.ObjectKey, configsync.AuthCookieFile, controllers.GitCredentialVolume); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nomostest.SetupFakeSSHCreds(nt, rootSyncID.Kind, rootSyncID.ObjectKey, configsync.AuthCookieFile, controllers.GitCredentialVolume))
 	nt.WaitForRootSyncStalledError(rs.Name, "Validation", `git secretType was set as "cookiefile" but cookie_file key is not present`)
 
 	nt.T.Log("Set auth type to token")
@@ -68,10 +62,22 @@ func TestSyncingThroughAProxy(t *testing.T) {
 	nt.MustMergePatch(rs, `{"spec": {"git": {"auth": "none", "secretRef": {"name":""}}}}`)
 
 	nt.T.Log("Verify no errors")
-	// Sync dir value set by testdata/proxy/proxy-enabled.yaml
-	nomostest.SetExpectedSyncPath(nt, rootSyncID, "hierarchical-format/config")
-	nt.Must(nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(nomostest.RemoteRootRepoSha1Fn)))
+	commit, err := nomostest.GitCommitFromSpec(nt, rs.Spec.Git)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	nomostest.SetExpectedSyncSource(nt, rootSyncID, &syncsource.GitSyncSource{
+		Repository: gitproviders.ReadOnlyRepository{
+			URL: rs.Spec.Git.Repo,
+		},
+		Branch:            rs.Spec.Git.Branch,
+		Revision:          rs.Spec.Git.Revision,
+		SourceFormat:      rs.Spec.SourceFormat,
+		Directory:         rs.Spec.Git.Dir,
+		ExpectedDirectory: rs.Spec.Git.Dir,
+		ExpectedCommit:    commit,
+	})
+	nt.Must(nt.WatchForAllSyncs())
 }
 
 func hasReadyReplicas(replicas int32) testpredicates.Predicate {

@@ -32,6 +32,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/policy"
+	"kpt.dev/configsync/e2e/nomostest/syncsource"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
@@ -237,10 +238,13 @@ func resetExpectedGitSync(nt *nomostest.NT, syncID core.ID) {
 	if nt.GitProvider.Type() == e2e.Local {
 		nomostest.InitGitRepos(nt, syncID.ObjectKey)
 	}
-	syncPath := gitproviders.DefaultSyncDir
 	sourceFormat := configsync.SourceFormatUnstructured
-	repo := nomostest.ResetRepository(nt, syncID.Kind, syncID.ObjectKey, sourceFormat)
-	nomostest.SetExpectedGitSource(nt, syncID, repo, syncPath, sourceFormat)
+	nomostest.SetExpectedSyncSource(nt, syncID, &syncsource.GitSyncSource{
+		Repository:   nomostest.ResetRepository(nt, syncID.Kind, syncID.ObjectKey, sourceFormat),
+		Branch:       gitproviders.MainBranch,
+		SourceFormat: sourceFormat,
+		Directory:    gitproviders.DefaultSyncDir,
+	})
 }
 
 func validateReconcilerResource(nt *nomostest.NT, gvk schema.GroupVersionKind, labels map[string]string, expectedCount int) {

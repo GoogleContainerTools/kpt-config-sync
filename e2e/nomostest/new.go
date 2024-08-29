@@ -427,14 +427,6 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 	for id, source := range opts.SyncSources {
 		switch tSource := source.(type) {
 		case *syncsource.GitSyncSource:
-			if tSource.Repository == nil {
-				// Initialize the Repository
-				tSource.Repository = initRepository(nt, id.Kind, id.ObjectKey, tSource.SourceFormat)
-			}
-			if tSource.Directory == "" {
-				// Set the default Directory
-				tSource.Directory = gitproviders.DefaultSyncDir
-			}
 			if tSource.SourceFormat == "" {
 				// Set the default SourceFormat
 				switch id.Kind {
@@ -445,6 +437,19 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 					// RepoSync only ever use unstructured
 					tSource.SourceFormat = configsync.SourceFormatUnstructured
 				}
+			}
+			if tSource.Repository == nil {
+				// Initialize the Repository
+				tSource.Repository = initRepository(nt, id.Kind, id.ObjectKey, tSource.SourceFormat)
+			}
+			if tSource.Branch == "" {
+				// Set the default Branch
+				tSource.Branch = gitproviders.MainBranch
+			}
+			if tSource.Directory == "" {
+				// Set the default Directory
+				tSource.Directory = gitproviders.DefaultSyncDir
+				tSource.ExpectedDirectory = "" // Uses Directory when empty
 			}
 			nt.SyncSources[id] = tSource
 		// case *syncsource.HelmSyncSource:
@@ -504,11 +509,21 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 	nt.RenewClient()
 
 	// Initialize the base RootSync using SSA for field management
-	rs := RootSyncObjectV1Beta1FromRootRepo(nt, configsync.RootSyncName)
-	if err := nt.KubeClient.Apply(rs); err != nil {
-		nt.T.Fatal(err)
+	rootSyncID := DefaultRootSyncID
+	var rootSyncObj client.Object
+	switch tSource := nt.SyncSources[rootSyncID].(type) {
+	case *syncsource.GitSyncSource:
+		rootSyncObj = nt.RootSyncObjectGitSyncSource(rootSyncID.Name, tSource)
+		// TODO: setup OCI & Helm RootSyncs
+		// case *syncsource.HelmSyncSource:
+		// 	rootSyncObj = nt.RootSyncObjectHelmSyncSource(rootSyncID.Name, tSource)
+		// case *syncsource.OCISyncSource:
+		// 	rootSyncObj = nt.RootSyncObjectOCISyncSource(rootSyncID.Name, tSource)
+	default:
+		nt.T.Fatalf("Invalid RootSync source %T: %s", tSource, rootSyncID.Name)
 	}
-	// Wait for Config Sync to be ready and the base RootSync to be synced.
+	nt.Must(nt.KubeClient.Apply(rootSyncObj))
+
 	if err := WaitForConfigSyncReady(nt); err != nil {
 		nt.T.Fatalf("waiting for ConfigSync Deployments to become available: %v", err)
 	}

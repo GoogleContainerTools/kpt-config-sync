@@ -424,7 +424,7 @@ func validateRepoSyncDependencies(nt *nomostest.NT, ns, rsName string) []client.
 	setNN(repoSyncSA, client.ObjectKeyFromObject(repoSyncReconciler))
 	repoSyncDependencies = append(repoSyncDependencies, repoSyncSA)
 
-	// See nomostest.CreateNamespaceSecretForNonCSR for creation of user secrets.
+	// See nomostest.CreateNamespaceSecrets for creation of user secrets.
 	// The Secret is neither needed nor created when using CSR as the Git provider.
 	if nt.GitProvider.Type() != e2e.CSR {
 		repoSyncAuthSecret := &corev1.Secret{}
@@ -434,7 +434,7 @@ func validateRepoSyncDependencies(nt *nomostest.NT, ns, rsName string) []client.
 		})
 		repoSyncDependencies = append(repoSyncDependencies, repoSyncAuthSecret)
 	}
-	// See nomostest.CreateNamespaceSecretForNonCSR for creation of user secrets.
+	// See nomostest.CreateNamespaceSecrets for creation of user secrets.
 	// This is a managed secret with a derivative name.
 	// For local kind clusters, the CA Certs are provided to authenticate the git server.
 	if nt.GitProvider.Type() == e2e.Local {

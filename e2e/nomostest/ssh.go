@@ -277,7 +277,7 @@ func generateSSLKeys(nt *NT, syncSource SyncSource, namespace string, domains []
 	}
 
 	// Create public secret in config-management-system to enable syncing with
-	// RootSyncs. For RepoSyncs, see CreateNamespaceSecretForNonCSR
+	// RootSyncs. For RepoSyncs, see CreateNamespaceSecrets
 	if err := createSecret(nt, configmanagement.ControllerNamespace, PublicCertSecretName(syncSource),
 		fmt.Sprintf("cert=%s", caCertPath(nt, syncSource))); err != nil {
 		return "", err
@@ -316,20 +316,19 @@ func downloadSSHKey(nt *NT) (string, error) {
 	return privateKeyPath(nt), nil
 }
 
-// CreateNamespaceSecretForNonCSR creates secrets in a given namespace using local paths.
+// CreateNamespaceSecrets creates secrets in a given namespace using local paths.
 // It skips creating the Secret if the GitProvider is CSR because CSR uses either
 // 'gcenode' or 'gcpserviceaccount' for authentication, which doesn't require a Secret.
-func CreateNamespaceSecretForNonCSR(nt *NT, ns string) error {
-	if nt.GitProvider.Type() == e2e.CSR {
-		return nil
-	}
-	privateKeypath := nt.gitPrivateKeyPath
-	if len(privateKeypath) == 0 {
-		privateKeypath = privateKeyPath(nt)
-	}
-	nt.T.Logf("Creating Secret %s for Namespace %s", NamespaceAuthSecretName, ns)
-	if err := createSecret(nt, ns, NamespaceAuthSecretName, fmt.Sprintf("ssh=%s", privateKeypath)); err != nil {
-		return err
+func CreateNamespaceSecrets(nt *NT, ns string) error {
+	if nt.GitProvider.Type() != e2e.CSR {
+		privateKeypath := nt.gitPrivateKeyPath
+		if len(privateKeypath) == 0 {
+			privateKeypath = privateKeyPath(nt)
+		}
+		nt.T.Logf("Creating Secret %s for Namespace %s", NamespaceAuthSecretName, ns)
+		if err := createSecret(nt, ns, NamespaceAuthSecretName, fmt.Sprintf("ssh=%s", privateKeypath)); err != nil {
+			return err
+		}
 	}
 	if nt.GitProvider.Type() == e2e.Local {
 		caCertPathVal := nt.gitCACertPath

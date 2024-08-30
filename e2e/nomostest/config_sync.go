@@ -710,8 +710,40 @@ func setupDelegatedControl(nt *NT) {
 	}
 }
 
-// RootSyncObjectV1Alpha1Git returns the default RootSync object.
-func RootSyncObjectV1Alpha1Git(name, repoURL string, sourceFormat configsync.SourceFormat) *v1alpha1.RootSync {
+// SetRSyncTestDefaults populates defaults for test RSyncs.
+func SetRSyncTestDefaults(nt *NT, obj client.Object) {
+	switch rs := obj.(type) {
+	case *v1alpha1.RootSync:
+		if nt.DefaultReconcileTimeout != nil && (rs.Spec.Override == nil || rs.Spec.Override.ReconcileTimeout == nil) {
+			rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*nt.DefaultReconcileTimeout)
+		}
+	case *v1beta1.RootSync:
+		if nt.DefaultReconcileTimeout != nil && (rs.Spec.Override == nil || rs.Spec.Override.ReconcileTimeout == nil) {
+			rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*nt.DefaultReconcileTimeout)
+		}
+	case *v1alpha1.RepoSync:
+		if nt.DefaultReconcileTimeout != nil && (rs.Spec.Override == nil || rs.Spec.Override.ReconcileTimeout == nil) {
+			rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*nt.DefaultReconcileTimeout)
+		}
+		// Add dependencies to ensure managed objects can be deleted.
+		nt.Must(SetRepoSyncDependencies(nt, obj))
+	case *v1beta1.RepoSync:
+		if nt.DefaultReconcileTimeout != nil && (rs.Spec.Override == nil || rs.Spec.Override.ReconcileTimeout == nil) {
+			rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*nt.DefaultReconcileTimeout)
+		}
+		// Add dependencies to ensure managed objects can be deleted.
+		nt.Must(SetRepoSyncDependencies(nt, obj))
+	default:
+		nt.T.Fatalf("Invalid RSync type %T", obj)
+	}
+	// Set global defaults
+	// Enable automatic deletion of managed objects by default.
+	// This helps ensure that test artifacts are cleaned up.
+	EnableDeletionPropagation(obj)
+}
+
+// rootSyncObjectV1Alpha1Git returns the default RootSync object.
+func rootSyncObjectV1Alpha1Git(name, repoURL string, sourceFormat configsync.SourceFormat) *v1alpha1.RootSync {
 	rs := k8sobjects.RootSyncObjectV1Alpha1(name)
 	rs.Spec.SourceFormat = sourceFormat
 	rs.Spec.SourceType = configsync.GitSource
@@ -736,9 +768,6 @@ func RootSyncObjectV1Alpha1Git(name, repoURL string, sourceFormat configsync.Sou
 			Name: controllers.GitCredentialVolume,
 		}
 	}
-	// Enable automatic deletion of managed objects by default.
-	// This helps ensure that test artifacts are cleaned up.
-	EnableDeletionPropagation(rs)
 	return rs
 }
 
@@ -757,17 +786,13 @@ func RootSyncObjectV1Alpha1FromRootRepo(nt *NT, name string) *v1alpha1.RootSync 
 	}
 	repoURL := nt.GitProvider.SyncURL(gitSource.Repository.RemoteRepoName)
 	sourceFormat := gitSource.Repository.Format
-	rs := RootSyncObjectV1Alpha1Git(name, repoURL, sourceFormat)
-	if nt.DefaultReconcileTimeout != nil {
-		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*nt.DefaultReconcileTimeout)
-	} else if rs.Spec.Override != nil {
-		rs.Spec.Override.ReconcileTimeout = nil
-	}
+	rs := rootSyncObjectV1Alpha1Git(name, repoURL, sourceFormat)
+	SetRSyncTestDefaults(nt, rs)
 	return rs
 }
 
-// RootSyncObjectV1Beta1Git returns the default RootSync object with version v1beta1.
-func RootSyncObjectV1Beta1Git(name, repoURL string, sourceFormat configsync.SourceFormat) *v1beta1.RootSync {
+// rootSyncObjectV1Beta1Git returns the default RootSync object with version v1beta1.
+func rootSyncObjectV1Beta1Git(name, repoURL string, sourceFormat configsync.SourceFormat) *v1beta1.RootSync {
 	rs := k8sobjects.RootSyncObjectV1Beta1(name)
 	rs.Spec.SourceFormat = sourceFormat
 	rs.Spec.SourceType = configsync.GitSource
@@ -792,9 +817,6 @@ func RootSyncObjectV1Beta1Git(name, repoURL string, sourceFormat configsync.Sour
 			Name: controllers.GitCredentialVolume,
 		}
 	}
-	// Enable automatic deletion of managed objects by default.
-	// This helps ensure that test artifacts are cleaned up.
-	EnableDeletionPropagation(rs)
 	return rs
 }
 
@@ -835,9 +857,9 @@ func StructuredNSPath(namespace, resourceName string) string {
 	return fmt.Sprintf("acme/namespaces/%s/%s.yaml", namespace, resourceName)
 }
 
-// RepoSyncObjectV1Alpha1Git returns the default RepoSync object in the given namespace.
+// repoSyncObjectV1Alpha1Git returns the default RepoSync object in the given namespace.
 // SourceFormat for RepoSync must be Unstructured (default), so it's left unspecified.
-func RepoSyncObjectV1Alpha1Git(nn types.NamespacedName, repoURL string) *v1alpha1.RepoSync {
+func repoSyncObjectV1Alpha1Git(nn types.NamespacedName, repoURL string) *v1alpha1.RepoSync {
 	rs := k8sobjects.RepoSyncObjectV1Alpha1(nn.Namespace, nn.Name)
 	rs.Spec.SourceType = configsync.GitSource
 	rs.Spec.Git = &v1alpha1.Git{
@@ -861,9 +883,6 @@ func RepoSyncObjectV1Alpha1Git(nn types.NamespacedName, repoURL string) *v1alpha
 			Name: "ssh-key",
 		}
 	}
-	// Enable automatic deletion of managed objects by default.
-	// This helps ensure that test artifacts are cleaned up.
-	EnableDeletionPropagation(rs)
 	return rs
 }
 
@@ -882,24 +901,14 @@ func RepoSyncObjectV1Alpha1FromNonRootRepo(nt *NT, nn types.NamespacedName) *v1a
 	}
 	repoURL := nt.GitProvider.SyncURL(gitSource.Repository.RemoteRepoName)
 	// RepoSync is always Unstructured. So ignore repo.Format.
-	rs := RepoSyncObjectV1Alpha1Git(nn, repoURL)
-	if nt.DefaultReconcileTimeout != nil {
-		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*nt.DefaultReconcileTimeout)
-	} else if rs.Spec.Override != nil {
-		rs.Spec.Override.ReconcileTimeout = nil
-	}
-	// Enable automatic deletion of managed objects by default.
-	// This helps ensure that test artifacts are cleaned up.
-	EnableDeletionPropagation(rs)
-	// Add dependencies to ensure managed objects can be deleted.
-	if err := SetRepoSyncDependencies(nt, rs); err != nil {
-		nt.T.Fatal(err)
-	}
+	rs := repoSyncObjectV1Alpha1Git(nn, repoURL)
+	SetRSyncTestDefaults(nt, rs)
 	return rs
 }
 
 // RepoSyncObjectV1Beta1Git returns the default RepoSync object
 // with version v1beta1 in the given namespace.
+// TODO: Replace usages with RootSyncObjectGit, once ReadOnlyRegistry is supported.
 func RepoSyncObjectV1Beta1Git(nn types.NamespacedName, repoURL string, sourceFormat configsync.SourceFormat) *v1beta1.RepoSync {
 	rs := k8sobjects.RepoSyncObjectV1Beta1(nn.Namespace, nn.Name)
 	rs.Spec.SourceFormat = sourceFormat
@@ -927,6 +936,7 @@ func RepoSyncObjectV1Beta1Git(nn types.NamespacedName, repoURL string, sourceFor
 	}
 	// Enable automatic deletion of managed objects by default.
 	// This helps ensure that test artifacts are cleaned up.
+	// TODO: Remove EnableDeletionPropagation here and make RepoSyncObjectV1Beta1Git private. Prefer using RootSyncObjectGit.
 	EnableDeletionPropagation(rs)
 	return rs
 }
@@ -938,15 +948,8 @@ func (nt *NT) RootSyncObjectGit(name string, repo *gitproviders.Repository, sync
 	id := core.RootSyncID(name)
 	SetExpectedGitSource(nt, id, repo, syncPath, sourceFormat)
 	repoURL := nt.GitProvider.SyncURL(repo.RemoteRepoName)
-	rs := RootSyncObjectV1Beta1Git(name, repoURL, sourceFormat)
-	if nt.DefaultReconcileTimeout != nil {
-		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*nt.DefaultReconcileTimeout)
-	} else if rs.Spec.Override != nil {
-		rs.Spec.Override.ReconcileTimeout = nil
-	}
-	// Enable automatic deletion of managed objects by default.
-	// This helps ensure that test artifacts are cleaned up.
-	EnableDeletionPropagation(rs)
+	rs := rootSyncObjectV1Beta1Git(name, repoURL, sourceFormat)
+	SetRSyncTestDefaults(nt, rs)
 	return rs
 }
 
@@ -959,18 +962,7 @@ func (nt *NT) RepoSyncObjectGit(nn types.NamespacedName, repo *gitproviders.Repo
 	repoURL := nt.GitProvider.SyncURL(repo.RemoteRepoName)
 	// RepoSync is always Unstructured. So ignore repo.Format.
 	rs := RepoSyncObjectV1Beta1Git(nn, repoURL, sourceFormat)
-	if nt.DefaultReconcileTimeout != nil {
-		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*nt.DefaultReconcileTimeout)
-	} else if rs.Spec.Override != nil {
-		rs.Spec.Override.ReconcileTimeout = nil
-	}
-	// Add dependencies to ensure managed objects can be deleted.
-	if err := SetRepoSyncDependencies(nt, rs); err != nil {
-		nt.T.Fatal(err)
-	}
-	// Enable automatic deletion of managed objects by default.
-	// This helps ensure that test artifacts are cleaned up.
-	EnableDeletionPropagation(rs)
+	SetRSyncTestDefaults(nt, rs)
 	return rs
 }
 
@@ -1007,14 +999,7 @@ func (nt *NT) RootSyncObjectOCI(name string, imageID registryproviders.OCIImageI
 	default:
 		nt.T.Fatalf("Unrecognized OCIProvider: %s", *e2e.OCIProvider)
 	}
-	if nt.DefaultReconcileTimeout != nil {
-		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*nt.DefaultReconcileTimeout)
-	} else if rs.Spec.Override != nil {
-		rs.Spec.Override.ReconcileTimeout = nil
-	}
-	// Enable automatic deletion of managed objects by default.
-	// This helps ensure that test artifacts are cleaned up.
-	EnableDeletionPropagation(rs)
+	SetRSyncTestDefaults(nt, rs)
 	return rs
 }
 
@@ -1051,18 +1036,7 @@ func (nt *NT) RepoSyncObjectOCI(nn types.NamespacedName, imageID registryprovide
 	default:
 		nt.T.Fatalf("Unrecognized OCIProvider: %s", *e2e.OCIProvider)
 	}
-	if nt.DefaultReconcileTimeout != nil {
-		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*nt.DefaultReconcileTimeout)
-	} else if rs.Spec.Override != nil {
-		rs.Spec.Override.ReconcileTimeout = nil
-	}
-	// Add dependencies to ensure managed objects can be deleted.
-	if err := SetRepoSyncDependencies(nt, rs); err != nil {
-		nt.T.Fatal(err)
-	}
-	// Enable automatic deletion of managed objects by default.
-	// This helps ensure that test artifacts are cleaned up.
-	EnableDeletionPropagation(rs)
+	SetRSyncTestDefaults(nt, rs)
 	return rs
 }
 
@@ -1096,15 +1070,7 @@ func (nt *NT) RootSyncObjectHelm(name string, chartID registryproviders.HelmChar
 	default:
 		nt.T.Fatalf("Unrecognized HelmProvider: %s", *e2e.OCIProvider)
 	}
-	// Set the default ReconcileTimeout
-	if nt.DefaultReconcileTimeout != nil {
-		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*nt.DefaultReconcileTimeout)
-	} else if rs.Spec.Override != nil {
-		rs.Spec.Override.ReconcileTimeout = nil
-	}
-	// Enable automatic deletion of managed objects by default.
-	// This helps ensure that test artifacts are cleaned up.
-	EnableDeletionPropagation(rs)
+	SetRSyncTestDefaults(nt, rs)
 	return rs
 }
 
@@ -1138,19 +1104,7 @@ func (nt *NT) RepoSyncObjectHelm(nn types.NamespacedName, chartID registryprovid
 	default:
 		nt.T.Fatalf("Unrecognized HelmProvider: %s", *e2e.OCIProvider)
 	}
-	// Set the default ReconcileTimeout
-	if nt.DefaultReconcileTimeout != nil {
-		rs.Spec.SafeOverride().ReconcileTimeout = toMetav1Duration(*nt.DefaultReconcileTimeout)
-	} else if rs.Spec.Override != nil {
-		rs.Spec.Override.ReconcileTimeout = nil
-	}
-	// Add dependencies to ensure managed objects can be deleted.
-	if err := SetRepoSyncDependencies(nt, rs); err != nil {
-		nt.T.Fatal(err)
-	}
-	// Enable automatic deletion of managed objects by default.
-	// This helps ensure that test artifacts are cleaned up.
-	EnableDeletionPropagation(rs)
+	SetRSyncTestDefaults(nt, rs)
 	return rs
 }
 

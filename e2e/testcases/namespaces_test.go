@@ -43,7 +43,7 @@ import (
 // TestDeclareNamespace runs a test that ensures ACM syncs Namespaces to clusters.
 func TestDeclareNamespace(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	err := nt.ValidateNotFound("foo", "", &corev1.Namespace{})
 	if err != nil {
@@ -77,7 +77,7 @@ func TestDeclareNamespace(t *testing.T) {
 
 func TestNamespaceLabelAndAnnotationLifecycle(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	// Create foo namespace without any labels or annotations.
 	nsObj := k8sobjects.NamespaceObject("foo")
@@ -178,7 +178,7 @@ func TestNamespaceLabelAndAnnotationLifecycle(t *testing.T) {
 
 func TestNamespaceExistsAndDeclared(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	// Create nsObj using kubectl first then commit.
 	nsObj := k8sobjects.NamespaceObject("decl-namespace-annotation-none")
@@ -209,7 +209,7 @@ func TestNamespaceExistsAndDeclared(t *testing.T) {
 
 func TestNamespaceEnabledAnnotationNotDeclared(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	// Create nsObj with managed annotation using kubectl.
 	nsObj := k8sobjects.NamespaceObject("undeclared-annotation-enabled")
@@ -240,7 +240,7 @@ func TestNamespaceEnabledAnnotationNotDeclared(t *testing.T) {
 // TestManagementDisabledNamespace tests https://cloud.google.com/anthos-config-management/docs/how-to/managing-objects#unmanaged-namespaces.
 func TestManagementDisabledNamespace(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	checkpointProtectedNamespace(nt, metav1.NamespaceDefault)
 
@@ -361,7 +361,7 @@ func TestManagementDisabledConfigMap(t *testing.T) {
 			"acme/namespaces/foo/cm3.yaml": cm3,
 		},
 	}))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	// Test that the namespace exists with expected config management labels and annotations.
 	err := nt.Validate(fooNamespace.Name, "", &corev1.Namespace{}, testpredicates.HasAllNomosMetadata())
@@ -475,7 +475,7 @@ func TestManagementDisabledConfigMap(t *testing.T) {
 
 func TestSyncLabelsAndAnnotationsOnKubeSystem(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2, ntopts.SkipAutopilotCluster)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	checkpointProtectedNamespace(nt, metav1.NamespaceSystem)
 
@@ -559,7 +559,7 @@ func TestSyncLabelsAndAnnotationsOnKubeSystem(t *testing.T) {
 
 func TestDoNotRemoveManagedByLabelExceptForConfigManagement(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	// Create namespace using kubectl with managed by helm label.
 	helmManagedNamespace := k8sobjects.NamespaceObject("helm-managed-namespace")
@@ -592,7 +592,7 @@ func TestDoNotRemoveManagedByLabelExceptForConfigManagement(t *testing.T) {
 func TestDeclareImplicitNamespace(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	var unixMilliseconds = time.Now().UnixNano() / 1000000
 	var implicitNamespace = "shipping-" + fmt.Sprint(unixMilliseconds)
@@ -668,7 +668,7 @@ func TestDeclareImplicitNamespace(t *testing.T) {
 
 func TestDontDeleteAllNamespaces(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	// Test Setup + Preconditions.
 	// Declare two Namespaces.

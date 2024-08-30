@@ -39,7 +39,7 @@ var preventDeletion = core.Annotation(common.LifecycleDeleteAnnotation, common.P
 func TestPreventDeletionNamespace(t *testing.T) {
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.Lifecycle)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	// Ensure the Namespace doesn't already exist.
 	err := nt.ValidateNotFound("shipping", "", &corev1.Namespace{})
@@ -135,7 +135,7 @@ func TestPreventDeletionNamespace(t *testing.T) {
 func TestPreventDeletionRole(t *testing.T) {
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.Lifecycle)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	// Ensure the Namespace doesn't already exist.
 	err := nt.ValidateNotFound("shipping-admin", "shipping", &rbacv1.Role{})
@@ -238,7 +238,7 @@ func TestPreventDeletionRole(t *testing.T) {
 func TestPreventDeletionClusterRole(t *testing.T) {
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.Lifecycle)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	// Ensure the ClusterRole doesn't already exist.
 	err := nt.ValidateNotFound("test-admin", "", &rbacv1.ClusterRole{})
@@ -317,7 +317,7 @@ func skipAutopilotManagedNamespace(nt *nomostest.NT, ns string) bool {
 func TestPreventDeletionSpecialNamespaces(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Lifecycle,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	// Build list of special namespaces to test.
 	// Skip namespaces managed by GKE Autopilot, if on an Autopilot cluster

@@ -1187,9 +1187,9 @@ func TestReconcilerManagerRootSyncCRDMissing(t *testing.T) {
 		ntopts.RepoSyncPermissions(policy.CoreAdmin()), // NS Reconciler manages ServiceAccounts
 	)
 	rootSyncKey := rootSyncID.ObjectKey
-	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
 	repoSyncKey := repoSyncID.ObjectKey
-	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
+	repoSyncGitRepo := nt.SyncSourceGitReadWriteRepository(repoSyncID)
 
 	reconcilerManagerKey := client.ObjectKey{
 		Name:      reconcilermanager.ManagerName,

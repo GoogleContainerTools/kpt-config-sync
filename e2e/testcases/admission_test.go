@@ -45,7 +45,7 @@ import (
 func TestAdmission(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl)
 
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/hello/ns.yaml",
 		k8sobjects.NamespaceObject("hello", core.Annotation("goodbye", "moon"))))
@@ -157,7 +157,7 @@ func TestDisableWebhookConfigurationUpdateHierarchy(t *testing.T) {
 	// Test starts with Admission Webhook already installed
 	nomostest.WaitForWebhookReadiness(nt)
 
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/hello/ns.yaml", k8sobjects.NamespaceObject("hello")))
 	nt.Must(rootSyncGitRepo.CommitAndPush("add test namespace"))
@@ -228,7 +228,7 @@ func TestDisableWebhookConfigurationUpdateUnstructured(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource,
 		ntopts.SyncWithGitSource(repoSyncID),
 		ntopts.RepoSyncPermissions(policy.CoreAdmin()))
-	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
+	repoSyncGitRepo := nt.SyncSourceGitReadWriteRepository(repoSyncID)
 
 	sa := k8sobjects.ServiceAccountObject("store", core.Namespace(namespaceRepo))
 	nt.Must(repoSyncGitRepo.Add("acme/sa.yaml", sa))

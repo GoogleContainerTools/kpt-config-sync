@@ -77,7 +77,7 @@ func TestStressCRD(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.StressTest,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	syncPath := gitproviders.DefaultSyncDir
 
@@ -141,7 +141,7 @@ func TestStressLargeNamespace(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.StressTest,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	syncPath := gitproviders.DefaultSyncDir
 	ns := "my-ns-1"
@@ -181,7 +181,7 @@ func TestStressFrequentGitCommits(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.StressTest,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	syncPath := gitproviders.DefaultSyncDir
 	ns := "bookstore"
@@ -296,7 +296,7 @@ func TestStress100CRDs(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.StressTest,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	syncPath := gitproviders.DefaultSyncDir
 	ns := "stress-test-ns"
@@ -351,7 +351,7 @@ func TestStressManyDeployments(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.StressTest,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	syncPath := filepath.Join(gitproviders.DefaultSyncDir, "stress-test")
 	ns := "stress-test-ns"
@@ -399,7 +399,7 @@ func TestStressMemoryUsageGit(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.StressTest,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	syncPath := filepath.Join(gitproviders.DefaultSyncDir, "stress-test")
 	ns := "stress-test-ns"

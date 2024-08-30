@@ -418,14 +418,14 @@ func stringSliceContains(list []string, value string) bool {
 }
 
 // ResetRepository creates or re-initializes a remote repository.
-func ResetRepository(nt *NT, syncKind string, nn types.NamespacedName, sourceFormat configsync.SourceFormat) *gitproviders.Repository {
+func ResetRepository(nt *NT, syncKind string, nn types.NamespacedName, sourceFormat configsync.SourceFormat) *gitproviders.ReadWriteRepository {
 	repo := initRepository(nt, syncKind, nn, sourceFormat)
 	initialCommit(nt, syncKind, nn, sourceFormat)
 	return repo
 }
 
 // initRepository inits a local repository and ensures its remote exists
-func initRepository(nt *NT, syncKind string, nn types.NamespacedName, sourceFormat configsync.SourceFormat) *gitproviders.Repository {
+func initRepository(nt *NT, syncKind string, nn types.NamespacedName, sourceFormat configsync.SourceFormat) *gitproviders.ReadWriteRepository {
 	repo, found := nt.RemoteRepositories[nn]
 	if !found {
 		repo = gitproviders.NewRepository(syncKind, nn, sourceFormat, nt.Scheme,

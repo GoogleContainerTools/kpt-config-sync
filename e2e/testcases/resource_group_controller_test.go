@@ -39,7 +39,7 @@ import (
 
 func TestResourceGroupController(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.ACMController)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	ns := "rg-test"
 	nt.Must(rootSyncGitRepo.Add(

@@ -116,7 +116,7 @@ func TestOtelCollectorDeployment(t *testing.T) {
 		ntopts.RequireGKE(t),
 		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured),
 	)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
 	nt.T.Cleanup(func() {
 		if t.Failed() {
 			nt.PodLogs("config-management-monitoring", csmetrics.OtelCollectorName, "", false)
@@ -234,7 +234,7 @@ func TestGCMMetrics(t *testing.T) {
 		ntopts.RequireGKE(t),
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 	)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 	nt.T.Cleanup(func() {
 		if t.Failed() {
 			nt.PodLogs("config-management-monitoring", csmetrics.OtelCollectorName, "", false)
@@ -318,7 +318,7 @@ func TestGCMMetrics(t *testing.T) {
 //   - roles/iam.workloadIdentityUser on config-management-monitoring/default for e2e-test-metric-writer
 func TestOtelCollectorGCMLabelAggregation(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.RequireGKE(t))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 	setupMetricsServiceAccount(nt)
 
 	startTime := time.Now().UTC()

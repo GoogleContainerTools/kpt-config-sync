@@ -69,9 +69,9 @@ func TestCACertSecretRefV1Alpha1(t *testing.T) {
 	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, backendNamespace)
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.RequireLocalGitProvider,
 		ntopts.SyncWithGitSource(repoSyncID))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 	repoSyncKey := repoSyncID.ObjectKey
-	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
+	repoSyncGitRepo := nt.SyncSourceGitReadWriteRepository(repoSyncID)
 	rootSyncReconcilerName := nomostest.DefaultRootReconcilerName
 	repoSyncReconcilerName := core.NsReconcilerName(repoSyncID.Namespace, repoSyncID.Name)
 
@@ -150,7 +150,7 @@ func TestCACertSecretRefV1Alpha1(t *testing.T) {
 	}
 
 	// Set RootSync to use SSH again
-	rootSyncSSHURL := nt.GitProvider.SyncURL(rootSyncGitRepo.RemoteRepoName)
+	rootSyncSSHURL := rootSyncGitRepo.SyncURL()
 	nt.MustMergePatch(rootSync, syncURLSSHPatch(rootSyncSSHURL))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -172,7 +172,7 @@ func TestCACertSecretRefV1Alpha1(t *testing.T) {
 	}
 
 	// Set RepoSync to use SSH again
-	repoSyncSSHURL := nt.GitProvider.SyncURL(repoSyncGitRepo.RemoteRepoName)
+	repoSyncSSHURL := repoSyncGitRepo.SyncURL()
 	repoSyncBackend.Spec.Git.Repo = repoSyncSSHURL
 	repoSyncBackend.Spec.Git.Auth = "ssh"
 	repoSyncBackend.Spec.Git.SecretRef = &v1alpha1.SecretReference{Name: "ssh-key"}
@@ -191,9 +191,9 @@ func TestCACertSecretRefV1Beta1(t *testing.T) {
 	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, backendNamespace)
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.RequireLocalGitProvider,
 		ntopts.SyncWithGitSource(repoSyncID))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 	repoSyncKey := repoSyncID.ObjectKey
-	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
+	repoSyncGitRepo := nt.SyncSourceGitReadWriteRepository(repoSyncID)
 	rootSyncReconcilerName := nomostest.DefaultRootReconcilerName
 
 	key := controllers.GitSSLCAInfo
@@ -277,7 +277,7 @@ func TestCACertSecretRefV1Beta1(t *testing.T) {
 	}
 
 	// Set RootSync to use SSH again
-	rootSyncSSHURL := nt.GitProvider.SyncURL(rootSyncGitRepo.RemoteRepoName)
+	rootSyncSSHURL := rootSyncGitRepo.SyncURL()
 	nt.MustMergePatch(rootSync, syncURLSSHPatch(rootSyncSSHURL))
 	if err := nt.WatchForAllSyncs(); err != nil {
 		nt.T.Fatal(err)
@@ -299,7 +299,7 @@ func TestCACertSecretRefV1Beta1(t *testing.T) {
 	}
 
 	// Set RepoSync to use SSH again
-	repoSyncSSHURL := nt.GitProvider.SyncURL(repoSyncGitRepo.RemoteRepoName)
+	repoSyncSSHURL := repoSyncGitRepo.SyncURL()
 	repoSyncBackend.Spec.Git.Repo = repoSyncSSHURL
 	repoSyncBackend.Spec.Git.Auth = "ssh"
 	repoSyncBackend.Spec.Git.SecretRef = &v1beta1.SecretReference{Name: "ssh-key"}
@@ -318,9 +318,9 @@ func TestCACertSecretWatch(t *testing.T) {
 	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, backendNamespace)
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.RequireLocalGitProvider,
 		ntopts.SyncWithGitSource(repoSyncID))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 	repoSyncKey := repoSyncID.ObjectKey
-	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
+	repoSyncGitRepo := nt.SyncSourceGitReadWriteRepository(repoSyncID)
 	rootSyncReconcilerName := nomostest.DefaultRootReconcilerName
 	repoSyncReconcilerName := core.NsReconcilerName(repoSyncID.Namespace, repoSyncID.Name)
 
@@ -384,7 +384,7 @@ func TestCACertSecretWatch(t *testing.T) {
 			testpredicates.SecretHasKey("baz", "bat"),
 		}))
 	// Unset caCertSecret for repoSyncBackend and use SSH
-	repoSyncSSHURL := nt.GitProvider.SyncURL(repoSyncGitRepo.RemoteRepoName)
+	repoSyncSSHURL := repoSyncGitRepo.SyncURL()
 	repoSyncBackend.Spec.Git.Repo = repoSyncSSHURL
 	repoSyncBackend.Spec.Git.Auth = "ssh"
 	repoSyncBackend.Spec.Git.SecretRef = &v1beta1.SecretReference{Name: "ssh-key"}
@@ -439,7 +439,7 @@ func TestOCICACertSecretRefNamespaceRepo(t *testing.T) {
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.SyncWithGitSource(repoSyncID),
 		ntopts.RepoSyncPermissions(policy.CoreAdmin()))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 	repoSyncKey := repoSyncID.ObjectKey
 	repoSyncReconcilerName := core.NsReconcilerName(repoSyncID.Namespace, repoSyncID.Name)
 
@@ -528,7 +528,7 @@ func TestHelmCACertSecretRefNamespaceRepo(t *testing.T) {
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.SyncWithGitSource(repoSyncID),
 		ntopts.RepoSyncPermissions(policy.CoreAdmin()))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	caCertSecret := nomostest.PublicCertSecretName(nomostest.RegistrySyncSource)
 

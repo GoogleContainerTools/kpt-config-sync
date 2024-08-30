@@ -58,7 +58,7 @@ func TestNamespaceRepo_Centralized(t *testing.T) {
 		ntopts.WithCentralizedControl,
 	)
 	repoSyncKey := repoSyncID.ObjectKey
-	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
+	repoSyncGitRepo := nt.SyncSourceGitReadWriteRepository(repoSyncID)
 
 	// Validate status condition "Reconciling" and "Stalled "is set to "False"
 	// after the reconciler deployment is successfully created.
@@ -108,7 +108,7 @@ func TestNamespaceRepo_Centralized(t *testing.T) {
 	validateRepoSyncRBAC(nt, bsNamespace, repoSyncGitRepo, configureRBACInCentralizedMode)
 }
 
-func validateRepoSyncRBAC(nt *nomostest.NT, ns string, nsRepo *gitproviders.Repository, configureRBAC configureRBACFunc) {
+func validateRepoSyncRBAC(nt *nomostest.NT, ns string, nsRepo *gitproviders.ReadWriteRepository, configureRBAC configureRBACFunc) {
 	nt.T.Cleanup(func() {
 		// Grant full permission to manage the Deployment in case the test fails early
 		configureRBAC(nt, ns, []string{"*"})
@@ -196,7 +196,7 @@ func validateRepoSyncRBAC(nt *nomostest.NT, ns string, nsRepo *gitproviders.Repo
 type configureRBACFunc func(nt *nomostest.NT, ns string, verbs []string)
 
 func configureRBACInCentralizedMode(nt *nomostest.NT, ns string, verbs []string) {
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 	rules := []rbacv1.PolicyRule{
 		{
 			APIGroups: []string{appsv1.GroupName},
@@ -330,7 +330,7 @@ func TestNamespaceRepo_Delegated(t *testing.T) {
 		ntopts.RepoSyncPermissions(policy.CoreAdmin()), // NS Reconciler manages ServiceAccounts
 	)
 	repoSyncKey := repoSyncID.ObjectKey
-	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
+	repoSyncGitRepo := nt.SyncSourceGitReadWriteRepository(repoSyncID)
 
 	// Validate service account 'store' not present.
 	err := nt.ValidateNotFound("store", bsNamespaceRepo, &corev1.ServiceAccount{})
@@ -405,7 +405,7 @@ func TestDeleteRepoSync_Centralized_AndRepoSyncV1Alpha1(t *testing.T) {
 		ntopts.SyncWithGitSource(repoSyncID),
 		ntopts.WithCentralizedControl,
 	)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 	repoSyncKey := repoSyncID.ObjectKey
 
 	secretNames := getNsReconcilerSecrets(nt, bsNamespace)
@@ -472,7 +472,7 @@ func TestManageSelfRepoSync(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.MultiRepos,
 		ntopts.RepoSyncPermissions(policy.CoreAdmin()), // NS Reconciler manages ServiceAccounts
 		ntopts.SyncWithGitSource(repoSyncID))
-	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
+	repoSyncGitRepo := nt.SyncSourceGitReadWriteRepository(repoSyncID)
 
 	rs := &v1beta1.RepoSync{}
 	if err := nt.KubeClient.Get(repoSyncID.Name, repoSyncID.Namespace, rs); err != nil {
@@ -545,8 +545,8 @@ func TestDeleteNamespaceReconcilerDeployment(t *testing.T) {
 	)
 	rootSyncKey := rootSyncID.ObjectKey
 	repoSyncKey := repoSyncID.ObjectKey
-	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
-	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
+	repoSyncGitRepo := nt.SyncSourceGitReadWriteRepository(repoSyncID)
 
 	nsReconciler := core.NsReconcilerName(repoSyncID.Namespace, repoSyncID.Name)
 

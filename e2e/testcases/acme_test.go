@@ -44,7 +44,7 @@ func configSyncManagementLabels(namespace, folder string) map[string]string {
 func TestAcmeCorpRepo(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1)
 
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	nsToFolder := map[string]string{
 		"analytics":                  "eng",
@@ -186,7 +186,7 @@ func TestObjectInCMSNamespace(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	nt.Must(rootSyncGitRepo.Copy("../testdata/object-in-cms-namespace", "acme"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("adding resource to config-management-system namespace"))

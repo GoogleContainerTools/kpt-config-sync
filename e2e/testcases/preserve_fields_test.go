@@ -41,7 +41,7 @@ import (
 func TestPreserveGeneratedServiceFields(t *testing.T) {
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	// Declare the Service's Namespace
 	ns := "autogen-fields"
@@ -158,7 +158,7 @@ func TestPreserveGeneratedServiceFields(t *testing.T) {
 func TestPreserveGeneratedClusterRoleFields(t *testing.T) {
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	nsViewerName := "namespace-viewer"
 	nsViewer := k8sobjects.ClusterRoleObject(core.Name(nsViewerName),
@@ -267,7 +267,7 @@ aggregationRule:
 func TestPreserveLastApplied(t *testing.T) {
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	// Declare a ClusterRole and wait for it to sync.
 	nsViewerName := "namespace-viewer"
@@ -322,7 +322,7 @@ func TestPreserveLastApplied(t *testing.T) {
 func TestAddUpdateDeleteLabels(t *testing.T) {
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	ns := "crud-labels"
 	nsObj := k8sobjects.NamespaceObject(ns)
@@ -392,7 +392,7 @@ func TestAddUpdateDeleteLabels(t *testing.T) {
 func TestAddUpdateDeleteAnnotations(t *testing.T) {
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	ns := "crud-annotations"
 	nsObj := k8sobjects.NamespaceObject(ns)

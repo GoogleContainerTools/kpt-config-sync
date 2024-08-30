@@ -26,7 +26,7 @@ import (
 
 func TestIgnoreKptfiles(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	// Add multiple Kptfiles
 	nt.Must(rootSyncGitRepo.AddFile("acme/cluster/Kptfile", []byte("random content")))

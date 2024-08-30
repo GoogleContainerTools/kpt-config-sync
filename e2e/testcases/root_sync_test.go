@@ -89,7 +89,7 @@ func TestUpdateRootSyncGitDirectory(t *testing.T) {
 	rootSyncID := nomostest.DefaultRootSyncID
 	rootSyncKey := rootSyncID.ObjectKey
 	nt := nomostest.New(t, nomostesting.SyncSource)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
 
 	// Validate RootSync is present.
 	var rs v1beta1.RootSync
@@ -177,7 +177,7 @@ func TestUpdateRootSyncGitDirectory(t *testing.T) {
 func TestUpdateRootSyncGitBranch(t *testing.T) {
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.SyncSource)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	nsA := "ns-a"
 	nsB := "ns-b"
@@ -310,7 +310,7 @@ func TestUpdateRootSyncGitBranch(t *testing.T) {
 
 func TestForceRevert(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.SyncSource)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	nt.Must(rootSyncGitRepo.Remove("acme/system/repo.yaml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Cause source error"))
@@ -369,7 +369,7 @@ func TestRootSyncReconcilingStatus(t *testing.T) {
 func TestManageSelfRootSync(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.ACMController,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 	rs := &v1beta1.RootSync{}
 	if err := nt.KubeClient.Get(configsync.RootSyncName, configsync.ControllerNamespace, rs); err != nil {
 		nt.T.Fatal(err)

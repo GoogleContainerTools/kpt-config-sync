@@ -36,7 +36,7 @@ func TestMissingRepoErrorWithHierarchicalFormat(t *testing.T) {
 func TestPolicyDirUnset(t *testing.T) {
 	rootSyncID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t, nomostesting.SyncSource)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
 	// There are 6 cluster-scoped objects under `../../examples/acme/cluster`.
 	//
 	// Copying the whole `../../examples/acme/cluster` dir would cause the Config Sync mono-repo mode CI job to fail,

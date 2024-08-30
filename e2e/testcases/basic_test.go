@@ -35,7 +35,7 @@ const (
 
 func TestNamespaceGarbageCollection(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	nt.Must(rootSyncGitRepo.Copy(fmt.Sprintf("%s/accounting-namespace.yaml", yamlDir), "acme/namespaces/accounting/namespace.yaml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add accounting namespace"))
@@ -60,7 +60,7 @@ func TestNamespaceGarbageCollection(t *testing.T) {
 
 func TestNamespacePolicyspaceConversion(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	nt.Must(rootSyncGitRepo.Copy(fmt.Sprintf("%s/dir-namespace.yaml", yamlDir), "acme/namespaces/dir/namespace.yaml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add dir namespace"))
@@ -90,7 +90,7 @@ func TestNamespacePolicyspaceConversion(t *testing.T) {
 
 func TestSyncDeploymentAndReplicaSet(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	// Test the ability to fix a mistake: overlapping replicaset and deployment.
 	// Readiness behavior is undefined for this race condition.
@@ -145,7 +145,7 @@ func TestSyncDeploymentAndReplicaSet(t *testing.T) {
 
 func TestRolebindingsUpdated(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation2)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	nt.Must(rootSyncGitRepo.Copy("../../examples/acme/namespaces/eng/backend/namespace.yaml", "acme/namespaces/eng/backend/namespace.yaml"))
 	nt.Must(rootSyncGitRepo.Copy("../../examples/acme/namespaces/eng/backend/bob-rolebinding.yaml", "acme/namespaces/eng/backend/br.yaml"))
@@ -173,7 +173,7 @@ func TestRolebindingsUpdated(t *testing.T) {
 }
 
 func manageNamespace(nt *nomostest.NT, namespace string) {
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 	nt.T.Log("Add an unmanaged resource into the namespace as a control")
 	nt.T.Log("We should never modify this resource")
 	_, err := nt.Shell.Kubectl("apply", "-f", fmt.Sprintf("%s/reserved_namespaces/unmanaged-service.%s.yaml", yamlDir, namespace))
@@ -221,7 +221,7 @@ func manageNamespace(nt *nomostest.NT, namespace string) {
 }
 
 func unmanageNamespace(nt *nomostest.NT, namespace string) {
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 	nt.T.Log("stop managing the system namespace")
 	nt.Must(rootSyncGitRepo.Copy(fmt.Sprintf("%s/reserved_namespaces/unmanaged-namespace.%s.yaml", yamlDir, namespace), fmt.Sprintf("acme/namespaces/%s/namespace.yaml", namespace)))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Stop managing the namespace"))

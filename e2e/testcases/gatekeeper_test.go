@@ -52,7 +52,7 @@ func emptyConstraintTemplate() unstructured.Unstructured {
 func TestConstraintTemplateAndConstraintInSameCommit(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	crdName := "k8sallowedrepos.constraints.gatekeeper.sh"
 	nt.T.Logf("Delete the %q CRD if needed", crdName)

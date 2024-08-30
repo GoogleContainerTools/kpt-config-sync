@@ -61,12 +61,34 @@ const (
 	DefaultSyncDir = "acme"
 )
 
-// Repository is a local git repository with a connection to a repository
-// on the git-server for the test.
+// Repository is a simple interface shared by both read-only and read-write Git
+// repositories.
+type Repository interface {
+	// SyncURL returns the git repository URL for Config Sync to sync from.
+	SyncURL() string
+}
+
+// ReadOnlyRepository is a remote Git repository to fetch & sync.
+type ReadOnlyRepository struct {
+	// URL is the URL to the Git repository to fetch & sync.
+	URL string
+}
+
+// SyncURL returns the git repository URL for Config Sync to sync from.
+func (r ReadOnlyRepository) SyncURL() string {
+	return r.URL
+}
+
+// Ensure GitRepository interface is satisfied
+var _ Repository = ReadOnlyRepository{}
+var _ Repository = &ReadWriteRepository{}
+
+// ReadWriteRepository is a local clone of a remote git repository, that you
+// have permission to manage.
 //
 // We shell out for git commands as the git libraries are difficult to configure
 // ssh for, and git-server requires ssh authentication.
-type Repository struct {
+type ReadWriteRepository struct {
 	// Name of the repository.
 	// <NAMESPACE>/<NAME> of the RootSync|RepoSync.
 	Name string
@@ -118,10 +140,10 @@ func NewRepository(
 	tmpDir string,
 	privateKeyPath string,
 	defaultWaitTimeout time.Duration,
-) *Repository {
+) *ReadWriteRepository {
 	namespacedName := syncNN.String()
 	safetyName := fmt.Sprintf("safety-%s", strings.ReplaceAll(namespacedName, "/", "-"))
-	return &Repository{
+	return &ReadWriteRepository{
 		Name:                  namespacedName,
 		Root:                  filepath.Join(tmpDir, "repos", namespacedName),
 		Format:                sourceFormat,
@@ -141,7 +163,7 @@ func NewRepository(
 
 // Create the remote repository using the GitProvider, and
 // create the local repository with an initial commit.
-func (g *Repository) Create() error {
+func (g *ReadWriteRepository) Create() error {
 	repoName, err := g.GitProvider.CreateRepository(g.Name)
 	if err != nil {
 		return fmt.Errorf("creating repo: %s: %w", g.Name, err)
@@ -153,7 +175,7 @@ func (g *Repository) Create() error {
 // Git executes the command from the repo root.
 // The command is always logged to the debug log.
 // If the command errors, the command and output is logged.
-func (g *Repository) Git(command ...string) ([]byte, error) {
+func (g *ReadWriteRepository) Git(command ...string) ([]byte, error) {
 	// The -C flag executes git from repository root.
 	// https://git-scm.com/docs/git#Documentation/git.txt--Cltpathgt
 	args := []string{"git", "-C", g.Root}
@@ -172,7 +194,7 @@ func (g *Repository) Git(command ...string) ([]byte, error) {
 
 // BulkGit executes a list of git commands sequentially.
 // If any command errors, execution is halted and the error is logged and returned.
-func (g *Repository) BulkGit(cmds ...[]string) error {
+func (g *ReadWriteRepository) BulkGit(cmds ...[]string) error {
 	for _, cmd := range cmds {
 		if _, err := g.Git(cmd...); err != nil {
 			return err
@@ -182,7 +204,7 @@ func (g *Repository) BulkGit(cmds ...[]string) error {
 }
 
 // InitialCommit initializes the Nomos repo with the Repo object.
-func (g *Repository) InitialCommit(sourceFormat configsync.SourceFormat) error {
+func (g *ReadWriteRepository) InitialCommit(sourceFormat configsync.SourceFormat) error {
 	// Add .gitkeep to retain dir when empty, otherwise configsync will error.
 	if err := g.AddEmptyDir(DefaultSyncDir); err != nil {
 		return err
@@ -221,7 +243,7 @@ func (g *Repository) InitialCommit(sourceFormat configsync.SourceFormat) error {
 
 // Init initializes this git repository and configures it to talk to the cluster
 // under test.
-func (g *Repository) Init() error {
+func (g *ReadWriteRepository) Init() error {
 	if err := os.RemoveAll(g.Root); err != nil {
 		return fmt.Errorf("deleting root directory: %s: %w", g.Root, err)
 	}
@@ -271,7 +293,7 @@ func (g *Repository) Init() error {
 //
 // Don't put multiple manifests in the same file unless parsing multi-manifest
 // files is the behavior under test. In that case, use AddFile.
-func (g *Repository) Add(path string, obj client.Object) error {
+func (g *ReadWriteRepository) Add(path string, obj client.Object) error {
 	testkubeclient.AddTestLabel(obj)
 	ext := filepath.Ext(path)
 	bytes, err := testkubeclient.SerializeObject(obj, ext, g.Scheme)
@@ -286,7 +308,7 @@ func (g *Repository) Add(path string, obj client.Object) error {
 // File must have one of these suffixes: .yaml, .yml, .json
 // This is meant to read files written with Add. So it only reads one object per
 // file. If you need to parse multiple objects from one file, use GetFile.
-func (g *Repository) Get(path string) (client.Object, error) {
+func (g *ReadWriteRepository) Get(path string) (client.Object, error) {
 	bytes, err := g.GetFile(path)
 	if err != nil {
 		return nil, err
@@ -338,7 +360,7 @@ func (g *Repository) Get(path string) (client.Object, error) {
 }
 
 // MustGet calls Get and fails the test on error, logging the result.
-func (g *Repository) MustGet(t testing.NTB, path string) client.Object {
+func (g *ReadWriteRepository) MustGet(t testing.NTB, path string) client.Object {
 	t.Helper()
 	obj, err := g.Get(path)
 	if err != nil {
@@ -349,7 +371,7 @@ func (g *Repository) MustGet(t testing.NTB, path string) client.Object {
 
 // GetAll reads, parses, and returns all the files in a specified directory as
 // objects.
-func (g *Repository) GetAll(dirPath string, recursive bool) ([]client.Object, error) {
+func (g *ReadWriteRepository) GetAll(dirPath string, recursive bool) ([]client.Object, error) {
 	absPath := filepath.Join(g.Root, dirPath)
 
 	entries, err := os.ReadDir(absPath)
@@ -386,7 +408,7 @@ func (g *Repository) GetAll(dirPath string, recursive bool) ([]client.Object, er
 }
 
 // MustGetAll calls GetAll and fails the test on error, logging the result.
-func (g *Repository) MustGetAll(t testing.NTB, dirPath string, recursive bool) []client.Object {
+func (g *ReadWriteRepository) MustGetAll(t testing.NTB, dirPath string, recursive bool) []client.Object {
 	t.Helper()
 	objs, err := g.GetAll(dirPath, recursive)
 	if err != nil {
@@ -402,7 +424,7 @@ func (g *Repository) MustGetAll(t testing.NTB, dirPath string, recursive bool) [
 // Path is relative to the Git repository root.
 // Overwrites `file` if it already exists.
 // Does not commit/push.
-func (g *Repository) AddFile(path string, bytes []byte) error {
+func (g *ReadWriteRepository) AddFile(path string, bytes []byte) error {
 	absPath := filepath.Join(g.Root, path)
 	if err := testkubeclient.WriteToFile(absPath, bytes); err != nil {
 		return err
@@ -417,12 +439,12 @@ func (g *Repository) AddFile(path string, bytes []byte) error {
 //
 // Use this when creating empty sync directories, otherwise Config Sync will
 // error that the directory doesn't exist.
-func (g *Repository) AddEmptyDir(path string) error {
+func (g *ReadWriteRepository) AddEmptyDir(path string) error {
 	return g.AddFile(filepath.Join(path, GitKeepFileName), []byte{})
 }
 
 // GetFile reads and returns the specified file.
-func (g *Repository) GetFile(path string) ([]byte, error) {
+func (g *ReadWriteRepository) GetFile(path string) ([]byte, error) {
 	absPath := filepath.Join(g.Root, path)
 
 	bytes, err := os.ReadFile(absPath)
@@ -434,7 +456,7 @@ func (g *Repository) GetFile(path string) ([]byte, error) {
 }
 
 // MustGetFile calls GetFile and fails the test on error, logging the result.
-func (g *Repository) MustGetFile(t testing.NTB, path string) []byte {
+func (g *ReadWriteRepository) MustGetFile(t testing.NTB, path string) []byte {
 	t.Helper()
 	body, err := g.GetFile(path)
 	if err != nil {
@@ -446,7 +468,7 @@ func (g *Repository) MustGetFile(t testing.NTB, path string) []byte {
 // Copy copies the file or directory from source to destination.
 // Overwrites the file if it already exists.
 // Does not commit/push.
-func (g *Repository) Copy(sourceDir, destDir string) error {
+func (g *ReadWriteRepository) Copy(sourceDir, destDir string) error {
 	absDestPath := filepath.Join(g.Root, destDir)
 	parentDir := filepath.Dir(absDestPath)
 	if absDestPath != parentDir {
@@ -463,7 +485,7 @@ func (g *Repository) Copy(sourceDir, destDir string) error {
 }
 
 // RemoveAll removes all files in the repository.
-func (g *Repository) RemoveAll() error {
+func (g *ReadWriteRepository) RemoveAll() error {
 	return g.BulkGit(
 		[]string{"rm", "-f", "-r", "*"},
 	)
@@ -473,7 +495,7 @@ func (g *Repository) RemoveAll() error {
 // If `file` is a directory, deletes the directory.
 // Returns error if the file does not exist.
 // Does not commit/push.
-func (g *Repository) Remove(path string) error {
+func (g *ReadWriteRepository) Remove(path string) error {
 	absPath := filepath.Join(g.Root, path)
 
 	if err := os.RemoveAll(absPath); err != nil {
@@ -485,7 +507,7 @@ func (g *Repository) Remove(path string) error {
 }
 
 // Exists returns true if the file or directory exists at the specified path.
-func (g *Repository) Exists(path string) (bool, error) {
+func (g *ReadWriteRepository) Exists(path string) (bool, error) {
 	absPath := filepath.Join(g.Root, path)
 
 	_, err := os.Stat(absPath)
@@ -502,13 +524,13 @@ func (g *Repository) Exists(path string) (bool, error) {
 // pushes them to the git server.
 // We don't care about differentiating between committing and pushing
 // for tests.
-func (g *Repository) CommitAndPush(msg string) error {
+func (g *ReadWriteRepository) CommitAndPush(msg string) error {
 	return g.CommitAndPushBranch(msg, MainBranch)
 }
 
 // CommitAndPushBranch commits any changes to the git branch, and
 // pushes them to the git server.
-func (g *Repository) CommitAndPushBranch(msg, branch string) error {
+func (g *ReadWriteRepository) CommitAndPushBranch(msg, branch string) error {
 	g.Logger.Infof("[repo %s] committing: %s", path.Base(g.Root), msg)
 	if _, err := g.Git("commit", "-m", msg); err != nil {
 		return err
@@ -527,7 +549,7 @@ func (g *Repository) CommitAndPushBranch(msg, branch string) error {
 
 // Push pushes the provided refspec to the git server.
 // Performs a retry using RemoteURL, which may change if the port forwarding restarts.
-func (g *Repository) Push(args ...string) error {
+func (g *ReadWriteRepository) Push(args ...string) error {
 	timeout := 1 * time.Minute
 	if g.GitProvider.Type() == e2e.Local {
 		// Wait long enough for the local git-server pod to be rescheduled
@@ -548,7 +570,7 @@ func (g *Repository) Push(args ...string) error {
 	return nil
 }
 
-func (g *Repository) push(remoteURL string, args ...string) error {
+func (g *ReadWriteRepository) push(remoteURL string, args ...string) error {
 	_, err := g.Git(append([]string{"push", remoteURL}, args...)...)
 	return err
 }
@@ -557,7 +579,7 @@ func (g *Repository) push(remoteURL string, args ...string) error {
 // This is currently intended to only be called from the OnReadyCallback for the
 // in-cluster git server. Accepts a remoteURL to avoid calls to LocalPort, as this
 // would lead to a deadlock
-func (g *Repository) PushAllBranches(remoteURL string) error {
+func (g *ReadWriteRepository) PushAllBranches(remoteURL string) error {
 	if g.isEmpty {
 		// empty repository, nothing to push
 		return nil
@@ -566,7 +588,7 @@ func (g *Repository) PushAllBranches(remoteURL string) error {
 }
 
 // CreateBranch creates and checkouts a new branch at once.
-func (g *Repository) CreateBranch(branch string) error {
+func (g *ReadWriteRepository) CreateBranch(branch string) error {
 	if _, err := g.Git("branch", branch); err != nil {
 		return err
 	}
@@ -574,14 +596,14 @@ func (g *Repository) CreateBranch(branch string) error {
 }
 
 // CheckoutBranch checkouts a branch.
-func (g *Repository) CheckoutBranch(branch string) error {
+func (g *ReadWriteRepository) CheckoutBranch(branch string) error {
 	_, err := g.Git("checkout", branch)
 	return err
 }
 
 // RenameBranch renames the current branch with a new one both locally and remotely.
 // The old branch will be deleted from remote.
-func (g *Repository) RenameBranch(current, new string) error {
+func (g *ReadWriteRepository) RenameBranch(current, new string) error {
 	if _, err := g.Git("branch", "-m", current, new); err != nil {
 		return err
 	}
@@ -593,7 +615,7 @@ func (g *Repository) RenameBranch(current, new string) error {
 
 // CurrentBranch returns the name of the current branch.
 // Note: this will not work if not checked out to a branch (e.g. detached HEAD).
-func (g *Repository) CurrentBranch() (string, error) {
+func (g *ReadWriteRepository) CurrentBranch() (string, error) {
 	out, err := g.Git("rev-parse", "--abbrev-ref", "HEAD")
 	if err != nil {
 		return "", err
@@ -604,7 +626,7 @@ func (g *Repository) CurrentBranch() (string, error) {
 // Hash returns the current hash of the git repository.
 //
 // Immediately ends the test on error.
-func (g *Repository) Hash() (string, error) {
+func (g *ReadWriteRepository) Hash() (string, error) {
 	out, err := g.Git("rev-parse", "--verify", "HEAD")
 	if err != nil {
 		return "", fmt.Errorf("getting the current local commit hash: %w", err)
@@ -613,7 +635,7 @@ func (g *Repository) Hash() (string, error) {
 }
 
 // MustHash calls Hash and fails the test on error, logging the result.
-func (g *Repository) MustHash(t testing.NTB) string {
+func (g *ReadWriteRepository) MustHash(t testing.NTB) string {
 	t.Helper()
 	commit, err := g.Hash()
 	if err != nil {
@@ -624,28 +646,33 @@ func (g *Repository) MustHash(t testing.NTB) string {
 
 // AddSafetyNamespace adds a Namespace to prevent the mono-repo safety check
 // (KNV2006) from preventing deletion of other objects.
-func (g *Repository) AddSafetyNamespace() error {
+func (g *ReadWriteRepository) AddSafetyNamespace() error {
 	return g.Add(g.SafetyNSPath, k8sobjects.NamespaceObject(g.SafetyNSName))
 }
 
 // RemoveSafetyNamespace removes the safety Namespace.
-func (g *Repository) RemoveSafetyNamespace() error {
+func (g *ReadWriteRepository) RemoveSafetyNamespace() error {
 	return g.Remove(g.SafetyNSPath)
 }
 
 // AddSafetyClusterRole adds a ClusterRole to prevent the mono-repo safety check
 // (KNV2006) from preventing deletion of other objects.
-func (g *Repository) AddSafetyClusterRole() error {
+func (g *ReadWriteRepository) AddSafetyClusterRole() error {
 	return g.Add(g.SafetyClusterRolePath, k8sobjects.ClusterRoleObject(core.Name(g.SafetyClusterRoleName)))
 }
 
 // RemoveSafetyClusterRole removes the safety ClusterRole.
-func (g *Repository) RemoveSafetyClusterRole() error {
+func (g *ReadWriteRepository) RemoveSafetyClusterRole() error {
 	return g.Remove(g.SafetyClusterRolePath)
 }
 
 // AddRepoObject adds a system.repo.yaml under the specified directory path.
 // Use this for structured repositories.
-func (g *Repository) AddRepoObject(syncDir string) error {
+func (g *ReadWriteRepository) AddRepoObject(syncDir string) error {
 	return g.Add(filepath.Join(syncDir, "system", "repo.yaml"), k8sobjects.RepoObject())
+}
+
+// SyncURL returns the git repository URL for Config Sync to sync from.
+func (g *ReadWriteRepository) SyncURL() string {
+	return g.GitProvider.SyncURL(g.RemoteRepoName)
 }

@@ -40,10 +40,11 @@ type SyncSource interface {
 type GitSyncSource struct {
 	// Repository is a local clone of the remote Git repository that contains
 	// the current/latest commit.
-	Repository *gitproviders.Repository
-	// TODO: Add SyncPath and Branch/Revision to uniquely identify part of a repo
+	// TODO: Add support for ReadOnlyRepository too (+ Branch, Revision, & ExpectedCommit)
+	Repository *gitproviders.ReadWriteRepository
+	// SourceFormat of the repository
 	SourceFormat configsync.SourceFormat
-	// Directory is the path within the source to sync to the cluster.
+	// Directory is the path within the repository to sync to the cluster.
 	Directory string
 }
 

@@ -29,7 +29,7 @@ import (
 func TestAdoptClientSideAppliedResource(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl)
 
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	// Declare a ClusterRole and `kubectl apply -f` it to the cluster.
 	nsViewerName := "ns-viewer"

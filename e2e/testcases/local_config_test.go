@@ -30,7 +30,7 @@ var LocalConfigValue = "true"
 
 func TestLocalConfig(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Lifecycle)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	ns := "local-config"
 	nt.Must(rootSyncGitRepo.Add(
@@ -84,7 +84,7 @@ func TestLocalConfig(t *testing.T) {
 
 func TestLocalConfigWithManagementDisabled(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Lifecycle)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	ns := "local-config"
 	nt.Must(rootSyncGitRepo.Add(

@@ -55,7 +55,7 @@ func TestReconcilerFinalizer_Orphan(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.MultiRepos)
 	rootSyncID := nomostest.DefaultRootSyncID
 	rootSyncKey := rootSyncID.ObjectKey
-	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
 
 	deployment1NN := types.NamespacedName{Name: "helloworld-1", Namespace: testNs}
 	namespace1NN := types.NamespacedName{Name: testNs}
@@ -145,7 +145,7 @@ func TestReconcilerFinalizer_Foreground(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.MultiRepos)
 	rootSyncID := nomostest.DefaultRootSyncID
 	rootSyncKey := rootSyncID.ObjectKey
-	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
 
 	deployment1NN := types.NamespacedName{Name: "helloworld-1", Namespace: testNs}
 	namespace1NN := types.NamespacedName{Name: testNs}
@@ -237,9 +237,9 @@ func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
 		ntopts.RepoSyncPermissions(policy.AppsAdmin(), policy.CoreAdmin()), // NS Reconciler manages Deployments
 	)
 	rootSyncKey := rootSyncID.ObjectKey
-	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
 	repoSyncKey := repoSyncID.ObjectKey
-	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
+	repoSyncGitRepo := nt.SyncSourceGitReadWriteRepository(repoSyncID)
 
 	repoSyncPath := nomostest.StructuredNSPath(repoSyncKey.Namespace, repoSyncKey.Name)
 	deployment1NN := types.NamespacedName{Name: "helloworld-1", Namespace: repoSyncKey.Namespace}
@@ -367,9 +367,9 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 		ntopts.RepoSyncPermissions(policy.AppsAdmin(), policy.CoreAdmin()), // NS Reconciler manages Deployments
 	)
 	rootSyncKey := rootSyncID.ObjectKey
-	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
 	repoSyncKey := repoSyncID.ObjectKey
-	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
+	repoSyncGitRepo := nt.SyncSourceGitReadWriteRepository(repoSyncID)
 
 	repoSyncPath := nomostest.StructuredNSPath(repoSyncKey.Namespace, repoSyncKey.Name)
 	deployment1NN := types.NamespacedName{Name: "helloworld-1", Namespace: repoSyncKey.Namespace}
@@ -520,8 +520,8 @@ func TestReconcileFinalizerReconcileTimeout(t *testing.T) {
 		ntopts.SyncWithGitSource(rootSync2ID, ntopts.Unstructured), // Create a nested RootSync to delete mid-test
 		ntopts.WithReconcileTimeout(10*time.Second),                // Reconcile expected to fail, so use a short timeout
 	)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
-	rootSync2GitRepo := nt.SyncSourceGitRepository(rootSync2ID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
+	rootSync2GitRepo := nt.SyncSourceGitReadWriteRepository(rootSync2ID)
 
 	// add a Namespace to the nested RootSync
 	namespace := k8sobjects.NamespaceObject(namespaceNN.Name)

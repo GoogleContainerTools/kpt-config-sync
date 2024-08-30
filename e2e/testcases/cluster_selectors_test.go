@@ -103,7 +103,7 @@ func namespaceObject(name string, annotations map[string]string) *corev1.Namespa
 func TestTargetingDifferentResourceQuotasToDifferentClusters(t *testing.T) {
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.Selector)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 	configMapName := clusterNameConfigMapName(nt)
 
 	nt.T.Log("Add test cluster, and cluster registry data")
@@ -181,7 +181,7 @@ func TestTargetingDifferentResourceQuotasToDifferentClusters(t *testing.T) {
 func TestClusterSelectorOnObjects(t *testing.T) {
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.Selector)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	configMapName := clusterNameConfigMapName(nt)
 
@@ -274,7 +274,7 @@ func TestClusterSelectorOnObjects(t *testing.T) {
 
 func TestClusterSelectorOnNamespaces(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Selector)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	configMapName := clusterNameConfigMapName(nt)
 
@@ -454,7 +454,7 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 
 func TestObjectReactsToChangeInInlineClusterSelector(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Selector)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	nt.T.Log("Add a valid cluster selector annotation to a role binding")
 	rb := roleBinding(roleBindingName, backendNamespace, inlineProdClusterSelectorAnnotation)
@@ -506,7 +506,7 @@ func TestObjectReactsToChangeInInlineClusterSelector(t *testing.T) {
 
 func TestObjectReactsToChangeInLegacyClusterSelector(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Selector)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	nt.T.Log("Add prod cluster, and cluster registry data")
 	prodCluster := clusterObject(prodClusterName, environmentLabelKey, prodEnvironment)
@@ -564,7 +564,7 @@ func TestObjectReactsToChangeInLegacyClusterSelector(t *testing.T) {
 
 func TestImporterIgnoresNonSelectedCustomResources(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Selector)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	nt.T.Log("Add test cluster, and cluster registry data")
 	testCluster := clusterObject(testClusterName, environmentLabelKey, testEnvironment)
@@ -609,7 +609,7 @@ func TestClusterSelectorOnNamespaceRepos(t *testing.T) {
 		ntopts.RepoSyncPermissions(policy.RBACAdmin()), // NS reconciler manages rolebindings
 	)
 	repoSyncKey := repoSyncID.ObjectKey
-	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
+	repoSyncGitRepo := nt.SyncSourceGitReadWriteRepository(repoSyncID)
 
 	nt.T.Log("Add a valid cluster selector annotation to a role binding")
 	rb := roleBinding(roleBindingName, namespaceRepo, inlineProdClusterSelectorAnnotation)
@@ -684,7 +684,7 @@ func TestClusterSelectorOnNamespaceRepos(t *testing.T) {
 
 func TestInlineClusterSelectorFormat(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Selector)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	configMapName := clusterNameConfigMapName(nt)
 	renameCluster(nt, configMapName, "")
@@ -849,7 +849,7 @@ func TestInlineClusterSelectorFormat(t *testing.T) {
 
 func TestClusterSelectorAnnotationConflicts(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Selector)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	nt.T.Log("Add both cluster selector annotations to a role binding")
 	nt.Must(rootSyncGitRepo.Add(
@@ -881,7 +881,7 @@ func TestClusterSelectorAnnotationConflicts(t *testing.T) {
 
 func TestClusterSelectorForCRD(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Selector)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	nt.T.Log("Add CRD without ClusterSelectors or cluster-name-selector annotation")
 	crd := anvilV1CRD()

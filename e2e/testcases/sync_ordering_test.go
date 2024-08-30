@@ -47,7 +47,7 @@ import (
 func TestMultiDependencies(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Lifecycle,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	namespaceName := "bookstore"
 	nt.T.Logf("Remove the namespace %q if it already exists", namespaceName)
@@ -341,7 +341,7 @@ func TestMultiDependencies(t *testing.T) {
 func TestExternalDependencyError(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Lifecycle,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	namespaceName := "bookstore"
 	nt.T.Logf("Remove the namespace %q if it already exists", namespaceName)
@@ -454,7 +454,7 @@ func TestDependencyWithReconciliation(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Lifecycle,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.WithReconcileTimeout(longTimeout))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	namespaceName := "bookstore"
 	nt.T.Logf("Remove the namespace %q if it already exists", namespaceName)

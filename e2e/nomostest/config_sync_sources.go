@@ -43,7 +43,7 @@ func SetExpectedSyncPath(nt *NT, syncID core.ID, syncPath string) {
 
 // SetExpectedGitSource creates, updates, or replaces the SyncSource for the
 // specified RootSync or RepoSync with the provided Git repo.
-func SetExpectedGitSource(nt *NT, syncID core.ID, repo *gitproviders.Repository, syncPath string, sourceFormat configsync.SourceFormat) {
+func SetExpectedGitSource(nt *NT, syncID core.ID, repo *gitproviders.ReadWriteRepository, syncPath string, sourceFormat configsync.SourceFormat) {
 	source, exists := nt.SyncSources[syncID]
 	if !exists {
 		nt.T.Logf("Creating expectation for %s %s to sync with Git repo (repository: %q, directory: %q, sourceFormat: %q)",

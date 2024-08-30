@@ -553,6 +553,10 @@ func DeleteObjectsAndWait(nt *NT, objs ...client.Object) error {
 		// Remove fake test finalizers if they are blocking deletion
 		if reflect.DeepEqual(obj.GetFinalizers(), []string{ConfigSyncE2EFinalizer}) {
 			if err := nt.KubeClient.MergePatch(obj, `{"metadata":{"finalizers":[]}}`); err != nil {
+				if apierrors.IsNotFound(err) || meta.IsNoMatchError(err) {
+					// skip waiting
+					continue
+				}
 				tg.Go(func() error {
 					return err
 				})

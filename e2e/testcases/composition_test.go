@@ -161,7 +161,7 @@ func TestComposition(t *testing.T) {
 	nt.T.Log("Validating synced objects are reconciled...")
 	validateStatusCurrent(nt, lvl0Repo.MustGetAll(nt.T, lvl0SubDir, true)...)
 
-	nt.Must(nomostest.CreateNamespaceSecretForNonCSR(nt, lvl2NN.Namespace))
+	nt.Must(nomostest.CreateNamespaceSecrets(nt, lvl2NN.Namespace))
 
 	// lvl1 RootSync
 	lvl1Path := filepath.Join(lvl0SubDir, fmt.Sprintf("rootsync-%s.yaml", lvl1NN.Name))

@@ -687,7 +687,7 @@ func setupDelegatedControl(nt *NT) {
 			nt.T.Fatal(err)
 		}
 
-		nt.Must(CreateNamespaceSecretForNonCSR(nt, id.Namespace))
+		nt.Must(CreateNamespaceSecrets(nt, id.Namespace))
 
 		if err := setupRepoSyncRoleBinding(nt, id.ObjectKey); err != nil {
 			nt.T.Fatal(err)
@@ -1285,7 +1285,7 @@ func setupCentralizedControl(nt *NT) {
 	// Now that the Namespaces exist, create the Secrets,
 	// which are required for the RepoSyncs to reconcile.
 	for nn := range repoSyncs {
-		nt.Must(CreateNamespaceSecretForNonCSR(nt, nn.Namespace))
+		nt.Must(CreateNamespaceSecrets(nt, nn.Namespace))
 	}
 }
 

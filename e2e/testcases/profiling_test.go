@@ -44,7 +44,7 @@ func TestProfilingResourcesByObjectCount(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.ProfilingTest,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	syncPath := filepath.Join(gitproviders.DefaultSyncDir, "stress-test")
 	ns := "stress-test-ns"
@@ -110,7 +110,7 @@ func TestProfilingResourcesByObjectCountWithMultiSync(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.ProfilingTest,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	steps := 4
 	deploysPerStep := 1000
@@ -238,7 +238,7 @@ func TestProfilingByObjectCountAndSyncCount(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.ProfilingTest,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	steps := 5
 	syncsPerStep := 1
@@ -344,7 +344,7 @@ func TestProfilingResourcesByRootSyncCount(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.ProfilingTest,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	// Create the namespace using the default root-sync.
 	// Use the same namespace for all other RSyncs to ensure they all show up in watches, whether it's cluster-scope or namespace-scope.

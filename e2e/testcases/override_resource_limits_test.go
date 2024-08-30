@@ -42,7 +42,7 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.SkipAutopilotCluster,
 		ntopts.SyncWithGitSource(repoSync1ID),
 		ntopts.SyncWithGitSource(repoSync2ID))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	rootReconcilerNN := core.RootReconcilerObjectKey(rootSyncNN.Name)
@@ -411,7 +411,7 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.OverrideAPI, ntopts.SkipAutopilotCluster,
 		ntopts.SyncWithGitSource(repoSync1ID),
 		ntopts.SyncWithGitSource(repoSync2ID))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	rootReconcilerNN := core.RootReconcilerObjectKey(rootSyncNN.Name)

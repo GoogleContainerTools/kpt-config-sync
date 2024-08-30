@@ -90,7 +90,7 @@ func TestComposition(t *testing.T) {
 	lvl3NN := types.NamespacedName{Namespace: testNs, Name: "level-3"}
 	lvl4NN := types.NamespacedName{Namespace: testNs, Name: "level-4"}
 
-	lvl0Repo := nt.SyncSourceGitRepository(lvl0ID)
+	lvl0Repo := nt.SyncSourceGitReadWriteRepository(lvl0ID)
 
 	lvl0Sync := nomostest.RootSyncObjectV1Beta1FromRootRepo(nt, lvl0NN.Name)
 	lvl0Sync.Spec.Git.Dir = gitproviders.DefaultSyncDir
@@ -405,7 +405,7 @@ func validateStatusCurrent(nt *nomostest.NT, objs ...client.Object) {
 	}
 }
 
-func commitForRepo(repo *gitproviders.Repository) nomostest.Sha1Func {
+func commitForRepo(repo *gitproviders.ReadWriteRepository) nomostest.Sha1Func {
 	return func(_ *nomostest.NT, _ types.NamespacedName) (string, error) {
 		return repo.Hash()
 	}
@@ -415,7 +415,7 @@ func commitForRepo(repo *gitproviders.Repository) nomostest.Sha1Func {
 // then waits until the specified sync object is synced.
 // This assumes the specified syncObj is configured to watch the specified
 // dirPath in the specified repo.
-func cleanupManagedSync(nt *nomostest.NT, repo *gitproviders.Repository, dirPath string, syncObj client.Object) {
+func cleanupManagedSync(nt *nomostest.NT, repo *gitproviders.ReadWriteRepository, dirPath string, syncObj client.Object) {
 	exists, err := repo.Exists(dirPath)
 	if err != nil {
 		nt.T.Fatal(err)

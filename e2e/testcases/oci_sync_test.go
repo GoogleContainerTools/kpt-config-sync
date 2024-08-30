@@ -123,9 +123,9 @@ func TestSwitchFromGitToOciCentralized(t *testing.T) {
 		// bookinfo repo contains ServiceAccount
 		ntopts.RepoSyncPermissions(policy.RBACAdmin(), policy.CoreAdmin()),
 	)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
 	repoSyncKey := repoSyncID.ObjectKey
-	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
+	repoSyncGitRepo := nt.SyncSourceGitReadWriteRepository(repoSyncID)
 
 	var err error
 	// file path to the RepoSync config in the root repository.
@@ -180,7 +180,7 @@ func TestSwitchFromGitToOciDelegated(t *testing.T) {
 		ntopts.RepoSyncPermissions(policy.RBACAdmin(), policy.CoreAdmin()),
 	)
 	repoSyncKey := repoSyncID.ObjectKey
-	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
+	repoSyncGitRepo := nt.SyncSourceGitReadWriteRepository(repoSyncID)
 
 	// Remote git branch will only contain the bookinfo-sa ServiceAccount
 	bookinfoSA := k8sobjects.ServiceAccountObject("bookinfo-sa", core.Namespace(namespace))

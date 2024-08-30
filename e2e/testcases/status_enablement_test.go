@@ -40,7 +40,7 @@ import (
 func TestStatusEnabledAndDisabled(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.OverrideAPI,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 	id := applier.InventoryID(configsync.RootSyncName, configsync.ControllerNamespace)
 
 	rootSync := k8sobjects.RootSyncObjectV1Alpha1(configsync.RootSyncName)

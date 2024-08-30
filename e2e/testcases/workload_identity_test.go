@@ -355,9 +355,9 @@ func TestWorkloadIdentity(t *testing.T) {
 			nt.T.Logf("Update RootSync and RepoSync to sync from %s", tc.sourceType)
 			switch tc.sourceType {
 			case configsync.GitSource:
-				rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
+				rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
 				rootMeta = updateRSyncWithGitSourceConfig(nt, rootSync, rootSyncGitRepo, tc.rootSrcCfg)
-				repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
+				repoSyncGitRepo := nt.SyncSourceGitReadWriteRepository(repoSyncID)
 				nsMeta = updateRSyncWithGitSourceConfig(nt, repoSync, repoSyncGitRepo, tc.nsSrcCfg)
 			case configsync.HelmSource:
 				rootChart, err = updateRootSyncWithHelmSourceConfig(nt, rootSyncKey, tc.rootSrcCfg)
@@ -570,7 +570,7 @@ type rsyncValidateMeta struct {
 	syncDir  string
 }
 
-func updateRSyncWithGitSourceConfig(nt *nomostest.NT, rs client.Object, repo *gitproviders.Repository, sc sourceConfig) rsyncValidateMeta {
+func updateRSyncWithGitSourceConfig(nt *nomostest.NT, rs client.Object, repo *gitproviders.ReadWriteRepository, sc sourceConfig) rsyncValidateMeta {
 	nt.Must(repo.Copy("../testdata/"+sc.pkg, "."))
 	nt.Must(repo.CommitAndPush("add DRY configs to the repository"))
 	nt.MustMergePatch(rs, fmt.Sprintf(`{

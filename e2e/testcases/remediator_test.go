@@ -30,7 +30,7 @@ import (
 
 func TestSurfaceFightError(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	nt.T.Logf("Stop the admission webhook to generate the fights")
 	nomostest.StopWebhook(nt)

@@ -75,7 +75,7 @@ func managerFieldsNonEmpty() testpredicates.Predicate {
 // changes to cluster-scoped objects.
 func TestRevertClusterRole(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	crName := "e2e-test-clusterrole"
 
@@ -144,7 +144,7 @@ func TestRevertClusterRole(t *testing.T) {
 // resources.
 func TestClusterRoleLifecycle(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	crName := "e2e-test-clusterrole"
 

@@ -39,7 +39,7 @@ func TestRootSyncRoleRefs(t *testing.T) {
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.SyncWithGitSource(rootSyncAID, ntopts.Unstructured),
 	)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 	rootSyncA := nomostest.RootSyncObjectV1Beta1FromRootRepo(nt, rootSyncAID.Name)
 	syncAReconcilerName := core.RootReconcilerName(rootSyncA.Name)
 	syncANN := rootSyncAID.ObjectKey

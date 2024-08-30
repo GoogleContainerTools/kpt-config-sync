@@ -36,7 +36,7 @@ import (
 func TestMultipleVersions_CustomResourceV1(t *testing.T) {
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.Reconciliation1)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	// Add the Anvil CRD.
 	crdObj := anvilV1CRD()
@@ -186,7 +186,7 @@ func anvilGVK(version string) schema.GroupVersionKind {
 func TestMultipleVersions_RoleBinding(t *testing.T) {
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt := nomostest.New(t, nomostesting.Reconciliation1)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	rbV1 := k8sobjects.RoleBindingObject(core.Name("v1user"))
 	rbV1.RoleRef = rbacv1.RoleRef{

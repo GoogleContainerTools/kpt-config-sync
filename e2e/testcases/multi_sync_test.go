@@ -88,8 +88,8 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 		ntopts.RepoSyncPermissions(policy.RepoSyncAdmin()),
 		ntopts.SyncWithGitSource(repoSync1ID),
 		ntopts.SyncWithGitSource(repoSync6ID))
-	rootSync0GitRepo := nt.SyncSourceGitRepository(rootSync0ID)
-	rootSync1GitRepo := nt.SyncSourceGitRepository(rootSync1ID)
+	rootSync0GitRepo := nt.SyncSourceGitReadWriteRepository(rootSync0ID)
+	rootSync1GitRepo := nt.SyncSourceGitReadWriteRepository(rootSync1ID)
 
 	// Cleanup all unmanaged RepoSyncs BEFORE the root-sync is deleted!
 	// Otherwise, the test Namespace will be deleted while still containing
@@ -123,8 +123,8 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	resetExpectedGitSync(nt, repoSync4ID)
 	resetExpectedGitSync(nt, repoSync5ID)
 
-	rootSync2GitRepo := nt.SyncSourceGitRepository(rootSync2ID)
-	repoSync2GitRepo := nt.SyncSourceGitRepository(repoSync2ID)
+	rootSync2GitRepo := nt.SyncSourceGitReadWriteRepository(rootSync2ID)
+	repoSync2GitRepo := nt.SyncSourceGitReadWriteRepository(repoSync2ID)
 
 	nrb2 := nomostest.RepoSyncRoleBinding(repoSync2Key)
 	nrb3 := nomostest.RepoSyncRoleBinding(repoSync3Key)
@@ -282,8 +282,8 @@ func TestConflictingDefinitions_RootToNamespace(t *testing.T) {
 		ntopts.SyncWithGitSource(repoSyncID),
 		ntopts.RepoSyncPermissions(policy.RBACAdmin()), // NS Reconciler manages Roles
 	)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
-	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
+	repoSyncGitRepo := nt.SyncSourceGitReadWriteRepository(repoSyncID)
 
 	podRoleFilePath := fmt.Sprintf("acme/namespaces/%s/pod-role.yaml", testNs)
 	nt.T.Logf("Add a Role to root: %s", rootSyncKey.Name)
@@ -403,8 +403,8 @@ func TestConflictingDefinitions_NamespaceToRoot(t *testing.T) {
 		ntopts.SyncWithGitSource(repoSyncID),
 		ntopts.RepoSyncPermissions(policy.RBACAdmin()), // NS reconciler manages Roles
 	)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
-	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
+	repoSyncGitRepo := nt.SyncSourceGitReadWriteRepository(repoSyncID)
 
 	podRoleFilePath := fmt.Sprintf("acme/namespaces/%s/pod-role.yaml", testNs)
 	nt.T.Logf("Add a Role to Namespace repo: %s", rootSyncKey.Name)
@@ -535,8 +535,8 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.MultiRepos,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.SyncWithGitSource(rootSync2ID, ntopts.Unstructured))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
-	rootSync2GitRepo := nt.SyncSourceGitRepository(rootSync2ID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
+	rootSync2GitRepo := nt.SyncSourceGitReadWriteRepository(rootSync2ID)
 
 	podRoleFilePath := fmt.Sprintf("acme/namespaces/%s/pod-role.yaml", testNs)
 	nt.T.Logf("Add a Role to RootSync: %s", rootSyncID.Name)
@@ -660,8 +660,8 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 		ntopts.SyncWithGitSource(repoSync1ID),
 		ntopts.SyncWithGitSource(repoSync2ID))
 
-	repoSync1GitRepo := nt.SyncSourceGitRepository(repoSync1ID)
-	repoSync2GitRepo := nt.SyncSourceGitRepository(repoSync2ID)
+	repoSync1GitRepo := nt.SyncSourceGitReadWriteRepository(repoSync1ID)
+	repoSync2GitRepo := nt.SyncSourceGitReadWriteRepository(repoSync2ID)
 
 	podRoleFilePath := fmt.Sprintf("acme/namespaces/%s/pod-role.yaml", testNs)
 	nt.T.Logf("Add a Role to Namespace: %s", repoSync1Key)

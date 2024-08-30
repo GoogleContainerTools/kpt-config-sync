@@ -56,7 +56,7 @@ func TestInvalidAuth(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	// TODO: Fix commit to be UNKNOWN (b/361182373)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 	commitHash := rootSyncGitRepo.MustHash(nt.T)
 
 	err = nomostest.ValidateMetrics(nt,

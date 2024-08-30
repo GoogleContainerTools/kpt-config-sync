@@ -784,7 +784,7 @@ func RootSyncObjectV1Alpha1FromRootRepo(nt *NT, name string) *v1alpha1.RootSync 
 	if !ok {
 		nt.T.Fatalf("expected SyncSources for %s to have *GitSyncSource, but got %T", id, source)
 	}
-	repoURL := nt.GitProvider.SyncURL(gitSource.Repository.RemoteRepoName)
+	repoURL := gitSource.Repository.SyncURL()
 	sourceFormat := gitSource.Repository.Format
 	rs := rootSyncObjectV1Alpha1Git(name, repoURL, sourceFormat)
 	SetRSyncTestDefaults(nt, rs)
@@ -899,7 +899,7 @@ func RepoSyncObjectV1Alpha1FromNonRootRepo(nt *NT, nn types.NamespacedName) *v1a
 	if !ok {
 		nt.T.Fatalf("expected SyncSources for %s to have *GitSyncSource, but got %T", id, source)
 	}
-	repoURL := nt.GitProvider.SyncURL(gitSource.Repository.RemoteRepoName)
+	repoURL := gitSource.Repository.SyncURL()
 	// RepoSync is always Unstructured. So ignore repo.Format.
 	rs := repoSyncObjectV1Alpha1Git(nn, repoURL)
 	SetRSyncTestDefaults(nt, rs)
@@ -944,10 +944,10 @@ func RepoSyncObjectV1Beta1Git(nn types.NamespacedName, repoURL string, sourceFor
 // RootSyncObjectGit creates a new RootSync object with a Git source, using the
 // default test config plus the specified inputs.
 // Creates, updates, or replaces the SyncSource expectation for this RootSync.
-func (nt *NT) RootSyncObjectGit(name string, repo *gitproviders.Repository, syncPath string, sourceFormat configsync.SourceFormat) *v1beta1.RootSync {
+func (nt *NT) RootSyncObjectGit(name string, repo *gitproviders.ReadWriteRepository, syncPath string, sourceFormat configsync.SourceFormat) *v1beta1.RootSync {
 	id := core.RootSyncID(name)
 	SetExpectedGitSource(nt, id, repo, syncPath, sourceFormat)
-	repoURL := nt.GitProvider.SyncURL(repo.RemoteRepoName)
+	repoURL := repo.SyncURL()
 	rs := rootSyncObjectV1Beta1Git(name, repoURL, sourceFormat)
 	SetRSyncTestDefaults(nt, rs)
 	return rs
@@ -956,10 +956,10 @@ func (nt *NT) RootSyncObjectGit(name string, repo *gitproviders.Repository, sync
 // RepoSyncObjectGit creates a new RepoSync object with a Git source, using the
 // default test config plus the specified inputs.
 // Creates, updates, or replaces the SyncSource expectation for this RepoSync.
-func (nt *NT) RepoSyncObjectGit(nn types.NamespacedName, repo *gitproviders.Repository, syncPath string, sourceFormat configsync.SourceFormat) *v1beta1.RepoSync {
+func (nt *NT) RepoSyncObjectGit(nn types.NamespacedName, repo *gitproviders.ReadWriteRepository, syncPath string, sourceFormat configsync.SourceFormat) *v1beta1.RepoSync {
 	id := core.RepoSyncID(nn.Name, nn.Namespace)
 	SetExpectedGitSource(nt, id, repo, syncPath, sourceFormat)
-	repoURL := nt.GitProvider.SyncURL(repo.RemoteRepoName)
+	repoURL := repo.SyncURL()
 	// RepoSync is always Unstructured. So ignore repo.Format.
 	rs := RepoSyncObjectV1Beta1Git(nn, repoURL, sourceFormat)
 	SetRSyncTestDefaults(nt, rs)
@@ -1146,7 +1146,7 @@ func setupCentralizedControl(nt *NT) {
 	nt.T.Log("[SETUP] Centralized control")
 
 	rootSyncID := core.RootSyncID(configsync.RootSyncName)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
 
 	// Add any RootSyncs specified by the test options
 	rootSyncSources := nt.SyncSources.RootSyncs()

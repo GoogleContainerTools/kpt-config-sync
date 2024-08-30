@@ -28,7 +28,7 @@ import (
 func TestDeclaredFieldsPod(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	namespace := k8sobjects.NamespaceObject("bookstore")
 	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))

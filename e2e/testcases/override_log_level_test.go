@@ -35,7 +35,7 @@ func TestOverrideRootSyncLogLevel(t *testing.T) {
 	rootSyncID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t, nomostesting.OverrideAPI,
 		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
 
 	rootReconcilerName := core.RootReconcilerObjectKey(rootSyncID.Name)
 	rootSyncV1 := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
@@ -136,9 +136,9 @@ func TestOverrideRepoSyncLogLevel(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.OverrideAPI,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
 		ntopts.SyncWithGitSource(repoSyncID))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 	repoSyncKey := repoSyncID.ObjectKey
-	repoSyncGitRepo := nt.SyncSourceGitRepository(repoSyncID)
+	repoSyncGitRepo := nt.SyncSourceGitReadWriteRepository(repoSyncID)
 
 	frontendReconcilerNN := core.NsReconcilerObjectKey(repoSyncID.Namespace, repoSyncID.Name)
 	repoSyncFrontend := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, repoSyncKey)

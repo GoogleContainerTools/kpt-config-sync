@@ -39,7 +39,7 @@ import (
 )
 
 func mustRemoveCustomResourceWithDefinition(nt *nomostest.NT, crd client.Object) {
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 	nt.Must(rootSyncGitRepo.Add("acme/cluster/anvil-crd.yaml", crd))
 	nsObj := k8sobjects.NamespaceObject("foo")
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/foo/ns.yaml", nsObj))
@@ -124,7 +124,7 @@ func TestMustRemoveCustomResourceWithDefinitionV1(t *testing.T) {
 }
 
 func addAndRemoveCustomResource(nt *nomostest.NT, dir string, crd string) {
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 	crdFile := filepath.Join(".", "..", "testdata", "customresources", dir, crd)
 	crdContent, err := os.ReadFile(crdFile)
 	if err != nil {
@@ -206,7 +206,7 @@ func TestAddAndRemoveCustomResourceV1(t *testing.T) {
 }
 
 func mustRemoveUnManagedCustomResource(nt *nomostest.NT, dir string, crd string) {
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 	crdFile := filepath.Join(".", "..", "testdata", "customresources", dir, crd)
 	crdContent, err := os.ReadFile(crdFile)
 	if err != nil {
@@ -273,7 +273,7 @@ func TestMustRemoveUnManagedCustomResourceV1(t *testing.T) {
 }
 
 func addUpdateRemoveClusterScopedCRD(nt *nomostest.NT, dir string, crd string) {
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 	crdFile := filepath.Join(".", "..", "testdata", "customresources", dir, crd)
 	crdContent, err := os.ReadFile(crdFile)
 	if err != nil {
@@ -355,7 +355,7 @@ func TestAddUpdateRemoveClusterScopedCRDV1(t *testing.T) {
 }
 
 func addUpdateNamespaceScopedCRD(nt *nomostest.NT, dir string, crd string) {
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 	crdFile := filepath.Join(".", "..", "testdata", "customresources", dir, crd)
 	crdContent, err := os.ReadFile(crdFile)
 	if err != nil {
@@ -455,7 +455,7 @@ func TestAddUpdateNamespaceScopedCRDV1(t *testing.T) {
 
 func TestLargeCRD(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	for _, file := range []string{"challenges-acme-cert-manager-io.yaml", "solrclouds-solr-apache-org.yaml"} {
 		crdFile := filepath.Join(".", "..", "testdata", "customresources", file)

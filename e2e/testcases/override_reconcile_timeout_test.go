@@ -38,7 +38,7 @@ import (
 func TestOverrideReconcileTimeout(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.OverrideAPI,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 	rootSync := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 
 	// Override reconcileTimeout to a short time 30s, only actuation should succeed, reconcile should time out.

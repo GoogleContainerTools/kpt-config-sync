@@ -48,7 +48,7 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 		nomostesting.Hydration,
 		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured),
 	)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
 
 	// Dry configs not yet added to repo, assert that hydration is disabled
 	tg := taskgroup.New()
@@ -176,7 +176,7 @@ func TestHydrateExternalFiles(t *testing.T) {
 		nomostesting.Hydration,
 		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured),
 	)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
 
 	nt.T.Log("Add the external files root directory")
 	nt.Must(rootSyncGitRepo.Copy("../testdata/hydration/external-files", "."))
@@ -206,7 +206,7 @@ func TestHydrateHelmComponents(t *testing.T) {
 		nomostesting.Hydration,
 		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured),
 	)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
 
 	nt.T.Log("Add the helm components root directory")
 	nt.Must(rootSyncGitRepo.Copy("../testdata/hydration/helm-components", "."))
@@ -269,7 +269,7 @@ func TestHydrateHelmOverlay(t *testing.T) {
 		nomostesting.Hydration,
 		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured),
 	)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
 
 	nt.T.Log("Add the helm-overlay root directory")
 	nt.Must(rootSyncGitRepo.Copy("../testdata/hydration/helm-overlay", "."))
@@ -329,7 +329,7 @@ func TestHydrateRemoteResources(t *testing.T) {
 		nomostesting.Hydration,
 		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured),
 	)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
 
 	nt.T.Log("Add the remote-base root directory")
 	nt.Must(rootSyncGitRepo.Copy("../testdata/hydration/remote-base", "."))
@@ -406,7 +406,7 @@ func TestHydrateResourcesInRelativePath(t *testing.T) {
 		nomostesting.Hydration,
 		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured),
 	)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
 
 	nt.T.Log("Add the root directory")
 	nt.Must(rootSyncGitRepo.Copy("../testdata/hydration/relative-path", "."))

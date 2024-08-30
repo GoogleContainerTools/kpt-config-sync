@@ -267,7 +267,7 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		SyncSources:             make(map[core.ID]syncsource.SyncSource),
 		MetricsExpectations:     testmetrics.NewSyncSetExpectations(t, scheme),
 		Scheme:                  scheme,
-		RemoteRepositories:      make(map[types.NamespacedName]*gitproviders.Repository),
+		RemoteRepositories:      make(map[types.NamespacedName]*gitproviders.ReadWriteRepository),
 		WebhookDisabled:         &webhookDisabled,
 		GitProvider:             gitproviders.NewGitProvider(t, *e2e.GitProvider, opts.ClusterName, logger, shell),
 		OCIProvider:             registryproviders.NewOCIProvider(*e2e.OCIProvider, opts.ClusterName, shell, ociClient),
@@ -480,7 +480,7 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 
 	if opts.InitialCommit != nil {
 		rootSyncID := DefaultRootSyncID
-		rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
+		rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
 		for path, obj := range opts.InitialCommit.Files {
 			nt.Must(rootSyncGitRepo.Add(path, obj))
 			// Some source objects are not included in the declared resources.

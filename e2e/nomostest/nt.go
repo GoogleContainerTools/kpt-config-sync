@@ -188,7 +188,7 @@ type NT struct {
 	// RemoteRepositories maintains a map between the repo local name and the remote repository.
 	// It includes both root repo and namespace repos and can be shared among test cases.
 	// It is used to reuse existing repositories instead of creating new ones.
-	RemoteRepositories map[types.NamespacedName]*gitproviders.Repository
+	RemoteRepositories map[types.NamespacedName]*gitproviders.ReadWriteRepository
 
 	// WebhookDisabled indicates whether the ValidatingWebhookConfiguration is deleted.
 	WebhookDisabled *bool
@@ -390,9 +390,9 @@ func (nt *NT) NumRepoSyncNamespaces() int {
 	return len(rsNamespaces)
 }
 
-// SyncSourceGitRepository returns the git Repository for the specified RSync,
+// SyncSourceGitReadWriteRepository returns the git Repository for the specified RSync,
 // if it exists in NT.SyncSources.
-func (nt *NT) SyncSourceGitRepository(id core.ID) *gitproviders.Repository {
+func (nt *NT) SyncSourceGitReadWriteRepository(id core.ID) *gitproviders.ReadWriteRepository {
 	source, found := nt.SyncSources[id]
 	if !found {
 		nt.T.Fatalf("Missing %s: %s", id.Kind, id.ObjectKey)
@@ -712,7 +712,7 @@ func (nt *NT) portForwardGitServer() {
 		// allGitRepos specifies the slice all repos for port forwarding.
 		var allGitRepos []types.NamespacedName
 		// allGitRepoMap is a map of repoNN->Repository for port forwarding.
-		allGitRepoMap := make(map[types.NamespacedName]*gitproviders.Repository)
+		allGitRepoMap := make(map[types.NamespacedName]*gitproviders.ReadWriteRepository)
 		for id, source := range nt.SyncSources {
 			if gitSource, ok := source.(*syncsource.GitSyncSource); ok {
 				allGitRepos = append(allGitRepos, id.ObjectKey)

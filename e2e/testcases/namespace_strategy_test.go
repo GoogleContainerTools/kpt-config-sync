@@ -49,7 +49,7 @@ import (
 func TestNamespaceStrategy(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.OverrideAPI,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	rootReconcilerNN := core.RootReconcilerObjectKey(rootSyncNN.Name)
@@ -179,10 +179,10 @@ func TestNamespaceStrategyMultipleRootSyncs(t *testing.T) {
 		ntopts.SyncWithGitSource(rootSyncXID, ntopts.Unstructured), // will declare resources in namespace-a, but not namespace-a itself
 		ntopts.SyncWithGitSource(rootSyncYID, ntopts.Unstructured), // will declare resources in namespace-a, but not namespace-a itself
 	)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
-	rootSyncAGitRepo := nt.SyncSourceGitRepository(rootSyncAID)
-	rootSyncXGitRepo := nt.SyncSourceGitRepository(rootSyncXID)
-	rootSyncYGitRepo := nt.SyncSourceGitRepository(rootSyncYID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
+	rootSyncAGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncAID)
+	rootSyncXGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncXID)
+	rootSyncYGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncYID)
 
 	rootSyncA := nomostest.RootSyncObjectV1Beta1FromRootRepo(nt, rootSyncAID.Name)
 	rootSyncX := nomostest.RootSyncObjectV1Beta1FromRootRepo(nt, rootSyncXID.Name)

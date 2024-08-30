@@ -36,7 +36,7 @@ func TestCreateAPIServiceAndEndpointInTheSameCommit(t *testing.T) {
 		// Increase the timeout from 1m to 5m to avoid reconcile timeout for the
 		// custom-metrics-stackdriver-adapter Deployment on Autopilot cluster.
 		ntopts.WithReconcileTimeout(5*time.Minute))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 	t.Cleanup(func() {
 		if t.Failed() {
 			nt.PodLogs(adapterNamespace, adapterName, "pod-custom-metrics-stackdriver-adapter", true)
@@ -81,7 +81,7 @@ func TestReconcilerResilientToFlakyAPIService(t *testing.T) {
 		// Increase the timeout from 1m to 5m to avoid reconcile timeout for the
 		// custom-metrics-stackdriver-adapter Deployment on Autopilot cluster.
 		ntopts.WithReconcileTimeout(5*time.Minute))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 	nt.T.Cleanup(func() {
 		nt.MustKubectl("delete", "-f", "../testdata/apiservice/apiservice.yaml", "--ignore-not-found")
 		nt.MustKubectl("delete", "-f", "../testdata/apiservice/namespace-custom-metrics.yaml", "--ignore-not-found")

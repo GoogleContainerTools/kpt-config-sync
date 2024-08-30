@@ -489,7 +489,7 @@ func testNomosHydrateWithClusterSelectors(t *testing.T, configPath string, sourc
 }
 
 func testSyncFromNomosHydrateOutput(nt *nomostest.NT, config string) {
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	if err := nt.ValidateNotFound("bookstore1", "", &corev1.Namespace{}); err != nil {
 		nt.T.Fatal(err)

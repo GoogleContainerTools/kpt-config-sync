@@ -27,7 +27,7 @@ import (
 
 func TestMultipleRemoteBranchesOutOfSync(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.ACMController)
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	if err := nt.KubeClient.Get(configsync.RootSyncName, configmanagement.ControllerNamespace, rs); err != nil {

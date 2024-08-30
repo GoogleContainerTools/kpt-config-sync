@@ -59,7 +59,7 @@ import (
 func TestDriftKubectlApplyClusterScoped(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	rootSync2Name := "abcdef"
 	rootSync1ApplySetID := applyset.IDFromSync(configsync.RootSyncName, declared.RootScope)
@@ -250,7 +250,7 @@ func TestDriftKubectlApplyClusterScoped(t *testing.T) {
 func TestDriftKubectlApplyNamespaceScoped(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	rootSync2Name := "abcdef"
 	rootSync1ApplySetID := applyset.IDFromSync(configsync.RootSyncName, declared.RootScope)
@@ -500,7 +500,7 @@ func TestDriftKubectlApplyNamespaceScoped(t *testing.T) {
 func TestDriftKubectlDelete(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	namespace := k8sobjects.NamespaceObject("bookstore")
 	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
@@ -562,7 +562,7 @@ func TestDriftKubectlDelete(t *testing.T) {
 func TestDriftKubectlDeleteWithIgnoreMutationAnnotation(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	namespace := k8sobjects.NamespaceObject("bookstore", core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation))
 	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
@@ -624,7 +624,7 @@ func TestDriftKubectlDeleteWithIgnoreMutationAnnotation(t *testing.T) {
 func TestDriftKubectlAnnotateUnmanagedField(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	namespace := k8sobjects.NamespaceObject("bookstore")
 	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
@@ -686,7 +686,7 @@ func TestDriftKubectlAnnotateUnmanagedField(t *testing.T) {
 func TestDriftKubectlAnnotateUnmanagedFieldWithIgnoreMutationAnnotation(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	namespace := k8sobjects.NamespaceObject("bookstore", core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation))
 	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
@@ -717,7 +717,7 @@ func TestDriftKubectlAnnotateUnmanagedFieldWithIgnoreMutationAnnotation(t *testi
 func TestDriftKubectlAnnotateManagedField(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	namespace := k8sobjects.NamespaceObject("bookstore", core.Annotation("season", "summer"))
 	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
@@ -782,7 +782,7 @@ func TestDriftKubectlAnnotateManagedFieldWithIgnoreMutationAnnotation(t *testing
 	rootSyncID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t, nomostesting.DriftControl,
 		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
 
 	namespace := k8sobjects.NamespaceObject("bookstore",
 		core.Annotation("season", "summer"),
@@ -850,7 +850,7 @@ func TestDriftKubectlAnnotateManagedFieldWithIgnoreMutationAnnotation(t *testing
 func TestDriftKubectlAnnotateDeleteManagedFields(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	namespace := k8sobjects.NamespaceObject("bookstore", core.Annotation("season", "summer"))
 	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
@@ -915,7 +915,7 @@ func TestDriftKubectlAnnotateDeleteManagedFieldsWithIgnoreMutationAnnotation(t *
 	rootSyncID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t, nomostesting.DriftControl,
 		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(rootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
 
 	namespace := k8sobjects.NamespaceObject("bookstore",
 		core.Annotation("season", "summer"),
@@ -984,7 +984,7 @@ func TestDriftKubectlAnnotateDeleteManagedFieldsWithIgnoreMutationAnnotation(t *
 func TestDriftRemoveApplySetPartOfLabel(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
-	rootSyncGitRepo := nt.SyncSourceGitRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	rootSync1ApplySetID := applyset.IDFromSync(configsync.RootSyncName, declared.RootScope)
 

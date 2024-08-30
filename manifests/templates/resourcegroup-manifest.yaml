@@ -232,6 +232,7 @@ spec:
       - args:
         - --config=/conf/otel-agent-config.yaml
         - --feature-gates=-pkg.translator.prometheus.NormalizeName
+        - --feature-gates=-component.UseLocalHostAsDefaultHost
         command:
         - /otelcontribcol
         env:

@@ -69,9 +69,7 @@ func TestPreserveGeneratedServiceFields(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Add(fmt.Sprintf("acme/namespaces/%s/service.yaml", ns), serviceObj))
 
 	nt.Must(rootSyncGitRepo.CommitAndPush("declare Namespace and Service"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Ensure the Service has the target port we set.
 	err := nt.Watcher.WatchObject(kinds.Service(), serviceName, ns,
@@ -134,9 +132,7 @@ func TestPreserveGeneratedServiceFields(t *testing.T) {
 	updatedService.Spec.Ports[0].TargetPort = intstr.FromInt(targetPort2)
 	nt.Must(rootSyncGitRepo.Add(fmt.Sprintf("acme/namespaces/%s/service.yaml", ns), updatedService))
 	nt.Must(rootSyncGitRepo.CommitAndPush("update declared Service"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Ensure the Service has the new target port we set.
 	err = nt.Watcher.WatchObject(kinds.Service(), serviceName, ns,
@@ -195,9 +191,7 @@ aggregationRule:
 	aggregateViewer := rootSyncGitRepo.MustGet(nt.T, "acme/cluster/aggregate-viewer-cr.yaml")
 
 	nt.Must(rootSyncGitRepo.CommitAndPush("declare ClusterRoles"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Ensure the aggregate rule is actually aggregated.
 	err := nt.Watcher.WatchObject(kinds.ClusterRole(), aggregateRoleName, "",
@@ -237,9 +231,7 @@ aggregationRule:
       permissions: viewer`)))
 	aggregateViewer = rootSyncGitRepo.MustGet(nt.T, "acme/cluster/aggregate-viewer-cr.yaml")
 	nt.Must(rootSyncGitRepo.CommitAndPush("add label to aggregate ClusterRole"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Ensure we don't overwrite the aggregate rules.
 	err = nt.Validate(aggregateRoleName, "", &rbacv1.ClusterRole{},
@@ -280,9 +272,7 @@ func TestPreserveLastApplied(t *testing.T) {
 	}}
 	nt.Must(rootSyncGitRepo.Add("acme/cluster/ns-viewer-cr.yaml", nsViewer))
 	nt.Must(rootSyncGitRepo.CommitAndPush("add namespace-viewer ClusterRole"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	err := nt.Validate(nsViewerName, "", &rbacv1.ClusterRole{})
 	if err != nil {
@@ -333,9 +323,7 @@ func TestAddUpdateDeleteLabels(t *testing.T) {
 	cm := k8sobjects.ConfigMapObject(core.Name(cmName))
 	nt.Must(rootSyncGitRepo.Add(cmPath, cm))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Adding ConfigMap with no labels to repo"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	var defaultLabels = []string{
 		metadata.ManagedByKey,
@@ -354,9 +342,7 @@ func TestAddUpdateDeleteLabels(t *testing.T) {
 	cm.Labels["baz"] = "qux"
 	nt.Must(rootSyncGitRepo.Add(cmPath, cm))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Update label for ConfigMap in repo"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	var updatedLabels []string
 	updatedLabels = append(updatedLabels, defaultLabels...)
@@ -369,9 +355,7 @@ func TestAddUpdateDeleteLabels(t *testing.T) {
 	delete(cm.Labels, "baz")
 	nt.Must(rootSyncGitRepo.Add(cmPath, cm))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Delete label for configmap in repo"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Check that the label is deleted after syncing.
 	nt.Must(nt.Validate(cmName, ns, &corev1.ConfigMap{},
@@ -403,9 +387,7 @@ func TestAddUpdateDeleteAnnotations(t *testing.T) {
 	cmObj := k8sobjects.ConfigMapObject(core.Name(cmName))
 	nt.Must(rootSyncGitRepo.Add(cmPath, cmObj))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Adding ConfigMap with no annotations to repo"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	annotationKeys := metadata.GetNomosAnnotationKeys()
 
@@ -430,9 +412,7 @@ func TestAddUpdateDeleteAnnotations(t *testing.T) {
 	cmObj.Annotations["baz"] = "qux"
 	nt.Must(rootSyncGitRepo.Add(cmPath, cmObj))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Update annotation for ConfigMap in repo"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	updatedKeys := append([]string{"baz"}, annotationKeys...)
 
@@ -456,9 +436,7 @@ func TestAddUpdateDeleteAnnotations(t *testing.T) {
 	delete(cmObj.Annotations, "baz")
 	nt.Must(rootSyncGitRepo.Add(cmPath, cmObj))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Delete annotation for configmap in repo"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Check that the annotation is deleted after syncing.
 	err = nt.Validate(cmName, ns, &corev1.ConfigMap{},

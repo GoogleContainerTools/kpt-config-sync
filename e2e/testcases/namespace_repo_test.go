@@ -85,9 +85,7 @@ func TestNamespaceRepo_Centralized(t *testing.T) {
 	sa := k8sobjects.ServiceAccountObject("store", core.Namespace(bsNamespace))
 	nt.Must(repoSyncGitRepo.Add("acme/sa.yaml", sa))
 	nt.Must(repoSyncGitRepo.CommitAndPush("Adding service account"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Validate service account 'store' is current.
 	err = nt.Watcher.WatchForCurrentStatus(kinds.ServiceAccount(), "store", bsNamespace,
@@ -172,9 +170,7 @@ func validateRepoSyncRBAC(nt *nomostest.NT, ns string, nsRepo *gitproviders.Read
 		}})
 	nt.T.Log("Add 'create' permission")
 	configureRBAC(nt, ns, []string{"list", "watch", "get", "patch", "create"})
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	if err := nt.Validate("hello-world", ns, &appsv1.Deployment{}); err != nil {
 		nt.T.Fatalf("deployment hello-world not found: %v", err)
 	}
@@ -185,9 +181,7 @@ func validateRepoSyncRBAC(nt *nomostest.NT, ns string, nsRepo *gitproviders.Read
 		`failed to prune Deployment.apps, bookstore/hello-world: deployments.apps "hello-world" is forbidden: User "system:serviceaccount:config-management-system:ns-reconciler-bookstore" cannot delete resource "deployments" in API group "apps" in the namespace "bookstore"`, nil)
 	nt.T.Log("Add 'delete' permission")
 	configureRBAC(nt, ns, []string{"list", "watch", "get", "patch", "create", "delete"})
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	if err := nt.ValidateNotFound("hello-world", ns, &appsv1.Deployment{}); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -341,9 +335,7 @@ func TestNamespaceRepo_Delegated(t *testing.T) {
 	sa := k8sobjects.ServiceAccountObject("store", core.Namespace(bsNamespaceRepo))
 	nt.Must(repoSyncGitRepo.Add("acme/sa.yaml", sa))
 	nt.Must(repoSyncGitRepo.CommitAndPush("Adding service account"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Validate service account 'store' is present.
 	err = nt.Validate("store", bsNamespaceRepo, &corev1.ServiceAccount{})
@@ -390,9 +382,7 @@ func TestDeleteRepoSync_Delegated_AndRepoSyncV1Alpha1(t *testing.T) {
 	if err := nt.KubeClient.Create(rsv1alpha1); err != nil {
 		nt.T.Fatal(err)
 	}
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 }
 
 func TestDeleteRepoSync_Centralized_AndRepoSyncV1Alpha1(t *testing.T) {
@@ -424,9 +414,7 @@ func TestDeleteRepoSync_Centralized_AndRepoSyncV1Alpha1(t *testing.T) {
 		nt.T.Fatalf("Missing %s: %s", repoSyncID.Kind, repoSyncID.ObjectKey)
 	}
 	delete(nt.SyncSources, repoSyncID)
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	checkRepoSyncResourcesNotPresent(nt, bsNamespace, secretNames)
 
@@ -445,9 +433,7 @@ func TestDeleteRepoSync_Centralized_AndRepoSyncV1Alpha1(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(bsNamespace, rs.Name), rs))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add RepoSync v1alpha1"))
 	// Add the bookstore namespace repo back to NamespaceRepos to verify that it is synced.
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rs)
 

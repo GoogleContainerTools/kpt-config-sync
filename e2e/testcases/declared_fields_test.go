@@ -49,9 +49,7 @@ spec:
     - containerPort: 80
 `)))
 	nt.Must(rootSyncGitRepo.CommitAndPush("add pod missing protocol from port"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Parse the pod yaml into an object
 	pod := rootSyncGitRepo.MustGet(nt.T, "acme/pod.yaml")
@@ -63,9 +61,7 @@ spec:
 
 	nt.Must(rootSyncGitRepo.Remove("acme/pod.yaml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Remove the pod"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	err = nt.Watcher.WatchForNotFound(kinds.Pod(), pod.GetName(), pod.GetNamespace())
 	if err != nil {

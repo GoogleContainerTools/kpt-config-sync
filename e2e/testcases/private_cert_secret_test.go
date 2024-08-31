@@ -105,9 +105,7 @@ func TestCACertSecretRefV1Alpha1(t *testing.T) {
 
 	// Set caCertSecret for RootSync
 	nt.MustMergePatch(rootSync, caCertSecretPatch(configsync.GitSource, caCertSecret))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	err = nt.Validate(rootSyncReconcilerName, configsync.ControllerNamespace, &appsv1.Deployment{}, testpredicates.DeploymentHasEnvVar(reconcilermanager.GitSync, key, caCertPath))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -132,9 +130,7 @@ func TestCACertSecretRefV1Alpha1(t *testing.T) {
 	repoSyncBackend.Spec.Git.CACertSecretRef = &v1alpha1.SecretReference{Name: caCertSecret}
 	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(repoSyncID.Namespace, repoSyncID.Name), repoSyncBackend))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Update backend RepoSync set caCertSecret"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	err = nt.Validate(repoSyncReconcilerName, configsync.ControllerNamespace, &appsv1.Deployment{}, testpredicates.DeploymentHasEnvVar(reconcilermanager.GitSync, key, caCertPath))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -152,9 +148,7 @@ func TestCACertSecretRefV1Alpha1(t *testing.T) {
 	// Set RootSync to use SSH again
 	rootSyncSSHURL := rootSyncGitRepo.SyncURL()
 	nt.MustMergePatch(rootSync, syncURLSSHPatch(rootSyncSSHURL))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	err = nt.Validate(rootSyncReconcilerName, configsync.ControllerNamespace, &appsv1.Deployment{}, testpredicates.DeploymentHasEnvVar(reconcilermanager.GitSync, controllers.GitSyncRepo, rootSyncSSHURL))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -178,9 +172,7 @@ func TestCACertSecretRefV1Alpha1(t *testing.T) {
 	repoSyncBackend.Spec.Git.SecretRef = &v1alpha1.SecretReference{Name: "ssh-key"}
 	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(repoSyncID.Namespace, repoSyncID.Name), repoSyncBackend))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Update backend RepoSync use SSH"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	err = nt.Validate(repoSyncReconcilerName, configsync.ControllerNamespace, &appsv1.Deployment{}, testpredicates.DeploymentHasEnvVar(reconcilermanager.GitSync, controllers.GitSyncRepo, repoSyncSSHURL))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -227,9 +219,7 @@ func TestCACertSecretRefV1Beta1(t *testing.T) {
 
 	// Set caCertSecret for RootSync
 	nt.MustMergePatch(rootSync, caCertSecretPatch(configsync.GitSource, caCertSecret))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	err = nt.Validate(rootSyncReconcilerName, configsync.ControllerNamespace, &appsv1.Deployment{}, testpredicates.DeploymentHasEnvVar(reconcilermanager.GitSync, key, caCertPath))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -253,9 +243,7 @@ func TestCACertSecretRefV1Beta1(t *testing.T) {
 	repoSyncBackend.Spec.Git.CACertSecretRef = &v1beta1.SecretReference{Name: caCertSecret}
 	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(repoSyncID.Namespace, repoSyncID.Name), repoSyncBackend))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Update backend RepoSync set caCertSecret"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	err = nt.Validate(reconcilerName, configsync.ControllerNamespace, &appsv1.Deployment{}, testpredicates.DeploymentHasEnvVar(reconcilermanager.GitSync, key, caCertPath))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -279,9 +267,7 @@ func TestCACertSecretRefV1Beta1(t *testing.T) {
 	// Set RootSync to use SSH again
 	rootSyncSSHURL := rootSyncGitRepo.SyncURL()
 	nt.MustMergePatch(rootSync, syncURLSSHPatch(rootSyncSSHURL))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	err = nt.Validate(rootSyncReconcilerName, configsync.ControllerNamespace, &appsv1.Deployment{}, testpredicates.DeploymentHasEnvVar(reconcilermanager.GitSync, controllers.GitSyncRepo, rootSyncSSHURL))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -305,9 +291,7 @@ func TestCACertSecretRefV1Beta1(t *testing.T) {
 	repoSyncBackend.Spec.Git.SecretRef = &v1beta1.SecretReference{Name: "ssh-key"}
 	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(repoSyncID.Namespace, repoSyncID.Name), repoSyncBackend))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Update backend RepoSync use SSH"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	err = nt.Validate(reconcilerName, configsync.ControllerNamespace, &appsv1.Deployment{}, testpredicates.DeploymentHasEnvVar(reconcilermanager.GitSync, controllers.GitSyncRepo, repoSyncSSHURL))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -349,9 +333,7 @@ func TestCACertSecretWatch(t *testing.T) {
 	repoSyncBackend.Spec.Git.CACertSecretRef = &v1beta1.SecretReference{Name: caCertSecret}
 	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(repoSyncID.Namespace, repoSyncID.Name), repoSyncBackend))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Update backend RepoSync use HTTPS with caCertSecret"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	err = nt.Validate(repoSyncReconcilerName, configsync.ControllerNamespace, &appsv1.Deployment{}, testpredicates.DeploymentHasEnvVar(reconcilermanager.GitSync, key, caCertPath))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -391,9 +373,7 @@ func TestCACertSecretWatch(t *testing.T) {
 	repoSyncBackend.Spec.Git.CACertSecretRef = &v1beta1.SecretReference{}
 	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(repoSyncID.Namespace, repoSyncID.Name), repoSyncBackend))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Update backend RepoSync unset caCertSecret and use SSH"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	err = nt.Validate(repoSyncReconcilerName, configsync.ControllerNamespace, &appsv1.Deployment{}, testpredicates.DeploymentHasEnvVar(reconcilermanager.GitSync, controllers.GitSyncRepo, repoSyncSSHURL))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -573,9 +553,7 @@ func TestHelmCACertSecretRefNamespaceRepo(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(repoSyncKey.Namespace, repoSyncKey.Name), rs))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Set the RepoSync to sync from Git"))
 
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	nt.T.Log("Verify the ConfigMap was pruned")
 	if err := nt.ValidateNotFound(cm.Name, cm.Namespace, &corev1.ConfigMap{}); err != nil {
 		nt.T.Fatal(err)

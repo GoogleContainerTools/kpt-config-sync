@@ -42,9 +42,7 @@ func TestLocalConfig(t *testing.T) {
 	cm := k8sobjects.ConfigMapObject(core.Name(cmName), core.Annotation(metadata.LocalConfigAnnotationKey, LocalConfigValue))
 	nt.Must(rootSyncGitRepo.Add(cmPath, cm))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Adding ConfigMap as local config"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Checking that the configmap doesn't exist in the cluster
 	err := nt.ValidateNotFound(cmName, ns, &corev1.ConfigMap{})
@@ -56,9 +54,7 @@ func TestLocalConfig(t *testing.T) {
 	cm = k8sobjects.ConfigMapObject(core.Name(cmName))
 	nt.Must(rootSyncGitRepo.Add(cmPath, cm))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Adding ConfigMap without local-config annotation"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Checking that the configmap exist
 	err = nt.Validate(cmName, ns, &corev1.ConfigMap{})
@@ -71,9 +67,7 @@ func TestLocalConfig(t *testing.T) {
 	cm = k8sobjects.ConfigMapObject(core.Name(cmName), core.Annotation(metadata.LocalConfigAnnotationKey, LocalConfigValue))
 	nt.Must(rootSyncGitRepo.Add(cmPath, cm))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Changing ConfigMap to local config"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Checking that the configmap is pruned.
 	err = nt.ValidateNotFound(cmName, ns, &corev1.ConfigMap{})
@@ -96,9 +90,7 @@ func TestLocalConfigWithManagementDisabled(t *testing.T) {
 	cm := k8sobjects.ConfigMapObject(core.Name(cmName))
 	nt.Must(rootSyncGitRepo.Add(cmPath, cm))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Adding ConfigMap"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Checking that the configmap exist
 	err := nt.Validate(cmName, ns, &corev1.ConfigMap{})
@@ -110,9 +102,7 @@ func TestLocalConfigWithManagementDisabled(t *testing.T) {
 	cm = k8sobjects.ConfigMapObject(core.Name(cmName), syncertest.ManagementDisabled)
 	nt.Must(rootSyncGitRepo.Add(cmPath, cm))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Disable the management of ConfigMap"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Checking that the configmap exist
 	err = nt.Validate(cmName, ns, &corev1.ConfigMap{})
@@ -125,9 +115,7 @@ func TestLocalConfigWithManagementDisabled(t *testing.T) {
 		core.Annotation(metadata.LocalConfigAnnotationKey, LocalConfigValue))
 	nt.Must(rootSyncGitRepo.Add(cmPath, cm))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Change the ConfigMap to local config"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Checking that the configmap exist
 	err = nt.Validate(cmName, ns, &corev1.ConfigMap{})
@@ -139,9 +127,7 @@ func TestLocalConfigWithManagementDisabled(t *testing.T) {
 	cm = k8sobjects.ConfigMapObject(core.Name(cmName), core.Annotation(metadata.LocalConfigAnnotationKey, LocalConfigValue))
 	nt.Must(rootSyncGitRepo.Add(cmPath, cm))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Remove the managed disabled annotation and keep the local-config annotation"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Checking that the configmap exist
 	err = nt.Validate(cmName, ns, &corev1.ConfigMap{})

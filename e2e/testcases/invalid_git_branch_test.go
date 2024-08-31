@@ -56,9 +56,7 @@ func TestInvalidRootSyncBranchStatus(t *testing.T) {
 	// Update RootSync to valid branch name
 	nomostest.SetRootSyncGitBranch(nt, configsync.RootSyncName, gitproviders.MainBranch)
 
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	if err := nomostest.ValidateStandardMetrics(nt); err != nil {
 		nt.T.Fatal(err)
@@ -111,9 +109,7 @@ func TestInvalidRepoSyncBranchStatus(t *testing.T) {
 	// Ensure RepoSync's active branch is checked out, so the correct commit is used for validation.
 	nt.Must(repoSyncGitRepo.CheckoutBranch(gitproviders.MainBranch))
 
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
@@ -139,9 +135,7 @@ func TestSyncFailureAfterSuccessfulSyncs(t *testing.T) {
 		nt.T.Log("Resetting all RootSync branches to main")
 		nt.Must(rootSyncGitRepo.CheckoutBranch(gitproviders.MainBranch))
 		nomostest.SetRootSyncGitBranch(nt, configsync.RootSyncName, gitproviders.MainBranch)
-		if err := nt.WatchForAllSyncs(); err != nil {
-			nt.T.Fatal(err)
-		}
+		nt.Must(nt.WatchForAllSyncs())
 	})
 
 	// Add audit namespace.
@@ -158,9 +152,7 @@ func TestSyncFailureAfterSuccessfulSyncs(t *testing.T) {
 
 	// Update RootSync to sync from the dev branch
 	nomostest.SetRootSyncGitBranch(nt, configsync.RootSyncName, devBranch)
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Validate namespace 'acme' created.
 	err := nt.Validate(auditNS, "", k8sobjects.NamespaceObject(auditNS))
@@ -174,7 +166,5 @@ func TestSyncFailureAfterSuccessfulSyncs(t *testing.T) {
 
 	// Change the remote branch name back to the original name.
 	nt.Must(rootSyncGitRepo.RenameBranch("invalid-branch", devBranch))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 }

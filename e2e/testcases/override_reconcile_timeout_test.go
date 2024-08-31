@@ -50,9 +50,7 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 		nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace, []testpredicates.Predicate{
 			testpredicates.RootSyncHasObservedGenerationNoLessThan(rootSync.Generation),
 		}))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	// Pre-provision a low priority workload to force the cluster to scale up.
 	// Later, when the real workload is being scheduled, if there's no more resources available
 	// (common on Autopilot clusters, which are optimized for utilization),
@@ -98,9 +96,7 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Add("acme/pod-1.yaml", pod1))
 	nt.Must(rootSyncGitRepo.Add("acme/ns-1.yaml", k8sobjects.NamespaceObject(namespaceName)))
 	nt.Must(rootSyncGitRepo.CommitAndPush(fmt.Sprintf("Add namespace/%s & pod/%s (never ready)", namespaceName, pod1Name)))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	expectActuationStatus := "Succeeded"
 	expectReconcileStatus := "Timeout"
 	if err := nt.Watcher.WatchObject(kinds.ResourceGroup(), "root-sync", "config-management-system",
@@ -120,9 +116,7 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 
 	nt.Must(rootSyncGitRepo.Remove("acme/pod-1.yaml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush(fmt.Sprintf("Remove pod/%s", pod1Name)))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Verify pod is deleted.
 	if err := nt.ValidateNotFound(pod1Name, namespaceName, &corev1.Pod{}); err != nil {
@@ -131,9 +125,7 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 	pod1.Spec.Containers[0].ReadinessProbe.InitialDelaySeconds = 30
 	nt.Must(rootSyncGitRepo.Add("acme/pod-1.yaml", pod1))
 	nt.Must(rootSyncGitRepo.CommitAndPush(fmt.Sprintf("Add pod/%s (ready after 30s)", pod1Name)))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	expectActuationStatus = "Succeeded"
 	expectReconcileStatus = "Succeeded"

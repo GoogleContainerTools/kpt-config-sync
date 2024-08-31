@@ -50,9 +50,7 @@ func TestAdmission(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/hello/ns.yaml",
 		k8sobjects.NamespaceObject("hello", core.Annotation("goodbye", "moon"))))
 	nt.Must(rootSyncGitRepo.CommitAndPush("add Namespace"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Ensure we properly forbid changing declared information.
 
@@ -161,9 +159,7 @@ func TestDisableWebhookConfigurationUpdateHierarchy(t *testing.T) {
 
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/hello/ns.yaml", k8sobjects.NamespaceObject("hello")))
 	nt.Must(rootSyncGitRepo.CommitAndPush("add test namespace"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	err := nt.Validate("hello", "", &corev1.Namespace{}, testpredicates.HasAnnotationKey(metadata.DeclaredFieldsKey))
 	if err != nil {
@@ -233,9 +229,7 @@ func TestDisableWebhookConfigurationUpdateUnstructured(t *testing.T) {
 	sa := k8sobjects.ServiceAccountObject("store", core.Namespace(namespaceRepo))
 	nt.Must(repoSyncGitRepo.Add("acme/sa.yaml", sa))
 	nt.Must(repoSyncGitRepo.CommitAndPush("Adding test service account"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Test starts with Admission Webhook already installed
 	nomostest.WaitForWebhookReadiness(nt)

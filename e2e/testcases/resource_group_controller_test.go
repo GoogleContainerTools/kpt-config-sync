@@ -51,9 +51,7 @@ func TestResourceGroupController(t *testing.T) {
 	cm := k8sobjects.ConfigMapObject(core.Name(cmName), core.Namespace(ns))
 	nt.Must(rootSyncGitRepo.Add(cmPath, cm))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Adding a ConfigMap to repo"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Checking that the ResourceGroup controller captures the status of the
 	// managed resources.

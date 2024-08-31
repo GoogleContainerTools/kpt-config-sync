@@ -79,9 +79,7 @@ func TestReconcilerFinalizer_Orphan(t *testing.T) {
 	deployment1.SetNamespace(deployment1NN.Namespace)
 	nt.Must(rootSyncGitRepo.Add(deployment1Path, deployment1))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Adding deployment helloworld-1 to RootSync"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	if err := nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), deployment1.Name, deployment1.Namespace); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -169,9 +167,7 @@ func TestReconcilerFinalizer_Foreground(t *testing.T) {
 	deployment1.SetNamespace(deployment1NN.Namespace)
 	nt.Must(rootSyncGitRepo.Add(deployment1Path, deployment1))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Adding deployment helloworld-1 to RootSync"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	if err := nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), deployment1.Name, deployment1.Namespace); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -265,9 +261,7 @@ func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
 	deployment1.SetNamespace(deployment1NN.Namespace)
 	nt.Must(rootSyncGitRepo.Add(deployment1Path, deployment1))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Adding deployment helloworld-1 to RootSync"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	if err := nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), deployment1.Name, deployment1.Namespace); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -279,9 +273,7 @@ func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
 	deployment2.SetNamespace(deployment1NN.Namespace)
 	nt.Must(repoSyncGitRepo.Add(deployment2Path, deployment2))
 	nt.Must(repoSyncGitRepo.CommitAndPush("Adding deployment helloworld-2 to RepoSync"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	if err := nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), deployment2.Name, deployment2.Namespace); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -319,9 +311,7 @@ func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
 		nt.Must(rootSyncGitRepo.Add(repoSyncPath, repoSync))
 		nt.Must(rootSyncGitRepo.CommitAndPush("Enabling RepoSync deletion propagation"))
 	}
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	require.NoError(nt.T,
 		nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSync.GetName(), repoSync.GetNamespace(), []testpredicates.Predicate{
 			testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
@@ -392,9 +382,7 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 	deployment1.SetNamespace(deployment2NN.Namespace)
 	nt.Must(rootSyncGitRepo.Add(deployment1Path, deployment1))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Adding deployment helloworld-1 to RootSync"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	if err := nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), deployment1.Name, deployment1.Namespace); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -406,9 +394,7 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 	deployment2.SetNamespace(deployment2NN.Namespace)
 	nt.Must(repoSyncGitRepo.Add(deployment2Path, deployment2))
 	nt.Must(repoSyncGitRepo.CommitAndPush("Adding deployment helloworld-2 to RepoSync"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	if err := nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), deployment2.Name, deployment2.Namespace); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -445,9 +431,7 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 	if nomostest.RemoveDeletionPropagationPolicy(repoSync) {
 		nt.Must(rootSyncGitRepo.Add(repoSyncPath, repoSync))
 		nt.Must(rootSyncGitRepo.CommitAndPush("Disabling RepoSync deletion propagation"))
-		if err := nt.WatchForAllSyncs(); err != nil {
-			nt.T.Fatal(err)
-		}
+		nt.Must(nt.WatchForAllSyncs())
 	}
 	require.NoError(nt.T,
 		nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSync.GetName(), repoSync.GetNamespace(), []testpredicates.Predicate{
@@ -461,9 +445,7 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 	core.SetAnnotation(namespace1, common.LifecycleDeleteAnnotation, common.PreventDeletion)
 	nt.Must(rootSyncGitRepo.Add(namespace1Path, namespace1))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Adding annotation to keep test namespace on removal from git"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Delete the RootSync
 	err = nt.KubeClient.Delete(rootSync)
@@ -528,9 +510,7 @@ func TestReconcileFinalizerReconcileTimeout(t *testing.T) {
 	nsPath := nomostest.StructuredNSPath(namespace.GetNamespace(), namespaceNN.Name)
 	nt.Must(rootSync2GitRepo.Add(nsPath, namespace))
 	nt.Must(rootSync2GitRepo.CommitAndPush(fmt.Sprintf("add Namespace %s", namespaceNN.Name)))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	nt.T.Cleanup(func() {
 		_, err := e2eretry.Retry(30*time.Second, func() error {
 			namespace := &corev1.Namespace{}

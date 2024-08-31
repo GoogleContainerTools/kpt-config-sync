@@ -100,9 +100,7 @@ func TestRootSyncRoleRefs(t *testing.T) {
 		clusterRoleObject2,
 	))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add Roles and RoleRefs"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	tg := taskgroup.New()
 	tg.Go(func() error {
 		return validateRoleRefs(nt, configsync.RootSyncKind, syncANN, rootSyncA.Spec.SafeOverride().RoleRefs)
@@ -131,9 +129,7 @@ func TestRootSyncRoleRefs(t *testing.T) {
 		rootSyncA,
 	))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Reduce RoleRefs"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	tg = taskgroup.New()
 	tg.Go(func() error {
 		return validateRoleRefs(nt, configsync.RootSyncKind, syncANN, rootSyncA.Spec.SafeOverride().RoleRefs)

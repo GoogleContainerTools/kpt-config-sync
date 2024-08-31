@@ -42,9 +42,7 @@ func TestSurfaceFightError(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Add(
 		fmt.Sprintf("acme/namespaces/%s/rb.yaml", ns.Name), rb))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add Namespace and RoleBinding"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Make the # of updates exceed the fightThreshold defined in pkg/syncer/reconcile/fight_detector.go
 	go func() {
@@ -75,7 +73,5 @@ func TestSurfaceFightError(t *testing.T) {
 	}
 
 	nt.T.Log("The fight error should be auto-resolved if no more fights")
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 }

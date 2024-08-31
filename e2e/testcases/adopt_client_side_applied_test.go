@@ -58,9 +58,7 @@ func TestAdoptClientSideAppliedResource(t *testing.T) {
 	}}
 	nt.Must(rootSyncGitRepo.Add("acme/cluster/ns-viewer-cr.yaml", nsViewer))
 	nt.Must(rootSyncGitRepo.CommitAndPush("add namespace-viewer ClusterRole"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Validate the ClusterRole exist and the Rules are the same as the one
 	// in "acme/cluster/ns-viewer-cr.yaml".

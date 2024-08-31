@@ -134,9 +134,7 @@ func TestOtelCollectorDeployment(t *testing.T) {
 	namespace := k8sobjects.NamespaceObject("foo")
 	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Adding foo namespace"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("Watch for metrics in GCM, timeout 2 minutes")
 	ctx := nt.Context
@@ -273,9 +271,7 @@ func TestGCMMetrics(t *testing.T) {
 	namespace := k8sobjects.NamespaceObject("foo")
 	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Adding foo namespace"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("Checking resource related metrics after adding test resource")
 	_, err = retry.Retry(nt.DefaultWaitTimeout, func() error {
@@ -290,9 +286,7 @@ func TestGCMMetrics(t *testing.T) {
 	nt.T.Log("Remove the test resource")
 	nt.Must(rootSyncGitRepo.Remove("acme/ns.yaml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Remove the test namespace"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("Checking resource related metrics after removing test resource")
 	_, err = retry.Retry(nt.DefaultWaitTimeout, func() error {
@@ -327,9 +321,7 @@ func TestOtelCollectorGCMLabelAggregation(t *testing.T) {
 	namespace := k8sobjects.NamespaceObject("foo")
 	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Adding foo namespace"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// The following metrics are sent to GCM and aggregated to remove the "commit" label.
 	var metricsWithCommitLabel = []string{
@@ -396,9 +388,7 @@ func setupMetricsServiceAccount(nt *nomostest.NT) {
 		if err := nt.KubeClient.Update(ksa); err != nil {
 			nt.T.Fatalf("failed to set service account annotation: %v", err)
 		}
-		if err := nt.WatchForAllSyncs(); err != nil {
-			nt.T.Fatal(err)
-		}
+		nt.Must(nt.WatchForAllSyncs())
 	}
 }
 

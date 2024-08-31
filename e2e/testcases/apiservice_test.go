@@ -49,9 +49,7 @@ func TestCreateAPIServiceAndEndpointInTheSameCommit(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Copy("../testdata/apiservice/apiservice.yaml", "acme/cluster/apiservice.yaml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("adding apiservice resources"))
 	nt.T.Log("Waiting for nomos to sync new APIService")
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	err := validateStackdriverAdapterStatusCurrent(nt)
 	if err != nil {
@@ -62,17 +60,13 @@ func TestCreateAPIServiceAndEndpointInTheSameCommit(t *testing.T) {
 	// the test repo from cleaning up
 	nt.Must(rootSyncGitRepo.Remove("acme/cluster/apiservice.yaml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Remove custom metric stackdriver adapter API service"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Remove the backend Deployment of test APIService
 	nt.Must(rootSyncGitRepo.Remove("acme/namespaces/custom-metrics/namespace-custom-metrics.yaml"))
 	nt.Must(rootSyncGitRepo.Remove("acme/namespaces/custom-metrics/namespace.yaml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Remove custom metric stackdriver adapter namespace"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 }
 
 func TestReconcilerResilientToFlakyAPIService(t *testing.T) {
@@ -101,9 +95,7 @@ func TestReconcilerResilientToFlakyAPIService(t *testing.T) {
 	nt.Must(rootSyncGitRepo.CommitAndPush("add testing resources"))
 
 	nt.T.Log("Wait for test resource to have status CURRENT")
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	err := nt.Watcher.WatchForCurrentStatus(kinds.Namespace(), "resilient", "")
 	if err != nil {
@@ -115,9 +107,7 @@ func TestReconcilerResilientToFlakyAPIService(t *testing.T) {
 	nt.MustKubectl("apply", "-f", "../testdata/apiservice/rbac.yaml")
 	nt.MustKubectl("apply", "-f", "../testdata/apiservice/namespace-custom-metrics.yaml")
 	nt.T.Log("Waiting for nomos to stabilize")
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	err = validateStackdriverAdapterStatusCurrent(nt)
 	if err != nil {

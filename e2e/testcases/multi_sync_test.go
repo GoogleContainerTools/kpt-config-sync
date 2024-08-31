@@ -805,35 +805,20 @@ func TestControllerValidationErrors(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.MultiRepos)
 
 	testNamespace := k8sobjects.NamespaceObject(testNs)
-	if err := nt.KubeClient.Create(testNamespace); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.KubeClient.Create(testNamespace))
 	t.Cleanup(func() {
-		if err := nomostest.DeleteObjectsAndWait(nt, testNamespace); err != nil {
-			nt.T.Fatal(err)
-		}
+		nt.Must(nomostest.DeleteObjectsAndWait(nt, testNamespace))
 	})
 
 	nt.T.Logf("Validate RootSync can only exist in the config-management-system namespace")
-	rootSync := &v1beta1.RootSync{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "rs-test",
-			Namespace: testNs,
-		},
-		Spec: v1beta1.RootSyncSpec{
-			Git: &v1beta1.Git{
-				Auth: "none",
-			},
-		},
-	}
+	rootSync := k8sobjects.RootSyncObjectV1Beta1("rs-test", core.Namespace(testNs))
+	rootSync.Spec.Git = &v1beta1.Git{Auth: configsync.AuthNone}
+	nomostest.SetRSyncTestDefaults(nt, rootSync)
+	nt.Must(nt.KubeClient.Create(rootSync))
 	t.Cleanup(func() {
-		if err := nomostest.DeleteObjectsAndWait(nt, rootSync); err != nil && !apierrors.IsNotFound(err) {
-			nt.T.Fatal(err)
-		}
+		nt.Must(nomostest.DeleteObjectsAndWait(nt, rootSync))
 	})
-	if err := nt.KubeClient.Create(rootSync); err != nil {
-		nt.T.Fatal(err)
-	}
+	// Can't use WaitForRootSyncStalledError because it doesn't take other namespaces
 	expectedCondition := &v1beta1.RootSyncCondition{
 		Type:    v1beta1.RootSyncStalled,
 		Status:  metav1.ConditionTrue,
@@ -848,15 +833,15 @@ func TestControllerValidationErrors(t *testing.T) {
 		[]testpredicates.Predicate{testpredicates.RootSyncHasCondition(expectedCondition)}))
 
 	nt.T.Logf("Validate RepoSync is not allowed in the config-management-system namespace")
-	nnControllerNamespace := nomostest.RepoSyncNN(configsync.ControllerNamespace, configsync.RepoSyncName)
-	rs := nomostest.RepoSyncObjectV1Beta1Git(nnControllerNamespace, "", configsync.SourceFormatUnstructured)
-	if err := nt.KubeClient.Create(rs); err != nil {
-		nt.T.Fatal(err)
-	}
-	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation", "RepoSync objects are not allowed in the config-management-system namespace")
-	if err := nomostest.DeleteObjectsAndWait(nt, rs); err != nil {
-		nt.T.Fatal(err)
-	}
+	rsControllerNamespace := k8sobjects.RepoSyncObjectV1Beta1(configsync.ControllerNamespace, configsync.RepoSyncName)
+	rsControllerNamespace.Spec.Git = &v1beta1.Git{Auth: configsync.AuthNone}
+	nomostest.SetRSyncTestDefaults(nt, rsControllerNamespace)
+	nt.Must(nt.KubeClient.Create(rsControllerNamespace))
+	t.Cleanup(func() {
+		nt.Must(nomostest.DeleteObjectsAndWait(nt, rsControllerNamespace))
+	})
+	nt.WaitForRepoSyncStalledError(rsControllerNamespace.Namespace, rsControllerNamespace.Name, "Validation",
+		"RepoSync objects are not allowed in the config-management-system namespace")
 
 	nt.T.Logf("Validate an invalid config with a long RepoSync name")
 	longBytes := make([]byte, validation.DNS1123SubdomainMaxLength)
@@ -864,36 +849,34 @@ func TestControllerValidationErrors(t *testing.T) {
 		longBytes[i] = 'a'
 	}
 	veryLongName := string(longBytes)
-	nnTooLong := nomostest.RepoSyncNN(testNs, veryLongName)
-	rs = nomostest.RepoSyncObjectV1Beta1Git(nnTooLong, "https://github.com/test/test", configsync.SourceFormatUnstructured)
-	if err := nt.KubeClient.Create(rs); err != nil {
-		nt.T.Fatal(err)
-	}
-	nt.WaitForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation",
-		fmt.Sprintf(`Invalid reconciler name "ns-reconciler-%s-%s-%d": must be no more than %d characters.`,
-			testNs, veryLongName, len(veryLongName), validation.DNS1123SubdomainMaxLength))
+	rsTooLong := k8sobjects.RepoSyncObjectV1Beta1(testNs, veryLongName)
+	rsTooLong.Spec.Git = &v1beta1.Git{Auth: configsync.AuthNone}
+	nomostest.SetRSyncTestDefaults(nt, rsTooLong)
+	nt.Must(nt.KubeClient.Create(rsTooLong))
 	t.Cleanup(func() {
-		if err := nomostest.DeleteObjectsAndWait(nt, rs); err != nil {
-			nt.T.Fatal(err)
-		}
+		nt.Must(nomostest.DeleteObjectsAndWait(nt, rsTooLong))
 	})
+	nt.WaitForRepoSyncStalledError(rsTooLong.Namespace, rsTooLong.Name, "Validation",
+		fmt.Sprintf(`Invalid reconciler name "%s": must be no more than %d characters.`,
+			core.NsReconcilerName(rsTooLong.Namespace, rsTooLong.Name), validation.DNS1123SubdomainMaxLength))
 
 	nt.T.Logf("Validate an invalid config with a long RepoSync Secret name")
-	nnInvalidSecretRef := nomostest.RepoSyncNN(testNs, "repo-test")
-	rsInvalidSecretRef := nomostest.RepoSyncObjectV1Beta1Git(nnInvalidSecretRef, "https://github.com/test/test", configsync.SourceFormatUnstructured)
-	rsInvalidSecretRef.Spec.Auth = configsync.AuthSSH
-	rsInvalidSecretRef.Spec.SecretRef = &v1beta1.SecretReference{Name: veryLongName}
-	if err := nt.KubeClient.Create(rsInvalidSecretRef); err != nil {
-		nt.T.Fatal(err)
+	rsInvalidSecretRef := k8sobjects.RepoSyncObjectV1Beta1(testNs, "repo-test")
+	rsInvalidSecretRef.Spec.Git = &v1beta1.Git{
+		// Repo required to avoid error:
+		// KNV1061: RepoSyncs must specify spec.git.repo when spec.sourceType is "git"
+		Repo:      "https://github.com/test/test",
+		Auth:      configsync.AuthSSH,
+		SecretRef: &v1beta1.SecretReference{Name: veryLongName},
 	}
-	nt.WaitForRepoSyncStalledError(rsInvalidSecretRef.Namespace, rsInvalidSecretRef.Name, "Validation",
-		fmt.Sprintf(`The managed secret name "ns-reconciler-%s-%s-%d-%s" is invalid: must be no more than %d characters. To fix it, update '.spec.git.secretRef.name'`,
-			testNs, rsInvalidSecretRef.Name, len(rsInvalidSecretRef.Name), v1beta1.GetSecretName(rsInvalidSecretRef.Spec.SecretRef), validation.DNS1123SubdomainMaxLength))
+	nomostest.SetRSyncTestDefaults(nt, rsInvalidSecretRef)
+	nt.Must(nt.KubeClient.Create(rsInvalidSecretRef))
 	t.Cleanup(func() {
-		if err := nomostest.DeleteObjectsAndWait(nt, rsInvalidSecretRef); err != nil {
-			nt.T.Fatal(err)
-		}
+		nt.Must(nomostest.DeleteObjectsAndWait(nt, rsInvalidSecretRef))
 	})
+	nt.WaitForRepoSyncStalledError(rsInvalidSecretRef.Namespace, rsInvalidSecretRef.Name, "Validation",
+		fmt.Sprintf(`The managed secret name "%s-%s" is invalid: must be no more than %d characters. To fix it, update '.spec.git.secretRef.name'`,
+			core.NsReconcilerName(rsInvalidSecretRef.Namespace, rsInvalidSecretRef.Name), veryLongName, validation.DNS1123SubdomainMaxLength))
 }
 
 func rootPodRole() *rbacv1.Role {

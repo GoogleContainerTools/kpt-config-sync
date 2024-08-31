@@ -906,10 +906,9 @@ func RepoSyncObjectV1Alpha1FromNonRootRepo(nt *NT, nn types.NamespacedName) *v1a
 	return rs
 }
 
-// RepoSyncObjectV1Beta1Git returns the default RepoSync object
+// repoSyncObjectV1Beta1Git returns the default RepoSync object
 // with version v1beta1 in the given namespace.
-// TODO: Replace usages with RootSyncObjectGit, once ReadOnlyRegistry is supported.
-func RepoSyncObjectV1Beta1Git(nn types.NamespacedName, repoURL string, sourceFormat configsync.SourceFormat) *v1beta1.RepoSync {
+func repoSyncObjectV1Beta1Git(nn types.NamespacedName, repoURL string, sourceFormat configsync.SourceFormat) *v1beta1.RepoSync {
 	rs := k8sobjects.RepoSyncObjectV1Beta1(nn.Namespace, nn.Name)
 	rs.Spec.SourceFormat = sourceFormat
 	rs.Spec.SourceType = configsync.GitSource
@@ -934,10 +933,6 @@ func RepoSyncObjectV1Beta1Git(nn types.NamespacedName, repoURL string, sourceFor
 			Name: "ssh-key",
 		}
 	}
-	// Enable automatic deletion of managed objects by default.
-	// This helps ensure that test artifacts are cleaned up.
-	// TODO: Remove EnableDeletionPropagation here and make RepoSyncObjectV1Beta1Git private. Prefer using RootSyncObjectGit.
-	EnableDeletionPropagation(rs)
 	return rs
 }
 
@@ -961,7 +956,7 @@ func (nt *NT) RepoSyncObjectGit(nn types.NamespacedName, repo *gitproviders.Read
 	SetExpectedGitSource(nt, id, repo, syncPath, sourceFormat)
 	repoURL := repo.SyncURL()
 	// RepoSync is always Unstructured. So ignore repo.Format.
-	rs := RepoSyncObjectV1Beta1Git(nn, repoURL, sourceFormat)
+	rs := repoSyncObjectV1Beta1Git(nn, repoURL, sourceFormat)
 	SetRSyncTestDefaults(nt, rs)
 	return rs
 }

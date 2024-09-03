@@ -261,15 +261,11 @@ func TestDriftKubectlApplyNamespaceScoped(t *testing.T) {
 	namespace := k8sobjects.NamespaceObject("bookstore")
 	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
 	nt.Must(rootSyncGitRepo.CommitAndPush("add a namespace"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	nt.Must(rootSyncGitRepo.Add("acme/cm.yaml", k8sobjects.ConfigMapObject(core.Name("cm-1"), core.Namespace("bookstore"))))
 	nt.Must(rootSyncGitRepo.CommitAndPush("add a configmap"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	/* A new test */
 	cm1Obj := &corev1.ConfigMap{}
@@ -505,15 +501,11 @@ func TestDriftKubectlDelete(t *testing.T) {
 	namespace := k8sobjects.NamespaceObject("bookstore")
 	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
 	nt.Must(rootSyncGitRepo.CommitAndPush("add a namespace"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	nt.Must(rootSyncGitRepo.Add("acme/cm.yaml", k8sobjects.ConfigMapObject(core.Name("cm-1"), core.Namespace("bookstore"))))
 	nt.Must(rootSyncGitRepo.CommitAndPush("add a configmap"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	nomostest.WaitForWebhookReadiness(nt)
 
@@ -567,15 +559,11 @@ func TestDriftKubectlDeleteWithIgnoreMutationAnnotation(t *testing.T) {
 	namespace := k8sobjects.NamespaceObject("bookstore", core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation))
 	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
 	nt.Must(rootSyncGitRepo.CommitAndPush("add a namespace"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	nt.Must(rootSyncGitRepo.Add("acme/cm.yaml", k8sobjects.ConfigMapObject(core.Name("cm-1"), core.Namespace("bookstore"))))
 	nt.Must(rootSyncGitRepo.CommitAndPush("add a configmap"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	nomostest.WaitForWebhookReadiness(nt)
 
@@ -629,9 +617,7 @@ func TestDriftKubectlAnnotateUnmanagedField(t *testing.T) {
 	namespace := k8sobjects.NamespaceObject("bookstore")
 	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
 	nt.Must(rootSyncGitRepo.CommitAndPush("add a namespace"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Add a new annotation into the namespace object
 	out, err := nt.Shell.Kubectl("annotate", "namespace", "bookstore", "season=summer")
@@ -691,9 +677,7 @@ func TestDriftKubectlAnnotateUnmanagedFieldWithIgnoreMutationAnnotation(t *testi
 	namespace := k8sobjects.NamespaceObject("bookstore", core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation))
 	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
 	nt.Must(rootSyncGitRepo.CommitAndPush("add a namespace"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Add a new annotation into the namespace object
 	out, err := nt.Shell.Kubectl("annotate", "namespace", "bookstore", "season=summer")
@@ -722,9 +706,7 @@ func TestDriftKubectlAnnotateManagedField(t *testing.T) {
 	namespace := k8sobjects.NamespaceObject("bookstore", core.Annotation("season", "summer"))
 	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
 	nt.Must(rootSyncGitRepo.CommitAndPush("add a namespace"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	nomostest.WaitForWebhookReadiness(nt)
 
@@ -789,9 +771,7 @@ func TestDriftKubectlAnnotateManagedFieldWithIgnoreMutationAnnotation(t *testing
 		core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation))
 	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
 	nt.Must(rootSyncGitRepo.CommitAndPush("add a namespace"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Modify a managed field
 	out, err := nt.Shell.Kubectl("annotate", "namespace", "bookstore", "--overwrite", "season=winter")
@@ -855,9 +835,7 @@ func TestDriftKubectlAnnotateDeleteManagedFields(t *testing.T) {
 	namespace := k8sobjects.NamespaceObject("bookstore", core.Annotation("season", "summer"))
 	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
 	nt.Must(rootSyncGitRepo.CommitAndPush("add a namespace"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	nomostest.WaitForWebhookReadiness(nt)
 
@@ -922,9 +900,7 @@ func TestDriftKubectlAnnotateDeleteManagedFieldsWithIgnoreMutationAnnotation(t *
 		core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation))
 	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
 	nt.Must(rootSyncGitRepo.CommitAndPush("add a namespace"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Delete a managed field
 	out, err := nt.Shell.Kubectl("annotate", "namespace", "bookstore", "season-")

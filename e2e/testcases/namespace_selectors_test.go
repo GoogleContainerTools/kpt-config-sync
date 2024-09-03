@@ -112,9 +112,7 @@ func TestNamespaceSelectorHierarchicalFormat(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/namespace-selector-bookstore.yaml", bookstoreNSS))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Update NamespaceSelector to use static mode"))
 
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	validateSelectedAndUnselectedResources(nt,
 		selectedResourcesWithBookstoreNSSAndShoestoreNSS,
@@ -152,9 +150,7 @@ func TestNamespaceSelectorUnstructuredFormat(t *testing.T) {
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add Namespaces, NamespaceSelectors and Namespace-scoped resources"))
 
 	nt.Logger.Info("Only resources in shoestore are created because bookstore Namespace is not declared")
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	validateSelectedAndUnselectedResources(nt,
 		selectedResourcesWithShoestoreNSSOnly,
@@ -201,9 +197,7 @@ func TestNamespaceSelectorUnstructuredFormat(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	validateSelectedAndUnselectedResources(nt,
 		selectedResourcesWithShoestoreNSSOnly,
 		unselectedResourcesWithShoestoreNSSOnly,
@@ -234,9 +228,7 @@ func TestNamespaceSelectorUnstructuredFormat(t *testing.T) {
 		}); err != nil {
 		nt.T.Fatal(err)
 	}
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	validateSelectedAndUnselectedResources(nt,
 		selectedResourcesWithBookstoreNSSAndShoestoreNSS,
 		unselectedResourcesWithBookstoreNSSAndShoestoreNSS,
@@ -266,9 +258,7 @@ func TestNamespaceSelectorUnstructuredFormat(t *testing.T) {
 	}
 
 	nt.Logger.Info("Only resources in shoestore are created because bookstore Namespace is not selected")
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	validateSelectedAndUnselectedResources(nt,
 		selectedResourcesWithShoestoreNSSOnly,
 		unselectedResourcesWithShoestoreNSSOnly,
@@ -298,9 +288,7 @@ func TestNamespaceSelectorUnstructuredFormat(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	validateSelectedAndUnselectedResources(nt,
 		selectedResourcesWithBookstoreNSSAndShoestoreNSS,
 		unselectedResourcesWithBookstoreNSSAndShoestoreNSS,
@@ -319,9 +307,7 @@ func TestNamespaceSelectorUnstructuredFormat(t *testing.T) {
 		}); err != nil {
 		nt.T.Fatal(err)
 	}
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	validateSelectedAndUnselectedResources(nt,
 		selectedResourcesWithShoestoreNSSOnly,
 		unselectedResourcesWithShoestoreNSSOnly,
@@ -339,9 +325,7 @@ func TestNamespaceSelectorUnstructuredFormat(t *testing.T) {
 		}); err != nil {
 		nt.T.Fatal(err)
 	}
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	validateSelectedAndUnselectedResources(nt,
 		selectedResourcesWithBookstoreNSSAndShoestoreNSS,
 		unselectedResourcesWithBookstoreNSSAndShoestoreNSS,
@@ -367,9 +351,7 @@ func TestNamespaceSelectorUnstructuredFormat(t *testing.T) {
 		}); err != nil {
 		nt.T.Fatal(err)
 	}
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	validateSelectedAndUnselectedResources(nt,
 		selectedResourcesWithShoestoreNSSOnly,
 		unselectedResourcesWithShoestoreNSSOnly,

@@ -80,9 +80,7 @@ func TestDeleteRootSyncAndRootSyncV1Alpha1(t *testing.T) {
 	if err := nt.KubeClient.Create(rsv1alpha1); err != nil {
 		nt.T.Fatal(err)
 	}
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 }
 
 func TestUpdateRootSyncGitDirectory(t *testing.T) {
@@ -117,9 +115,7 @@ func TestUpdateRootSyncGitDirectory(t *testing.T) {
 		k8sobjects.RepoObject()))
 
 	nt.Must(rootSyncGitRepo.CommitAndPush("add namespace to acme directory"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Validate namespace 'audit' created.
 	err = nt.Validate(auditNS, "", auditNSObj)
@@ -189,9 +185,7 @@ func TestUpdateRootSyncGitBranch(t *testing.T) {
 	// Add "ns-a" namespace.
 	nt.Must(rootSyncGitRepo.Add(fmt.Sprintf("acme/namespaces/%s/ns.yaml", nsA), nsAObj))
 	nt.Must(rootSyncGitRepo.CommitAndPush("add namespace to acme directory"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// "ns-a" namespace created
 	err := nt.Validate(nsA, "", &corev1.Namespace{})
@@ -218,9 +212,7 @@ func TestUpdateRootSyncGitBranch(t *testing.T) {
 
 	// Checkout back to 'main' branch to get the correct HEAD commit sha1.
 	nt.Must(rootSyncGitRepo.CheckoutBranch(branchA))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// "ns-a" namespace still exists
 	err = nt.Validate(nsA, "", &corev1.Namespace{})
@@ -249,9 +241,7 @@ func TestUpdateRootSyncGitBranch(t *testing.T) {
 	// Checkout 'test-branch' branch to get the correct HEAD commit sha1.
 	nt.Must(rootSyncGitRepo.CheckoutBranch(branchB))
 
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// "ns-a" namespace deleted
 	err = nt.ValidateNotFound(nsA, "", &corev1.Namespace{})
@@ -281,9 +271,7 @@ func TestUpdateRootSyncGitBranch(t *testing.T) {
 	// Checkout back to 'main' branch to get the correct HEAD commit sha1.
 	nt.Must(rootSyncGitRepo.CheckoutBranch(branchA))
 
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// "ns-a" namespace created
 	err = nt.Validate(nsA, "", &corev1.Namespace{})
@@ -335,9 +323,7 @@ func TestForceRevert(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Git("reset", "--hard", "HEAD^"))
 	nt.Must(rootSyncGitRepo.Push(syncBranch, "-f"))
 
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	if err := nomostest.ValidateStandardMetrics(nt); err != nil {
 		nt.T.Fatal(err)

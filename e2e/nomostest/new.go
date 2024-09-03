@@ -530,9 +530,7 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 	}
 
 	// Wait for all RootSyncs and all RepoSyncs to be reconciled
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	// Validate all expected syncs exist (some may have been deployed by others)
 	if err := validateRootSyncsExist(nt); err != nil {
 		nt.T.Fatal(err)

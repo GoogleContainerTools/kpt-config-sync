@@ -143,9 +143,7 @@ func TestSwitchFromGitToOciCentralized(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	if err := nt.Validate(bookinfoSA.Name, bookinfoSA.Namespace, &corev1.ServiceAccount{},
 		testpredicates.HasAnnotation(metadata.ResourceManagerKey, namespace)); err != nil {
 		nt.T.Fatal(err)
@@ -194,9 +192,7 @@ func TestSwitchFromGitToOciDelegated(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Verify the manual configuration: switch from Git to OCI
 	// Verify the default sourceType is set when not specified.

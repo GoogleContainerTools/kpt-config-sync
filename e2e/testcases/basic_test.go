@@ -39,9 +39,7 @@ func TestNamespaceGarbageCollection(t *testing.T) {
 
 	nt.Must(rootSyncGitRepo.Copy(fmt.Sprintf("%s/accounting-namespace.yaml", yamlDir), "acme/namespaces/accounting/namespace.yaml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add accounting namespace"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	if err := nt.Validate("accounting", "", &corev1.Namespace{}); err != nil {
 		nt.T.Fatal(err)
@@ -49,9 +47,7 @@ func TestNamespaceGarbageCollection(t *testing.T) {
 
 	nt.Must(rootSyncGitRepo.Remove("acme/namespaces/accounting/namespace.yaml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Remove accounting namespace"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	if err := nt.ValidateNotFound("accounting", "", &corev1.Namespace{}); err != nil {
 		nt.T.Fatal("Namespace still exist when it should have been garbage collected")
@@ -64,9 +60,7 @@ func TestNamespacePolicyspaceConversion(t *testing.T) {
 
 	nt.Must(rootSyncGitRepo.Copy(fmt.Sprintf("%s/dir-namespace.yaml", yamlDir), "acme/namespaces/dir/namespace.yaml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add dir namespace"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	if err := nt.Validate("dir", "", &corev1.Namespace{}); err != nil {
 		nt.T.Fatal(err)
@@ -75,9 +69,7 @@ func TestNamespacePolicyspaceConversion(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Remove("acme/namespaces/dir/namespace.yaml"))
 	nt.Must(rootSyncGitRepo.Copy(fmt.Sprintf("%s/subdir-namespace.yaml", yamlDir), "acme/namespaces/dir/subdir/namespace.yaml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Remove dir namespace, add subdir namespace"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	if err := nt.Validate("subdir", "", &corev1.Namespace{}); err != nil {
 		nt.T.Fatal(err)
@@ -104,9 +96,7 @@ func TestSyncDeploymentAndReplicaSet(t *testing.T) {
 	// This sync may block until reconcile timeout is reached,
 	// because ReplicaSet or Deployment may never reconcile.
 	// So this wait timeout must be longer than the reconcile timeout (5m).
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	nt.T.Log("check that the replicaset was created")
 	if err := nt.Validate("hello-world", "dir", &appsv1.ReplicaSet{}, testpredicates.HasLabel("app", "hello-world")); err != nil {
 		nt.T.Fatal(err)
@@ -115,9 +105,7 @@ func TestSyncDeploymentAndReplicaSet(t *testing.T) {
 	nt.T.Log("Add a corresponding deployment")
 	nt.Must(rootSyncGitRepo.Copy(fmt.Sprintf("%s/deployment-helloworld.yaml", yamlDir), "acme/namespaces/dir/deployment.yaml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add corresponding deployment"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("check that the deployment was created")
 	if err := nt.Validate("hello-world", "dir", &appsv1.Deployment{}); err != nil {
@@ -130,9 +118,7 @@ func TestSyncDeploymentAndReplicaSet(t *testing.T) {
 	// This sync may block until reconcile timeout is reached,
 	// because the ReplicaSet is re-applied before deleting the Deployment.
 	// So this wait timeout must be longer than the reconcile timeout (5m).
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("check that the deployment was removed and replicaset remains")
 	if err := nt.ValidateNotFound("hello-world", "dir", &appsv1.Deployment{}); err != nil {
@@ -150,18 +136,14 @@ func TestRolebindingsUpdated(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Copy("../../examples/acme/namespaces/eng/backend/namespace.yaml", "acme/namespaces/eng/backend/namespace.yaml"))
 	nt.Must(rootSyncGitRepo.Copy("../../examples/acme/namespaces/eng/backend/bob-rolebinding.yaml", "acme/namespaces/eng/backend/br.yaml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add bob rolebinding"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	if err := nt.Validate("bob-rolebinding", "backend", &rbacv1.RoleBinding{}, testpredicates.RoleBindingHasName("acme-admin")); err != nil {
 		nt.T.Fatal("bob-rolebinding not found")
 	}
 
 	nt.Must(rootSyncGitRepo.Copy(fmt.Sprintf("%s/robert-rolebinding.yaml", yamlDir), "acme/namespaces/eng/backend/br.yaml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Replace bob with robert rolebinding"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	if err := nt.ValidateNotFound("bob-rolebinding", "backend", &rbacv1.RoleBinding{}); err != nil {
 		nt.T.Fatal("bob-rolebinding is not deleted")
@@ -193,9 +175,7 @@ func manageNamespace(nt *nomostest.NT, namespace string) {
 	nt.T.Log("Start managing the namespace")
 	nt.Must(rootSyncGitRepo.Copy(fmt.Sprintf("%s/reserved_namespaces/namespace.%s.yaml", yamlDir, namespace), fmt.Sprintf("acme/namespaces/%s/namespace.yaml", namespace)))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Start managing the namespace"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("Validate managed service appears on the cluster")
 	if err := nt.Validate("some-service", namespace, &corev1.Service{}); err != nil {
@@ -205,9 +185,7 @@ func manageNamespace(nt *nomostest.NT, namespace string) {
 	nt.T.Log("Remove the namespace directory from the repo")
 	nt.Must(rootSyncGitRepo.Remove(fmt.Sprintf("acme/namespaces/%s", namespace)))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Remove the namespace from the managed set of namespaces"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("Validate managed service disappears from the cluster")
 	if err := nt.ValidateNotFound("some-service", namespace, &corev1.Service{}); err != nil {
@@ -225,9 +203,7 @@ func unmanageNamespace(nt *nomostest.NT, namespace string) {
 	nt.T.Log("stop managing the system namespace")
 	nt.Must(rootSyncGitRepo.Copy(fmt.Sprintf("%s/reserved_namespaces/unmanaged-namespace.%s.yaml", yamlDir, namespace), fmt.Sprintf("acme/namespaces/%s/namespace.yaml", namespace)))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Stop managing the namespace"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 }
 
 func TestNamespaceDefaultCanBeManaged(t *testing.T) {

@@ -42,9 +42,7 @@ func TestMultipleVersions_CustomResourceV1(t *testing.T) {
 	crdObj := anvilV1CRD()
 	nt.Must(rootSyncGitRepo.Add("acme/cluster/anvil-crd.yaml", crdObj))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Adding Anvil CRD"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	nt.RenewClient()
 
 	// Add the v1 Anvils and verify they are created.
@@ -55,9 +53,7 @@ func TestMultipleVersions_CustomResourceV1(t *testing.T) {
 	anvilv2Obj := anvilCR("v2", "second", 100)
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/foo/anvilv2.yaml", anvilv2Obj))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Adding v1 and v2 Anvil CRs"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	err := nt.Validate("first", "foo", anvilCR("v1", "", 0))
 	if err != nil {
@@ -74,9 +70,7 @@ func TestMultipleVersions_CustomResourceV1(t *testing.T) {
 	anvilv2Obj = anvilCR("v2", "second", 200)
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/foo/anvilv2.yaml", anvilv2Obj))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Modifying v1 and v2 Anvil CRs"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	err = nt.Validate("first", "foo", anvilCR("v1", "", 0))
 	if err != nil {
@@ -205,9 +199,7 @@ func TestMultipleVersions_RoleBinding(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/foo/ns.yaml", nsObj))
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/foo/rbv1.yaml", rbV1))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Adding v1 RoleBinding"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	err := nt.Validate("v1user", "foo", &rbacv1.RoleBinding{},
 		hasV1Subjects("v1user@acme.com"))
@@ -235,9 +227,7 @@ func TestMultipleVersions_RoleBinding(t *testing.T) {
 
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/foo/rbv1.yaml", rbV1))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Modifying v1 RoleBinding"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	err = nt.Validate("v1user", "foo", &rbacv1.RoleBinding{},
 		hasV1Subjects("v1user@acme.com", "v1admin@acme.com"))
@@ -258,9 +248,7 @@ func TestMultipleVersions_RoleBinding(t *testing.T) {
 	// Remove the v1 RoleBinding and verify that it is also deleted.
 	nt.Must(rootSyncGitRepo.Remove("acme/namespaces/foo/rbv1.yaml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Removing v1 RoleBinding"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	if err := nt.ValidateNotFound("v1user", "foo", &rbacv1.RoleBinding{}); err != nil {
 		nt.T.Fatal(err)

@@ -91,9 +91,7 @@ func TestNamespaceStrategy(t *testing.T) {
 	// switch the mode to implicit
 	nt.MustMergePatch(rootSync, `{"spec": {"override": {"namespaceStrategy": "implicit"}}}`)
 	// check for success
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	// assert that implicit namespace was created
 	err = nt.Validate(fooNamespace.Name, fooNamespace.Namespace, &corev1.Namespace{},
 		testpredicates.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
@@ -121,9 +119,7 @@ func TestNamespaceStrategy(t *testing.T) {
 	// explicitly declare the namespace in git
 	nt.Must(rootSyncGitRepo.Add("acme/namespace-foo.yaml", fooNamespace))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Explicitly manage fooNamespace"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	// assert that namespace is managed
 	err = nt.Watcher.WatchObject(kinds.Namespace(), fooNamespace.Name, fooNamespace.Namespace,
 		[]testpredicates.Predicate{
@@ -147,9 +143,7 @@ func TestNamespaceStrategy(t *testing.T) {
 	// prune the ConfigMap
 	nt.Must(rootSyncGitRepo.Remove("acme/cm1.yaml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Prune cm1"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	// all resources should be pruned
 	tg := taskgroup.New()
 	tg.Go(func() error {
@@ -208,9 +202,7 @@ func TestNamespaceStrategyMultipleRootSyncs(t *testing.T) {
 		fmt.Sprintf("Adding RootSyncs (%s, %s, %s) with namespaceStrategy=explicit",
 			rootSyncA.Name, rootSyncX.Name, rootSyncY.Name),
 	))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	// Assert that all reconcilers have NAMESPACE_STRATEGY=explicit set
 	tg := taskgroup.New()
 	for _, rsName := range []string{rootSyncA.Name, rootSyncX.Name, rootSyncY.Name} {
@@ -247,9 +239,7 @@ func TestNamespaceStrategyMultipleRootSyncs(t *testing.T) {
 	nt.Must(rootSyncAGitRepo.Add("acme/namespace-a.yaml", namespaceA))
 	nt.Must(rootSyncAGitRepo.CommitAndPush("Add namespace-a"))
 	// check for success
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	// assert that all resources were created
 	tg = taskgroup.New()
 	tg.Go(func() error {

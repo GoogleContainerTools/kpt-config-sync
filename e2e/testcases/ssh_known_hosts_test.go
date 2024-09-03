@@ -91,18 +91,14 @@ func TestRootSyncSSHKnownHost(t *testing.T) {
 	cm := k8sobjects.ConfigMapObject(core.Name(cmName))
 	nt.Must(rootSyncGitRepo.Add(cmPath, cm))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Adding test ConfigMap"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	err = nt.Validate(cmName, "default", &corev1.ConfigMap{})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 	nt.Must(rootSyncGitRepo.Remove(cmPath))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Removing test ConfigMap"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	if err := nt.ValidateNotFound(cmName, "default", &corev1.ConfigMap{}); err != nil {
 		nt.T.Fatalf("error: %s", err)
 	}
@@ -192,18 +188,14 @@ func TestRepoSyncSSHKnownHost(t *testing.T) {
 	cm := k8sobjects.ConfigMapObject(core.Name(cmName))
 	nt.Must(repoSyncGitRepo.Add(cmPath, cm))
 	nt.Must(repoSyncGitRepo.CommitAndPush("Adding test ConfigMap"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	err = nt.Validate(cmName, backendNamespace, &corev1.ConfigMap{})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 	nt.Must(repoSyncGitRepo.Remove(cmPath))
 	nt.Must(repoSyncGitRepo.CommitAndPush("Removing test ConfigMap"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	if err := nt.ValidateNotFound(cmName, backendNamespace, &corev1.ConfigMap{}); err != nil {
 		nt.T.Fatalf("error: %s", err)
 	}

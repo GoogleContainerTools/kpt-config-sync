@@ -76,9 +76,7 @@ func TestConstraintTemplateAndConstraintInSameCommit(t *testing.T) {
 			// Add back the safety ClusterRole to pass the safety check (KNV2006).
 			nt.Must(rootSyncGitRepo.AddSafetyClusterRole())
 			nt.Must(rootSyncGitRepo.CommitAndPush("Reset the acme directory"))
-			if err := nt.WatchForAllSyncs(); err != nil {
-				nt.T.Fatal(err)
-			}
+			nt.Must(nt.WatchForAllSyncs())
 		}
 	})
 
@@ -95,16 +93,12 @@ func TestConstraintTemplateAndConstraintInSameCommit(t *testing.T) {
 		nt.T.Fatalf("Failed to create constraint CRD: %v", err)
 	}
 	// Sync should eventually succeed on retry, now that all the required CRDs exist.
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Cleanup before deleting the ConstraintTemplate and Constraint CRDs to avoid resource conflict errors from the webhook.
 	nt.Must(rootSyncGitRepo.Remove("acme/cluster"))
 	// Add back the safety ClusterRole to pass the safety check (KNV2006).
 	nt.Must(rootSyncGitRepo.AddSafetyClusterRole())
 	nt.Must(rootSyncGitRepo.CommitAndPush("Reset the acme directory"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 }

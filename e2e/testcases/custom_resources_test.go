@@ -193,9 +193,7 @@ func TestSyncUpdateCustomResource(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/foo/ns.yaml", k8sobjects.NamespaceObject("foo")))
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/foo/anvil-v1.yaml", anvilCR("v1", "heavy", 10)))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Adding Anvil CR"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	nt.RenewClient()
 
 	err = nt.Validate("heavy", "foo", anvilCR("v1", "", 0), weightEqual10)
@@ -206,9 +204,7 @@ func TestSyncUpdateCustomResource(t *testing.T) {
 	// Update CustomResource
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/foo/anvil-v1.yaml", anvilCR("v1", "heavy", 100)))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Updating Anvil CR"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	nt.RenewClient()
 
 	err = nt.Validate("heavy", "foo", anvilCR("v1", "", 0), weightEqual100)

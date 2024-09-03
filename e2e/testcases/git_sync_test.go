@@ -44,9 +44,7 @@ func TestMultipleRemoteBranchesOutOfSync(t *testing.T) {
 	nt.T.Logf("Verify git-sync can pull the latest commit with the default branch and revision")
 	// WatchForAllSyncs validates RootSync's lastSyncedCommit is updated to the
 	// local HEAD with the DefaultRootSha1Fn function.
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	if err := nt.Validate("hello", "", &corev1.Namespace{}); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -54,9 +52,7 @@ func TestMultipleRemoteBranchesOutOfSync(t *testing.T) {
 	nt.T.Logf("Remove the test namespace to make sure git-sync can fetch newer commit")
 	nt.Must(rootSyncGitRepo.Remove("acme/namespaces/hello/ns.yaml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("remove Namespace"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	if err := nt.ValidateNotFound("hello", "", &corev1.Namespace{}); err != nil {
 		nt.T.Fatal(err)
 	}

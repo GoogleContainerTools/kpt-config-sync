@@ -35,9 +35,7 @@ func TestIgnoreKptfiles(t *testing.T) {
 	nsObj := k8sobjects.NamespaceObject("foo")
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/foo/ns.yaml", nsObj))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Adding multiple Kptfiles"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	nt.RenewClient()
 
 	err := nt.Validate("foo", "", k8sobjects.NamespaceObject("foo"))

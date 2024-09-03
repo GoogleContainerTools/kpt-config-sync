@@ -968,9 +968,7 @@ func TestAutopilotReconcilerAdjustment(t *testing.T) {
 
 	// Wait for overrides to be applied
 	// Note: This depends on the Syncing condition reflecting the current RSync generation.
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("Wait for the reconciler deployment to be updated once")
 	generation++ // patched by reconciler-manager
@@ -1047,9 +1045,7 @@ func TestAutopilotReconcilerAdjustment(t *testing.T) {
 
 	// Wait for overrides to be applied
 	// Note: This depends on the Syncing condition reflecting the current RSync generation.
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("Wait for the reconciler-manager to update the reconciler deployment CPU request, only on non-autopilot cluster")
 	err = nt.Watcher.WatchObject(kinds.Deployment(), reconcilerNN.Name, reconcilerNN.Namespace, []testpredicates.Predicate{

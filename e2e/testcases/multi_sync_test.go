@@ -290,9 +290,7 @@ func TestConflictingDefinitions_RootToNamespace(t *testing.T) {
 	roleObj := rootPodRole()
 	nt.Must(rootSyncGitRepo.Add(podRoleFilePath, roleObj))
 	nt.Must(rootSyncGitRepo.CommitAndPush("add pod viewer role"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Add Role to the RootSync, NOT the RepoSync
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncKey, roleObj)
@@ -316,10 +314,7 @@ func TestConflictingDefinitions_RootToNamespace(t *testing.T) {
 	nt.Must(repoSyncGitRepo.CommitAndPush("add conflicting pod owner role"))
 
 	nt.T.Logf("The RootSync should report no problems")
-	err = nt.WatchForAllSyncs(nomostest.RootSyncOnly())
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs(nomostest.RootSyncOnly()))
 
 	nt.T.Logf("The RepoSync %s reports a problem since it can't sync the declaration.", repoSyncKey)
 	nt.WaitForRepoSyncSyncError(repoSyncKey.Namespace, repoSyncKey.Name, status.ManagementConflictErrorCode, "detected a management conflict", nil)
@@ -356,9 +351,7 @@ func TestConflictingDefinitions_RootToNamespace(t *testing.T) {
 	nt.T.Logf("Remove the declaration from the Root repo %s", rootSyncKey.Name)
 	nt.Must(rootSyncGitRepo.Remove(podRoleFilePath))
 	nt.Must(rootSyncGitRepo.CommitAndPush("remove conflicting pod role from Root"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Logf("Ensure the Role is updated to the one in the Namespace repo %s", repoSyncKey)
 	err = nt.Validate("pods", testNs, &rbacv1.Role{},
@@ -411,9 +404,7 @@ func TestConflictingDefinitions_NamespaceToRoot(t *testing.T) {
 	nsRoleObj := namespacePodRole()
 	nt.Must(repoSyncGitRepo.Add(podRoleFilePath, nsRoleObj))
 	nt.Must(repoSyncGitRepo.CommitAndPush("declare Role"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	err := nt.Validate("pods", testNs, &rbacv1.Role{},
 		roleHasRules(nsRoleObj.Rules),
@@ -447,10 +438,7 @@ func TestConflictingDefinitions_NamespaceToRoot(t *testing.T) {
 	nt.Must(rootSyncGitRepo.CommitAndPush("add conflicting pod role to Root"))
 
 	nt.T.Logf("The RootSync should update the Role")
-	err = nt.WatchForAllSyncs(nomostest.RootSyncOnly())
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs(nomostest.RootSyncOnly()))
 
 	nt.T.Log("The RepoSync remediator should report a conflict error")
 	nt.WaitForRepoSyncSyncError(repoSyncKey.Namespace, repoSyncKey.Name, status.ManagementConflictErrorCode, "detected a management conflict", nil)
@@ -493,9 +481,7 @@ func TestConflictingDefinitions_NamespaceToRoot(t *testing.T) {
 	nt.T.Logf("Remove the Role from the Namespace repo %s", repoSyncKey)
 	nt.Must(repoSyncGitRepo.Remove(podRoleFilePath))
 	nt.Must(repoSyncGitRepo.CommitAndPush("remove conflicting pod role from Namespace repo"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Logf("Ensure the Role still matches the one in the Root repo %s", rootSyncKey.Name)
 	err = nt.Validate("pods", testNs, &rbacv1.Role{},
@@ -542,9 +528,7 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	nt.T.Logf("Add a Role to RootSync: %s", rootSyncID.Name)
 	nt.Must(rootSyncGitRepo.Add(podRoleFilePath, rootPodRole()))
 	nt.Must(rootSyncGitRepo.CommitAndPush("add pod viewer role"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	nt.T.Logf("Ensure the Role is managed by RootSync %s", rootSyncID.Name)
 	role := &rbacv1.Role{}
 	err := nt.Validate("pods", testNs, role,
@@ -631,9 +615,7 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	nt.T.Logf("Remove the declaration from RootSync %s", rootSyncID.Name)
 	nt.Must(rootSyncGitRepo.Remove(podRoleFilePath))
 	nt.Must(rootSyncGitRepo.CommitAndPush("remove conflicting pod role"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Logf("Ensure the Role is managed by RootSync %s", rootSync2ID.Name)
 	// The pod role may be deleted from the cluster after it was removed from the `root-sync` Root repo.
@@ -668,9 +650,7 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 	roleObj := namespacePodRole()
 	nt.Must(repoSync1GitRepo.Add(podRoleFilePath, roleObj))
 	nt.Must(repoSync1GitRepo.CommitAndPush("add pod viewer role"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 	role := &rbacv1.Role{}
 	nt.T.Logf("Ensure the Role is managed by Namespace Repo %s", repoSync1Key)
 	err := nt.Validate("pods", testNs, role,
@@ -754,9 +734,7 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 	nt.T.Logf("Remove the declaration from one Namespace repo %s", repoSync1Key)
 	nt.Must(repoSync1GitRepo.Remove(podRoleFilePath))
 	nt.Must(repoSync1GitRepo.CommitAndPush("remove conflicting pod role from Namespace"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Logf("Ensure the Role is managed by the other Namespace repo %s", repoSync2Key)
 	err = nt.Validate("pods", testNs, &rbacv1.Role{},

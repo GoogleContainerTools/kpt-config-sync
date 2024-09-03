@@ -46,17 +46,13 @@ func TestStatusEnabledAndDisabled(t *testing.T) {
 	rootSync := k8sobjects.RootSyncObjectV1Alpha1(configsync.RootSyncName)
 	// Override the statusMode for root-reconciler
 	nt.MustMergePatch(rootSync, `{"spec": {"override": {"statusMode": "disabled"}}}`)
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	namespaceName := "status-test"
 	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespaceObject(namespaceName, nil)))
 	nt.Must(rootSyncGitRepo.Add("acme/cm1.yaml", k8sobjects.ConfigMapObject(core.Name("cm1"), core.Namespace(namespaceName))))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add a namespace and a configmap"))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	err := nt.Watcher.WatchObject(kinds.ResourceGroup(),
 		configsync.RootSyncName, configsync.ControllerNamespace,
@@ -71,9 +67,7 @@ func TestStatusEnabledAndDisabled(t *testing.T) {
 
 	// Override the statusMode for root-reconciler to re-enable the status
 	nt.MustMergePatch(rootSync, `{"spec": {"override": {"statusMode": "enabled"}}}`)
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	err = nt.Watcher.WatchObject(kinds.ResourceGroup(),
 		configsync.RootSyncName, configsync.ControllerNamespace,

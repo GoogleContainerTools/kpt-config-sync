@@ -83,9 +83,7 @@ func TestStressCRD(t *testing.T) {
 
 	nt.T.Log("Stop the CS webhook by removing the webhook configuration")
 	nomostest.StopWebhook(nt)
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	crdName := "crontabs.stable.example.com"
 	nt.T.Logf("Delete the %q CRD if needed", crdName)
@@ -113,10 +111,7 @@ func TestStressCRD(t *testing.T) {
 		nt.Must(rootSyncGitRepo.Add(fmt.Sprintf("%s/crontab-cr-%d.yaml", syncPath, i), cr))
 	}
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add configs (one CRD and 1000 Namespaces (every namespace has one ConfigMap and one CR)"))
-	err = nt.WatchForAllSyncs(nomostest.WithTimeout(30 * time.Minute))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs(nomostest.WithTimeout(30 * time.Minute)))
 
 	nt.T.Logf("Verify that the CronTab CRD is installed on the cluster")
 	if err := nt.Validate(crdName, "", k8sobjects.CustomResourceDefinitionV1Object()); err != nil {
@@ -152,9 +147,7 @@ func TestStressLargeNamespace(t *testing.T) {
 	nt.T.Log("Override the memory limit of the reconciler container of root-reconciler to 800MiB")
 	rootSync := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	nt.MustMergePatch(rootSync, `{"spec": {"override": {"resources": [{"containerName": "reconciler", "memoryLimit": "800Mi"}]}}}`)
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	nt.Must(rootSyncGitRepo.Add(fmt.Sprintf("%s/ns-%s.yaml", syncPath, ns), k8sobjects.NamespaceObject(ns)))
 
@@ -165,10 +158,7 @@ func TestStressLargeNamespace(t *testing.T) {
 			core.Name(fmt.Sprintf("cm-%d", i)), core.Namespace(ns), core.Label(labelKey, labelValue))))
 	}
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add configs (5000 ConfigMaps and 1 Namespace"))
-	err := nt.WatchForAllSyncs(nomostest.WithTimeout(10 * time.Minute))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs(nomostest.WithTimeout(10 * time.Minute)))
 
 	nt.T.Log("Verify there are 5000 ConfigMaps in the namespace")
 	nt.Must(validateNumberOfObjectsEquals(nt, kinds.ConfigMap(), 5000,
@@ -191,9 +181,7 @@ func TestStressFrequentGitCommits(t *testing.T) {
 
 	nt.Must(rootSyncGitRepo.Add(fmt.Sprintf("%s/ns-%s.yaml", syncPath, ns), k8sobjects.NamespaceObject(ns)))
 	nt.Must(rootSyncGitRepo.CommitAndPush(fmt.Sprintf("add a namespace: %s", ns)))
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Logf("Add 100 commits (every commit adds a new ConfigMap object into the %s namespace)", ns)
 	labelKey := "StressTestName"
@@ -204,10 +192,7 @@ func TestStressFrequentGitCommits(t *testing.T) {
 			k8sobjects.ConfigMapObject(core.Name(cmName), core.Namespace(ns), core.Label(labelKey, labelValue))))
 		nt.Must(rootSyncGitRepo.CommitAndPush(fmt.Sprintf("add %s", cmName)))
 	}
-	err := nt.WatchForAllSyncs(nomostest.WithTimeout(10 * time.Minute))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs(nomostest.WithTimeout(10 * time.Minute)))
 
 	nt.T.Logf("Verify that there are exactly 100 ConfigMaps under the %s namespace", ns)
 	nt.Must(validateNumberOfObjectsEquals(nt, kinds.ConfigMap(), 100,
@@ -328,9 +313,7 @@ func TestStress100CRDs(t *testing.T) {
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add a test namespace to trigger a new sync"))
 
 	nt.T.Logf("Waiting for the sync to complete")
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Validate client-side throttling is disabled for nomos status
 	out, err := nt.Shell.ExecWithDebug("nomos", "status")
@@ -372,9 +355,7 @@ func TestStressManyDeployments(t *testing.T) {
 
 	// Validate that the resources sync without the reconciler running out of
 	// memory, getting OOMKilled, and crash looping.
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Logf("Verify the number of Deployment objects")
 	nt.Must(validateNumberOfObjectsEquals(nt, kinds.Deployment(), deployCount,
@@ -387,9 +368,7 @@ func TestStressManyDeployments(t *testing.T) {
 
 	// Validate that the resources sync without the reconciler running out of
 	// memory, getting OOMKilled, and crash looping.
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 }
 
 // TestStressMemoryUsageGit applies 100 CRDs and then 50 objects for each
@@ -430,9 +409,7 @@ func TestStressMemoryUsageGit(t *testing.T) {
 
 	// Validate that the resources sync without the reconciler running out of
 	// memory, getting OOMKilled, and crash looping.
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Logf("Verify the number of Anvil objects")
 	for i := 1; i <= crdCount; i++ {
@@ -453,9 +430,7 @@ func TestStressMemoryUsageGit(t *testing.T) {
 
 	// Validate that the resources sync without the reconciler running out of
 	// memory, getting OOMKilled, and crash looping.
-	if err := nt.WatchForAllSyncs(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForAllSyncs())
 }
 
 // TestStressMemoryUsageOCI applies 100 CRDs and then 50 objects for each

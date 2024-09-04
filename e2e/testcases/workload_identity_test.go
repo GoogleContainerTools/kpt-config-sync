@@ -539,6 +539,7 @@ func updateRootSyncWithOCISourceConfig(nt *nomostest.NT, rsID core.ID, sc source
 	if err = nt.KubeClient.Apply(rootSyncOCI); err != nil {
 		return meta, err
 	}
+	meta.sha1Func = imageDigestFuncByDigest(image.Digest)
 	return meta, nil
 }
 
@@ -558,6 +559,7 @@ func updateRepoSyncWithOCISourceConfig(nt *nomostest.NT, rsID core.ID, sc source
 	if err = nt.KubeClient.Apply(repoSyncOCI); err != nil {
 		return meta, err
 	}
+	meta.sha1Func = imageDigestFuncByDigest(image.Digest)
 	return meta, nil
 }
 

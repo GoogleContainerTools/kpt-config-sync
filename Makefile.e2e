@@ -86,7 +86,6 @@ test-e2e-kind: config-sync-manifest-local build-kind-e2e
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		-v $(ARTIFACTS):/logs/artifacts \
 		--env ARTIFACTS="/logs/artifacts" \
-		--env GCP_PROJECT=$(GCP_PROJECT) \
 		--network="host" \
 		--rm \
 		$(KIND_IMAGE) \

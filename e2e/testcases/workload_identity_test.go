@@ -458,8 +458,8 @@ func TestWorkloadIdentity(t *testing.T) {
 
 			switch tc.sourceType {
 			case configsync.GitSource, configsync.OciSource:
-				setExpectedGitCommitAndPath(nt, rootMeta)
-				setExpectedGitCommitAndPath(nt, nsMeta)
+				setExpectedPathAndSHA(nt, tc.sourceType, rootMeta)
+				setExpectedPathAndSHA(nt, tc.sourceType, nsMeta)
 				nt.Must(nt.WatchForAllSyncs())
 				kustomizecomponents.ValidateAllTenants(nt, string(declared.RootScope), "base", "tenant-a", "tenant-b", "tenant-c")
 				kustomizecomponents.ValidateTenant(nt, nsMeta.rsID.Namespace, "test-ns", "base")
@@ -673,8 +673,8 @@ func migrateFromGSAtoKSA(nt *nomostest.NT, fleetWITest bool, sourceType configsy
 
 	switch sourceType {
 	case configsync.GitSource, configsync.OciSource:
-		setExpectedGitCommitAndPath(nt, rootMeta)
-		setExpectedGitCommitAndPath(nt, nsMeta)
+		setExpectedPathAndSHA(nt, sourceType, rootMeta)
+		setExpectedPathAndSHA(nt, sourceType, nsMeta)
 		nt.Must(nt.WatchForAllSyncs())
 		kustomizecomponents.ValidateAllTenants(nt, string(declared.RootScope), "../base", "tenant-a")
 		if err := nt.ValidateNotFound("tenant-b", "", &corev1.Namespace{}); err != nil {
@@ -697,9 +697,16 @@ func migrateFromGSAtoKSA(nt *nomostest.NT, fleetWITest bool, sourceType configsy
 	return nil
 }
 
-func setExpectedGitCommitAndPath(nt *nomostest.NT, meta rsyncValidateMeta) {
+func setExpectedPathAndSHA(nt *nomostest.NT, sourceType configsync.SourceType, meta rsyncValidateMeta) {
 	commit, err := meta.sha1Func(nt, meta.rsID.ObjectKey)
 	require.NoError(nt.T, err)
-	nomostest.SetExpectedGitCommit(nt, meta.rsID, commit)
+	switch sourceType {
+	case configsync.GitSource:
+		nomostest.SetExpectedGitCommit(nt, meta.rsID, commit)
+	case configsync.OciSource:
+		nomostest.SetExpectedOCIImageDigest(nt, meta.rsID, commit)
+	default:
+		nt.T.Fatalf("unsupported source type: %s", sourceType)
+	}
 	nomostest.SetExpectedSyncPath(nt, meta.rsID, meta.syncDir)
 }

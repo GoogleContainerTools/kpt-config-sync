@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
@@ -169,8 +170,7 @@ func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
 	}
 
 	// Override the git sync depth setting for ns-reconciler-backend
-	var depth int64 = 33
-	repoSyncBackend.Spec.SafeOverride().GitSyncDepth = &depth
+	repoSyncBackend.Spec.SafeOverride().GitSyncDepth = ptr.To[int64](33)
 	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(repoSyncID.Namespace, repoSyncID.Name), repoSyncBackend))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Update backend RepoSync git sync depth to 33"))
 	nt.Must(nt.WatchForAllSyncs())
@@ -193,8 +193,7 @@ func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
 	nt.MustMergePatch(rootSync, `{"spec": {"override": null}}`)
 
 	// Override the git sync depth setting for ns-reconciler-backend to 0
-	depth = 0
-	repoSyncBackend.Spec.SafeOverride().GitSyncDepth = &depth
+	repoSyncBackend.Spec.SafeOverride().GitSyncDepth = ptr.To[int64](0)
 	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(repoSyncID.Namespace, repoSyncID.Name), repoSyncBackend))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Update backend RepoSync git sync depth to 0"))
 	nt.Must(nt.WatchForAllSyncs())

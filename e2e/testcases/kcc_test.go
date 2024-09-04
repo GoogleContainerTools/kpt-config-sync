@@ -23,12 +23,14 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
+	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testresourcegroup"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
@@ -43,14 +45,23 @@ func TestKCCResourcesOnCSR(t *testing.T) {
 	rootSyncID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.KCCTest, ntopts.RequireGKE(t))
 
-	rs := k8sobjects.RootSyncObjectV1Beta1(rootSyncID.Name)
 	nt.T.Log("sync to the kcc resources from a CSR repo")
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"dir": "kcc", "branch": "main", "repo": "%s/p/%s/r/configsync-kcc", "auth": "gcpserviceaccount","gcpServiceAccountEmail": "e2e-test-csr-reader@%s.iam.gserviceaccount.com", "secretRef": {"name": ""}}, "sourceFormat": "unstructured"}}`,
-		nomostesting.CSRHost, *e2e.GCPProject, *e2e.GCPProject))
-	nomostest.SetExpectedSyncPath(nt, rootSyncID, "kcc")
+	repo := gitproviders.ReadOnlyRepository{
+		URL: fmt.Sprintf("%s/p/%s/r/configsync-kcc", nomostesting.CSRHost, *e2e.GCPProject),
+	}
+	rs := nt.RootSyncObjectGit(rootSyncID.Name, repo, gitproviders.MainBranch, "kcc", "", configsync.SourceFormatUnstructured)
+	rs.Spec.Git.Auth = "gcpserviceaccount"
+	rs.Spec.Git.GCPServiceAccountEmail = fmt.Sprintf("e2e-test-csr-reader@%s.iam.gserviceaccount.com", *e2e.GCPProject)
+	rs.Spec.Git.SecretRef = nil
+	nt.Must(nt.KubeClient.Apply(rs))
 
-	nt.Must(nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(nomostest.RemoteRootRepoSha1Fn)))
+	commit, err := nomostest.GitCommitFromSpec(nt, rs.Spec.Git)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	nomostest.SetExpectedGitCommit(nt, rootSyncID, commit)
+
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Verify that the GCP resources are created.
 	gvkPubSubTopic := schema.GroupVersionKind{
@@ -100,8 +111,7 @@ func TestKCCResourcesOnCSR(t *testing.T) {
 	nt.T.Log("sync to an empty directory from a CSR repo")
 	nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "kcc-empty"}}}`)
 	nomostest.SetExpectedSyncPath(nt, rootSyncID, "kcc-empty")
-	nt.Must(nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(nomostest.RemoteRootRepoSha1Fn)))
+	nt.Must(nt.WatchForAllSyncs())
 
 	// Wait until all objects are not found
 	tg = taskgroup.New()

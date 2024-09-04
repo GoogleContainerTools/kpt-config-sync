@@ -45,22 +45,46 @@ func TestInvalidRootSyncBranchStatus(t *testing.T) {
 	}
 	commitHash := rootSyncGitRepo.MustHash(nt.T)
 
-	err = nomostest.ValidateMetrics(nt,
+	nt.Must(nomostest.ValidateMetrics(nt,
 		nomostest.ReconcilerErrorMetrics(nt, rootSyncLabels, commitHash, metrics.ErrorSummary{
 			Source: 1,
-		}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		})))
 
 	// Update RootSync to valid branch name
 	nomostest.SetRootSyncGitBranch(nt, configsync.RootSyncName, gitproviders.MainBranch)
 
 	nt.Must(nt.WatchForAllSyncs())
 
-	if err := nomostest.ValidateStandardMetrics(nt); err != nil {
+	nt.Must(nomostest.ValidateStandardMetrics(nt))
+}
+
+func TestInvalidRootSyncRevisionStatus(t *testing.T) {
+	nt := nomostest.New(t, nomostesting.SyncSource)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
+
+	// Update RootSync to invalid branch name
+	nomostest.SetRootSyncGitRevision(nt, configsync.RootSyncName, "invalid-branch")
+
+	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "")
+
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
+	rootSyncLabels, err := nomostest.MetricLabelsForRootSync(nt, rootSyncNN)
+	if err != nil {
 		nt.T.Fatal(err)
 	}
+	commitHash := rootSyncGitRepo.MustHash(nt.T)
+
+	nt.Must(nomostest.ValidateMetrics(nt,
+		nomostest.ReconcilerErrorMetrics(nt, rootSyncLabels, commitHash, metrics.ErrorSummary{
+			Source: 1,
+		})))
+
+	// Update RootSync to valid branch name
+	nomostest.SetRootSyncGitRevision(nt, configsync.RootSyncName, gitproviders.MainBranch)
+
+	nt.Must(nt.WatchForAllSyncs())
+
+	nt.Must(nomostest.ValidateStandardMetrics(nt))
 }
 
 func TestInvalidRepoSyncBranchStatus(t *testing.T) {
@@ -73,18 +97,16 @@ func TestInvalidRepoSyncBranchStatus(t *testing.T) {
 
 	repoSync := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, repoSyncKey)
 	repoSync.Spec.Branch = "invalid-branch"
+	repoSync.Spec.Revision = ""
 	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(namespaceRepo, repoSync.Name), repoSync))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Update RepoSync to invalid branch name"))
 
 	nt.WaitForRepoSyncSourceError(namespaceRepo, configsync.RepoSyncName, status.SourceErrorCode, "")
 
-	err := nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
 		// RepoSync already included in the default resource count and operations
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	repoSyncLabels, err := nomostest.MetricLabelsForRepoSync(nt, repoSyncKey)
 	if err != nil {
@@ -93,14 +115,11 @@ func TestInvalidRepoSyncBranchStatus(t *testing.T) {
 	// TODO: Fix commit to be UNKNOWN (b/361182373)
 	commitHash := repoSyncGitRepo.MustHash(nt.T)
 
-	err = nomostest.ValidateMetrics(nt,
+	nt.Must(nomostest.ValidateMetrics(nt,
 		// Source error prevents apply, so don't wait for a sync with the current commit.
 		nomostest.ReconcilerErrorMetrics(nt, repoSyncLabels, commitHash, metrics.ErrorSummary{
 			Source: 1,
-		}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		})))
 
 	repoSync.Spec.Branch = gitproviders.MainBranch
 	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(namespaceRepo, repoSync.Name), repoSync))
@@ -111,21 +130,69 @@ func TestInvalidRepoSyncBranchStatus(t *testing.T) {
 
 	nt.Must(nt.WatchForAllSyncs())
 
-	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
 		// RepoSync already included in the default resource count and operations
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
-	err = nomostest.ValidateStandardMetricsForRepoSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRepoSync(nt, metrics.Summary{
 		Sync:        repoSyncKey,
 		ObjectCount: 0, // no additional managed objects
-	})
+	}))
+}
+
+func TestInvalidRepoSyncRevisionStatus(t *testing.T) {
+	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, namespaceRepo)
+	nt := nomostest.New(t, nomostesting.SyncSource,
+		ntopts.SyncWithGitSource(repoSyncID))
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
+	repoSyncKey := repoSyncID.ObjectKey
+	repoSyncGitRepo := nt.SyncSourceGitReadWriteRepository(repoSyncID)
+
+	repoSync := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, repoSyncKey)
+	repoSync.Spec.Revision = "invalid-branch"
+	repoSync.Spec.Branch = ""
+	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(namespaceRepo, repoSync.Name), repoSync))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Update RepoSync to invalid branch name"))
+
+	nt.WaitForRepoSyncSourceError(namespaceRepo, configsync.RepoSyncName, status.SourceErrorCode, "")
+
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
+		// RepoSync already included in the default resource count and operations
+	}))
+
+	repoSyncLabels, err := nomostest.MetricLabelsForRepoSync(nt, repoSyncKey)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
+	// TODO: Fix commit to be UNKNOWN (b/361182373)
+	commitHash := repoSyncGitRepo.MustHash(nt.T)
+
+	nt.Must(nomostest.ValidateMetrics(nt,
+		// Source error prevents apply, so don't wait for a sync with the current commit.
+		nomostest.ReconcilerErrorMetrics(nt, repoSyncLabels, commitHash, metrics.ErrorSummary{
+			Source: 1,
+		})))
+
+	repoSync.Spec.Revision = gitproviders.MainBranch
+	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(namespaceRepo, repoSync.Name), repoSync))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Update RepoSync to valid branch name"))
+
+	// Ensure RepoSync's active branch is checked out, so the correct commit is used for validation.
+	nt.Must(repoSyncGitRepo.CheckoutBranch(gitproviders.MainBranch))
+
+	nt.Must(nt.WatchForAllSyncs())
+
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
+		// RepoSync already included in the default resource count and operations
+	}))
+
+	nt.Must(nomostest.ValidateStandardMetricsForRepoSync(nt, metrics.Summary{
+		Sync:        repoSyncKey,
+		ObjectCount: 0, // no additional managed objects
+	}))
 }
 
 func TestSyncFailureAfterSuccessfulSyncs(t *testing.T) {
@@ -155,10 +222,7 @@ func TestSyncFailureAfterSuccessfulSyncs(t *testing.T) {
 	nt.Must(nt.WatchForAllSyncs())
 
 	// Validate namespace 'acme' created.
-	err := nt.Validate(auditNS, "", k8sobjects.NamespaceObject(auditNS))
-	if err != nil {
-		nt.T.Error(err)
-	}
+	nt.Must(nt.Validate(auditNS, "", k8sobjects.NamespaceObject(auditNS)))
 
 	// Make the sync fail by invalidating the source repo.
 	nt.Must(rootSyncGitRepo.RenameBranch(devBranch, "invalid-branch"))

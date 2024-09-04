@@ -21,7 +21,6 @@ import (
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/system"
-	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/status"
 )
 
@@ -54,7 +53,7 @@ func TestPolicyDirUnset(t *testing.T) {
 	nt.Must(nt.WatchForAllSyncs())
 
 	nomostest.SetRootSyncGitDir(nt, rootSyncID.Name, "")
-	nomostest.SetExpectedSyncPath(nt, rootSyncID, controllers.DefaultSyncDir)
+	nomostest.SetExpectedSyncPath(nt, rootSyncID, "")
 	nt.Must(nt.WatchForAllSyncs())
 }
 

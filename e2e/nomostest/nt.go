@@ -390,8 +390,8 @@ func (nt *NT) NumRepoSyncNamespaces() int {
 	return len(rsNamespaces)
 }
 
-// SyncSourceGitReadWriteRepository returns the git Repository for the specified RSync,
-// if it exists in NT.SyncSources.
+// SyncSourceGitReadWriteRepository returns the git ReadWriteRepository for the
+// specified RSync, if it exists in NT.SyncSources.
 func (nt *NT) SyncSourceGitReadWriteRepository(id core.ID) *gitproviders.ReadWriteRepository {
 	source, found := nt.SyncSources[id]
 	if !found {
@@ -399,9 +399,15 @@ func (nt *NT) SyncSourceGitReadWriteRepository(id core.ID) *gitproviders.ReadWri
 	}
 	gitSource, ok := source.(*syncsource.GitSyncSource)
 	if !ok {
-		nt.T.Fatalf("Expected *GitSyncSource for %s %s but found %T: %s", id.Kind, id.ObjectKey, source)
+		nt.T.Fatalf("Expected *GitSyncSource for %s %s, but found %T",
+			id.Kind, id.ObjectKey, source)
 	}
-	return gitSource.Repository
+	gitRepo, ok := gitSource.Repository.(*gitproviders.ReadWriteRepository)
+	if !ok {
+		nt.T.Fatalf("Expected GitSyncSource.Repository for %s %s to be a ReadWriteRepository, but found %T",
+			id.Kind, id.ObjectKey, gitSource.Repository)
+	}
+	return gitRepo
 }
 
 // DefaultRootSha1Fn is the default function to retrieve the commit hash of the root repo.
@@ -715,8 +721,12 @@ func (nt *NT) portForwardGitServer() {
 		allGitRepoMap := make(map[types.NamespacedName]*gitproviders.ReadWriteRepository)
 		for id, source := range nt.SyncSources {
 			if gitSource, ok := source.(*syncsource.GitSyncSource); ok {
-				allGitRepos = append(allGitRepos, id.ObjectKey)
-				allGitRepoMap[id.ObjectKey] = gitSource.Repository
+				if gitRepo, ok := gitSource.Repository.(*gitproviders.ReadWriteRepository); ok {
+					allGitRepos = append(allGitRepos, id.ObjectKey)
+					allGitRepoMap[id.ObjectKey] = gitRepo
+				}
+				// Ignore ReadOnlyRepository - doesn't need a proxy, because it
+				// doesn't run on our test cluster.
 			}
 		}
 		// re-init all repos
@@ -945,7 +955,7 @@ func RemoteRootRepoSha1Fn(nt *NT, nn types.NamespacedName) (string, error) {
 	if err := nt.KubeClient.Get(nn.Name, nn.Namespace, rs); err != nil {
 		return "", err
 	}
-	commit, err := gitCommitFromSpec(nt, rs.Spec.Git)
+	commit, err := GitCommitFromSpec(nt, rs.Spec.Git)
 	if err != nil {
 		return "", fmt.Errorf("failed to lookup git commit for RootSync: %w", err)
 	}
@@ -958,26 +968,22 @@ func RemoteNsRepoSha1Fn(nt *NT, nn types.NamespacedName) (string, error) {
 	if err := nt.KubeClient.Get(nn.Name, nn.Namespace, rs); err != nil {
 		return "", err
 	}
-	commit, err := gitCommitFromSpec(nt, rs.Spec.Git)
+	commit, err := GitCommitFromSpec(nt, rs.Spec.Git)
 	if err != nil {
 		return "", fmt.Errorf("failed to lookup git commit for RepoSync: %w", err)
 	}
 	return commit, nil
 }
 
-// gitCommitFromSpec returns the latest commit from a Git spec.
+// GitCommitFromSpec returns the latest commit from a Git spec.
 // Uses git ls-remote to avoid needing to clone the repo.
 // Warning: may not work if authentication is required.
-func gitCommitFromSpec(nt *NT, gitSpec *v1beta1.Git) (string, error) {
+func GitCommitFromSpec(nt *NT, gitSpec *v1beta1.Git) (string, error) {
 	if gitSpec == nil {
 		return "", errors.New("spec.git is nil")
 	}
 	if gitSpec.Repo == "" {
 		return "", errors.New("spec.git.repo is empty")
-	}
-	// revision specified
-	if gitSpec.Revision != "" && gitSpec.Revision != "HEAD" {
-		return gitSpec.Revision, nil
 	}
 	var pattern string
 	if gitSpec.Branch != "" {
@@ -986,6 +992,10 @@ func gitCommitFromSpec(nt *NT, gitSpec *v1beta1.Git) (string, error) {
 	} else {
 		// HEAD of default branch
 		pattern = "HEAD"
+	}
+	// revision specified
+	if gitSpec.Revision != "" {
+		pattern = gitSpec.Revision
 	}
 	var args []string
 	if strings.Contains(gitSpec.Repo, testing.CSRHost) {

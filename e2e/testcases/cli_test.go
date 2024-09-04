@@ -39,8 +39,10 @@ import (
 	"kpt.dev/configsync/cmd/nomos/util"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
+	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/policy"
+	"kpt.dev/configsync/e2e/nomostest/syncsource"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
@@ -1674,15 +1676,22 @@ func TestNomosMigrateMonoRepo(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nt.T.Log("Waiting for RootSync to be synced")
-	err = nt.WatchForSync(kinds.RootSyncV1Beta1(),
-		configsync.RootSyncName, configsync.ControllerNamespace,
-		nomostest.RemoteRootRepoSha1Fn, nomostest.RootSyncHasStatusSyncCommit,
-		&nomostest.SyncPathPredicatePair{
-			Path:      expectedRootSyncSpec.Dir,
-			Predicate: nomostest.RootSyncHasStatusSyncPath,
-		}, testwatcher.WatchTimeout(30*time.Second))
+	commit, err := nomostest.GitCommitFromSpec(nt, expectedRootSyncSpec.Git)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
+	nomostest.SetExpectedSyncSource(nt, nomostest.DefaultRootSyncID, &syncsource.GitSyncSource{
+		Repository: gitproviders.ReadOnlyRepository{
+			URL: expectedRootSyncSpec.Git.Repo,
+		},
+		Branch:            expectedRootSyncSpec.Git.Branch,
+		Revision:          expectedRootSyncSpec.Git.Revision,
+		SourceFormat:      expectedRootSyncSpec.SourceFormat,
+		Directory:         expectedRootSyncSpec.Git.Dir,
+		ExpectedDirectory: expectedRootSyncSpec.Git.Dir,
+		ExpectedCommit:    commit,
+	})
+
+	nt.T.Log("Waiting for RootSync to be synced")
+	nt.Must(nt.WatchForAllSyncs(nomostest.SkipReadyCheck()))
 }

@@ -39,6 +39,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/iam"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/registryproviders"
+	"kpt.dev/configsync/e2e/nomostest/syncsource"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testresourcegroup"
@@ -221,7 +222,6 @@ func TestStressLargeRequest(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	rootSync := k8sobjects.RootSyncObjectV1Beta1(rootSyncID.Name)
 	reconcilerOverride := v1beta1.ContainerResourcesSpec{
 		ContainerName: reconcilermanager.Reconciler,
 		MemoryLimit:   resource.MustParse("1500Mi"),
@@ -229,27 +229,15 @@ func TestStressLargeRequest(t *testing.T) {
 	if *e2e.GKEAutopilot {
 		reconcilerOverride.MemoryRequest = resource.MustParse("1500Mi")
 	}
-	rootSync.Spec = v1beta1.RootSyncSpec{
-		SourceFormat: configsync.SourceFormatUnstructured,
-		Git: &v1beta1.Git{
-			Repo:      "https://github.com/config-sync-examples/crontab-crs",
-			Branch:    "main",
-			Dir:       "configs",
-			Auth:      configsync.AuthNone,
-			SecretRef: nil,
-		},
-		Override: &v1beta1.RootSyncOverrideSpec{
-			OverrideSpec: v1beta1.OverrideSpec{
-				StatusMode: applier.StatusDisabled,
-				Resources:  []v1beta1.ContainerResourcesSpec{reconcilerOverride},
-			},
-		},
+	repo := gitproviders.ReadOnlyRepository{
+		URL: "https://github.com/config-sync-examples/crontab-crs",
 	}
+	rootSync := nt.RootSyncObjectGit(rootSyncID.Name, repo, gitproviders.MainBranch, "configs", "", configsync.SourceFormatUnstructured)
+	rootSync.Spec.Git.Auth = configsync.AuthNone
+	rootSync.Spec.SafeOverride().OverrideSpec.StatusMode = applier.StatusDisabled
+	rootSync.Spec.SafeOverride().OverrideSpec.Resources = []v1beta1.ContainerResourcesSpec{reconcilerOverride}
 	nt.T.Logf("Apply the RootSync object to sync to %s", rootSync.Spec.Git.Repo)
-	if err := nt.KubeClient.Apply(rootSync); err != nil {
-		nt.T.Fatal(err)
-	}
-	nomostest.SetExpectedSyncPath(nt, rootSyncID, "configs")
+	nt.Must(nt.KubeClient.Apply(rootSync))
 
 	nt.T.Logf("Verify that the source errors are truncated")
 	err = nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, rootSyncID.Namespace,
@@ -269,9 +257,14 @@ func TestStressLargeRequest(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
+	commit, err := nomostest.GitCommitFromSpec(nt, rootSync.Spec.Git)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	nomostest.SetExpectedGitCommit(nt, rootSyncID, commit)
+
 	nt.T.Logf("Wait for the sync to complete")
-	nt.Must(nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(nomostest.RemoteRootRepoSha1Fn)))
+	nt.Must(nt.WatchForAllSyncs())
 }
 
 // TestStress100CRDs applies 100 CRDs and validates that syncing still works.
@@ -497,8 +490,7 @@ func TestStressMemoryUsageOCI(t *testing.T) {
 
 	// Validate that the resources sync without the reconciler running out of
 	// memory, getting OOMKilled, and crash looping.
-	nt.Must(nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(imageDigestFuncByDigest(image.Digest))))
+	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Logf("Verify the number of Anvil objects")
 	for i := 1; i <= crdCount; i++ {
@@ -518,11 +510,11 @@ func TestStressMemoryUsageOCI(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
+	nomostest.SetExpectedOCIImageDigest(nt, rootSyncID, emptyImage.Digest)
 
 	// Validate that the resources sync without the reconciler running out of
 	// memory, getting OOMKilled, and crash looping.
-	nt.Must(nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(imageDigestFuncByDigest(emptyImage.Digest))))
+	nt.Must(nt.WatchForAllSyncs())
 }
 
 // TestStressMemoryUsageHelm applies 100 CRDs and then 50 objects for each
@@ -606,7 +598,9 @@ func TestStressMemoryUsageHelm(t *testing.T) {
 		emptyChart.Name, emptyChart.Version))
 
 	// Update the expected helm chart
-	nomostest.SetExpectedHelmSource(nt, rootSyncID, emptyChart.HelmChartID)
+	nomostest.SetExpectedSyncSource(nt, rootSyncID, &syncsource.HelmSyncSource{
+		ChartID: emptyChart.HelmChartID,
+	})
 	// Validate that the resources sync without the reconciler running out of
 	// memory, getting OOMKilled, and crash looping.
 	nt.Must(nt.WatchForAllSyncs(nomostest.WithTimeout(5 * time.Minute)))

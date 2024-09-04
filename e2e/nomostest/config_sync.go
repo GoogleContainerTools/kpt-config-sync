@@ -393,11 +393,11 @@ func ValidateMultiRepoDeployments(nt *NT) error {
 		var rs *v1beta1.RootSync
 		switch tSource := source.(type) {
 		case *syncsource.GitSyncSource:
-			rs = nt.RootSyncObjectGit(id.Name, tSource.Repository, tSource.Directory, tSource.SourceFormat)
+			rs = nt.RootSyncObjectGitSyncSource(id.Name, tSource)
 		case *syncsource.HelmSyncSource:
-			rs = nt.RootSyncObjectHelm(id.Name, tSource.ChartID)
+			rs = nt.RootSyncObjectHelmSyncSource(id.Name, tSource)
 		case *syncsource.OCISyncSource:
-			rs = nt.RootSyncObjectOCI(id.Name, tSource.ImageID, tSource.Directory, tSource.Digest)
+			rs = nt.RootSyncObjectOCISyncSource(id.Name, tSource)
 		default:
 			nt.T.Fatalf("Invalid RootSync source %T: %s", source, id.Name)
 		}
@@ -664,13 +664,14 @@ func setupDelegatedControl(nt *NT) {
 			continue
 		}
 		var rs *v1beta1.RootSync
-		switch source.(type) {
+		switch tSource := source.(type) {
 		case *syncsource.GitSyncSource:
-			rs = RootSyncObjectV1Beta1FromRootRepo(nt, id.Name)
-		// case *syncsource.HelmSyncSource:
-		// 	rs = nt.RootSyncObjectHelm(id.Name, tSource.ChartID)
-		// case *syncsource.OCISyncSource:
+			rs = nt.RootSyncObjectGitSyncSource(id.Name, tSource)
 		// TODO: setup OCI & Helm RootSyncs
+		// case *syncsource.HelmSyncSource:
+		// 	rs = nt.RootSyncObjectHelmSyncSource(id.Name, tSource)
+		// case *syncsource.OCISyncSource:
+		// 	rs = nt.RootSyncObjectOCISyncSource(id.Name, tSource)
 		default:
 			nt.T.Fatalf("Invalid %s source %T: %s", id.Kind, source, id.Name)
 		}
@@ -694,13 +695,14 @@ func setupDelegatedControl(nt *NT) {
 		}
 
 		var rs *v1beta1.RepoSync
-		switch source.(type) {
+		switch tSource := source.(type) {
 		case *syncsource.GitSyncSource:
-			rs = RepoSyncObjectV1Beta1FromNonRootRepo(nt, id.ObjectKey)
-		// case *syncsource.HelmSyncSource:
-		// 	rs = nt.RepoSyncObjectHelm(id.ObjectKey, tSource.ChartID)
-		// case *syncsource.OCISyncSource:
+			rs = nt.RepoSyncObjectGitSyncSource(id.ObjectKey, tSource)
 		// TODO: setup OCI & Helm RootSyncs
+		// case *syncsource.HelmSyncSource:
+		// 	rs = nt.RepoSyncObjectHelmSyncSource(id.ObjectKey, tSource)
+		// case *syncsource.OCISyncSource:
+		// 	rs = nt.RepoSyncObjectOCISyncSource(id.ObjectKey, tSource)
 		default:
 			nt.T.Fatalf("Invalid %s source %T: %s", id.Kind, source, id.Name)
 		}
@@ -774,7 +776,6 @@ func rootSyncObjectV1Alpha1Git(name, repoURL string, sourceFormat configsync.Sou
 // RootSyncObjectV1Alpha1FromRootRepo returns a v1alpha1 RootSync object which
 // uses a RootSync repo from nt.SyncSources.
 func RootSyncObjectV1Alpha1FromRootRepo(nt *NT, name string) *v1alpha1.RootSync {
-	// TODO: Allow supplying the Repository, instead of requiring it to already exist
 	id := core.RootSyncID(name)
 	source, found := nt.SyncSources[id]
 	if !found {
@@ -784,23 +785,22 @@ func RootSyncObjectV1Alpha1FromRootRepo(nt *NT, name string) *v1alpha1.RootSync 
 	if !ok {
 		nt.T.Fatalf("expected SyncSources for %s to have *GitSyncSource, but got %T", id, source)
 	}
-	repoURL := gitSource.Repository.SyncURL()
-	sourceFormat := gitSource.Repository.Format
-	rs := rootSyncObjectV1Alpha1Git(name, repoURL, sourceFormat)
+	rs := rootSyncObjectV1Alpha1Git(name, gitSource.Repository.SyncURL(), gitSource.SourceFormat)
 	SetRSyncTestDefaults(nt, rs)
 	return rs
 }
 
 // rootSyncObjectV1Beta1Git returns the default RootSync object with version v1beta1.
-func rootSyncObjectV1Beta1Git(name, repoURL string, sourceFormat configsync.SourceFormat) *v1beta1.RootSync {
+func rootSyncObjectV1Beta1Git(name, repoURL string, branch, revision, syncPath string, sourceFormat configsync.SourceFormat) *v1beta1.RootSync {
 	rs := k8sobjects.RootSyncObjectV1Beta1(name)
 	rs.Spec.SourceFormat = sourceFormat
 	rs.Spec.SourceType = configsync.GitSource
 	rs.Spec.Git = &v1beta1.Git{
-		Repo:   repoURL,
-		Branch: gitproviders.MainBranch,
-		Dir:    gitproviders.DefaultSyncDir,
-		Period: metav1.Duration{Duration: shortSyncPollingPeriod},
+		Repo:     repoURL,
+		Branch:   branch,
+		Revision: revision,
+		Dir:      syncPath,
+		Period:   metav1.Duration{Duration: shortSyncPollingPeriod},
 	}
 	switch *e2e.GitProvider {
 	case e2e.CSR:
@@ -833,7 +833,7 @@ func RootSyncObjectV1Beta1FromRootRepo(nt *NT, name string) *v1beta1.RootSync {
 	if !ok {
 		nt.T.Fatalf("expected SyncSources for %s to have *GitSyncSource, but got %T", id, source)
 	}
-	return nt.RootSyncObjectGit(name, gitSource.Repository, gitSource.Directory, gitSource.SourceFormat)
+	return nt.RootSyncObjectGitSyncSource(name, gitSource)
 }
 
 // RootSyncObjectV1Beta1FromOtherRootRepo returns a v1beta1 RootSync object which
@@ -849,7 +849,7 @@ func RootSyncObjectV1Beta1FromOtherRootRepo(nt *NT, syncName, repoName string) *
 	if !ok {
 		nt.T.Fatalf("expected SyncSources for %s to have *GitSyncSource, but got %T", repoID, source)
 	}
-	return nt.RootSyncObjectGit(syncName, gitSource.Repository, gitSource.Directory, gitSource.SourceFormat)
+	return nt.RootSyncObjectGitSyncSource(syncName, gitSource)
 }
 
 // StructuredNSPath returns structured path with namespace and resourcename in repo.
@@ -889,7 +889,6 @@ func repoSyncObjectV1Alpha1Git(nn types.NamespacedName, repoURL string) *v1alpha
 // RepoSyncObjectV1Alpha1FromNonRootRepo returns a v1alpha1 RepoSync object which
 // uses a RepoSync repo from nt.SyncSources.
 func RepoSyncObjectV1Alpha1FromNonRootRepo(nt *NT, nn types.NamespacedName) *v1alpha1.RepoSync {
-	// TODO: Allow supplying the Repository, instead of requiring it to already exist
 	id := core.RepoSyncID(nn.Name, nn.Namespace)
 	source, found := nt.SyncSources[id]
 	if !found {
@@ -899,24 +898,24 @@ func RepoSyncObjectV1Alpha1FromNonRootRepo(nt *NT, nn types.NamespacedName) *v1a
 	if !ok {
 		nt.T.Fatalf("expected SyncSources for %s to have *GitSyncSource, but got %T", id, source)
 	}
-	repoURL := gitSource.Repository.SyncURL()
 	// RepoSync is always Unstructured. So ignore repo.Format.
-	rs := repoSyncObjectV1Alpha1Git(nn, repoURL)
+	rs := repoSyncObjectV1Alpha1Git(nn, gitSource.Repository.SyncURL())
 	SetRSyncTestDefaults(nt, rs)
 	return rs
 }
 
 // repoSyncObjectV1Beta1Git returns the default RepoSync object
 // with version v1beta1 in the given namespace.
-func repoSyncObjectV1Beta1Git(nn types.NamespacedName, repoURL string, sourceFormat configsync.SourceFormat) *v1beta1.RepoSync {
+func repoSyncObjectV1Beta1Git(nn types.NamespacedName, repoURL, branch, revision, syncPath string, sourceFormat configsync.SourceFormat) *v1beta1.RepoSync {
 	rs := k8sobjects.RepoSyncObjectV1Beta1(nn.Namespace, nn.Name)
 	rs.Spec.SourceFormat = sourceFormat
 	rs.Spec.SourceType = configsync.GitSource
 	rs.Spec.Git = &v1beta1.Git{
-		Repo:   repoURL,
-		Branch: gitproviders.MainBranch,
-		Dir:    gitproviders.DefaultSyncDir,
-		Period: metav1.Duration{Duration: shortSyncPollingPeriod},
+		Repo:     repoURL,
+		Branch:   branch,
+		Revision: revision,
+		Dir:      syncPath,
+		Period:   metav1.Duration{Duration: shortSyncPollingPeriod},
 	}
 	switch *e2e.GitProvider {
 	case e2e.CSR:
@@ -939,11 +938,23 @@ func repoSyncObjectV1Beta1Git(nn types.NamespacedName, repoURL string, sourceFor
 // RootSyncObjectGit creates a new RootSync object with a Git source, using the
 // default test config plus the specified inputs.
 // Creates, updates, or replaces the SyncSource expectation for this RootSync.
-func (nt *NT) RootSyncObjectGit(name string, repo *gitproviders.ReadWriteRepository, syncPath string, sourceFormat configsync.SourceFormat) *v1beta1.RootSync {
+func (nt *NT) RootSyncObjectGit(name string, repo gitproviders.Repository, branch, revision, syncPath string, sourceFormat configsync.SourceFormat) *v1beta1.RootSync {
 	id := core.RootSyncID(name)
-	SetExpectedGitSource(nt, id, repo, syncPath, sourceFormat)
-	repoURL := repo.SyncURL()
-	rs := rootSyncObjectV1Beta1Git(name, repoURL, sourceFormat)
+	source := &syncsource.GitSyncSource{
+		Repository:   repo,
+		Branch:       branch,
+		Revision:     revision,
+		Directory:    syncPath,
+		SourceFormat: sourceFormat,
+	}
+	SetExpectedSyncSource(nt, id, source)
+	return nt.RootSyncObjectGitSyncSource(name, source)
+}
+
+// RootSyncObjectGitSyncSource creates a new RootSync object with a Git source,
+// using the default test config plus the specified inputs.
+func (nt *NT) RootSyncObjectGitSyncSource(name string, source *syncsource.GitSyncSource) *v1beta1.RootSync {
+	rs := rootSyncObjectV1Beta1Git(name, source.Repository.SyncURL(), source.Branch, source.Revision, source.Directory, source.SourceFormat)
 	SetRSyncTestDefaults(nt, rs)
 	return rs
 }
@@ -951,33 +962,53 @@ func (nt *NT) RootSyncObjectGit(name string, repo *gitproviders.ReadWriteReposit
 // RepoSyncObjectGit creates a new RepoSync object with a Git source, using the
 // default test config plus the specified inputs.
 // Creates, updates, or replaces the SyncSource expectation for this RepoSync.
-func (nt *NT) RepoSyncObjectGit(nn types.NamespacedName, repo *gitproviders.ReadWriteRepository, syncPath string, sourceFormat configsync.SourceFormat) *v1beta1.RepoSync {
+func (nt *NT) RepoSyncObjectGit(nn types.NamespacedName, repo gitproviders.Repository, branch, revision, syncPath string, sourceFormat configsync.SourceFormat) *v1beta1.RepoSync {
 	id := core.RepoSyncID(nn.Name, nn.Namespace)
-	SetExpectedGitSource(nt, id, repo, syncPath, sourceFormat)
-	repoURL := repo.SyncURL()
+	source := &syncsource.GitSyncSource{
+		Repository:   repo,
+		Branch:       branch,
+		Revision:     revision,
+		Directory:    syncPath,
+		SourceFormat: sourceFormat,
+	}
+	SetExpectedSyncSource(nt, id, source)
+	return nt.RepoSyncObjectGitSyncSource(nn, source)
+}
+
+// RepoSyncObjectGitSyncSource creates a new RepoSync object with a Git source,
+// using the default test config plus the specified inputs.
+func (nt *NT) RepoSyncObjectGitSyncSource(nn types.NamespacedName, source *syncsource.GitSyncSource) *v1beta1.RepoSync {
 	// RepoSync is always Unstructured. So ignore repo.Format.
-	rs := repoSyncObjectV1Beta1Git(nn, repoURL, sourceFormat)
+	rs := repoSyncObjectV1Beta1Git(nn, source.Repository.SyncURL(), source.Branch, source.Revision, source.Directory, source.SourceFormat)
 	SetRSyncTestDefaults(nt, rs)
 	return rs
 }
 
-// RootSyncObjectOCI returns a RootSync object that syncs the provided OCIImage.
+// RootSyncObjectOCI returns a RootSync object that syncs the provided OCI image.
 // ImageID is used for pulling. ImageDigest is used for validating the result.
 // Creates, updates, or replaces the SyncSource expectation for this RootSync.
 func (nt *NT) RootSyncObjectOCI(name string, imageID registryproviders.OCIImageID, syncPath, expectedImageDigest string) *v1beta1.RootSync {
 	id := core.RootSyncID(name)
-	// Register the OCI image for syncing
-	expectedSyncPath := syncPath
-	if syncPath == "" {
-		expectedSyncPath = controllers.DefaultSyncDir
+	source := &syncsource.OCISyncSource{
+		ImageID:             imageID,
+		Directory:           syncPath,
+		ExpectedImageDigest: expectedImageDigest,
 	}
-	SetExpectedOCISource(nt, id, imageID, expectedImageDigest, expectedSyncPath)
+	SetExpectedSyncSource(nt, id, source)
+	return nt.RootSyncObjectOCISyncSource(name, source)
+}
+
+// RootSyncObjectOCISyncSource returns a RootSync object that syncs the provided
+// OCI image.
+func (nt *NT) RootSyncObjectOCISyncSource(name string, source *syncsource.OCISyncSource) *v1beta1.RootSync {
 	rs := k8sobjects.RootSyncObjectV1Beta1(name)
-	rs.Spec.SourceFormat = configsync.SourceFormatUnstructured // TODO: is SourceFormat necessary with OCI?
+	// OCI Images can use hierarchy mode, but we don't have any tests for it yet.
+	// So just hard-code unstructured by default for now.
+	rs.Spec.SourceFormat = configsync.SourceFormatUnstructured
 	rs.Spec.SourceType = configsync.OciSource
 	rs.Spec.Oci = &v1beta1.Oci{
-		Image:  imageID.Address(),
-		Dir:    syncPath,
+		Image:  source.ImageID.Address(),
+		Dir:    source.Directory,
 		Auth:   configsync.AuthNone,
 		Period: metav1.Duration{Duration: shortSyncPollingPeriod},
 	}
@@ -1003,18 +1034,25 @@ func (nt *NT) RootSyncObjectOCI(name string, imageID registryproviders.OCIImageI
 // Creates, updates, or replaces the SyncSource expectation for this RepoSync.
 func (nt *NT) RepoSyncObjectOCI(nn types.NamespacedName, imageID registryproviders.OCIImageID, syncPath, expectedImageDigest string) *v1beta1.RepoSync {
 	id := core.RepoSyncID(nn.Name, nn.Namespace)
-	// Register the OCI image for syncing
-	expectedSyncPath := syncPath
-	if syncPath == "" {
-		expectedSyncPath = controllers.DefaultSyncDir
+	source := &syncsource.OCISyncSource{
+		ImageID:             imageID,
+		Directory:           syncPath,
+		ExpectedImageDigest: expectedImageDigest,
 	}
-	SetExpectedOCISource(nt, id, imageID, expectedImageDigest, expectedSyncPath)
+	SetExpectedSyncSource(nt, id, source)
+	return nt.RepoSyncObjectOCISyncSource(nn, source)
+}
+
+// RepoSyncObjectOCISyncSource returns a RepoSync object that syncs the provided
+// OCI image.
+func (nt *NT) RepoSyncObjectOCISyncSource(nn types.NamespacedName, source *syncsource.OCISyncSource) *v1beta1.RepoSync {
 	rs := k8sobjects.RepoSyncObjectV1Beta1(nn.Namespace, nn.Name)
-	rs.Spec.SourceFormat = configsync.SourceFormatUnstructured // TODO: is SourceFormat necessary with OCI?
+	// RepoSync always uses unstructured. No need to set it.
+	// rs.Spec.SourceFormat = configsync.SourceFormatUnstructured
 	rs.Spec.SourceType = configsync.OciSource
 	rs.Spec.Oci = &v1beta1.Oci{
-		Image:  imageID.Address(),
-		Dir:    syncPath,
+		Image:  source.ImageID.Address(),
+		Dir:    source.Directory,
 		Auth:   configsync.AuthNone,
 		Period: metav1.Duration{Duration: shortSyncPollingPeriod},
 	}
@@ -1035,20 +1073,28 @@ func (nt *NT) RepoSyncObjectOCI(nn types.NamespacedName, imageID registryprovide
 	return rs
 }
 
-// RootSyncObjectHelm returns a RootSync object that syncs the provided HelmPackage.
+// RootSyncObjectHelm returns a RootSync object that syncs the provided Helm chart.
 // Creates, updates, or replaces the SyncSource expectation for this RootSync.
 func (nt *NT) RootSyncObjectHelm(name string, chartID registryproviders.HelmChartID) *v1beta1.RootSync {
 	id := core.RootSyncID(name)
-	// Register the Helm chart for syncing
-	SetExpectedHelmSource(nt, id, chartID)
+	source := &syncsource.HelmSyncSource{
+		ChartID: chartID,
+	}
+	SetExpectedSyncSource(nt, id, source)
+	return nt.RootSyncObjectHelmSyncSource(name, source)
+}
+
+// RootSyncObjectHelmSyncSource returns a RootSync object that syncs the
+// provided Helm chart.
+func (nt *NT) RootSyncObjectHelmSyncSource(name string, source *syncsource.HelmSyncSource) *v1beta1.RootSync {
 	rs := k8sobjects.RootSyncObjectV1Beta1(name)
 	rs.Spec.SourceFormat = configsync.SourceFormatUnstructured
 	rs.Spec.SourceType = configsync.HelmSource
 	rs.Spec.Helm = &v1beta1.HelmRootSync{
 		HelmBase: v1beta1.HelmBase{
 			Repo:    nt.HelmProvider.RepositoryRemoteURL(),
-			Chart:   chartID.Name,
-			Version: chartID.Version,
+			Chart:   source.ChartID.Name,
+			Version: source.ChartID.Version,
 			Auth:    configsync.AuthNone,
 		},
 	}
@@ -1073,16 +1119,24 @@ func (nt *NT) RootSyncObjectHelm(name string, chartID registryproviders.HelmChar
 // Creates, updates, or replaces the SyncSource expectation for this RepoSync.
 func (nt *NT) RepoSyncObjectHelm(nn types.NamespacedName, chartID registryproviders.HelmChartID) *v1beta1.RepoSync {
 	id := core.RepoSyncID(nn.Name, nn.Namespace)
-	// Register the Helm chart for syncing
-	SetExpectedHelmSource(nt, id, chartID)
+	source := &syncsource.HelmSyncSource{
+		ChartID: chartID,
+	}
+	SetExpectedSyncSource(nt, id, source)
+	return nt.RepoSyncObjectHelmSyncSource(nn, source)
+}
+
+// RepoSyncObjectHelmSyncSource returns a RepoSync object that syncs the
+// provided Helm chart.
+func (nt *NT) RepoSyncObjectHelmSyncSource(nn types.NamespacedName, source *syncsource.HelmSyncSource) *v1beta1.RepoSync {
 	rs := k8sobjects.RepoSyncObjectV1Beta1(nn.Namespace, nn.Name)
 	rs.Spec.SourceFormat = configsync.SourceFormatUnstructured
 	rs.Spec.SourceType = configsync.HelmSource
 	rs.Spec.Helm = &v1beta1.HelmRepoSync{
 		HelmBase: v1beta1.HelmBase{
 			Repo:    nt.HelmProvider.RepositoryRemoteURL(),
-			Chart:   chartID.Name,
-			Version: chartID.Version,
+			Chart:   source.ChartID.Name,
+			Version: source.ChartID.Version,
 			Auth:    configsync.AuthNone,
 		},
 	}
@@ -1116,7 +1170,7 @@ func RepoSyncObjectV1Beta1FromNonRootRepo(nt *NT, nn types.NamespacedName) *v1be
 	if !ok {
 		nt.T.Fatalf("expected SyncSources for %s to have *GitSyncSource, but got %T", id, source)
 	}
-	return nt.RepoSyncObjectGit(nn, gitSource.Repository, gitSource.Directory, gitSource.SourceFormat)
+	return nt.RepoSyncObjectGit(nn, gitSource.Repository, gitSource.Branch, gitSource.Revision, gitSource.Directory, gitSource.SourceFormat)
 }
 
 // RepoSyncObjectV1Beta1FromOtherRootRepo returns a v1beta1 RepoSync object which
@@ -1132,7 +1186,7 @@ func RepoSyncObjectV1Beta1FromOtherRootRepo(nt *NT, nn types.NamespacedName, rep
 	if !ok {
 		nt.T.Fatalf("expected SyncSources for %s to have *GitSyncSource, but got %T", repoID, source)
 	}
-	return nt.RepoSyncObjectGit(nn, gitSource.Repository, gitSource.Directory, gitSource.SourceFormat)
+	return nt.RepoSyncObjectGit(nn, gitSource.Repository, gitSource.Branch, gitSource.Revision, gitSource.Directory, gitSource.SourceFormat)
 }
 
 // setupCentralizedControl is a pure central-control mode.
@@ -1151,13 +1205,14 @@ func setupCentralizedControl(nt *NT) {
 		if id.Name == configsync.RootSyncName {
 			continue
 		}
-		switch source.(type) {
+		switch tSource := source.(type) {
 		case *syncsource.GitSyncSource:
-			rootSyncs[id] = RootSyncObjectV1Beta1FromRootRepo(nt, id.Name)
-		// case *syncsource.HelmSyncSource:
-		// 	rootSyncs[id] = nt.RootSyncObjectHelm(id.Name, tSource.ChartID)
-		// case *syncsource.OCISyncSource:
+			rootSyncs[id] = nt.RootSyncObjectGitSyncSource(id.Name, tSource)
 		// TODO: setup OCI & Helm RootSyncs
+		// case *syncsource.HelmSyncSource:
+		// 	rootSyncs[id] = nt.RootSyncObjectHelmSyncSource(id.Name, tSource)
+		// case *syncsource.OCISyncSource:
+		// 	rootSyncs[id] = nt.RootSyncObjectOCISyncSource(id.Name, tSource)
 		default:
 			nt.T.Fatalf("Invalid %s source %T: %s", id.Kind, source, id.Name)
 		}
@@ -1188,13 +1243,14 @@ func setupCentralizedControl(nt *NT) {
 	// Add any RootSyncs specified by the test options
 	repoSyncs := make(map[core.ID]*v1beta1.RepoSync, len(repoSyncSources))
 	for id, source := range repoSyncSources {
-		switch source.(type) {
+		switch tSource := source.(type) {
 		case *syncsource.GitSyncSource:
-			repoSyncs[id] = RepoSyncObjectV1Beta1FromNonRootRepo(nt, id.ObjectKey)
-		// case *syncsource.HelmSyncSource:
-		// 	repoSyncs[id] = nt.RepoSyncObjectHelm(id.ObjectKey, tSource.ChartID)
-		// case *syncsource.OCISyncSource:
+			repoSyncs[id] = nt.RepoSyncObjectGitSyncSource(id.ObjectKey, tSource)
 		// TODO: setup OCI & Helm RootSyncs
+		// case *syncsource.HelmSyncSource:
+		// 	repoSyncs[id] = nt.RepoSyncObjectHelmSyncSource(id.ObjectKey, tSource)
+		// case *syncsource.OCISyncSource:
+		// 	repoSyncs[id] = nt.RepoSyncObjectOCISyncSource(id.ObjectKey, tSource)
 		default:
 			nt.T.Fatalf("Invalid %s source %T: %s", id.Kind, source, id.Name)
 		}
@@ -1380,9 +1436,16 @@ func SetRootSyncGitDir(nt *NT, syncName, syncPath string) {
 
 // SetRootSyncGitBranch updates the root-sync object with the provided git branch
 func SetRootSyncGitBranch(nt *NT, syncName, branch string) {
-	nt.T.Logf("Change git branch to %q", branch)
+	nt.T.Logf("Set spec.git.branch to %q", branch)
 	rs := k8sobjects.RootSyncObjectV1Beta1(syncName)
-	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"branch": %q}}}`, branch))
+	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"branch": %q, "revision": null}}}`, branch))
+}
+
+// SetRootSyncGitRevision updates the root-sync object with the provided git branch
+func SetRootSyncGitRevision(nt *NT, syncName, revision string) {
+	nt.T.Logf("Set spec.git.revision to %q", revision)
+	rs := k8sobjects.RootSyncObjectV1Beta1(syncName)
+	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"git": {"revision": %q, "branch": null}}}`, revision))
 }
 
 func toMetav1Duration(t time.Duration) *metav1.Duration {

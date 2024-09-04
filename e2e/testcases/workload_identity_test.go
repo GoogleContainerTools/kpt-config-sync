@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -457,11 +458,9 @@ func TestWorkloadIdentity(t *testing.T) {
 
 			switch tc.sourceType {
 			case configsync.GitSource, configsync.OciSource:
-				nomostest.SetExpectedSyncPath(nt, rootMeta.rsID, rootMeta.syncDir)
-				nomostest.SetExpectedSyncPath(nt, nsMeta.rsID, nsMeta.syncDir)
-				nt.Must(nt.WatchForAllSyncs(
-					nomostest.WithRootSha1Func(rootMeta.sha1Func),
-					nomostest.WithRepoSha1Func(nsMeta.sha1Func)))
+				setExpectedGitCommitAndPath(nt, rootMeta)
+				setExpectedGitCommitAndPath(nt, nsMeta)
+				nt.Must(nt.WatchForAllSyncs())
 				kustomizecomponents.ValidateAllTenants(nt, string(declared.RootScope), "base", "tenant-a", "tenant-b", "tenant-c")
 				kustomizecomponents.ValidateTenant(nt, nsMeta.rsID.Namespace, "test-ns", "base")
 
@@ -540,7 +539,6 @@ func updateRootSyncWithOCISourceConfig(nt *nomostest.NT, rsID core.ID, sc source
 	if err = nt.KubeClient.Apply(rootSyncOCI); err != nil {
 		return meta, err
 	}
-	meta.sha1Func = imageDigestFuncByDigest(image.Digest)
 	return meta, nil
 }
 
@@ -560,7 +558,6 @@ func updateRepoSyncWithOCISourceConfig(nt *nomostest.NT, rsID core.ID, sc source
 	if err = nt.KubeClient.Apply(repoSyncOCI); err != nil {
 		return meta, err
 	}
-	meta.sha1Func = imageDigestFuncByDigest(image.Digest)
 	return meta, nil
 }
 
@@ -674,11 +671,9 @@ func migrateFromGSAtoKSA(nt *nomostest.NT, fleetWITest bool, sourceType configsy
 
 	switch sourceType {
 	case configsync.GitSource, configsync.OciSource:
-		nomostest.SetExpectedSyncPath(nt, rootMeta.rsID, rootMeta.syncDir)
-		nomostest.SetExpectedSyncPath(nt, nsMeta.rsID, nsMeta.syncDir)
-		nt.Must(nt.WatchForAllSyncs(
-			nomostest.WithRootSha1Func(rootMeta.sha1Func),
-			nomostest.WithRepoSha1Func(nsMeta.sha1Func)))
+		setExpectedGitCommitAndPath(nt, rootMeta)
+		setExpectedGitCommitAndPath(nt, nsMeta)
+		nt.Must(nt.WatchForAllSyncs())
 		kustomizecomponents.ValidateAllTenants(nt, string(declared.RootScope), "../base", "tenant-a")
 		if err := nt.ValidateNotFound("tenant-b", "", &corev1.Namespace{}); err != nil {
 			return err
@@ -698,4 +693,11 @@ func migrateFromGSAtoKSA(nt *nomostest.NT, fleetWITest bool, sourceType configsy
 			testpredicates.IsManagedBy(nt.Scheme, declared.Scope(nsID.Namespace), nsID.Name)))
 	}
 	return nil
+}
+
+func setExpectedGitCommitAndPath(nt *nomostest.NT, meta rsyncValidateMeta) {
+	commit, err := meta.sha1Func(nt, meta.rsID.ObjectKey)
+	require.NoError(nt.T, err)
+	nomostest.SetExpectedGitCommit(nt, meta.rsID, commit)
+	nomostest.SetExpectedSyncPath(nt, meta.rsID, meta.syncDir)
 }

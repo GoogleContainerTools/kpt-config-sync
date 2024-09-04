@@ -406,8 +406,7 @@ func TestOCICACertSecretRefRootRepo(t *testing.T) {
 
 	nt.T.Log("Add caCertSecretRef to RootSync")
 	nt.MustMergePatch(rs, caCertSecretPatch(configsync.OciSource, caCertSecret))
-	nt.Must(nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(imageDigestFuncByDigest(image.Digest))))
+	nt.Must(nt.WatchForAllSyncs())
 }
 
 // TestOCICACertSecretRefNamespaceRepo can run only run on KinD clusters.
@@ -447,8 +446,7 @@ func TestOCICACertSecretRefNamespaceRepo(t *testing.T) {
 	rs.Spec.Oci.CACertSecretRef = &v1beta1.SecretReference{Name: caCertSecret}
 	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(repoSyncID.Namespace, repoSyncID.Name), rs))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Set the CA cert for the RepoSync"))
-	nt.Must(nt.WatchForAllSyncs(
-		nomostest.WithRepoSha1Func(imageDigestFuncByDigest(image.Digest))))
+	nt.Must(nt.WatchForAllSyncs())
 	nt.T.Log("Verify the ConfigMap was created")
 	nt.Must(nt.Validate(cm.Name, cm.Namespace, &corev1.ConfigMap{}))
 	nt.T.Log("Verify the upserted Secret was created")

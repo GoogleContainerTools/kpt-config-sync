@@ -22,13 +22,13 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/policy"
+	"kpt.dev/configsync/e2e/nomostest/syncsource"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
-	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/status"
 )
 
@@ -121,11 +121,15 @@ func TestGithubAppRootSync(t *testing.T) {
 	// TODO: replace this if we implement a gitprovider interface
 	rs = k8sobjects.RootSyncObjectV1Beta1(rootSyncNN.Name)
 	nt.Must(nt.KubeClient.Get(rs.Name, rs.Namespace, rs))
-	commitSha := rs.Status.Source.Commit
-	nomostest.SetExpectedSyncPath(nt, rootSyncID, controllers.DefaultSyncDir)
-	nt.Must(nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(fakeSha1Fn(commitSha)),
-	))
+	nomostest.SetExpectedSyncSource(nt, rootSyncID, &syncsource.GitSyncSource{
+		Repository: gitproviders.ReadOnlyRepository{
+			URL: githubApp.Repo(),
+		},
+		Branch:         githubAppRepoBranch,
+		SourceFormat:   configsync.SourceFormatUnstructured,
+		ExpectedCommit: rs.Status.Source.Commit,
+	})
+	nt.Must(nt.WatchForAllSyncs())
 	// Verify reconciler can sync using application ID
 	nt.T.Log("The reconciler should successfully sync using githubapp auth with application ID")
 	nt.Must(nt.KubeClient.Delete(rs)) // Recreate RootSync to ensure status is current
@@ -143,9 +147,7 @@ func TestGithubAppRootSync(t *testing.T) {
 		},
 	}
 	nt.Must(nt.KubeClient.Apply(rs))
-	nt.Must(nt.WatchForAllSyncs(
-		nomostest.WithRootSha1Func(fakeSha1Fn(commitSha)),
-	))
+	nt.Must(nt.WatchForAllSyncs())
 }
 
 func TestGithubAppRepoSync(t *testing.T) {
@@ -223,11 +225,18 @@ func TestGithubAppRepoSync(t *testing.T) {
 	// TODO: replace this if we implement a gitprovider interface
 	rs = k8sobjects.RepoSyncObjectV1Beta1(repoSyncNN.Namespace, repoSyncNN.Name)
 	nt.Must(nt.KubeClient.Get(rs.Name, rs.Namespace, rs))
-	commitSha := rs.Status.Source.Commit
-	nomostest.SetExpectedSyncPath(nt, repoSyncID, githubAppRepoNamespacedConfigDir)
-	nt.Must(nt.WatchForAllSyncs(
-		nomostest.WithRepoSha1Func(fakeSha1Fn(commitSha)),
-	))
+	nomostest.SetExpectedSyncSource(nt, repoSyncID, &syncsource.GitSyncSource{
+		Repository: gitproviders.ReadOnlyRepository{
+			URL: githubApp.Repo(),
+		},
+		Branch:            githubAppRepoBranch,
+		Revision:          "",
+		SourceFormat:      configsync.SourceFormatUnstructured,
+		Directory:         "",
+		ExpectedDirectory: githubAppRepoNamespacedConfigDir,
+		ExpectedCommit:    rs.Status.Source.Commit,
+	})
+	nt.Must(nt.WatchForAllSyncs())
 	// Verify reconciler can sync using application ID
 	nt.T.Log("The reconciler should successfully sync using githubapp auth with application ID")
 	nt.Must(nt.KubeClient.Delete(rs)) // Recreate RepoSync to ensure status is current
@@ -249,15 +258,7 @@ func TestGithubAppRepoSync(t *testing.T) {
 		},
 	}
 	nt.Must(nt.KubeClient.Apply(rs))
-	nt.Must(nt.WatchForAllSyncs(
-		nomostest.WithRepoSha1Func(fakeSha1Fn(commitSha)),
-	))
-}
-
-func fakeSha1Fn(commit string) nomostest.Sha1Func {
-	return func(_ *nomostest.NT, _ types.NamespacedName) (string, error) {
-		return commit, nil
-	}
+	nt.Must(nt.WatchForAllSyncs())
 }
 
 func createGithubSecretWithClientID(nt *nomostest.NT, githubApp *gitproviders.GithubAppConfiguration, nn types.NamespacedName) error {

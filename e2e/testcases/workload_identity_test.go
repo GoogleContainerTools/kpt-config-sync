@@ -381,38 +381,38 @@ func TestWorkloadIdentity(t *testing.T) {
 						nt.T.Fatal(err)
 					}
 				} else { // OCI provider is GCR
-					nt.MustMergePatch(rootSync, fmt.Sprintf(`{
-						"spec": {
-							"sourceType": "%s",
-							"oci": {
-								"image": "%s",
-								"dir": "%s",
-								"auth": "gcpserviceaccount",
-								"gcpServiceAccountEmail": "%s"
-							}
-						}
-					}`, configsync.OciSource, tc.rootSrcCfg.repo, tc.rootSrcCfg.dir, tc.gsaEmail))
 					rootMeta = rsyncValidateMeta{
 						rsID:     rootSyncID,
 						sha1Func: tc.rootSrcCfg.commitFn,
 						syncDir:  tc.rootSrcCfg.dir,
 					}
-					nt.MustMergePatch(repoSync, fmt.Sprintf(`{
-						"spec": {
-							"sourceType": "%s",
-							"oci": {
-								"image": "%s",
-								"dir": "%s",
-								"auth": "gcpserviceaccount",
-								"gcpServiceAccountEmail": "%s"
-							}
-						}
-					}`, configsync.OciSource, tc.nsSrcCfg.repo, tc.nsSrcCfg.dir, tc.gsaEmail))
+					rootSyncDigest, err := getImageDigest(nt, tc.rootSrcCfg.repo)
+					if err != nil {
+						nt.T.Fatal(err)
+					}
+					rootSyncImageID := registryproviders.OCIImageID{
+						Name: tc.rootSrcCfg.repo,
+					}
+					rootSyncGCR := nt.RootSyncObjectOCI(configsync.RootSyncName, rootSyncImageID, tc.rootSrcCfg.dir, rootSyncDigest)
+					rootSyncGCR.Spec.Oci.Auth = configsync.AuthGCPServiceAccount
+					rootSyncGCR.Spec.Oci.GCPServiceAccountEmail = tc.gsaEmail
+					nt.Must(nt.KubeClient.Apply(rootSyncGCR))
 					nsMeta = rsyncValidateMeta{
 						rsID:     repoSyncID,
 						sha1Func: tc.nsSrcCfg.commitFn,
 						syncDir:  tc.nsSrcCfg.dir,
 					}
+					repoSyncDigest, err := getImageDigest(nt, tc.nsSrcCfg.repo)
+					if err != nil {
+						nt.T.Fatal(err)
+					}
+					repoSyncImageID := registryproviders.OCIImageID{
+						Name: tc.nsSrcCfg.repo,
+					}
+					repoSyncGCR := nt.RepoSyncObjectOCI(repoSyncKey, repoSyncImageID, tc.nsSrcCfg.dir, repoSyncDigest)
+					repoSyncGCR.Spec.Oci.Auth = configsync.AuthGCPServiceAccount
+					repoSyncGCR.Spec.Oci.GCPServiceAccountEmail = tc.gsaEmail
+					nt.Must(nt.KubeClient.Apply(repoSyncGCR))
 				}
 			}
 

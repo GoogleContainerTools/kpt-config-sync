@@ -232,8 +232,9 @@ func TestStressLargeRequest(t *testing.T) {
 	repo := gitproviders.ReadOnlyRepository{
 		URL: "https://github.com/config-sync-examples/crontab-crs",
 	}
-	rootSync := nt.RootSyncObjectGit(rootSyncID.Name, repo, gitproviders.MainBranch, "configs", "", configsync.SourceFormatUnstructured)
+	rootSync := nt.RootSyncObjectGit(rootSyncID.Name, repo, gitproviders.MainBranch, "", "configs", configsync.SourceFormatUnstructured)
 	rootSync.Spec.Git.Auth = configsync.AuthNone
+	rootSync.Spec.SecretRef = nil
 	rootSync.Spec.SafeOverride().OverrideSpec.StatusMode = applier.StatusDisabled
 	rootSync.Spec.SafeOverride().OverrideSpec.Resources = []v1beta1.ContainerResourcesSpec{reconcilerOverride}
 	nt.T.Logf("Apply the RootSync object to sync to %s", rootSync.Spec.Git.Repo)

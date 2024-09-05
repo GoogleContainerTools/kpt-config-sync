@@ -49,7 +49,7 @@ func TestKCCResourcesOnCSR(t *testing.T) {
 	repo := gitproviders.ReadOnlyRepository{
 		URL: fmt.Sprintf("%s/p/%s/r/configsync-kcc", nomostesting.CSRHost, *e2e.GCPProject),
 	}
-	rs := nt.RootSyncObjectGit(rootSyncID.Name, repo, gitproviders.MainBranch, "kcc", "", configsync.SourceFormatUnstructured)
+	rs := nt.RootSyncObjectGit(rootSyncID.Name, repo, gitproviders.MainBranch, "", "kcc", configsync.SourceFormatUnstructured)
 	rs.Spec.Git.Auth = "gcpserviceaccount"
 	rs.Spec.Git.GCPServiceAccountEmail = fmt.Sprintf("e2e-test-csr-reader@%s.iam.gserviceaccount.com", *e2e.GCPProject)
 	rs.Spec.Git.SecretRef = nil

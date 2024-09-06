@@ -34,19 +34,19 @@ import (
 )
 
 func TestRootSyncRoleRefs(t *testing.T) {
+	rootSync0ID := nomostest.DefaultRootSyncID
 	rootSyncAID := core.RootSyncID("sync-a")
 	nt := nomostest.New(t, nomostesting.OverrideAPI,
-		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
+		ntopts.SyncWithGitSource(rootSync0ID, ntopts.Unstructured),
 		ntopts.SyncWithGitSource(rootSyncAID, ntopts.Unstructured),
 	)
-	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSync0ID)
 	rootSyncA := nomostest.RootSyncObjectV1Beta1FromRootRepo(nt, rootSyncAID.Name)
+	sync0ReconcilerName := core.RootReconcilerName(rootSync0ID.Name)
 	syncAReconcilerName := core.RootReconcilerName(rootSyncA.Name)
 	syncANN := rootSyncAID.ObjectKey
-	if err := nt.Validate(controllers.RootSyncLegacyClusterRoleBindingName, "", &rbacv1.ClusterRoleBinding{},
-		testpredicates.ClusterRoleBindingSubjectNamesEqual(nomostest.DefaultRootReconcilerName, syncAReconcilerName)); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(controllers.RootSyncLegacyClusterRoleBindingName, "", &rbacv1.ClusterRoleBinding{},
+		testpredicates.ClusterRoleBindingSubjectNamesEqual(sync0ReconcilerName, syncAReconcilerName)))
 	nt.T.Logf("Set custom roleRef overrides on RootSync %s", syncANN.Name)
 	rootSyncA.Spec.SafeOverride().RoleRefs = []v1beta1.RootSyncRoleRef{
 		{
@@ -107,15 +107,13 @@ func TestRootSyncRoleRefs(t *testing.T) {
 	})
 	tg.Go(func() error {
 		return nt.Validate(controllers.RootSyncLegacyClusterRoleBindingName, "", &rbacv1.ClusterRoleBinding{},
-			testpredicates.ClusterRoleBindingSubjectNamesEqual(nomostest.DefaultRootReconcilerName))
+			testpredicates.ClusterRoleBindingSubjectNamesEqual(sync0ReconcilerName))
 	})
 	tg.Go(func() error {
 		return nt.Validate(controllers.RootSyncBaseClusterRoleBindingName, "", &rbacv1.ClusterRoleBinding{},
 			testpredicates.ClusterRoleBindingSubjectNamesEqual(syncAReconcilerName))
 	})
-	if err := tg.Wait(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(tg.Wait())
 
 	nt.T.Logf("Remove some but not all roleRefs from %s to verify garbage collection", syncANN.Name)
 	rootSyncA.Spec.SafeOverride().RoleRefs = []v1beta1.RootSyncRoleRef{
@@ -125,7 +123,7 @@ func TestRootSyncRoleRefs(t *testing.T) {
 		},
 	}
 	nt.Must(rootSyncGitRepo.Add(
-		fmt.Sprintf("acme/namespaces/%s/%s.yaml", configsync.ControllerNamespace, rootSyncA.Name),
+		fmt.Sprintf("acme/namespaces/%s/%s.yaml", rootSyncA.Namespace, rootSyncA.Name),
 		rootSyncA,
 	))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Reduce RoleRefs"))
@@ -136,42 +134,34 @@ func TestRootSyncRoleRefs(t *testing.T) {
 	})
 	tg.Go(func() error {
 		return nt.Validate(controllers.RootSyncLegacyClusterRoleBindingName, "", &rbacv1.ClusterRoleBinding{},
-			testpredicates.ClusterRoleBindingSubjectNamesEqual(nomostest.DefaultRootReconcilerName))
+			testpredicates.ClusterRoleBindingSubjectNamesEqual(sync0ReconcilerName))
 	})
 	tg.Go(func() error {
 		return nt.Validate(controllers.RootSyncBaseClusterRoleBindingName, "", &rbacv1.ClusterRoleBinding{},
 			testpredicates.ClusterRoleBindingSubjectNamesEqual(syncAReconcilerName))
 	})
-	if err := tg.Wait(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(tg.Wait())
 
 	nt.T.Logf("Delete the RootSync %s to verify garbage collection", syncANN.Name)
 	nt.Must(rootSyncGitRepo.Remove(
 		nomostest.StructuredNSPath(rootSyncA.Namespace, rootSyncA.Name),
 	))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Prune RootSync"))
-	if err := nt.WatchForSync(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
-		nomostest.DefaultRootSha1Fn, nomostest.RootSyncHasStatusSyncCommit, nil); err != nil {
-		nt.T.Fatal(err)
-	}
-	if err := nt.Watcher.WatchForNotFound(kinds.RootSyncV1Beta1(), syncANN.Name, syncANN.Namespace); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForSync(kinds.RootSyncV1Beta1(), rootSync0ID.Name, rootSync0ID.Namespace,
+		nt.SyncSources[rootSync0ID]))
+	nt.Must(nt.Watcher.WatchForNotFound(kinds.RootSyncV1Beta1(), syncANN.Name, syncANN.Namespace))
 	tg = taskgroup.New()
 	tg.Go(func() error {
 		return validateRoleRefs(nt, configsync.RootSyncKind, syncANN, []v1beta1.RootSyncRoleRef{})
 	})
 	tg.Go(func() error {
 		return nt.Validate(controllers.RootSyncLegacyClusterRoleBindingName, "", &rbacv1.ClusterRoleBinding{},
-			testpredicates.ClusterRoleBindingSubjectNamesEqual(nomostest.DefaultRootReconcilerName))
+			testpredicates.ClusterRoleBindingSubjectNamesEqual(sync0ReconcilerName))
 	})
 	tg.Go(func() error {
 		return nt.ValidateNotFound(controllers.RootSyncBaseClusterRoleBindingName, "", &rbacv1.ClusterRoleBinding{})
 	})
-	if err := tg.Wait(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(tg.Wait())
 }
 
 // This helper function verifies that the specified role refs are mapped to

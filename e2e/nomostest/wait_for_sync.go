@@ -22,6 +22,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"kpt.dev/configsync/e2e/nomostest/retry"
+	"kpt.dev/configsync/e2e/nomostest/syncsource"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
@@ -105,12 +107,6 @@ func SkipReadyCheck() WatchForAllSyncsOptions {
 	}
 }
 
-// SyncPathPredicatePair is a pair of the sync directory and the predicate.
-type SyncPathPredicatePair struct {
-	Path      string
-	Predicate func(string) testpredicates.Predicate
-}
-
 // WatchForAllSyncs calls WatchForSync on all Syncs in nt.SyncSources.
 //
 // If you want to validate specific fields of a Sync object, use
@@ -153,9 +149,8 @@ func (nt *NT) WatchForAllSyncs(options ...WatchForAllSyncsOptions) error {
 			}
 			idPtr := id
 			tg.Go(func() error {
-				return nt.WatchForSync(kinds.RootSyncV1Beta1(), idPtr.Name, idPtr.Namespace,
-					DefaultRootSha1Fn, RootSyncHasStatusSyncCommit,
-					&SyncPathPredicatePair{Path: source.Path(), Predicate: RootSyncHasStatusSyncPath},
+				return nt.WatchForSync(
+					kinds.RootSyncV1Beta1(), idPtr.Name, idPtr.Namespace, source,
 					watchOptions...)
 			})
 		}
@@ -168,9 +163,8 @@ func (nt *NT) WatchForAllSyncs(options ...WatchForAllSyncsOptions) error {
 			}
 			idPtr := id
 			tg.Go(func() error {
-				return nt.WatchForSync(kinds.RepoSyncV1Beta1(), idPtr.Name, idPtr.Namespace,
-					DefaultRepoSha1Fn, RepoSyncHasStatusSyncCommit,
-					&SyncPathPredicatePair{Path: source.Path(), Predicate: RepoSyncHasStatusSyncPath},
+				return nt.WatchForSync(
+					kinds.RepoSyncV1Beta1(), idPtr.Name, idPtr.Namespace, source,
 					watchOptions...)
 			})
 		}
@@ -184,18 +178,12 @@ func (nt *NT) WatchForAllSyncs(options ...WatchForAllSyncsOptions) error {
 //   - gvk (required) is the sync object GroupVersionKind
 //   - name (required) is the sync object name
 //   - namespace (required) is the sync object namespace
-//   - sha1Func (required) is the function that to compute the expected commit.
-//   - syncSha1 (required) is a Predicate factory used to validate whether the
-//     object is synced, given the expected commit.
-//   - syncDirPair (optional) is a pair of sync dir and the corresponding
-//     predicate to validate the config directory.
+//   - source (required) is the expectations for this RSync.
 //   - opts (optional) allows configuring the watcher (e.g. timeout)
 func (nt *NT) WatchForSync(
 	gvk schema.GroupVersionKind,
 	name, namespace string,
-	sha1Func Sha1Func,
-	syncSha1 func(string) testpredicates.Predicate,
-	syncDirPair *SyncPathPredicatePair,
+	source syncsource.SyncSource,
 	opts ...testwatcher.WatchOption,
 ) error {
 	nt.T.Helper()
@@ -203,26 +191,37 @@ func (nt *NT) WatchForSync(
 		// If namespace is empty, use the default namespace
 		namespace = configsync.ControllerNamespace
 	}
-	nn := types.NamespacedName{
-		Name:      name,
-		Namespace: namespace,
-	}
-	sha1, err := sha1Func(nt, nn)
-	if err != nil {
-		return fmt.Errorf("failed to retrieve sha1: %w", err)
-	}
 
 	predicates := []testpredicates.Predicate{
 		// Wait until status.observedGeneration matches metadata.generation
 		testpredicates.HasObservedLatestGeneration(nt.Scheme),
 		// Wait until metadata.deletionTimestamp is missing, and conditions do not iniclude Reconciling=True or Stalled=True
 		testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
+	}
+
+	expectedSyncPath := source.Path()
+	expectedCommit, err := source.Commit()
+	if err != nil {
+		return err
+	}
+
+	switch gvk.Kind {
+	case configsync.RootSyncKind:
 		// Wait until expected commit/version is parsed, rendered, and synced
-		syncSha1(sha1),
+		predicates = append(predicates, RootSyncHasStatusSyncCommit(expectedCommit))
+		// Wait until expected directory/chart-name is parsed, rendered, and synced
+		predicates = append(predicates, RootSyncHasStatusSyncPath(expectedSyncPath))
+	case configsync.RepoSyncKind:
+		// Wait until expected commit/version is parsed, rendered, and synced
+		predicates = append(predicates, RepoSyncHasStatusSyncCommit(expectedCommit))
+		// Wait until expected directory/chart-name is parsed, rendered, and synced
+		predicates = append(predicates, RepoSyncHasStatusSyncPath(expectedSyncPath))
+	default:
+		return retry.NewTerminalError(
+			fmt.Errorf("%w: got %s, want RootSync or RepoSync",
+				testpredicates.ErrWrongType, gvk.Kind))
 	}
-	if syncDirPair != nil {
-		predicates = append(predicates, syncDirPair.Predicate(syncDirPair.Path))
-	}
+
 	opts = append(opts, testwatcher.WatchPredicates(predicates...))
 
 	err = nt.Watcher.WatchObject(gvk, name, namespace, opts...)

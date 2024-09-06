@@ -655,40 +655,28 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 	nt.Must(nt.WatchForAllSyncs())
 	role := &rbacv1.Role{}
 	nt.T.Logf("Ensure the Role is managed by Namespace Repo %s", repoSync1Key)
-	err := nt.Validate("pods", testNs, role,
+	nt.Must(nt.Validate("pods", testNs, role,
 		roleHasRules(roleObj.Rules),
-		testpredicates.IsManagedBy(nt.Scheme, declared.Scope(repoSync1Key.Namespace), repoSync1Key.Name))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		testpredicates.IsManagedBy(nt.Scheme, declared.Scope(repoSync1Key.Namespace), repoSync1Key.Name)))
 	roleResourceVersion := role.ResourceVersion
 
 	// Validate no errors from root reconciler.
-	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: rootSyncKey,
 		// RepoSync already included in the default resource count and operations
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	nt.MetricsExpectations.AddObjectApply(configsync.RepoSyncKind, repoSync1Key, roleObj)
 
 	// Validate no errors from namespace reconciler #1.
-	err = nomostest.ValidateStandardMetricsForRepoSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRepoSync(nt, metrics.Summary{
 		Sync: repoSync1Key,
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	// Validate no errors from namespace reconciler #2.
-	err = nomostest.ValidateStandardMetricsForRepoSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRepoSync(nt, metrics.Summary{
 		Sync: repoSync2Key,
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	nt.T.Logf("Declare a conflicting Role in another Namespace repo: %s", repoSync2Key)
 	nt.Must(repoSync2GitRepo.Add(podRoleFilePath, roleObj))
@@ -696,26 +684,17 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 
 	nt.T.Logf("Only RepoSync %s reports the conflict error because kpt_applier won't update the resource", repoSync2Key)
 	nt.WaitForRepoSyncSyncError(repoSync2Key.Namespace, repoSync2Key.Name, status.ManagementConflictErrorCode, "detected a management conflict", nil)
-	err = nt.WatchForSync(kinds.RepoSyncV1Beta1(), repoSync1Key.Name, repoSync1Key.Namespace,
-		nomostest.DefaultRepoSha1Fn, nomostest.RepoSyncHasStatusSyncCommit, nil)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForSync(kinds.RepoSyncV1Beta1(), repoSync1ID.Name, repoSync1ID.Namespace,
+		nt.SyncSources[repoSync1ID]))
 	nt.T.Logf("The Role resource version should not be changed")
-	err = nt.Validate("pods", testNs, &rbacv1.Role{},
-		testpredicates.ResourceVersionEquals(nt.Scheme, roleResourceVersion))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate("pods", testNs, &rbacv1.Role{},
+		testpredicates.ResourceVersionEquals(nt.Scheme, roleResourceVersion)))
 
 	nt.T.Logf("Stop the admission webhook, the remediator should not be affected, which still reports the conflicts")
 	nomostest.StopWebhook(nt)
 	nt.WaitForRepoSyncSyncError(repoSync2Key.Namespace, repoSync2Key.Name, status.ManagementConflictErrorCode, "detected a management conflict", nil)
-	err = nt.WatchForSync(kinds.RepoSyncV1Beta1(), repoSync1Key.Name, repoSync1Key.Namespace,
-		nomostest.DefaultRepoSha1Fn, nomostest.RepoSyncHasStatusSyncCommit, nil)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.WatchForSync(kinds.RepoSyncV1Beta1(), repoSync1ID.Name, repoSync1ID.Namespace,
+		nt.SyncSources[repoSync1ID]))
 	nt.T.Logf("Validate conflict metric is emitted from Namespace reconciler %s", repoSync2Key)
 	repoSync2Labels, err := nomostest.MetricLabelsForRepoSync(nt, repoSync2Key)
 	if err != nil {
@@ -723,15 +702,12 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 	}
 	commitHash := repoSync2GitRepo.MustHash(nt.T)
 
-	err = nomostest.ValidateMetrics(nt,
+	nt.Must(nomostest.ValidateMetrics(nt,
 		nomostest.ReconcilerSyncError(nt, repoSync2Labels, commitHash),
 		nomostest.ReconcilerErrorMetrics(nt, repoSync2Labels, commitHash, metrics.ErrorSummary{
 			Conflicts: 1,
 			Sync:      1,
-		}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		})))
 
 	nt.T.Logf("Remove the declaration from one Namespace repo %s", repoSync1Key)
 	nt.Must(repoSync1GitRepo.Remove(podRoleFilePath))
@@ -739,46 +715,34 @@ func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
 	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Logf("Ensure the Role is managed by the other Namespace repo %s", repoSync2Key)
-	err = nt.Validate("pods", testNs, &rbacv1.Role{},
+	nt.Must(nt.Validate("pods", testNs, &rbacv1.Role{},
 		roleHasRules(roleObj.Rules),
-		testpredicates.IsManagedBy(nt.Scheme, declared.Scope(repoSync2Key.Namespace), repoSync2Key.Name))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		testpredicates.IsManagedBy(nt.Scheme, declared.Scope(repoSync2Key.Namespace), repoSync2Key.Name)))
 
 	// Validate no errors from root reconciler.
-	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: rootSyncKey,
 		// RepoSync already included in the default resource count and operations
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	nt.MetricsExpectations.AddObjectDelete(configsync.RepoSyncKind, repoSync1Key, roleObj)
 
 	// Validate no errors from namespace reconciler #1.
-	err = nomostest.ValidateStandardMetricsForRepoSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRepoSync(nt, metrics.Summary{
 		Sync: repoSync1Key,
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	nt.MetricsExpectations.AddObjectApply(configsync.RepoSyncKind, repoSync2Key, roleObj)
 
 	// Validate no errors from namespace reconciler #2.
-	err = nomostest.ValidateStandardMetricsForRepoSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRepoSync(nt, metrics.Summary{
 		Sync: repoSync2Key,
 		Errors: metrics.ErrorSummary{
 			// resource_conflicts_total is cumulative and ony resets whe the commit changes
 			// TODO: Fix resource_conflicts_total to reflect the actual current total number of conflicts.
 			Conflicts: 1,
 		},
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 }
 
 func TestControllerValidationErrors(t *testing.T) {

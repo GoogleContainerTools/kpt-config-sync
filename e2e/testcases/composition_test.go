@@ -37,7 +37,6 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configmanagement"
-	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/declared"
@@ -78,6 +77,9 @@ import (
 // 4. R*Sync status isn't updated after sync without external input.
 func TestComposition(t *testing.T) {
 	lvl0ID := nomostest.DefaultRootSyncID
+	lvl1ID := core.ID{GroupKind: nomostest.DefaultRootSyncID.GroupKind, ObjectKey: nomostest.RootSyncNN("level-1")}
+	lvl2ID := core.ID{GroupKind: kinds.RepoSyncV1Beta1().GroupKind(), ObjectKey: types.NamespacedName{Namespace: testNs, Name: "level-2"}}
+	lvl3ID := core.ID{GroupKind: kinds.RepoSyncV1Beta1().GroupKind(), ObjectKey: types.NamespacedName{Namespace: testNs, Name: "level-3"}}
 	nt := nomostest.New(t,
 		nomostesting.MultiRepos,
 		ntopts.WithDelegatedControl,
@@ -85,9 +87,9 @@ func TestComposition(t *testing.T) {
 		ntopts.RepoSyncPermissions(policy.RepoSyncAdmin(), policy.CoreAdmin())) // NS reconciler manages RepoSyncs and ConfigMaps
 
 	lvl0NN := lvl0ID.ObjectKey
-	lvl1NN := nomostest.RootSyncNN("level-1")
-	lvl2NN := types.NamespacedName{Namespace: testNs, Name: "level-2"}
-	lvl3NN := types.NamespacedName{Namespace: testNs, Name: "level-3"}
+	lvl1NN := lvl1ID.ObjectKey
+	lvl2NN := lvl2ID.ObjectKey
+	lvl3NN := lvl3ID.ObjectKey
 	lvl4NN := types.NamespacedName{Namespace: testNs, Name: "level-4"}
 
 	lvl0Repo := nt.SyncSourceGitReadWriteRepository(lvl0ID)
@@ -97,46 +99,9 @@ func TestComposition(t *testing.T) {
 	// Use a subdirectory under the root-sync repo to make cleanup easy
 	lvl0SubDir := filepath.Join(lvl0Sync.Spec.Git.Dir, "level-0")
 
-	lvl1Sync := nomostest.RootSyncObjectV1Beta1FromOtherRootRepo(nt, lvl1NN.Name, lvl0NN.Name)
-	lvl1Sync.Spec.Git.Dir = lvl1NN.Name
-
 	lvl2RB := nomostest.RepoSyncRoleBinding(lvl2NN)
-	lvl2Sync := nomostest.RepoSyncObjectV1Beta1FromOtherRootRepo(nt, lvl2NN, lvl0NN.Name)
-	lvl2Sync.Spec.Git.Dir = lvl2NN.Name
-
 	lvl3RB := nomostest.RepoSyncRoleBinding(lvl3NN)
-	lvl3Sync := nomostest.RepoSyncObjectV1Beta1FromOtherRootRepo(nt, lvl3NN, lvl0NN.Name)
-	lvl3Sync.Spec.Git.Dir = lvl3NN.Name
 
-	// RepoSync level-2 depends on RoleBinding level-2.
-	// RepoSync level-3 depends on RoleBinding level-3.
-	// But the RoleBindings are managed by RootSync root-sync (level-0),
-	// and Config Sync doesn't support external dependencies.
-	// Since RepoSync level-3 is managed by RepoSync level-2,
-	// and RepoSync level-2 is manage by RootSync level-1,
-	// and RootSync level-1 is manage by RootSync root-sync (level-0),
-	// we need to make RepoSync level-1 depend on both RoleBindings,
-	// so the RoleBindings are deleted after both RepoSyncs.
-	if err := nomostest.SetDependencies(lvl1Sync, lvl2RB, lvl3RB); err != nil {
-		nt.T.Fatal(err)
-	}
-
-	// Remove files to prune objects before the R*Syncs are deleted.
-	// Use separate functions to allow independent failure to be tolerated,
-	// which can happen if the previous test failed when partially complete.
-	// Cleanups execute in the reverse order they are added.
-	t.Cleanup(func() {
-		cleanupManagedSync(nt, lvl0Repo, lvl0SubDir, lvl0Sync)
-	})
-	t.Cleanup(func() {
-		cleanupManagedSync(nt, lvl0Repo, lvl1Sync.Spec.Git.Dir, lvl1Sync)
-	})
-	t.Cleanup(func() {
-		cleanupManagedSync(nt, lvl0Repo, lvl2Sync.Spec.Git.Dir, lvl2Sync)
-	})
-	t.Cleanup(func() {
-		cleanupManagedSync(nt, lvl0Repo, lvl3Sync.Spec.Git.Dir, lvl3Sync)
-	})
 	// Print reconciler logs for R*Syncs that aren't in nt.SyncSources.
 	t.Cleanup(func() {
 		if t.Failed() {
@@ -156,7 +121,7 @@ func TestComposition(t *testing.T) {
 	nt.Must(lvl0Repo.CommitAndPush("Adding Namespace & RoleBindings for RepoSyncs"))
 
 	nt.T.Log("Waiting for R*Syncs to be synced...")
-	waitForSync(nt, commitForRepo(lvl0Repo), lvl0Sync)
+	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("Validating synced objects are reconciled...")
 	validateStatusCurrent(nt, lvl0Repo.MustGetAll(nt.T, lvl0SubDir, true)...)
@@ -164,6 +129,19 @@ func TestComposition(t *testing.T) {
 	nt.Must(nomostest.CreateNamespaceSecrets(nt, lvl2NN.Namespace))
 
 	// lvl1 RootSync
+	lvl1Sync := nomostest.RootSyncObjectV1Beta1FromOtherRootRepo(nt, lvl1NN.Name, lvl0NN.Name)
+	lvl1Sync.Spec.Git.Dir = lvl1NN.Name
+	nomostest.SetExpectedSyncPath(nt, lvl1ID, lvl1NN.Name)
+	// RepoSync level-2 depends on RoleBinding level-2.
+	// RepoSync level-3 depends on RoleBinding level-3.
+	// But the RoleBindings are managed by RootSync root-sync (level-0),
+	// and Config Sync doesn't support external dependencies.
+	// Since RepoSync level-3 is managed by RepoSync level-2,
+	// and RepoSync level-2 is manage by RootSync level-1,
+	// and RootSync level-1 is manage by RootSync root-sync (level-0),
+	// we need to make RepoSync level-1 depend on both RoleBindings,
+	// so the RoleBindings are deleted after both RepoSyncs.
+	nt.Must(nomostest.SetDependencies(lvl1Sync, lvl2RB, lvl3RB))
 	lvl1Path := filepath.Join(lvl0SubDir, fmt.Sprintf("rootsync-%s.yaml", lvl1NN.Name))
 	nt.T.Logf("Adding RootSync %s to the shared repository: %s", lvl1NN.Name, lvl1Path)
 	nt.Must(lvl0Repo.Add(lvl1Path, lvl1Sync))
@@ -171,13 +149,16 @@ func TestComposition(t *testing.T) {
 	nt.Must(lvl0Repo.CommitAndPush(fmt.Sprintf("Adding RootSync: %s", lvl1NN)))
 
 	nt.T.Log("Waiting for R*Syncs to be synced...")
-	waitForSync(nt, commitForRepo(lvl0Repo), lvl0Sync, lvl1Sync)
+	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("Validating synced objects are reconciled...")
 	validateStatusCurrent(nt, lvl0Repo.MustGetAll(nt.T, lvl0SubDir, true)...)
 	// lvl1Sync.Spec.Git.Dir contains no yaml yet, so we don't need to test it for reconciliation yet.
 
 	// lvl2 RepoSync
+	lvl2Sync := nomostest.RepoSyncObjectV1Beta1FromOtherRootRepo(nt, lvl2NN, lvl0NN.Name)
+	lvl2Sync.Spec.Git.Dir = lvl2NN.Name
+	nomostest.SetExpectedSyncPath(nt, lvl2ID, lvl2NN.Name)
 	lvl2Path := filepath.Join(lvl1Sync.Spec.Git.Dir, fmt.Sprintf("reposync-%s.yaml", lvl2NN.Name))
 	nt.T.Logf("Adding RepoSync %s to the shared repository: %s", lvl2NN.Name, lvl2Path)
 	nt.Must(lvl0Repo.Add(lvl2Path, lvl2Sync))
@@ -185,7 +166,7 @@ func TestComposition(t *testing.T) {
 	nt.Must(lvl0Repo.CommitAndPush(fmt.Sprintf("Adding RepoSync: %s", lvl2NN)))
 
 	nt.T.Log("Waiting for R*Syncs to be synced...")
-	waitForSync(nt, commitForRepo(lvl0Repo), lvl0Sync, lvl1Sync, lvl2Sync)
+	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("Validating synced objects are reconciled...")
 	validateStatusCurrent(nt, lvl0Repo.MustGetAll(nt.T, lvl0SubDir, true)...)
@@ -193,6 +174,9 @@ func TestComposition(t *testing.T) {
 	// lvl2Sync.Spec.Git.Dir contains no yaml yet, so we don't need to test it for reconciliation yet.
 
 	// lvl3 RepoSync
+	lvl3Sync := nomostest.RepoSyncObjectV1Beta1FromOtherRootRepo(nt, lvl3NN, lvl0NN.Name)
+	lvl3Sync.Spec.Git.Dir = lvl3NN.Name
+	nomostest.SetExpectedSyncPath(nt, lvl3ID, lvl3NN.Name)
 	lvl3Path := filepath.Join(lvl2Sync.Spec.Git.Dir, fmt.Sprintf("reposync-%s.yaml", lvl3NN.Name))
 	nt.T.Logf("Adding RepoSync %s to the shared repository: %s", lvl3NN.Name, lvl3Path)
 	nt.Must(lvl0Repo.Add(lvl3Path, lvl3Sync))
@@ -200,7 +184,7 @@ func TestComposition(t *testing.T) {
 	nt.Must(lvl0Repo.CommitAndPush(fmt.Sprintf("Adding RepoSync: %s", lvl3NN)))
 
 	nt.T.Log("Waiting for R*Syncs to be synced...")
-	waitForSync(nt, commitForRepo(lvl0Repo), lvl0Sync, lvl1Sync, lvl2Sync, lvl3Sync)
+	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("Validating synced objects are reconciled...")
 	validateStatusCurrent(nt, lvl0Repo.MustGetAll(nt.T, lvl0SubDir, true)...)
@@ -220,7 +204,7 @@ func TestComposition(t *testing.T) {
 	nt.Must(lvl0Repo.CommitAndPush(fmt.Sprintf("Adding ConfigMap: %s", lvl4NN.Name)))
 
 	nt.T.Log("Waiting for R*Syncs to be synced...")
-	waitForSync(nt, commitForRepo(lvl0Repo), lvl0Sync, lvl1Sync, lvl2Sync, lvl3Sync)
+	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("Validating synced objects are reconciled...")
 	validateStatusCurrent(nt, lvl0Repo.MustGetAll(nt.T, lvl0SubDir, true)...)
@@ -350,46 +334,6 @@ func (id gvknn) String() string {
 	return id.ToResourceReference().String()
 }
 
-// waitForSync waits for the specified R*Syncs to be Synced.
-//
-// The reason we can't just use nt.WaitForRepoSyncs is that the R*Syncs for this
-// test are not all in nt.SyncSources, because they're all sharing the same
-// repository.
-//
-// So this function uses the same sha1Func for all R*Syncs.
-func waitForSync(nt *nomostest.NT, sha1Func nomostest.Sha1Func, objs ...client.Object) {
-	nt.T.Helper()
-
-	tg := taskgroup.New()
-	for _, obj := range objs {
-		switch rsync := obj.(type) {
-		case *v1beta1.RootSync:
-			tg.Go(func() error {
-				return nt.WatchForSync(kinds.RootSyncV1Beta1(), rsync.Name, rsync.Namespace,
-					sha1Func, nomostest.RootSyncHasStatusSyncCommit,
-					&nomostest.SyncPathPredicatePair{
-						Path:      rsync.Spec.Git.Dir,
-						Predicate: nomostest.RootSyncHasStatusSyncPath,
-					})
-			})
-		case *v1beta1.RepoSync:
-			tg.Go(func() error {
-				return nt.WatchForSync(kinds.RepoSyncV1Beta1(), rsync.Name, rsync.Namespace,
-					sha1Func, nomostest.RepoSyncHasStatusSyncCommit,
-					&nomostest.SyncPathPredicatePair{
-						Path:      rsync.Spec.Git.Dir,
-						Predicate: nomostest.RepoSyncHasStatusSyncPath,
-					})
-			})
-		default:
-			nt.T.Fatal("Invalid R*Sync type: %T", obj)
-		}
-	}
-	if err := tg.Wait(); err != nil {
-		nt.T.Fatalf("R*Syncs not synced: %v", err)
-	}
-}
-
 func validateStatusCurrent(nt *nomostest.NT, objs ...client.Object) {
 	tg := taskgroup.New()
 	for _, obj := range objs {
@@ -404,37 +348,4 @@ func validateStatusCurrent(nt *nomostest.NT, objs ...client.Object) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-}
-
-func commitForRepo(repo *gitproviders.ReadWriteRepository) nomostest.Sha1Func {
-	return func(_ *nomostest.NT, _ types.NamespacedName) (string, error) {
-		return repo.Hash()
-	}
-}
-
-// cleanupManagedSync deletes the specified dirPath from the specified repo and
-// then waits until the specified sync object is synced.
-// This assumes the specified syncObj is configured to watch the specified
-// dirPath in the specified repo.
-func cleanupManagedSync(nt *nomostest.NT, repo *gitproviders.ReadWriteRepository, dirPath string, syncObj client.Object) {
-	exists, err := repo.Exists(dirPath)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-	if !exists {
-		return
-	}
-	syncGVK, err := kinds.Lookup(syncObj, nt.Scheme)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-	syncNN := client.ObjectKeyFromObject(syncObj)
-
-	nt.T.Logf("Cleaning up %s %s...", syncGVK.Kind, syncNN)
-	nt.Must(repo.Remove(dirPath))
-	nt.Must(repo.AddEmptyDir(dirPath))
-	nt.Must(repo.CommitAndPush(fmt.Sprintf("Remove dir contents: %s ", dirPath)))
-
-	nt.T.Logf("Waiting for %s %s to be synced...", syncGVK.Kind, syncNN)
-	waitForSync(nt, commitForRepo(repo), syncObj)
 }

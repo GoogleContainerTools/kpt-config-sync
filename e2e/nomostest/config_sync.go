@@ -785,6 +785,7 @@ func RootSyncObjectV1Alpha1FromRootRepo(nt *NT, name string) *v1alpha1.RootSync 
 	if !ok {
 		nt.T.Fatalf("expected SyncSources for %s to have *GitSyncSource, but got %T", id, source)
 	}
+	// Use the existing SyncSource expectations.
 	rs := rootSyncObjectV1Alpha1Git(name, gitSource.Repository.SyncURL(), gitSource.SourceFormat)
 	SetRSyncTestDefaults(nt, rs)
 	return rs
@@ -833,6 +834,7 @@ func RootSyncObjectV1Beta1FromRootRepo(nt *NT, name string) *v1beta1.RootSync {
 	if !ok {
 		nt.T.Fatalf("expected SyncSources for %s to have *GitSyncSource, but got %T", id, source)
 	}
+	// Use the existing SyncSource expectations.
 	return nt.RootSyncObjectGitSyncSource(name, gitSource)
 }
 
@@ -849,7 +851,8 @@ func RootSyncObjectV1Beta1FromOtherRootRepo(nt *NT, syncName, repoName string) *
 	if !ok {
 		nt.T.Fatalf("expected SyncSources for %s to have *GitSyncSource, but got %T", repoID, source)
 	}
-	return nt.RootSyncObjectGitSyncSource(syncName, gitSource)
+	// Copy the existing SyncSource expectations to allow independent updates.
+	return nt.RootSyncObjectGit(syncName, gitSource.Repository, gitSource.Branch, gitSource.Revision, gitSource.Directory, gitSource.SourceFormat)
 }
 
 // StructuredNSPath returns structured path with namespace and resourcename in repo.
@@ -898,6 +901,7 @@ func RepoSyncObjectV1Alpha1FromNonRootRepo(nt *NT, nn types.NamespacedName) *v1a
 	if !ok {
 		nt.T.Fatalf("expected SyncSources for %s to have *GitSyncSource, but got %T", id, source)
 	}
+	// Use the existing SyncSource expectations.
 	// RepoSync is always Unstructured. So ignore repo.Format.
 	rs := repoSyncObjectV1Alpha1Git(nn, gitSource.Repository.SyncURL())
 	SetRSyncTestDefaults(nt, rs)
@@ -1170,7 +1174,8 @@ func RepoSyncObjectV1Beta1FromNonRootRepo(nt *NT, nn types.NamespacedName) *v1be
 	if !ok {
 		nt.T.Fatalf("expected SyncSources for %s to have *GitSyncSource, but got %T", id, source)
 	}
-	return nt.RepoSyncObjectGit(nn, gitSource.Repository, gitSource.Branch, gitSource.Revision, gitSource.Directory, gitSource.SourceFormat)
+	// Use the existing SyncSource expectations.
+	return nt.RepoSyncObjectGitSyncSource(nn, gitSource)
 }
 
 // RepoSyncObjectV1Beta1FromOtherRootRepo returns a v1beta1 RepoSync object which
@@ -1186,6 +1191,7 @@ func RepoSyncObjectV1Beta1FromOtherRootRepo(nt *NT, nn types.NamespacedName, rep
 	if !ok {
 		nt.T.Fatalf("expected SyncSources for %s to have *GitSyncSource, but got %T", repoID, source)
 	}
+	// Copy the existing SyncSource expectations to allow independent updates.
 	return nt.RepoSyncObjectGit(nn, gitSource.Repository, gitSource.Branch, gitSource.Revision, gitSource.Directory, gitSource.SourceFormat)
 }
 

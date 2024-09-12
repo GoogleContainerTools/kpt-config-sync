@@ -314,14 +314,20 @@ func (b *BugReporter) fetchResources(ctx context.Context, gv schema.GroupVersion
 	return rd
 }
 
-// fetchConfigMaps provides a set of Readables for the ConfigMap objects under the config-management-system namespace
+// fetchConfigMaps provides a set of Readables for the ConfigMap objects under the controller namespaces
 func (b *BugReporter) fetchConfigMaps(ctx context.Context) (rd []Readable) {
 	redactKeys := []string{"HTTPS_PROXY", "HTTP_PROXY"}
-	ns := configmanagement.ControllerNamespace
-	configMapList, err := b.clientSet.CoreV1().ConfigMaps(ns).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		b.ErrorList = append(b.ErrorList, fmt.Errorf("failed to list %s configmaps: %v", ns, err))
-	} else {
+	var namespaces = []string{
+		configmanagement.ControllerNamespace,
+		configmanagement.RGControllerNamespace,
+		configmanagement.MonitoringNamespace,
+	}
+	for _, ns := range namespaces {
+		configMapList, err := b.clientSet.CoreV1().ConfigMaps(ns).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			b.ErrorList = append(b.ErrorList, fmt.Errorf("failed to list %s configmaps: %v", ns, err))
+			continue
+		}
 		for _, cm := range configMapList.Items {
 			if strings.HasSuffix(cm.Name, "git-sync") {
 				for _, k := range redactKeys {

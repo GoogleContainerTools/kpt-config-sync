@@ -270,7 +270,8 @@ func TestRun(t *testing.T) {
 			expectedRootSync: func() *v1beta1.RootSync {
 				rs := rootSyncOutput.DeepCopy()
 				// Create + Update (source status) + Update (rendering status) + Update (sync status)
-				rs.ObjectMeta.ResourceVersion = "4"
+				rs.ObjectMeta.ResourceVersion = "5"
+				core.SetAnnotation(rs, metadata.SourceCommitAnnotationKey, "abcd123")
 				rs.Status.Status.LastSyncedCommit = sourceCommit
 				rs.Status.Status.Source = v1beta1.SourceStatus{
 					Git: &v1beta1.GitStatus{
@@ -363,7 +364,8 @@ func TestRun(t *testing.T) {
 			expectedRootSync: func() *v1beta1.RootSync {
 				rs := rootSyncOutput.DeepCopy()
 				// Create + Update (source status) + Update (rendering status)
-				rs.ObjectMeta.ResourceVersion = "3"
+				rs.ObjectMeta.ResourceVersion = "4"
+				core.SetAnnotation(rs, metadata.SourceCommitAnnotationKey, "abcd123")
 				rs.Status.Status.Source = v1beta1.SourceStatus{
 					Git: &v1beta1.GitStatus{
 						Repo:   fileSource.SourceRepo,
@@ -410,7 +412,8 @@ func TestRun(t *testing.T) {
 			expectedRootSync: func() *v1beta1.RootSync {
 				rs := rootSyncOutput.DeepCopy()
 				// Create + Update (source status) + Update (rendering status)
-				rs.ObjectMeta.ResourceVersion = "3"
+				rs.ObjectMeta.ResourceVersion = "4"
+				core.SetAnnotation(rs, metadata.SourceCommitAnnotationKey, "abcd123")
 				rs.Status.Status.Source = v1beta1.SourceStatus{
 					Git: &v1beta1.GitStatus{
 						Repo:   fileSource.SourceRepo,
@@ -462,7 +465,8 @@ func TestRun(t *testing.T) {
 			expectedRootSync: func() *v1beta1.RootSync {
 				rs := rootSyncOutput.DeepCopy()
 				// Create + Update (source status) + Update (rendering status) + Update (sync status)
-				rs.ObjectMeta.ResourceVersion = "4"
+				rs.ObjectMeta.ResourceVersion = "5"
+				core.SetAnnotation(rs, metadata.SourceCommitAnnotationKey, "abcd123")
 				rs.Status.Status.LastSyncedCommit = sourceCommit
 				rs.Status.Status.Source = v1beta1.SourceStatus{
 					Git: &v1beta1.GitStatus{
@@ -516,7 +520,8 @@ func TestRun(t *testing.T) {
 			expectedRootSync: func() *v1beta1.RootSync {
 				rs := rootSyncOutput.DeepCopy()
 				// Create + Update (source status) + Update (rendering status) + Update (sync status)
-				rs.ObjectMeta.ResourceVersion = "4"
+				rs.ObjectMeta.ResourceVersion = "5"
+				core.SetAnnotation(rs, metadata.SourceCommitAnnotationKey, "abcd123")
 				rs.Status.Status.LastSyncedCommit = sourceCommit
 				rs.Status.Status.Source = v1beta1.SourceStatus{
 					Git: &v1beta1.GitStatus{
@@ -572,9 +577,10 @@ func TestRun(t *testing.T) {
 			expectedRootSync: func() *v1beta1.RootSync {
 				rs := rootSyncOutput.DeepCopy()
 				// Create + Update (source status) + Update (rendering status)
-				rs.ObjectMeta.ResourceVersion = "4" // TODO: Why 4 and not just 3?
+				rs.ObjectMeta.ResourceVersion = "5" // TODO: Why 4 and not just 3?
 				// Tell reconciler-manager to disable the hydration-controller container
 				core.SetAnnotation(rs, metadata.RequiresRenderingAnnotationKey, "false")
+				core.SetAnnotation(rs, metadata.SourceCommitAnnotationKey, "abcd123")
 				rs.Status.Status.Source = v1beta1.SourceStatus{
 					Git: &v1beta1.GitStatus{
 						Repo:   fileSource.SourceRepo,
@@ -625,9 +631,10 @@ func TestRun(t *testing.T) {
 			expectedRootSync: func() *v1beta1.RootSync {
 				rs := rootSyncOutput.DeepCopy()
 				// Create + Update (source status) + Update (rendering status)
-				rs.ObjectMeta.ResourceVersion = "4" // TODO: Why 4 and not just 3?
+				rs.ObjectMeta.ResourceVersion = "5" // TODO: Why 4 and not just 3?
 				// Tell reconciler-manager to enable the hydration-controller container
 				core.SetAnnotation(rs, metadata.RequiresRenderingAnnotationKey, "true")
+				core.SetAnnotation(rs, metadata.SourceCommitAnnotationKey, "abcd123")
 				rs.Status.Status.Source = v1beta1.SourceStatus{
 					Git: &v1beta1.GitStatus{
 						Repo:   fileSource.SourceRepo,

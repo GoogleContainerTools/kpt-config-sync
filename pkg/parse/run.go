@@ -95,6 +95,16 @@ func DefaultRunFunc(ctx context.Context, p Parser, trigger string, state *reconc
 	// pull the source commit and directory with retries within 5 minutes.
 	gs.Commit, syncDir, gs.Errs = hydrate.SourceCommitAndDirWithRetry(util.SourceRetryBackoff, opts.SourceType, opts.SourceDir, opts.SyncDir, opts.ReconcilerName)
 
+	// Add pre-sync annotations to the object.
+	// If updating the object fails, it's likely due to a signature verification error
+	// from the webhook. In this case, add the error as a source error.
+	if gs.Errs == nil {
+		err := p.setSourceAnnotations(ctx, gs.Commit)
+		if err != nil {
+			gs.Errs = status.Append(gs.Errs, status.SourceError.Wrap(err).Build())
+		}
+	}
+
 	// Generate source spec from Reconciler config
 	gs.Spec = SourceSpecFromFileSource(opts.FileSource, opts.SourceType, gs.Commit)
 

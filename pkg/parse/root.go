@@ -17,6 +17,7 @@ package parse
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strconv"
 
 	"github.com/elliotchance/orderedmap/v2"
@@ -259,6 +260,41 @@ func setSourceStatusFields(source *v1beta1.SourceStatus, newStatus *SourceStatus
 	source.Errors = cse[0 : len(cse)/denominator]
 	source.ErrorSummary = errorSummary
 	source.LastUpdate = newStatus.LastUpdate
+}
+
+func (p *root) setSourceAnnotations(ctx context.Context, commit string) error {
+	rs := &v1beta1.RootSync{}
+	if err := p.Client.Get(ctx, rootsync.ObjectKey(p.SyncName), rs); err != nil {
+		return status.APIServerError(err, "failed to get RootSync for parser")
+	}
+	existing := rs.DeepCopy()
+
+	// Always update the source-commit annotation
+	currentSourceCommit := rs.GetAnnotations()[metadata.SourceCommitAnnotationKey]
+	if commit != currentSourceCommit {
+		core.SetAnnotation(rs, metadata.SourceCommitAnnotationKey, commit)
+	}
+
+	// Update the source-url annotation based on the source type
+	var newSourceURL string
+	if p.Options.SourceType == configsync.OciSource || p.Options.SourceType == configsync.HelmSource {
+		newSourceURL = p.Options.SourceRepo
+	}
+
+	currentImageURL := rs.GetAnnotations()[metadata.SourceURLAnnotationKey]
+	if newSourceURL != currentImageURL {
+		if newSourceURL == "" {
+			core.RemoveAnnotations(rs, metadata.SourceURLAnnotationKey)
+		} else {
+			core.SetAnnotation(rs, metadata.SourceURLAnnotationKey, newSourceURL)
+		}
+	}
+
+	// Patch the RepoSync if any annotations were updated
+	if !reflect.DeepEqual(existing.GetAnnotations(), rs.GetAnnotations()) {
+		return p.Client.Patch(ctx, rs, client.MergeFrom(existing), client.FieldOwner(configsync.FieldManager))
+	}
+	return nil
 }
 
 func (p *root) setRequiresRendering(ctx context.Context, renderingRequired bool) error {

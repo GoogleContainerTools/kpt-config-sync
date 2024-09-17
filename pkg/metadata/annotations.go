@@ -144,6 +144,16 @@ const (
 	// reconciler-manager reads it. If set to true, the reconciler-manager will
 	// create the reconciler with the Namespace controller in the reconciler container.
 	DynamicNSSelectorEnabledAnnotationKey = configsync.ConfigSyncPrefix + "dynamic-ns-selector-enabled"
+
+	// SourceURLAnnotationKey stores the source URL where the source commit is fetched from.
+	// It is only set for OCI and Helm source, and unset for the Git source.
+	// It can be used for OCI signature verification.
+	SourceURLAnnotationKey = configsync.ConfigSyncPrefix + "source-url"
+
+	// SourceCommitAnnotationKey stores the Git source commit fetched by git-sync,
+	// the OCI image digest fetched by oci-sync, or the Helm chart version fetched by helm-sync.
+	// It can be used for OCI signature verification.
+	SourceCommitAnnotationKey = configsync.ConfigSyncPrefix + "source-commit"
 )
 
 // Lifecycle annotations

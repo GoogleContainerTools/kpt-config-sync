@@ -466,20 +466,20 @@ func TestDependencyWithReconciliation(t *testing.T) {
 	tg := taskgroup.New()
 	tg.Go(func() error {
 		return nt.Watcher.WatchObject(kinds.Pod(), pod1Name, namespaceName,
-			[]testpredicates.Predicate{
+			testwatcher.WatchPredicates(
 				pod1SyncPredicate,
 				podCachePredicate(pod1),
 				testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
-			},
+			),
 			testwatcher.WatchTimeout(nt.DefaultWaitTimeout*2))
 	})
 	tg.Go(func() error {
 		return nt.Watcher.WatchObject(kinds.Pod(), pod2Name, namespaceName,
-			[]testpredicates.Predicate{
+			testwatcher.WatchPredicates(
 				pod2SyncPredicate,
 				podCachePredicate(pod2),
 				testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
-			},
+			),
 			testwatcher.WatchTimeout(nt.DefaultWaitTimeout*2))
 	})
 	// Watch in the background
@@ -547,22 +547,22 @@ func TestDependencyWithReconciliation(t *testing.T) {
 	tg = taskgroup.New()
 	tg.Go(func() error {
 		return nt.Watcher.WatchObject(kinds.Pod(), pod1Name, namespaceName,
-			[]testpredicates.Predicate{
+			testwatcher.WatchPredicates(
 				pod1SyncPredicate,
 				podCachePredicate(pod1),
 				pod1DeletionPredicate,
 				testpredicates.ObjectNotFoundPredicate(nt.Scheme),
-			},
+			),
 			testwatcher.WatchTimeout(nt.DefaultWaitTimeout*2))
 	})
 	tg.Go(func() error {
 		return nt.Watcher.WatchObject(kinds.Pod(), pod2Name, namespaceName,
-			[]testpredicates.Predicate{
+			testwatcher.WatchPredicates(
 				pod2SyncPredicate,
 				podCachePredicate(pod2),
 				pod2LastUpdatedPredicate,
 				testpredicates.ObjectNotFoundPredicate(nt.Scheme),
-			},
+			),
 			testwatcher.WatchTimeout(nt.DefaultWaitTimeout*2))
 	})
 
@@ -615,7 +615,7 @@ func TestDependencyWithReconciliation(t *testing.T) {
 	// pod3 will never reconcile (image pull failure)
 	// TODO: kstatus should probably detect image pull failure and time out to Failure status, like it does for scheduling failure.
 	err = multierr.Append(err, nt.Watcher.WatchObject(kinds.Pod(), "pod3", namespaceName,
-		[]testpredicates.Predicate{testpredicates.StatusEquals(nt.Scheme, kstatus.InProgressStatus)}))
+		testwatcher.WatchPredicates(testpredicates.StatusEquals(nt.Scheme, kstatus.InProgressStatus))))
 	err = multierr.Append(err, nt.ValidateNotFound("pod4", namespaceName, &corev1.Pod{}))
 	if err != nil {
 		nt.T.Fatal(err)

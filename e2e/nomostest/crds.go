@@ -21,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/kinds"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -45,7 +46,7 @@ func WaitForCRDs(nt *NT, crds []string) error {
 		tg.Go(func() error {
 			return nt.Watcher.WatchObject(kinds.CustomResourceDefinitionV1(),
 				nn.Name, nn.Namespace,
-				[]testpredicates.Predicate{IsEstablished})
+				testwatcher.WatchPredicates(IsEstablished))
 		})
 	}
 	return tg.Wait()

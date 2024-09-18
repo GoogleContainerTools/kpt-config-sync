@@ -26,6 +26,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
@@ -121,11 +122,8 @@ func TestRevertClusterRole(t *testing.T) {
 	}
 
 	// Ensure the conflict is reverted.
-	err = nt.Watcher.WatchObject(kinds.ClusterRole(), crName, "",
-		[]testpredicates.Predicate{clusterRoleHasRules(declaredRules)})
-	if err != nil {
-		nt.T.Error(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.ClusterRole(), crName, "",
+		testwatcher.WatchPredicates(clusterRoleHasRules(declaredRules))))
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, declaredCr)

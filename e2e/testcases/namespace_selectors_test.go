@@ -27,6 +27,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -177,25 +178,18 @@ func TestNamespaceSelectorUnstructuredFormat(t *testing.T) {
 	bookstoreNSS.Spec.Mode = v1.NSSelectorDynamicMode
 	nt.Must(rootSyncGitRepo.Add("acme/namespace-selector-bookstore.yaml", bookstoreNSS))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Update NamespaceSelector to use dynamic mode"))
-	if err := nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(),
+	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(),
 		configsync.RootSyncName,
 		configsync.ControllerNamespace,
-		[]testpredicates.Predicate{
-			testpredicates.HasAnnotation(
-				metadata.DynamicNSSelectorEnabledAnnotationKey, "true"),
-		}); err != nil {
-		nt.T.Fatal(err)
-	}
-	if err := nt.Watcher.WatchObject(kinds.Deployment(),
+		testwatcher.WatchPredicates(
+			testpredicates.HasAnnotation(metadata.DynamicNSSelectorEnabledAnnotationKey, "true"),
+		)))
+	nt.Must(nt.Watcher.WatchObject(kinds.Deployment(),
 		core.RootReconcilerName(configsync.RootSyncName),
 		configsync.ControllerNamespace,
-		[]testpredicates.Predicate{
-			testpredicates.DeploymentHasEnvVar(
-				reconcilermanager.Reconciler,
-				reconcilermanager.DynamicNSSelectorEnabled, "true"),
-		}); err != nil {
-		nt.T.Fatal(err)
-	}
+		testwatcher.WatchPredicates(
+			testpredicates.DeploymentHasEnvVar(reconcilermanager.Reconciler, reconcilermanager.DynamicNSSelectorEnabled, "true"),
+		)))
 
 	nt.Must(nt.WatchForAllSyncs())
 	validateSelectedAndUnselectedResources(nt,
@@ -219,15 +213,13 @@ func TestNamespaceSelectorUnstructuredFormat(t *testing.T) {
 	})
 
 	nt.Logger.Info("Watching the ResourceGroup object until new selected resources are added to the inventory")
-	if err := nt.Watcher.WatchObject(kinds.ResourceGroup(),
+	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(),
 		configsync.RootSyncName,
 		configsync.ControllerNamespace,
-		[]testpredicates.Predicate{
+		testwatcher.WatchPredicates(
 			testpredicates.ResourceGroupHasObjects(selectedResourcesWithBookstoreNSSAndShoestoreNSS),
 			testpredicates.ResourceGroupMissingObjects(unselectedResourcesWithBookstoreNSSAndShoestoreNSS),
-		}); err != nil {
-		nt.T.Fatal(err)
-	}
+		)))
 	nt.Must(nt.WatchForAllSyncs())
 	validateSelectedAndUnselectedResources(nt,
 		selectedResourcesWithBookstoreNSSAndShoestoreNSS,
@@ -239,23 +231,18 @@ func TestNamespaceSelectorUnstructuredFormat(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Add("acme/namespace-selector-bookstore.yaml", bookstoreNSS))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Update NamespaceSelector to use static mode"))
 
-	if err := nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(),
+	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(),
 		configsync.RootSyncName,
 		configsync.ControllerNamespace,
-		[]testpredicates.Predicate{
-			testpredicates.HasAnnotation(
-				metadata.DynamicNSSelectorEnabledAnnotationKey, "false"),
-		}); err != nil {
-		nt.T.Fatal(err)
-	}
-	if err := nt.Watcher.WatchObject(kinds.Deployment(),
+		testwatcher.WatchPredicates(
+			testpredicates.HasAnnotation(metadata.DynamicNSSelectorEnabledAnnotationKey, "false"),
+		)))
+	nt.Must(nt.Watcher.WatchObject(kinds.Deployment(),
 		core.RootReconcilerName(configsync.RootSyncName),
 		configsync.ControllerNamespace,
-		[]testpredicates.Predicate{
+		testwatcher.WatchPredicates(
 			testpredicates.DeploymentMissingEnvVar(reconcilermanager.Reconciler, reconcilermanager.DynamicNSSelectorEnabled),
-		}); err != nil {
-		nt.T.Fatal(err)
-	}
+		)))
 
 	nt.Logger.Info("Only resources in shoestore are created because bookstore Namespace is not selected")
 	nt.Must(nt.WatchForAllSyncs())
@@ -268,25 +255,18 @@ func TestNamespaceSelectorUnstructuredFormat(t *testing.T) {
 	bookstoreNSS.Spec.Mode = v1.NSSelectorDynamicMode
 	nt.Must(rootSyncGitRepo.Add("acme/namespace-selector-bookstore.yaml", bookstoreNSS))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Update NamespaceSelector to use dynamic mode again"))
-	if err := nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(),
+	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(),
 		configsync.RootSyncName,
 		configsync.ControllerNamespace,
-		[]testpredicates.Predicate{
-			testpredicates.HasAnnotation(
-				metadata.DynamicNSSelectorEnabledAnnotationKey, "true"),
-		}); err != nil {
-		nt.T.Fatal(err)
-	}
-	if err := nt.Watcher.WatchObject(kinds.Deployment(),
+		testwatcher.WatchPredicates(
+			testpredicates.HasAnnotation(metadata.DynamicNSSelectorEnabledAnnotationKey, "true"),
+		)))
+	nt.Must(nt.Watcher.WatchObject(kinds.Deployment(),
 		core.RootReconcilerName(configsync.RootSyncName),
 		configsync.ControllerNamespace,
-		[]testpredicates.Predicate{
-			testpredicates.DeploymentHasEnvVar(
-				reconcilermanager.Reconciler,
-				reconcilermanager.DynamicNSSelectorEnabled, "true"),
-		}); err != nil {
-		nt.T.Fatal(err)
-	}
+		testwatcher.WatchPredicates(
+			testpredicates.DeploymentHasEnvVar(reconcilermanager.Reconciler, reconcilermanager.DynamicNSSelectorEnabled, "true"),
+		)))
 
 	nt.Must(nt.WatchForAllSyncs())
 	validateSelectedAndUnselectedResources(nt,
@@ -298,15 +278,13 @@ func TestNamespaceSelectorUnstructuredFormat(t *testing.T) {
 	nt.MustMergePatch(bookstoreNamespace, `{"metadata":{"labels":{"app":"other"}}}`)
 
 	nt.Logger.Info("Watching the ResourceGroup object until unselected resources are removed from the inventory")
-	if err := nt.Watcher.WatchObject(kinds.ResourceGroup(),
+	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(),
 		configsync.RootSyncName,
 		configsync.ControllerNamespace,
-		[]testpredicates.Predicate{
+		testwatcher.WatchPredicates(
 			testpredicates.ResourceGroupHasObjects(selectedResourcesWithShoestoreNSSOnly),
 			testpredicates.ResourceGroupMissingObjects(unselectedResourcesWithShoestoreNSSOnly),
-		}); err != nil {
-		nt.T.Fatal(err)
-	}
+		)))
 	nt.Must(nt.WatchForAllSyncs())
 	validateSelectedAndUnselectedResources(nt,
 		selectedResourcesWithShoestoreNSSOnly,
@@ -316,15 +294,13 @@ func TestNamespaceSelectorUnstructuredFormat(t *testing.T) {
 	nt.Logger.Info("Update Namespace's label to make it selected again, resources should be selected")
 	nt.MustMergePatch(bookstoreNamespace, fmt.Sprintf(`{"metadata":{"labels":{"app":"%s"}}}`, bookstoreNS))
 
-	if err := nt.Watcher.WatchObject(kinds.ResourceGroup(),
+	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(),
 		configsync.RootSyncName,
 		configsync.ControllerNamespace,
-		[]testpredicates.Predicate{
+		testwatcher.WatchPredicates(
 			testpredicates.ResourceGroupHasObjects(selectedResourcesWithBookstoreNSSAndShoestoreNSS),
 			testpredicates.ResourceGroupMissingObjects(unselectedResourcesWithBookstoreNSSAndShoestoreNSS),
-		}); err != nil {
-		nt.T.Fatal(err)
-	}
+		)))
 	nt.Must(nt.WatchForAllSyncs())
 	validateSelectedAndUnselectedResources(nt,
 		selectedResourcesWithBookstoreNSSAndShoestoreNSS,
@@ -345,10 +321,10 @@ func TestNamespaceSelectorUnstructuredFormat(t *testing.T) {
 	if err := nt.Watcher.WatchObject(kinds.ResourceGroup(),
 		configsync.RootSyncName,
 		configsync.ControllerNamespace,
-		[]testpredicates.Predicate{
+		testwatcher.WatchPredicates(
 			testpredicates.ResourceGroupHasObjects(selectedResourcesWithShoestoreNSSOnly),
 			testpredicates.ResourceGroupMissingObjects(unselectedResourcesWithShoestoreNSSOnly),
-		}); err != nil {
+		)); err != nil {
 		nt.T.Fatal(err)
 	}
 	nt.Must(nt.WatchForAllSyncs())

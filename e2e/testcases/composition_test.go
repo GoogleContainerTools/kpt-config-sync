@@ -270,19 +270,20 @@ func TestComposition(t *testing.T) {
 		tg.Go(func() error {
 			// Stop early if the generation changes. Otherwise wait until timeout.
 			gne := testpredicates.GenerationNotEquals(synedObj.GetGeneration())
-			return nt.Watcher.WatchObject(idPtr.GroupVersionKind, idPtr.Name, idPtr.Namespace, []testpredicates.Predicate{
-				func(obj client.Object) error {
-					if err := ctx.Err(); err != nil {
-						return err // cancelled
-					}
-					if err := gne(obj); err != nil {
-						// Generation changed! Cancel other watches.
-						cancel()
-						return err
-					}
-					return nil
-				},
-			}, testwatcher.WatchTimeout(1*time.Minute))
+			return nt.Watcher.WatchObject(idPtr.GroupVersionKind, idPtr.Name, idPtr.Namespace,
+				testwatcher.WatchPredicates(
+					func(obj client.Object) error {
+						if err := ctx.Err(); err != nil {
+							return err // cancelled
+						}
+						if err := gne(obj); err != nil {
+							// Generation changed! Cancel other watches.
+							cancel()
+							return err
+						}
+						return nil
+					},
+				), testwatcher.WatchTimeout(1*time.Minute))
 		})
 	}
 	if err := tg.Wait(); err != nil {

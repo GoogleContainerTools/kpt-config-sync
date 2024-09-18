@@ -42,6 +42,7 @@ import (
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testutils"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
@@ -77,11 +78,11 @@ func TestReconcilerManagerNormalTeardown(t *testing.T) {
 	t.Log("Validate the RootSync")
 	rootSync := &v1beta1.RootSync{}
 	setNN(rootSync, rootSyncID.ObjectKey)
-	err = nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync.Name, rootSync.Namespace, []testpredicates.Predicate{
-		testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
-		testpredicates.HasFinalizer(metadata.ReconcilerManagerFinalizer),
-	})
-	require.NoError(t, err)
+	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync.Name, rootSync.Namespace,
+		testwatcher.WatchPredicates(
+			testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
+			testpredicates.HasFinalizer(metadata.ReconcilerManagerFinalizer),
+		)))
 
 	t.Log("Validate the RootSync reconciler and its dependencies")
 	rootSyncDependencies := validateRootSyncDependencies(nt, rootSync.Name)
@@ -89,11 +90,11 @@ func TestReconcilerManagerNormalTeardown(t *testing.T) {
 	t.Log("Validate the RepoSync")
 	repoSync := &v1beta1.RepoSync{}
 	setNN(repoSync, repoSyncID.ObjectKey)
-	err = nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSync.Name, repoSync.Namespace, []testpredicates.Predicate{
-		testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
-		testpredicates.HasFinalizer(metadata.ReconcilerManagerFinalizer),
-	})
-	require.NoError(t, err)
+	nt.Must(nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSync.Name, repoSync.Namespace,
+		testwatcher.WatchPredicates(
+			testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
+			testpredicates.HasFinalizer(metadata.ReconcilerManagerFinalizer),
+		)))
 
 	t.Log("Validate the RepoSync reconciler and its dependencies")
 	repoSyncDependencies := validateRepoSyncDependencies(nt, repoSync.Namespace, repoSync.Name)
@@ -137,11 +138,11 @@ func TestReconcilerManagerTeardownInvalidRSyncs(t *testing.T) {
 
 	t.Log("Validate the RootSync")
 	rootSync := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
-	err = nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync.Name, rootSync.Namespace, []testpredicates.Predicate{
-		testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
-		testpredicates.HasFinalizer(metadata.ReconcilerManagerFinalizer),
-	})
-	require.NoError(t, err)
+	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync.Name, rootSync.Namespace,
+		testwatcher.WatchPredicates(
+			testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
+			testpredicates.HasFinalizer(metadata.ReconcilerManagerFinalizer),
+		)))
 
 	t.Log("Validate the RootSync reconciler and its dependencies")
 	rootSyncDependencies := validateRootSyncDependencies(nt, rootSync.Name)
@@ -165,11 +166,11 @@ func TestReconcilerManagerTeardownInvalidRSyncs(t *testing.T) {
 
 	t.Log("Validate the RepoSync")
 	repoSync := k8sobjects.RepoSyncObjectV1Beta1(repoSyncID.Namespace, repoSyncID.Name)
-	err = nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSync.Name, repoSync.Namespace, []testpredicates.Predicate{
-		testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
-		testpredicates.HasFinalizer(metadata.ReconcilerManagerFinalizer),
-	})
-	require.NoError(t, err)
+	nt.Must(nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSync.Name, repoSync.Namespace,
+		testwatcher.WatchPredicates(
+			testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
+			testpredicates.HasFinalizer(metadata.ReconcilerManagerFinalizer),
+		)))
 
 	t.Log("Validate the RepoSync reconciler and its dependencies")
 	repoSyncDependencies := validateRepoSyncDependencies(nt, repoSync.Namespace, repoSync.Name)
@@ -268,9 +269,8 @@ func TestReconcilerManagerTeardownRootSyncWithReconcileTimeout(t *testing.T) {
 		Status:  metav1.ConditionTrue,
 		Type:    v1beta1.RootSyncReconciling,
 	}
-	err := nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync.Name, rootSync.Namespace,
-		[]testpredicates.Predicate{testpredicates.RootSyncHasCondition(&expectedCondition)})
-	require.NoError(t, err)
+	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync.Name, rootSync.Namespace,
+		testwatcher.WatchPredicates(testpredicates.RootSyncHasCondition(&expectedCondition))))
 	nt.T.Log("Validate that all of the managed resources still exist")
 	validateRootSyncDependencies(nt, rootSync.Name)
 
@@ -353,9 +353,8 @@ func TestReconcilerManagerTeardownRepoSyncWithReconcileTimeout(t *testing.T) {
 		Status:  metav1.ConditionTrue,
 		Type:    v1beta1.RepoSyncReconciling,
 	}
-	err := nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSync.Name, repoSync.Namespace,
-		[]testpredicates.Predicate{testpredicates.RepoSyncHasCondition(&expectedCondition)})
-	require.NoError(t, err)
+	nt.Must(nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSync.Name, repoSync.Namespace,
+		testwatcher.WatchPredicates(testpredicates.RepoSyncHasCondition(&expectedCondition))))
 	nt.T.Log("Validate that all of the managed resources still exist")
 	validateRepoSyncDependencies(nt, repoSync.Namespace, repoSync.Name)
 
@@ -496,14 +495,11 @@ func TestManagingReconciler(t *testing.T) {
 	})
 	nt.T.Log("Verify the ImagePullPolicy should be reverted by the reconciler-manager")
 	generation += 2 // generation bumped by 2 because the change will be first applied then reverted by the reconciler-manager
-	err := nt.Watcher.WatchObject(kinds.Deployment(), nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace,
-		[]testpredicates.Predicate{
+	nt.Must(nt.Watcher.WatchObject(kinds.Deployment(), nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace,
+		testwatcher.WatchPredicates(
 			testpredicates.HasGenerationAtLeast(generation),
 			testpredicates.DeploymentContainerPullPolicyEquals(reconcilermanager.Reconciler, originalImagePullPolicy),
-		})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		)))
 
 	// test case 2: the reconciler-manager should manage the replicas field, so that the reconciler can be resumed after pause.
 	nt.T.Log("Manually update the replicas")
@@ -511,11 +507,8 @@ func TestManagingReconciler(t *testing.T) {
 	nt.MustMergePatch(reconcilerDeployment, fmt.Sprintf(`{"spec": {"replicas": %d}}`, newReplicas))
 	nt.T.Log("Verify the reconciler-manager should revert the replicas change")
 	generation += 2 // generation bumped by 2 because the change will be first applied then reverted by the reconciler-manager
-	err = nt.Watcher.WatchObject(kinds.Deployment(), nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace,
-		[]testpredicates.Predicate{testpredicates.HasGenerationAtLeast(generation), hasReplicas(managedReplicas)})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.Deployment(), nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace,
+		testwatcher.WatchPredicates(testpredicates.HasGenerationAtLeast(generation), hasReplicas(managedReplicas))))
 	generation = getDeploymentGeneration(nt, nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace)
 
 	// test case 3:  the reconciler-manager should not revert the change to the fields that are not owned by reconciler-manager
@@ -531,17 +524,14 @@ func TestManagingReconciler(t *testing.T) {
 
 	nt.T.Log("Verify the reconciler-manager does not revert the change")
 	generation++ // generation bumped by 1 because reconicler-manager should not revert this change
-	err = nt.Watcher.WatchObject(kinds.Deployment(), nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace,
-		[]testpredicates.Predicate{
+	nt.Must(nt.Watcher.WatchObject(kinds.Deployment(), nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace,
+		testwatcher.WatchPredicates(
 			testpredicates.HasGenerationAtLeast(generation),
 			firstContainerTerminationMessagePathEquals("dev/termination-message"),
 			firstContainerStdinEquals(true),
 			hasTolerations(modifiedTolerations),
 			hasPriorityClassName("system-node-critical"),
-		})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		)))
 	generation = getDeploymentGeneration(nt, nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace)
 	// change the fields back to default values
 	mustUpdateRootReconciler(nt, func(d *appsv1.Deployment) {
@@ -551,17 +541,14 @@ func TestManagingReconciler(t *testing.T) {
 		d.Spec.Template.Spec.PriorityClassName = ""
 	})
 	generation++ // generation bumped by 1 because reconciler-manager should not revert this change
-	err = nt.Watcher.WatchObject(kinds.Deployment(), nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace,
-		[]testpredicates.Predicate{
+	nt.Must(nt.Watcher.WatchObject(kinds.Deployment(), nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace,
+		testwatcher.WatchPredicates(
 			testpredicates.HasGenerationAtLeast(generation),
 			firstContainerTerminationMessagePathEquals("dev/termination-log"),
 			firstContainerStdinEquals(false),
 			hasTolerations(originalTolerations),
 			hasPriorityClassName(""),
-		})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		)))
 	generation = getDeploymentGeneration(nt, nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace)
 
 	// test case 4: the reconciler-manager should update the reconciler Deployment if the manifest in the ConfigMap has been changed.
@@ -580,14 +567,11 @@ func TestManagingReconciler(t *testing.T) {
 	nomostest.DeletePodByLabel(nt, "app", reconcilermanager.ManagerName, true)
 	nt.T.Log("Verify the reconciler Deployment has been updated to the new manifest")
 	generation++ // generation bumped by 1 to apply the new change in the default manifests declared in the Config Map
-	err = nt.Watcher.WatchObject(kinds.Deployment(), nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace,
-		[]testpredicates.Predicate{
+	nt.Must(nt.Watcher.WatchObject(kinds.Deployment(), nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace,
+		testwatcher.WatchPredicates(
 			testpredicates.HasGenerationAtLeast(generation),
 			testpredicates.DeploymentContainerPullPolicyEquals(reconcilermanager.Reconciler, updatedImagePullPolicy),
-		})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		)))
 	generation = getDeploymentGeneration(nt, nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace)
 
 	// test case 5: the reconciler-manager should add the gcenode-askpass-sidecar container when needed
@@ -599,11 +583,8 @@ func TestManagingReconciler(t *testing.T) {
 	nt.MustMergePatch(rs, `{"spec":{"git":{"auth":"gcpserviceaccount","secretRef":{"name":""},"gcpServiceAccountEmail":"test-gcp-sa-email@test-project.iam.gserviceaccount.com"}}}`)
 	nt.T.Log("Verify the gcenode-askpass-sidecar container should exist")
 	generation++ // generation bumped by 1 to apply the new sidecar container and/or the GSA email address.
-	err = nt.Watcher.WatchObject(kinds.Deployment(), nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace,
-		[]testpredicates.Predicate{testpredicates.HasGenerationAtLeast(generation), templateForGcpServiceAccountAuthType()})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.Deployment(), nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace,
+		testwatcher.WatchPredicates(testpredicates.HasGenerationAtLeast(generation), templateForGcpServiceAccountAuthType())))
 	generation = getDeploymentGeneration(nt, nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace)
 
 	// test case 6: the reconciler-manager should mount the git-creds volumes again if the auth type requires a git secret
@@ -611,14 +592,9 @@ func TestManagingReconciler(t *testing.T) {
 	nt.MustMergePatch(rs, `{"spec":{"git":{"auth":"ssh","secretRef":{"name":"git-creds"}}}}`)
 	nt.T.Log("Verify the git-creds volume exists and the gcenode-askpass-sidecar container is gone")
 	generation++ // generation bumped by 1 to add the git-cred volume again
-	if err = nomostest.SetupFakeSSHCreds(nt, rs.Kind, nomostest.RootSyncNN(rs.Name), configsync.AuthSSH, controllers.GitCredentialVolume); err != nil {
-		nt.T.Fatal(err)
-	}
-	err = nt.Watcher.WatchObject(kinds.Deployment(), nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace,
-		[]testpredicates.Predicate{testpredicates.HasGenerationAtLeast(generation), templateForSSHAuthType()})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nomostest.SetupFakeSSHCreds(nt, rs.Kind, nomostest.RootSyncNN(rs.Name), configsync.AuthSSH, controllers.GitCredentialVolume))
+	nt.Must(nt.Watcher.WatchObject(kinds.Deployment(), nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace,
+		testwatcher.WatchPredicates(testpredicates.HasGenerationAtLeast(generation), templateForSSHAuthType())))
 	generation = getDeploymentGeneration(nt, nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace)
 
 	// test case 7: the reconciler-manager should delete the git-creds volume if not needed
@@ -626,11 +602,8 @@ func TestManagingReconciler(t *testing.T) {
 	nt.MustMergePatch(rs, `{"spec": {"git": {"auth": "none", "secretRef": {"name":""}}}}`)
 	nt.T.Log("Verify the git-creds volume is gone")
 	generation++ // generation bumped by 1 to delete the git-creds volume
-	err = nt.Watcher.WatchObject(kinds.Deployment(), nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace,
-		[]testpredicates.Predicate{testpredicates.HasGenerationAtLeast(generation), noGitCredsVolume()})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.Deployment(), nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace,
+		testwatcher.WatchPredicates(testpredicates.HasGenerationAtLeast(generation), noGitCredsVolume())))
 }
 
 type updateFunc func(deployment *appsv1.Deployment)
@@ -696,9 +669,9 @@ func resetReconcilerDeploymentManifests(nt *nomostest.NT, containerName string, 
 	nt.T.Log("Verify the reconciler Deployment has been reverted to the original manifest")
 	err := nt.Watcher.WatchObject(kinds.Deployment(),
 		nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace,
-		[]testpredicates.Predicate{
+		testwatcher.WatchPredicates(
 			testpredicates.DeploymentContainerPullPolicyEquals(containerName, pullPolicy),
-		},
+		),
 	)
 	if err != nil {
 		nt.T.Fatal(err)
@@ -972,12 +945,10 @@ func TestAutopilotReconcilerAdjustment(t *testing.T) {
 
 	nt.T.Log("Wait for the reconciler deployment to be updated once")
 	generation++ // patched by reconciler-manager
-	err = nt.Watcher.WatchObject(kinds.Deployment(), reconcilerNN.Name, reconcilerNN.Namespace, []testpredicates.Predicate{
-		testpredicates.HasGenerationAtLeast(generation),
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.Deployment(), reconcilerNN.Name, reconcilerNN.Namespace,
+		testwatcher.WatchPredicates(
+			testpredicates.HasGenerationAtLeast(generation),
+		)))
 
 	nt.T.Log("Verify the reconciler-manager applied the override memory/CPU request change")
 	reconcilerDeployment = &appsv1.Deployment{}
@@ -1007,12 +978,10 @@ func TestAutopilotReconcilerAdjustment(t *testing.T) {
 
 	nt.T.Log("Wait for the reconciler deployment to be updated twice")
 	generation += 2 // manual update + reconciler-manager revert
-	err = nt.Watcher.WatchObject(kinds.Deployment(), reconcilerNN.Name, reconcilerNN.Namespace, []testpredicates.Predicate{
-		testpredicates.HasGenerationAtLeast(generation),
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.Deployment(), reconcilerNN.Name, reconcilerNN.Namespace,
+		testwatcher.WatchPredicates(
+			testpredicates.HasGenerationAtLeast(generation),
+		)))
 
 	nt.T.Log("Verify the reconciler-manager reverted the manual memory/CPU request change")
 	reconcilerDeployment = &appsv1.Deployment{}
@@ -1048,12 +1017,10 @@ func TestAutopilotReconcilerAdjustment(t *testing.T) {
 	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("Wait for the reconciler-manager to update the reconciler deployment CPU request, only on non-autopilot cluster")
-	err = nt.Watcher.WatchObject(kinds.Deployment(), reconcilerNN.Name, reconcilerNN.Namespace, []testpredicates.Predicate{
-		testpredicates.HasGenerationAtLeast(generation),
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.Deployment(), reconcilerNN.Name, reconcilerNN.Namespace,
+		testwatcher.WatchPredicates(
+			testpredicates.HasGenerationAtLeast(generation),
+		)))
 
 	nt.T.Log("Verify the reconciler-manager changed the reconciler CPU request, only on non-autopilot cluster")
 	reconcilerDeployment = &appsv1.Deployment{}
@@ -1201,9 +1168,10 @@ func TestReconcilerManagerRootSyncCRDMissing(t *testing.T) {
 	nt.Must(nt.KubeClient.Get(rootSyncKey.Name, rootSyncKey.Namespace, rootSync))
 	if nomostest.EnableDeletionPropagation(rootSync) {
 		nt.Must(nt.KubeClient.Update(rootSync))
-		nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync.Name, rootSync.Namespace, []testpredicates.Predicate{
-			testpredicates.HasFinalizer(metadata.ReconcilerFinalizer),
-		}))
+		nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync.Name, rootSync.Namespace,
+			testwatcher.WatchPredicates(
+				testpredicates.HasFinalizer(metadata.ReconcilerFinalizer),
+			)))
 	}
 
 	t.Log("Validate RootSync syncing works")

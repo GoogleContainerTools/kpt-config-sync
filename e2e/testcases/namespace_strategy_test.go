@@ -25,6 +25,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/applier"
@@ -56,19 +57,16 @@ func TestNamespaceStrategy(t *testing.T) {
 	rootSync := k8sobjects.RootSyncObjectV1Alpha1(rootSyncNN.Name)
 	// set the NamespaceStrategy to explicit
 	nt.MustMergePatch(rootSync, `{"spec": {"override": {"namespaceStrategy": "explicit"}}}`)
-	err := nt.Watcher.WatchObject(
+	nt.Must(nt.Watcher.WatchObject(
 		kinds.Deployment(), rootReconcilerNN.Name, rootReconcilerNN.Namespace,
-		[]testpredicates.Predicate{
+		testwatcher.WatchPredicates(
 			testpredicates.DeploymentHasEnvVar(
 				reconcilermanager.Reconciler,
 				reconcilermanager.NamespaceStrategy,
 				string(configsync.NamespaceStrategyExplicit),
 			),
-		},
-	)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		),
+	))
 	// add a resource for which the namespace is not declared/created
 	fooNamespace := k8sobjects.NamespaceObject("foo-implicit")
 	cm1 := k8sobjects.ConfigMapObject(core.Name("cm1"), core.Namespace(fooNamespace.Name))
@@ -93,47 +91,38 @@ func TestNamespaceStrategy(t *testing.T) {
 	// check for success
 	nt.Must(nt.WatchForAllSyncs())
 	// assert that implicit namespace was created
-	err = nt.Validate(fooNamespace.Name, fooNamespace.Namespace, &corev1.Namespace{},
+	nt.Must(nt.Validate(fooNamespace.Name, fooNamespace.Namespace, &corev1.Namespace{},
 		testpredicates.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
 		testpredicates.HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 		testpredicates.HasAnnotation(metadata.ResourceManagerKey, string(declared.RootScope)),
-	)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	))
 	// switch mode back to explicit
 	nt.MustMergePatch(rootSync, `{"spec": {"override": {"namespaceStrategy": "explicit"}}}`)
 	// assert that namespace is no longer managed
-	err = nt.Watcher.WatchObject(kinds.Namespace(), fooNamespace.Name, fooNamespace.Namespace,
-		[]testpredicates.Predicate{
+	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), fooNamespace.Name, fooNamespace.Namespace,
+		testwatcher.WatchPredicates(
 			// still has PreventDeletion
 			testpredicates.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
 			// management annotations should be removed
 			testpredicates.MissingAnnotation(metadata.ResourceManagementKey),
 			testpredicates.MissingAnnotation(metadata.ResourceManagerKey),
-		},
-	)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		),
+	))
 	// explicitly declare the namespace in git
 	nt.Must(rootSyncGitRepo.Add("acme/namespace-foo.yaml", fooNamespace))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Explicitly manage fooNamespace"))
 	nt.Must(nt.WatchForAllSyncs())
 	// assert that namespace is managed
-	err = nt.Watcher.WatchObject(kinds.Namespace(), fooNamespace.Name, fooNamespace.Namespace,
-		[]testpredicates.Predicate{
+	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), fooNamespace.Name, fooNamespace.Namespace,
+		testwatcher.WatchPredicates(
 			// Config Sync uses a single field manager, so the PreventDeletion
 			// annotation is removed.
 			// Users can still declare the annotation in the explicit namespace.
 			testpredicates.MissingAnnotation(common.LifecycleDeleteAnnotation),
 			testpredicates.HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 			testpredicates.HasAnnotation(metadata.ResourceManagerKey, string(declared.RootScope)),
-		},
-	)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		),
+	))
 	// prune the namespace
 	nt.Must(rootSyncGitRepo.Remove("acme/namespace-foo.yaml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Prune namespace-foo"))
@@ -210,13 +199,13 @@ func TestNamespaceStrategyMultipleRootSyncs(t *testing.T) {
 		tg.Go(func() error {
 			return nt.Watcher.WatchObject(
 				kinds.Deployment(), reconcilerNN.Name, reconcilerNN.Namespace,
-				[]testpredicates.Predicate{
+				testwatcher.WatchPredicates(
 					testpredicates.DeploymentHasEnvVar(
 						reconcilermanager.Reconciler,
 						reconcilermanager.NamespaceStrategy,
 						string(configsync.NamespaceStrategyExplicit),
 					),
-				},
+				),
 			)
 		})
 	}
@@ -244,29 +233,27 @@ func TestNamespaceStrategyMultipleRootSyncs(t *testing.T) {
 	tg = taskgroup.New()
 	tg.Go(func() error {
 		return nt.Watcher.WatchObject(kinds.Namespace(), namespaceA.Name, namespaceA.Namespace,
-			[]testpredicates.Predicate{
+			testwatcher.WatchPredicates(
 				// Users can add PreventDeletion annotation to the declared namespace
 				// if they choose, but the reconciler does not add it by default.
 				testpredicates.MissingAnnotation(common.LifecycleDeleteAnnotation),
 				testpredicates.HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 				testpredicates.HasAnnotation(metadata.ResourceManagerKey, declared.ResourceManager(declared.RootScope, rootSyncA.Name)),
-			})
+			))
 	})
 	tg.Go(func() error {
 		return nt.Watcher.WatchObject(kinds.ConfigMap(), cmX.Name, cmX.Namespace,
-			[]testpredicates.Predicate{
+			testwatcher.WatchPredicates(
 				testpredicates.HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 				testpredicates.HasAnnotation(metadata.ResourceManagerKey, declared.ResourceManager(declared.RootScope, rootSyncX.Name)),
-			})
+			))
 	})
 	tg.Go(func() error {
 		return nt.Watcher.WatchObject(kinds.ConfigMap(), cmY.Name, cmY.Namespace,
-			[]testpredicates.Predicate{
+			testwatcher.WatchPredicates(
 				testpredicates.HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
 				testpredicates.HasAnnotation(metadata.ResourceManagerKey, declared.ResourceManager(declared.RootScope, rootSyncY.Name)),
-			})
+			))
 	})
-	if err := tg.Wait(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(tg.Wait())
 }

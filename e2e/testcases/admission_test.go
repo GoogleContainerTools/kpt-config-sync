@@ -26,6 +26,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
@@ -170,18 +171,18 @@ func TestDisableWebhookConfigurationUpdateHierarchy(t *testing.T) {
 
 	tg := taskgroup.New()
 	tg.Go(func() error {
-		predicates := []testpredicates.Predicate{
-			testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
-			testpredicates.DeploymentMissingEnvVar(reconcilermanager.Reconciler, reconcilermanager.WebhookEnabled),
-		}
 		return nt.Watcher.WatchObject(kinds.Deployment(),
-			core.RootReconcilerName(configsync.RootSyncName), configsync.ControllerNamespace, predicates)
+			core.RootReconcilerName(configsync.RootSyncName), configsync.ControllerNamespace,
+			testwatcher.WatchPredicates(
+				testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
+				testpredicates.DeploymentMissingEnvVar(reconcilermanager.Reconciler, reconcilermanager.WebhookEnabled),
+			))
 	})
 	tg.Go(func() error {
 		return nt.Watcher.WatchObject(kinds.Namespace(), "hello", "",
-			[]testpredicates.Predicate{
+			testwatcher.WatchPredicates(
 				testpredicates.MissingAnnotation(metadata.DeclaredFieldsKey),
-			})
+			))
 	})
 	if err := tg.Wait(); err != nil {
 		nt.T.Fatal(err)
@@ -201,18 +202,18 @@ func TestDisableWebhookConfigurationUpdateHierarchy(t *testing.T) {
 	nt.T.Logf("Check declared-fields annotation is re-populated")
 	tg = taskgroup.New()
 	tg.Go(func() error {
-		predicates := []testpredicates.Predicate{
-			testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
-			testpredicates.DeploymentHasEnvVar(reconcilermanager.Reconciler, reconcilermanager.WebhookEnabled, "true"),
-		}
 		return nt.Watcher.WatchObject(kinds.Deployment(),
-			core.RootReconcilerName(configsync.RootSyncName), configsync.ControllerNamespace, predicates)
+			core.RootReconcilerName(configsync.RootSyncName), configsync.ControllerNamespace,
+			testwatcher.WatchPredicates(
+				testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
+				testpredicates.DeploymentHasEnvVar(reconcilermanager.Reconciler, reconcilermanager.WebhookEnabled, "true"),
+			))
 	})
 	tg.Go(func() error {
 		return nt.Watcher.WatchObject(kinds.Namespace(), "hello", "",
-			[]testpredicates.Predicate{
+			testwatcher.WatchPredicates(
 				testpredicates.HasAnnotationKey(metadata.DeclaredFieldsKey),
-			})
+			))
 	})
 	if err := tg.Wait(); err != nil {
 		nt.T.Fatal(err)
@@ -243,18 +244,18 @@ func TestDisableWebhookConfigurationUpdateUnstructured(t *testing.T) {
 
 	tg := taskgroup.New()
 	tg.Go(func() error {
-		predicates := []testpredicates.Predicate{
-			testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
-			testpredicates.DeploymentMissingEnvVar(reconcilermanager.Reconciler, reconcilermanager.WebhookEnabled),
-		}
 		return nt.Watcher.WatchObject(kinds.Deployment(),
-			core.NsReconcilerName(namespaceRepo, configsync.RepoSyncName), configsync.ControllerNamespace, predicates)
+			core.NsReconcilerName(namespaceRepo, configsync.RepoSyncName), configsync.ControllerNamespace,
+			testwatcher.WatchPredicates(
+				testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
+				testpredicates.DeploymentMissingEnvVar(reconcilermanager.Reconciler, reconcilermanager.WebhookEnabled),
+			))
 	})
 	tg.Go(func() error {
 		return nt.Watcher.WatchObject(kinds.ServiceAccount(), "store", namespaceRepo,
-			[]testpredicates.Predicate{
+			testwatcher.WatchPredicates(
 				testpredicates.MissingAnnotation(metadata.DeclaredFieldsKey),
-			})
+			))
 	})
 	if err := tg.Wait(); err != nil {
 		nt.T.Fatal(err)
@@ -274,18 +275,18 @@ func TestDisableWebhookConfigurationUpdateUnstructured(t *testing.T) {
 	nt.T.Logf("Check declared-fields annotation is re-populated")
 	tg = taskgroup.New()
 	tg.Go(func() error {
-		predicates := []testpredicates.Predicate{
-			testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
-			testpredicates.DeploymentHasEnvVar(reconcilermanager.Reconciler, reconcilermanager.WebhookEnabled, "true"),
-		}
 		return nt.Watcher.WatchObject(kinds.Deployment(),
-			core.NsReconcilerName(namespaceRepo, configsync.RepoSyncName), configsync.ControllerNamespace, predicates)
+			core.NsReconcilerName(namespaceRepo, configsync.RepoSyncName), configsync.ControllerNamespace,
+			testwatcher.WatchPredicates(
+				testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
+				testpredicates.DeploymentHasEnvVar(reconcilermanager.Reconciler, reconcilermanager.WebhookEnabled, "true"),
+			))
 	})
 	tg.Go(func() error {
 		return nt.Watcher.WatchObject(kinds.ServiceAccount(), "store", namespaceRepo,
-			[]testpredicates.Predicate{
+			testwatcher.WatchPredicates(
 				testpredicates.HasAnnotationKey(metadata.DeclaredFieldsKey),
-			})
+			))
 	})
 	if err := tg.Wait(); err != nil {
 		nt.T.Fatal(err)

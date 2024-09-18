@@ -28,6 +28,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
@@ -114,10 +115,10 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 	nt.Must(rootSyncGitRepo.CommitAndPush("remove the Kustomize configuration to make the sync fail"))
 	latestCommit = rootSyncGitRepo.MustHash(nt.T)
 	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, rootSyncID.Namespace,
-		[]testpredicates.Predicate{
+		testwatcher.WatchPredicates(
 			testpredicates.RootSyncHasRenderingError(status.ActionableHydrationErrorCode, "Kustomization config file is missing from the sync directory"),
 			testpredicates.RootSyncHasNomosStatus(latestCommit, "ERROR"),
-		}))
+		)))
 
 	nt.T.Log("Add kustomization.yaml back")
 	nt.Must(rootSyncGitRepo.Copy("../testdata/hydration/kustomize-components/kustomization.yml", "./kustomize-components/kustomization.yml"))
@@ -135,10 +136,10 @@ func TestHydrateKustomizeComponents(t *testing.T) {
 	nt.Must(rootSyncGitRepo.CommitAndPush("update kustomization.yaml to make it invalid"))
 	latestCommit = rootSyncGitRepo.MustHash(nt.T)
 	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, rootSyncID.Namespace,
-		[]testpredicates.Predicate{
+		testwatcher.WatchPredicates(
 			testpredicates.RootSyncHasRenderingError(status.ActionableHydrationErrorCode, "failed to run kustomize build"),
 			testpredicates.RootSyncHasNomosStatus(latestCommit, "ERROR"),
-		}))
+		)))
 
 	// one final validation to ensure hydration-controller can be re-disabled
 	nt.T.Log("Remove all dry configs")
@@ -307,20 +308,20 @@ func TestHydrateHelmOverlay(t *testing.T) {
 	nt.Must(rootSyncGitRepo.CommitAndPush("Update kustomization.yaml with duplicated resources"))
 	latestCommit = rootSyncGitRepo.MustHash(nt.T)
 	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, rootSyncID.Namespace,
-		[]testpredicates.Predicate{
+		testwatcher.WatchPredicates(
 			testpredicates.RootSyncHasRenderingError(status.ActionableHydrationErrorCode, "failed to run kustomize build"),
 			testpredicates.RootSyncHasNomosStatus(latestCommit, "ERROR"),
-		}))
+		)))
 
 	nt.T.Log("Make the parsing fail by checking in a deprecated group and kind")
 	nt.Must(rootSyncGitRepo.Copy("../testdata/hydration/deprecated-GK/kustomization.yaml", "./helm-overlay/kustomization.yaml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Update kustomization.yaml to render a deprecated group and kind"))
 	latestCommit = rootSyncGitRepo.MustHash(nt.T)
 	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, rootSyncID.Namespace,
-		[]testpredicates.Predicate{
+		testwatcher.WatchPredicates(
 			testpredicates.RootSyncHasSourceError(nonhierarchical.DeprecatedGroupKindErrorCode, "The config is using a deprecated Group and Kind"),
 			testpredicates.RootSyncHasNomosStatus(latestCommit, "ERROR"),
-		}))
+		)))
 }
 
 func TestHydrateRemoteResources(t *testing.T) {
@@ -339,9 +340,9 @@ func TestHydrateRemoteResources(t *testing.T) {
 	nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "remote-base"}}}`)
 	nomostest.SetExpectedSyncPath(nt, rootSyncID, "remote-base")
 	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, rootSyncID.Namespace,
-		[]testpredicates.Predicate{
+		testwatcher.WatchPredicates(
 			testpredicates.RootSyncHasRenderingError(status.ActionableHydrationErrorCode, ""),
-		}))
+		)))
 
 	// hydration-controller disabled by default, check for existing of container
 	// after sync source contains DRY configs
@@ -393,9 +394,9 @@ func TestHydrateRemoteResources(t *testing.T) {
 	nt.T.Log("Update RootSync to sync from the remote-base directory when disable shell in hydration controller")
 	nt.MustMergePatch(rs, `{"spec": {"git": {"dir": "remote-base"}}}`)
 	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, rootSyncID.Namespace,
-		[]testpredicates.Predicate{
+		testwatcher.WatchPredicates(
 			testpredicates.RootSyncHasRenderingError(status.ActionableHydrationErrorCode, ""),
-		}))
+		)))
 	nt.Must(nt.Validate(nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace, &appsv1.Deployment{},
 		testpredicates.HasExactlyImage(reconcilermanager.HydrationController, reconcilermanager.HydrationController, "", "")))
 }

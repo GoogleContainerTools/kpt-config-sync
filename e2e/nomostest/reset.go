@@ -28,6 +28,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -172,9 +173,9 @@ func ResetRootSyncs(nt *NT, rsList []v1beta1.RootSync) error {
 			if err := nt.KubeClient.MergePatch(rs, patch); err != nil {
 				return err
 			}
-			if err := nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rs.Name, rs.Namespace, []testpredicates.Predicate{
-				testpredicates.HasFinalizer(metadata.ReconcilerFinalizer),
-			}); err != nil {
+			if err := nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rs.Name, rs.Namespace,
+				testwatcher.WatchPredicates(testpredicates.HasFinalizer(metadata.ReconcilerFinalizer)),
+			); err != nil {
 				return err
 			}
 		}
@@ -247,9 +248,9 @@ func ResetRepoSyncs(nt *NT, rsList []v1beta1.RepoSync) error {
 			if err := nt.KubeClient.MergePatch(rs, patch); err != nil {
 				return err
 			}
-			if err := nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), rs.Name, rs.Namespace, []testpredicates.Predicate{
-				testpredicates.HasFinalizer(metadata.ReconcilerFinalizer),
-			}); err != nil {
+			if err := nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), rs.Name, rs.Namespace,
+				testwatcher.WatchPredicates(testpredicates.HasFinalizer(metadata.ReconcilerFinalizer)),
+			); err != nil {
 				return err
 			}
 		}

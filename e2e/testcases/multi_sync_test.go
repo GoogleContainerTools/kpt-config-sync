@@ -36,6 +36,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/applier"
@@ -564,9 +565,9 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	// https://github.com/kubernetes/kubernetes/blob/master/staging/src/k8s.io/apiserver/pkg/admission/plugin/webhook/errors/statuserror.go#L29
 	tg.Go(func() error {
 		return nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync2ID.Name, rootSync2ID.Namespace,
-			[]testpredicates.Predicate{
+			testwatcher.WatchPredicates(
 				testpredicates.RootSyncHasSyncError(applier.ApplierErrorCode, "denied the request"),
-			})
+			))
 	})
 	if err := tg.Wait(); err != nil {
 		nt.T.Fatal(err)
@@ -594,23 +595,23 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	manager2 := declared.ResourceManager(declared.RootScope, rootSync2ID.Name)
 	tg.Go(func() error {
 		return nt.Watcher.WatchObject(kinds.Role(), "pods", testNs,
-			[]testpredicates.Predicate{
+			testwatcher.WatchPredicates(
 				testpredicates.HasBeenManagedBy(nt.Scheme, nt.Logger, manager1, manager2),
-			})
+			))
 	})
 	// Reconciler conflict, detected by the first reconciler's applier OR reported by the second reconciler
 	tg.Go(func() error {
 		return nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, rootSyncID.Namespace,
-			[]testpredicates.Predicate{
+			testwatcher.WatchPredicates(
 				testpredicates.RootSyncHasSyncError(status.ManagementConflictErrorCode, "detected a management conflict"),
-			})
+			))
 	})
 	// Reconciler conflict, detected by the second reconciler's applier OR reported by the first reconciler
 	tg.Go(func() error {
 		return nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync2ID.Name, rootSync2ID.Namespace,
-			[]testpredicates.Predicate{
+			testwatcher.WatchPredicates(
 				testpredicates.RootSyncHasSyncError(status.ManagementConflictErrorCode, "detected a management conflict"),
-			})
+			))
 	})
 	if err := tg.Wait(); err != nil {
 		nt.T.Fatal(err)
@@ -624,14 +625,11 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	nt.T.Logf("Ensure the Role is managed by RootSync %s", rootSync2ID.Name)
 	// The pod role may be deleted from the cluster after it was removed from the `root-sync` Root repo.
 	// Therefore, we need to retry here to wait until the `root-test` Root repo recreates the pod role.
-	err = nt.Watcher.WatchObject(kinds.Role(), "pods", testNs,
-		[]testpredicates.Predicate{
+	nt.Must(nt.Watcher.WatchObject(kinds.Role(), "pods", testNs,
+		testwatcher.WatchPredicates(
 			roleHasRules(rootPodRole().Rules),
 			testpredicates.IsManagedBy(nt.Scheme, declared.RootScope, rootSync2ID.Name),
-		})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		)))
 }
 
 func TestConflictingDefinitions_NamespaceToNamespace(t *testing.T) {
@@ -812,7 +810,7 @@ func TestControllerValidationErrors(t *testing.T) {
 		},
 	}
 	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync.Name, rootSync.Namespace,
-		[]testpredicates.Predicate{testpredicates.RootSyncHasCondition(expectedCondition)}))
+		testwatcher.WatchPredicates(testpredicates.RootSyncHasCondition(expectedCondition))))
 
 	nt.T.Logf("Validate RepoSync is not allowed in the config-management-system namespace")
 	rsControllerNamespace := k8sobjects.RepoSyncObjectV1Beta1(configsync.ControllerNamespace, configsync.RepoSyncName)

@@ -21,7 +21,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -37,6 +36,7 @@ import (
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testutils"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
@@ -104,11 +104,11 @@ func TestReconcilerFinalizer_Orphan(t *testing.T) {
 			nt.T.Fatal(err)
 		}
 	}
-	require.NoError(nt.T,
-		nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync.GetName(), rootSync.GetNamespace(), []testpredicates.Predicate{
+	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync.GetName(), rootSync.GetNamespace(),
+		testwatcher.WatchPredicates(
 			testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
 			testpredicates.MissingFinalizer(metadata.ReconcilerFinalizer),
-		}))
+		)))
 
 	// Delete the RootSync
 	err = nt.KubeClient.Delete(rootSync)
@@ -125,12 +125,12 @@ func TestReconcilerFinalizer_Orphan(t *testing.T) {
 	tg.Go(func() error {
 		// Namespace1 should NOT have been deleted, because it was orphaned by the RootSync.
 		return nt.Watcher.WatchObject(kinds.Namespace(), namespace1.GetName(), namespace1.GetNamespace(),
-			[]testpredicates.Predicate{testpredicates.HasAllNomosMetadata()}) // metadata NOT removed when orphaned
+			testwatcher.WatchPredicates(testpredicates.HasAllNomosMetadata())) // metadata NOT removed when orphaned
 	})
 	tg.Go(func() error {
 		// Deployment1 should NOT have been deleted, because it was orphaned by the RootSync.
 		return nt.Watcher.WatchObject(kinds.Deployment(), deployment1.GetName(), deployment1.GetNamespace(),
-			[]testpredicates.Predicate{testpredicates.HasAllNomosMetadata()}) // metadata NOT removed when orphaned
+			testwatcher.WatchPredicates(testpredicates.HasAllNomosMetadata())) // metadata NOT removed when orphaned
 	})
 	if err := tg.Wait(); err != nil {
 		nt.T.Fatal(err)
@@ -192,11 +192,11 @@ func TestReconcilerFinalizer_Foreground(t *testing.T) {
 			nt.T.Fatal(err)
 		}
 	}
-	require.NoError(nt.T,
-		nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync.GetName(), rootSync.GetNamespace(), []testpredicates.Predicate{
+	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync.GetName(), rootSync.GetNamespace(),
+		testwatcher.WatchPredicates(
 			testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
 			testpredicates.HasFinalizer(metadata.ReconcilerFinalizer),
-		}))
+		)))
 
 	// Delete the RootSync
 	nt.T.Log("Deleting RootSync")
@@ -299,11 +299,11 @@ func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
 			nt.T.Fatal(err)
 		}
 	}
-	require.NoError(nt.T,
-		nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync.GetName(), rootSync.GetNamespace(), []testpredicates.Predicate{
+	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync.GetName(), rootSync.GetNamespace(),
+		testwatcher.WatchPredicates(
 			testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
 			testpredicates.HasFinalizer(metadata.ReconcilerFinalizer),
-		}))
+		)))
 
 	nt.T.Log("Enabling RepoSync deletion propagation")
 	repoSync := rootSyncGitRepo.MustGet(nt.T, repoSyncPath)
@@ -312,11 +312,11 @@ func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
 		nt.Must(rootSyncGitRepo.CommitAndPush("Enabling RepoSync deletion propagation"))
 	}
 	nt.Must(nt.WatchForAllSyncs())
-	require.NoError(nt.T,
-		nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSync.GetName(), repoSync.GetNamespace(), []testpredicates.Predicate{
+	nt.Must(nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSync.GetName(), repoSync.GetNamespace(),
+		testwatcher.WatchPredicates(
 			testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
 			testpredicates.HasFinalizer(metadata.ReconcilerFinalizer),
-		}))
+		)))
 
 	// Delete the RootSync
 	err = nt.KubeClient.Delete(rootSync)
@@ -420,11 +420,11 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 			nt.T.Fatal(err)
 		}
 	}
-	require.NoError(nt.T,
-		nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync.GetName(), rootSync.GetNamespace(), []testpredicates.Predicate{
+	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync.GetName(), rootSync.GetNamespace(),
+		testwatcher.WatchPredicates(
 			testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
 			testpredicates.HasFinalizer(metadata.ReconcilerFinalizer),
-		}))
+		)))
 
 	nt.T.Log("Disabling RepoSync deletion propagation")
 	repoSync := rootSyncGitRepo.MustGet(nt.T, repoSyncPath)
@@ -433,11 +433,11 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 		nt.Must(rootSyncGitRepo.CommitAndPush("Disabling RepoSync deletion propagation"))
 		nt.Must(nt.WatchForAllSyncs())
 	}
-	require.NoError(nt.T,
-		nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSync.GetName(), repoSync.GetNamespace(), []testpredicates.Predicate{
+	nt.Must(nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSync.GetName(), repoSync.GetNamespace(),
+		testwatcher.WatchPredicates(
 			testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
 			testpredicates.MissingFinalizer(metadata.ReconcilerFinalizer),
-		}))
+		)))
 
 	// Abandon the test namespace, otherwise it will block the finalizer
 	namespace1Path := nomostest.StructuredNSPath(namespace1NN.Name, namespace1NN.Name)
@@ -474,12 +474,12 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 		// Namespace1 should NOT have been deleted, because it was abandoned by the RootSync.
 		// TODO: Use NoConfigSyncMetadata predicate once metadata removal is fixed (b/256043590)
 		return nt.Watcher.WatchObject(kinds.Namespace(), namespace1.GetName(), namespace1.GetNamespace(),
-			[]testpredicates.Predicate{})
+			testwatcher.WatchPredicates())
 	})
 	tg.Go(func() error {
 		// Deployment2 should NOT have been deleted, because it was orphaned by the RepoSync.
 		return nt.Watcher.WatchObject(kinds.Deployment(), deployment2.GetName(), deployment2.GetNamespace(),
-			[]testpredicates.Predicate{testpredicates.HasAllNomosMetadata()})
+			testwatcher.WatchPredicates(testpredicates.HasAllNomosMetadata()))
 	})
 	if err := tg.Wait(); err != nil {
 		nt.T.Fatal(err)
@@ -580,10 +580,8 @@ func TestReconcileFinalizerReconcileTimeout(t *testing.T) {
 		},
 	}
 	// Finalizer currently only sets condition, not sync status
-	if err := nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync2ID.Name, rootSync2ID.Namespace,
-		[]testpredicates.Predicate{testpredicates.RootSyncHasCondition(expectedCondition)}); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync2ID.Name, rootSync2ID.Namespace,
+		testwatcher.WatchPredicates(testpredicates.RootSyncHasCondition(expectedCondition))))
 	// Wait a fixed duration for RootSync deletion to be blocked
 	time.Sleep(30 * time.Second)
 	if err := nt.Validate(rootSync2ID.Name, rootSync2ID.Namespace, &v1beta1.RootSync{}); err != nil {

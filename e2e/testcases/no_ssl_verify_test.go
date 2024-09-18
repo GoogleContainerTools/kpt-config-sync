@@ -185,8 +185,8 @@ func TestNoSSLVerifyV1Beta1(t *testing.T) {
 
 func validateDeploymentContainerMissingEnvVar(nt *nomostest.NT, nn types.NamespacedName, container, key string) error {
 	return nt.Watcher.WatchObject(kinds.Deployment(), nn.Name, nn.Namespace,
-		[]testpredicates.Predicate{
+		testwatcher.WatchPredicates(
 			testpredicates.DeploymentMissingEnvVar(container, key),
-		},
+		),
 		testwatcher.WatchTimeout(30*time.Second))
 }

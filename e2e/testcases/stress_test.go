@@ -43,6 +43,7 @@ import (
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testresourcegroup"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/e2e/nomostest/workloadidentity"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -216,11 +217,8 @@ func TestStressLargeRequest(t *testing.T) {
 	nt.MustKubectl("apply", "-f", oldCrdFilePath)
 
 	nt.T.Logf("Wait until the old CRD is established")
-	err := nt.Watcher.WatchObject(kinds.CustomResourceDefinitionV1(), crdName, "",
-		[]testpredicates.Predicate{nomostest.IsEstablished})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.CustomResourceDefinitionV1(), crdName, "",
+		testwatcher.WatchPredicates(nomostest.IsEstablished)))
 
 	reconcilerOverride := v1beta1.ContainerResourcesSpec{
 		ContainerName: reconcilermanager.Reconciler,
@@ -241,22 +239,16 @@ func TestStressLargeRequest(t *testing.T) {
 	nt.Must(nt.KubeClient.Apply(rootSync))
 
 	nt.T.Logf("Verify that the source errors are truncated")
-	err = nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, rootSyncID.Namespace,
-		[]testpredicates.Predicate{truncateSourceErrors()})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, rootSyncID.Namespace,
+		testwatcher.WatchPredicates(truncateSourceErrors())))
 
 	newCrdFilePath := "../testdata/customresources/changed_schema_crds/new_schema_crd.yaml"
 	nt.T.Logf("Apply the new CronTab CRD defined in %s", newCrdFilePath)
 	nt.MustKubectl("apply", "-f", newCrdFilePath)
 
 	nt.T.Logf("Wait until the new CRD is established")
-	err = nt.Watcher.WatchObject(kinds.CustomResourceDefinitionV1(), crdName, "",
-		[]testpredicates.Predicate{nomostest.IsEstablished})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.CustomResourceDefinitionV1(), crdName, "",
+		testwatcher.WatchPredicates(nomostest.IsEstablished)))
 
 	commit, err := nomostest.GitCommitFromSpec(nt, rootSync.Spec.Git)
 	if err != nil {
@@ -653,12 +645,10 @@ func TestStressResourceGroup(t *testing.T) {
 	expectedStatus.ObservedGeneration = 2
 	expectedStatus.ResourceStatuses = testresourcegroup.GenerateResourceStatus(resources, v1alpha1.NotFound, "")
 
-	err = nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace, []testpredicates.Predicate{
-		testpredicates.ResourceGroupStatusEquals(expectedStatus),
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace,
+		testwatcher.WatchPredicates(
+			testpredicates.ResourceGroupStatusEquals(expectedStatus),
+		)))
 
 	if err := testresourcegroup.CreateOrUpdateResources(nt.KubeClient, resources, resourceID); err != nil {
 		nt.T.Fatal(err)
@@ -667,12 +657,10 @@ func TestStressResourceGroup(t *testing.T) {
 	expectedStatus.ObservedGeneration = 2
 	expectedStatus.ResourceStatuses = testresourcegroup.GenerateResourceStatus(resources, v1alpha1.Current, "1234567")
 
-	err = nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace, []testpredicates.Predicate{
-		testpredicates.ResourceGroupStatusEquals(expectedStatus),
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace,
+		testwatcher.WatchPredicates(
+			testpredicates.ResourceGroupStatusEquals(expectedStatus),
+		)))
 
 	index := 995
 	arbitraryConfigMapToDelete := v1.ConfigMap{}
@@ -694,12 +682,10 @@ func TestStressResourceGroup(t *testing.T) {
 		},
 	}
 
-	err = nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace, []testpredicates.Predicate{
-		testpredicates.ResourceGroupStatusEquals(expectedStatus),
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace,
+		testwatcher.WatchPredicates(
+			testpredicates.ResourceGroupStatusEquals(expectedStatus),
+		)))
 
 	nt.T.Log("Delete the ResourceGroup")
 	if err := nt.KubeClient.Delete(rg); err != nil {

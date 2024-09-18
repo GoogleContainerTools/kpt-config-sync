@@ -27,6 +27,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
@@ -476,9 +477,10 @@ func watchForSyncedAndReconciled(nt *nomostest.NT, rsRefs []rSyncRef) error {
 	for _, rsRef := range rsRefs {
 		reRefPtr := rsRef
 		tg.Go(func() error {
-			return nt.Watcher.WatchObject(kinds.ResourceGroup(), reRefPtr.Name, reRefPtr.Namespace, []testpredicates.Predicate{
-				testpredicates.AllResourcesReconciled(nt.Scheme),
-			})
+			return nt.Watcher.WatchObject(kinds.ResourceGroup(), reRefPtr.Name, reRefPtr.Namespace,
+				testwatcher.WatchPredicates(
+					testpredicates.AllResourcesReconciled(nt.Scheme),
+				))
 		})
 	}
 	return tg.Wait()

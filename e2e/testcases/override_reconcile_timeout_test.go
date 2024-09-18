@@ -18,13 +18,13 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
 	resourcegroupv1alpha1 "kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/core"
@@ -46,10 +46,10 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 		`{"spec": {"override": {"reconcileTimeout": "30s"}}}`); err != nil {
 		nt.T.Fatal(err)
 	}
-	require.NoError(nt.T,
-		nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace, []testpredicates.Predicate{
+	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
+		testwatcher.WatchPredicates(
 			testpredicates.RootSyncHasObservedGenerationNoLessThan(rootSync.Generation),
-		}))
+		)))
 	nt.Must(nt.WatchForAllSyncs())
 	// Pre-provision a low priority workload to force the cluster to scale up.
 	// Later, when the real workload is being scheduled, if there's no more resources available
@@ -60,10 +60,10 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 			nt.MustKubectl("delete", "-f", "../testdata/low-priority-pause-deployment.yaml", "--ignore-not-found")
 		})
 		nt.MustKubectl("apply", "-f", "../testdata/low-priority-pause-deployment.yaml")
-		require.NoError(nt.T,
-			nt.Watcher.WatchObject(kinds.Deployment(), "pause-deployment", "default", []testpredicates.Predicate{
+		nt.Must(nt.Watcher.WatchObject(kinds.Deployment(), "pause-deployment", "default",
+			testwatcher.WatchPredicates(
 				testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
-			}))
+			)))
 	}
 
 	namespaceName := "timeout-1"
@@ -99,20 +99,20 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 	nt.Must(nt.WatchForAllSyncs())
 	expectActuationStatus := "Succeeded"
 	expectReconcileStatus := "Timeout"
-	if err := nt.Watcher.WatchObject(kinds.ResourceGroup(), "root-sync", "config-management-system",
-		[]testpredicates.Predicate{resourceStatusEquals(idToVerify, expectActuationStatus, expectReconcileStatus)}); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(), "root-sync", "config-management-system",
+		testwatcher.WatchPredicates(
+			resourceStatusEquals(idToVerify, expectActuationStatus, expectReconcileStatus),
+		)))
 
 	// Override reconcileTimeout to 5m, namespace actuation should succeed, namespace reconcile should succeed.
 	if err := nt.KubeClient.MergePatch(rootSync,
 		`{"spec": {"override": {"reconcileTimeout": "5m"}}}`); err != nil {
 		nt.T.Fatal(err)
 	}
-	require.NoError(nt.T,
-		nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace, []testpredicates.Predicate{
+	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
+		testwatcher.WatchPredicates(
 			testpredicates.RootSyncHasObservedGenerationNoLessThan(rootSync.Generation),
-		}))
+		)))
 
 	nt.Must(rootSyncGitRepo.Remove("acme/pod-1.yaml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush(fmt.Sprintf("Remove pod/%s", pod1Name)))
@@ -129,10 +129,10 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 
 	expectActuationStatus = "Succeeded"
 	expectReconcileStatus = "Succeeded"
-	if err := nt.Watcher.WatchObject(kinds.ResourceGroup(), "root-sync", "config-management-system",
-		[]testpredicates.Predicate{resourceStatusEquals(idToVerify, expectActuationStatus, expectReconcileStatus)}); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(), "root-sync", "config-management-system",
+		testwatcher.WatchPredicates(
+			resourceStatusEquals(idToVerify, expectActuationStatus, expectReconcileStatus),
+		)))
 }
 
 // resourceStatusEquals verifies that an object has actuation and reconcile status as expected

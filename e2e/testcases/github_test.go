@@ -113,8 +113,8 @@ func TestGithubAppRootSync(t *testing.T) {
 		},
 	}
 	nt.Must(nt.KubeClient.Apply(rs))
-	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), githubAppRepoNamespace, "", nil))
-	nt.Must(nt.Watcher.WatchObject(kinds.ConfigMap(), githubAppRepoConfigMap, githubAppRepoNamespace, nil))
+	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), githubAppRepoNamespace, ""))
+	nt.Must(nt.Watcher.WatchObject(kinds.ConfigMap(), githubAppRepoConfigMap, githubAppRepoNamespace))
 	// This hack exists because we don't have a way to authenticate to the repo from
 	// the test framework. The branch is not expected to change, so just trust the
 	// SHA reported on the RootSync.
@@ -218,7 +218,7 @@ func TestGithubAppRepoSync(t *testing.T) {
 		},
 	}
 	nt.Must(nt.KubeClient.Apply(rs))
-	nt.Must(nt.Watcher.WatchObject(kinds.ConfigMap(), githubAppRepoConfigMap, githubAppRepoNamespace, nil))
+	nt.Must(nt.Watcher.WatchObject(kinds.ConfigMap(), githubAppRepoConfigMap, githubAppRepoNamespace))
 	// This hack exists because we don't have a way to authenticate to the repo from
 	// the test framework. The branch is not expected to change, so just trust the
 	// SHA reported on the RepoSync.

@@ -418,15 +418,18 @@ func ValidateMultiRepoDeployments(nt *NT) error {
 			reconcilermanager.ManagerName, configmanagement.ControllerNamespace)
 	})
 	tg.Go(func() error {
-		predicates := []testpredicates.Predicate{testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus)}
+		watchOptions := []testwatcher.WatchOption{
+			testwatcher.WatchPredicates(testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus)),
+		}
 		// If testing on GKE, ensure that the otel-collector deployment has
 		// picked up the `otel-collector-googlecloud` configmap.
 		// This bumps the deployment generation.
 		if *e2e.TestCluster == e2e.GKE {
-			predicates = append(predicates, testpredicates.HasGenerationAtLeast(2))
+			watchOptions = append(watchOptions, testwatcher.WatchPredicates(
+				testpredicates.HasGenerationAtLeast(2)))
 		}
 		return nt.Watcher.WatchObject(kinds.Deployment(),
-			ocmetrics.OtelCollectorName, configmanagement.MonitoringNamespace, predicates)
+			ocmetrics.OtelCollectorName, configmanagement.MonitoringNamespace, watchOptions...)
 	})
 	tg.Go(func() error {
 		// The root-reconciler is created after the reconciler-manager is ready.

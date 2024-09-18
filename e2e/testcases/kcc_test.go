@@ -208,10 +208,8 @@ func TestKCCResourceGroup(t *testing.T) {
 			Status: v1alpha1.InProgress,
 		},
 	}
-	err = nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace, []testpredicates.Predicate{
-		testpredicates.ResourceGroupStatusEquals(expectedStatus),
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace,
+		testwatcher.WatchPredicates(
+			testpredicates.ResourceGroupStatusEquals(expectedStatus),
+		)))
 }

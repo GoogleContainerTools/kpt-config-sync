@@ -1385,24 +1385,16 @@ func TestNomosMigrate(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err := nt.Watcher.WatchObject(kinds.Deployment(), "reconciler-manager", configsync.ControllerNamespace,
-		[]testpredicates.Predicate{
+	nt.Must(nt.Watcher.WatchObject(kinds.Deployment(), "reconciler-manager", configsync.ControllerNamespace,
+		testwatcher.WatchPredicates(
 			testpredicates.DeploymentContainerImageEquals(
 				"reconciler-manager",
 				"gcr.io/config-management-release/reconciler-manager:v1.18.0-rc.3",
 			),
-		})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		)))
 
 	nt.T.Log("Running nomos migrate to migrate from ConfigManagement to OSS install")
-	_, err = nt.Shell.Command("nomos", "migrate", "--remove-configmanagement").CombinedOutput()
-	// TODO: this breaks the XML parsing of the junit report
-	//nt.T.Log(string(out))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Shell.Command("nomos", "migrate", "--remove-configmanagement").CombinedOutput())
 
 	nt.T.Log("Wait for legacy resources to be NotFound...")
 	tg = taskgroup.New()
@@ -1555,16 +1547,13 @@ func TestNomosMigrateMonoRepo(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err := nt.Watcher.WatchObject(kinds.Deployment(), "reconciler-manager", configsync.ControllerNamespace,
-		[]testpredicates.Predicate{
+	nt.Must(nt.Watcher.WatchObject(kinds.Deployment(), "reconciler-manager", configsync.ControllerNamespace,
+		testwatcher.WatchPredicates(
 			testpredicates.DeploymentContainerImageEquals(
 				"reconciler-manager",
 				"gcr.io/config-management-release/reconciler-manager:v1.18.0-rc.3",
 			),
-		})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		)))
 
 	cmObj = &unstructured.Unstructured{
 		Object: map[string]interface{}{
@@ -1626,12 +1615,7 @@ func TestNomosMigrateMonoRepo(t *testing.T) {
 	}
 
 	nt.T.Log("Running nomos migrate to migrate from ConfigManagement to OSS install")
-	_, err = nt.Shell.Command("nomos", "migrate", "--remove-configmanagement").CombinedOutput()
-	// TODO: this breaks the XML parsing of the junit report
-	//nt.T.Log(string(out))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Shell.Command("nomos", "migrate", "--remove-configmanagement").CombinedOutput())
 
 	nt.T.Log("Wait for legacy resources to be NotFound...")
 	tg = taskgroup.New()
@@ -1668,9 +1652,7 @@ func TestNomosMigrateMonoRepo(t *testing.T) {
 	tg.Go(func() error {
 		return nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(),
 			configsync.RootSyncName, configsync.ControllerNamespace,
-			[]testpredicates.Predicate{
-				testpredicates.RootSyncSpecEquals(expectedRootSyncSpec),
-			})
+			testwatcher.WatchPredicates(testpredicates.RootSyncSpecEquals(expectedRootSyncSpec)))
 	})
 	if err := tg.Wait(); err != nil {
 		nt.T.Fatal(err)

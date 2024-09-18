@@ -47,23 +47,18 @@ var _ reconcile.Reconciler = &OtelReconciler{}
 type OtelReconciler struct {
 	loggingController
 
-	clusterName string
-	client      client.Client
-	scheme      *runtime.Scheme
+	client client.Client
+	scheme *runtime.Scheme
 }
 
 // NewOtelReconciler returns a new OtelReconciler.
-func NewOtelReconciler(clusterName string, client client.Client, log logr.Logger, scheme *runtime.Scheme) *OtelReconciler {
-	if clusterName == "" {
-		clusterName = "unknown_cluster"
-	}
+func NewOtelReconciler(client client.Client, log logr.Logger, scheme *runtime.Scheme) *OtelReconciler {
 	return &OtelReconciler{
 		loggingController: loggingController{
 			log: log,
 		},
-		clusterName: clusterName,
-		client:      client,
-		scheme:      scheme,
+		client: client,
+		scheme: scheme,
 	}
 }
 

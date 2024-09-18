@@ -63,7 +63,7 @@ func setupOtelReconciler(t *testing.T, objs ...client.Object) (*syncerFake.Clien
 	t.Helper()
 
 	fakeClient := syncerFake.NewClient(t, core.Scheme, objs...)
-	testReconciler := NewOtelReconciler("",
+	testReconciler := NewOtelReconciler(
 		fakeClient,
 		controllerruntime.Log.WithName("controllers").WithName("Otel"),
 		fakeClient.Scheme(),

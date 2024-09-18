@@ -131,7 +131,7 @@ func main() {
 	})
 	setupLog.Info("RootSync controller registration scheduled")
 
-	otel := controllers.NewOtelReconciler(*clusterName, mgr.GetClient(),
+	otel := controllers.NewOtelReconciler(mgr.GetClient(),
 		textlogger.NewLogger(textlogger.NewConfig()).WithName("controllers").WithName("Otel"),
 		mgr.GetScheme())
 	if err := otel.Register(mgr); err != nil {

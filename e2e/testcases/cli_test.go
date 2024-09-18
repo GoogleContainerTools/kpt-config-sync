@@ -981,8 +981,10 @@ func TestNomosBugreport(t *testing.T) {
 		"namespaces/config-management-system/root-reconciler.*/otel-agent.log",
 		"namespaces/config-management-system/root-reconciler.*/reconciler.log",
 		"namespaces/config-management-monitoring/pods.yaml",
+		"namespaces/config-management-monitoring/ConfigMaps.yaml",
 		"namespaces/config-management-monitoring/otel-collector.*/otel-collector.log",
 		"namespaces/resource-group-system/pods.yaml",
+		"namespaces/resource-group-system/ConfigMaps.yaml",
 		"namespaces/resource-group-system/resource-group-controller-manager-.*/manager.log",
 		"namespaces/resource-group-system/resource-group-controller-manager-.*/otel-agent.log",
 	}

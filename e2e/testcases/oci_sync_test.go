@@ -195,13 +195,9 @@ func TestSwitchFromGitToOciDelegated(t *testing.T) {
 
 	// Verify the manual configuration: switch from Git to OCI
 	// Verify the default sourceType is set when not specified.
-	if err := nt.Validate(bookinfoSA.Name, namespace, &corev1.ServiceAccount{},
-		testpredicates.HasAnnotation(metadata.ResourceManagerKey, namespace)); err != nil {
-		nt.T.Fatal(err)
-	}
-	if err := nt.ValidateNotFound(bookinfoRole.Name, namespace, &rbacv1.Role{}); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(bookinfoSA.Name, namespace, &corev1.ServiceAccount{},
+		testpredicates.HasAnnotation(metadata.ResourceManagerKey, namespace)))
+	nt.Must(nt.ValidateNotFound(bookinfoRole.Name, namespace, &rbacv1.Role{}))
 
 	// Switch from Git to OCI
 	repoSyncOCI := nt.RepoSyncObjectOCI(repoSyncKey, image.OCIImageID().WithoutDigest(), "", image.Digest)
@@ -210,8 +206,8 @@ func TestSwitchFromGitToOciDelegated(t *testing.T) {
 
 	nt.Must(nt.Validate(configsync.RepoSyncName, namespace, &v1beta1.RepoSync{}, isSourceType(configsync.OciSource)))
 	nt.T.Log("Verify the namespace objects are synced")
-	nt.Must(nt.WatchForSync(kinds.RepoSyncV1Beta1(), configsync.RepoSyncName, namespace,
-		imageDigestFuncByDigest(image.Digest), nomostest.RepoSyncHasStatusSyncCommit, nil))
+	nt.Must(nt.WatchForSync(kinds.RepoSyncV1Beta1(), repoSyncID.Name, repoSyncID.Namespace,
+		nt.SyncSources[repoSyncID]))
 	nt.Must(nt.Validate(bookinfoRole.Name, namespace, &rbacv1.Role{},
 		testpredicates.HasAnnotation(metadata.ResourceManagerKey, namespace)))
 	nt.Must(nt.ValidateNotFound(bookinfoSA.Name, namespace, &corev1.ServiceAccount{}))

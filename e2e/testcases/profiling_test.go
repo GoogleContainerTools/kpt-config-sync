@@ -19,15 +19,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
+	"github.com/stretchr/testify/require"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
-	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
-	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
@@ -42,30 +39,17 @@ import (
 // managed objects.
 // Skipped by default, because it needs cluster autoscaling and a lot of quota.
 func TestProfilingResourcesByObjectCount(t *testing.T) {
+	rootSyncID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.ProfilingTest,
-		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
+		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured),
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
-	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
 
 	syncPath := filepath.Join(gitproviders.DefaultSyncDir, "stress-test")
 	ns := "stress-test-ns"
 
 	steps := 4
 	deploysPerStep := 500
-
-	// Make a list of RootSyncs to watch.
-	var rSyncRefs []rSyncRef
-	// All the RootSyncs use the same git repo
-	commitFn := func(nt *nomostest.NT, _ types.NamespacedName) (string, error) {
-		return nomostest.DefaultRootSha1Fn(nt, nomostest.RootSyncNN(configsync.RootSyncName))
-	}
-	// Add parent RootSync
-	rSyncRefs = append(rSyncRefs, rSyncRef{
-		GroupVersionKind: kinds.RootSyncV1Beta1(),
-		NamespacedName:   nomostest.RootSyncNN(configsync.RootSyncName),
-		SyncPath:         gitproviders.DefaultSyncDir,
-		CommitFunc:       commitFn,
-	})
 
 	for step := 1; step <= steps; step++ {
 		deployCount := deploysPerStep * step
@@ -84,7 +68,9 @@ func TestProfilingResourcesByObjectCount(t *testing.T) {
 
 		// Validate that the resources sync without the reconciler running out of
 		// memory, getting OOMKilled, and crash looping.
-		nt.Must(watchForSyncedAndReconciled(nt, rSyncRefs))
+		nt.Must(nt.WatchForAllSyncs(nomostest.WithPredicates(
+			testpredicates.AllResourcesReconciled(nt.Scheme)),
+		))
 
 		nt.T.Logf("Verify the number of Deployment objects")
 		nt.Must(validateNumberOfObjectsEquals(nt, kinds.Deployment(), deployCount,
@@ -97,7 +83,9 @@ func TestProfilingResourcesByObjectCount(t *testing.T) {
 
 		// Validate that the resources sync without the reconciler running out of
 		// memory, getting OOMKilled, and crash looping.
-		nt.Must(watchForSyncedAndReconciled(nt, rSyncRefs))
+		nt.Must(nt.WatchForAllSyncs(nomostest.WithPredicates(
+			testpredicates.AllResourcesReconciled(nt.Scheme)),
+		))
 	}
 }
 
@@ -108,10 +96,11 @@ func TestProfilingResourcesByObjectCount(t *testing.T) {
 // relative to the number of managed objects.
 // Skipped by default, because it needs cluster autoscaling and a lot of quota.
 func TestProfilingResourcesByObjectCountWithMultiSync(t *testing.T) {
+	rootSyncID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.ProfilingTest,
-		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
+		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured),
 		ntopts.WithReconcileTimeout(configsync.DefaultReconcileTimeout))
-	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
 
 	steps := 4
 	deploysPerStep := 1000
@@ -139,25 +128,16 @@ func TestProfilingResourcesByObjectCountWithMultiSync(t *testing.T) {
 		nt.Must(rootSyncGitRepo.Add(
 			fmt.Sprintf("%s/namespaces/%s/rootsync-%s.yaml", gitproviders.DefaultSyncDir, configsync.ControllerNamespace, syncName),
 			syncObj))
+
+		// Update sync expectation
+		syncID, err := kinds.LookupID(syncObj, nt.Scheme)
+		require.NoError(nt.T, err)
+		nomostest.SetExpectedSyncPath(nt, syncID, syncPath)
 	}
 
 	for step := 1; step <= steps; step++ {
 		totalDeployCount := deploysPerStep * step
 		nt.T.Logf("Starting step %d: %d Deployments total", step, totalDeployCount)
-
-		// Make a list of RootSyncs to watch.
-		var rSyncRefs []rSyncRef
-		// All the RootSyncs use the same git repo
-		commitFn := func(nt *nomostest.NT, _ types.NamespacedName) (string, error) {
-			return nomostest.DefaultRootSha1Fn(nt, nomostest.RootSyncNN(configsync.RootSyncName))
-		}
-		// Add parent RootSync
-		rSyncRefs = append(rSyncRefs, rSyncRef{
-			GroupVersionKind: kinds.RootSyncV1Beta1(),
-			NamespacedName:   nomostest.RootSyncNN(configsync.RootSyncName),
-			SyncPath:         gitproviders.DefaultSyncDir,
-			CommitFunc:       commitFn,
-		})
 
 		for syncIndex := 1; syncIndex <= syncCount; syncIndex++ {
 			syncName := fmt.Sprintf("sync-%d", syncIndex)
@@ -174,19 +154,13 @@ func TestProfilingResourcesByObjectCountWithMultiSync(t *testing.T) {
 			}
 
 			nt.Must(rootSyncGitRepo.CommitAndPush(fmt.Sprintf("Adding %d deployments for %d RootSyncs", deployCount, syncCount)))
-
-			// Add child RootSync
-			rSyncRefs = append(rSyncRefs, rSyncRef{
-				GroupVersionKind: kinds.RootSyncV1Beta1(),
-				NamespacedName:   nomostest.RootSyncNN(syncName),
-				SyncPath:         syncPath,
-				CommitFunc:       commitFn,
-			})
 		}
 
 		// Validate that the resources sync without the reconciler running out of
 		// memory, getting OOMKilled, and crash looping.
-		nt.Must(watchForSyncedAndReconciled(nt, rSyncRefs))
+		nt.Must(nt.WatchForAllSyncs(nomostest.WithPredicates(
+			testpredicates.AllResourcesReconciled(nt.Scheme)),
+		))
 
 		nt.T.Logf("Verify the number of Deployment objects")
 		nt.Must(validateNumberOfObjectsEquals(nt, kinds.Deployment(), totalDeployCount,
@@ -205,7 +179,9 @@ func TestProfilingResourcesByObjectCountWithMultiSync(t *testing.T) {
 
 		// Validate that the resources sync without the reconciler running out of
 		// memory, getting OOMKilled, and crash looping.
-		nt.Must(watchForSyncedAndReconciled(nt, rSyncRefs))
+		nt.Must(nt.WatchForAllSyncs(nomostest.WithPredicates(
+			testpredicates.AllResourcesReconciled(nt.Scheme)),
+		))
 
 		nt.T.Logf("Verify all Deployments deleted")
 		nt.Must(validateNumberOfObjectsEquals(nt, kinds.Deployment(), 0,
@@ -218,6 +194,12 @@ func TestProfilingResourcesByObjectCountWithMultiSync(t *testing.T) {
 		syncName := fmt.Sprintf("sync-%d", syncIndex)
 		nt.Must(rootSyncGitRepo.Remove(
 			fmt.Sprintf("%s/namespaces/%s/rootsync-%s.yaml", gitproviders.DefaultSyncDir, configsync.ControllerNamespace, syncName)))
+
+		// Remove sync expectation
+		syncObj := k8sobjects.RootSyncObjectV1Beta1(syncName)
+		syncID, err := kinds.LookupID(syncObj, nt.Scheme)
+		require.NoError(nt.T, err)
+		delete(nt.SyncSources, syncID)
 	}
 
 	nt.T.Logf("Removing test namespace: %s", ns)
@@ -258,20 +240,6 @@ func TestProfilingByObjectCountAndSyncCount(t *testing.T) {
 		totalDeployCount := syncCount * deploysPerSync
 		nt.T.Logf("Starting step %d: %d Syncs with %d Deployments total", step, syncCount, totalDeployCount)
 
-		// Make a list of RootSyncs to watch.
-		var rSyncRefs []rSyncRef
-		// All the RootSyncs use the same git repo
-		commitFn := func(nt *nomostest.NT, _ types.NamespacedName) (string, error) {
-			return nomostest.DefaultRootSha1Fn(nt, nomostest.RootSyncNN(configsync.RootSyncName))
-		}
-		// Add parent RootSync
-		rSyncRefs = append(rSyncRefs, rSyncRef{
-			GroupVersionKind: kinds.RootSyncV1Beta1(),
-			NamespacedName:   nomostest.RootSyncNN(configsync.RootSyncName),
-			SyncPath:         gitproviders.DefaultSyncDir,
-			CommitFunc:       commitFn,
-		})
-
 		syncIndex++
 
 		syncName := fmt.Sprintf("sync-%d", syncIndex)
@@ -302,17 +270,16 @@ func TestProfilingByObjectCountAndSyncCount(t *testing.T) {
 
 		nt.Must(rootSyncGitRepo.CommitAndPush(fmt.Sprintf("Adding %d deployments each for %d RootSyncs", deployCount, syncCount)))
 
-		// Add child RootSync
-		rSyncRefs = append(rSyncRefs, rSyncRef{
-			GroupVersionKind: kinds.RootSyncV1Beta1(),
-			NamespacedName:   nomostest.RootSyncNN(syncName),
-			SyncPath:         syncPath,
-			CommitFunc:       commitFn,
-		})
+		// Update sync expectation
+		syncID, err := kinds.LookupID(syncObj, nt.Scheme)
+		require.NoError(nt.T, err)
+		nomostest.SetExpectedSyncPath(nt, syncID, syncPath)
 
 		// Validate that the resources sync without the reconciler running out of
 		// memory, getting OOMKilled, and crash looping.
-		nt.Must(watchForSyncedAndReconciled(nt, rSyncRefs))
+		nt.Must(nt.WatchForAllSyncs(nomostest.WithPredicates(
+			testpredicates.AllResourcesReconciled(nt.Scheme)),
+		))
 
 		nt.T.Logf("Verify the number of Deployment objects")
 		nt.Must(validateNumberOfObjectsEquals(nt, kinds.Deployment(), totalDeployCount,
@@ -325,6 +292,12 @@ func TestProfilingByObjectCountAndSyncCount(t *testing.T) {
 		syncName := fmt.Sprintf("sync-%d", syncIndex)
 		nt.Must(rootSyncGitRepo.Remove(
 			fmt.Sprintf("%s/namespaces/%s/rootsync-%s.yaml", gitproviders.DefaultSyncDir, configsync.ControllerNamespace, syncName)))
+
+		// Remove sync expectation
+		syncObj := k8sobjects.RootSyncObjectV1Beta1(syncName)
+		syncID, err := kinds.LookupID(syncObj, nt.Scheme)
+		require.NoError(nt.T, err)
+		delete(nt.SyncSources, syncID)
 	}
 
 	nt.T.Logf("Removing test namespace: %s", ns)
@@ -380,23 +353,17 @@ func TestProfilingResourcesByRootSyncCount(t *testing.T) {
 				fmt.Sprintf("%s/namespaces/%s/deployment-%s.yaml", syncPath, ns, deployName),
 				pauseDeploymentObject(nt, deployName, ns)))
 		}
+
+		// Update sync expectation
+		syncID, err := kinds.LookupID(syncObj, nt.Scheme)
+		require.NoError(nt.T, err)
+		nomostest.SetExpectedSyncPath(nt, syncID, syncPath)
 	}
 
 	nt.Must(rootSyncGitRepo.CommitAndPush(fmt.Sprintf("Adding %d RootSyncs each with %d deployments", syncCount, deployCount)))
 
 	// Wait for root-sync to sync
 	nt.Must(nt.WatchForAllSyncs())
-
-	// Wait for the other RootSyncs to sync
-	nt.T.Log("Waiting for RootSyncs to be synced...")
-	latestCommit := commitForRepo(rootSyncGitRepo)
-	for i := 1; i <= syncCount; i++ {
-		syncName := fmt.Sprintf("sync-%d", i)
-		syncPath := syncName
-		syncObj := nomostest.RootSyncObjectV1Beta1FromOtherRootRepo(nt, syncName, configsync.RootSyncName)
-		syncObj.Spec.Git.Dir = syncPath
-		waitForSync(nt, latestCommit, syncObj)
-	}
 
 	nt.T.Logf("Verify the number of Deployment objects")
 	nt.Must(validateNumberOfObjectsEquals(nt, kinds.Deployment(), syncCount*deployCount,
@@ -421,67 +388,15 @@ func TestProfilingResourcesByRootSyncCount(t *testing.T) {
 		syncName := fmt.Sprintf("sync-%d", i)
 		nt.Must(rootSyncGitRepo.Remove(
 			fmt.Sprintf("%s/namespaces/%s/rootsync-%s.yaml", gitproviders.DefaultSyncDir, configsync.ControllerNamespace, syncName)))
+
+		// Remove sync expectation
+		syncObj := k8sobjects.RootSyncObjectV1Beta1(syncName)
+		syncID, err := kinds.LookupID(syncObj, nt.Scheme)
+		require.NoError(nt.T, err)
+		delete(nt.SyncSources, syncID)
 	}
 
 	// Validate that the resources sync without the reconciler running out of
 	// memory, getting OOMKilled, and crash looping.
 	nt.Must(nt.WatchForAllSyncs())
-}
-
-type rSyncRef struct {
-	schema.GroupVersionKind
-	types.NamespacedName
-	SyncPath   string
-	CommitFunc nomostest.Sha1Func
-}
-
-func watchForSyncedAndReconciled(nt *nomostest.NT, rsRefs []rSyncRef) error {
-	nt.T.Log("Waiting for Config Sync to be Ready")
-	if err := nomostest.WaitForConfigSyncReady(nt); err != nil {
-		return err
-	}
-
-	nt.T.Log("Waiting for RootSyncs/RepoSyncs to be Synced")
-	tg := taskgroup.New()
-	for _, rsRef := range rsRefs {
-		reRefPtr := rsRef
-		switch rsRef.GroupVersionKind.Kind {
-		case configsync.RootSyncKind:
-			tg.Go(func() error {
-				return nt.WatchForSync(reRefPtr.GroupVersionKind, reRefPtr.Name, reRefPtr.Namespace,
-					reRefPtr.CommitFunc, nomostest.RootSyncHasStatusSyncCommit,
-					&nomostest.SyncPathPredicatePair{
-						Path:      reRefPtr.SyncPath,
-						Predicate: nomostest.RootSyncHasStatusSyncPath,
-					})
-			})
-		case configsync.RepoSyncKind:
-			tg.Go(func() error {
-				return nt.WatchForSync(reRefPtr.GroupVersionKind, reRefPtr.Name, reRefPtr.Namespace,
-					reRefPtr.CommitFunc, nomostest.RepoSyncHasStatusSyncCommit,
-					&nomostest.SyncPathPredicatePair{
-						Path:      reRefPtr.SyncPath,
-						Predicate: nomostest.RepoSyncHasStatusSyncPath,
-					})
-			})
-		default:
-			return fmt.Errorf("invalid RSync kind: %s", rsRef.GroupVersionKind)
-		}
-	}
-	if err := tg.Wait(); err != nil {
-		return err
-	}
-
-	nt.T.Log("Waiting for synced resources to be Current")
-	tg = taskgroup.New()
-	for _, rsRef := range rsRefs {
-		reRefPtr := rsRef
-		tg.Go(func() error {
-			return nt.Watcher.WatchObject(kinds.ResourceGroup(), reRefPtr.Name, reRefPtr.Namespace,
-				testwatcher.WatchPredicates(
-					testpredicates.AllResourcesReconciled(nt.Scheme),
-				))
-		})
-	}
-	return tg.Wait()
 }

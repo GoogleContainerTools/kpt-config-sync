@@ -41,9 +41,10 @@ func SetExpectedSyncSource(nt *NT, syncID core.ID, source syncsource.SyncSource)
 // UpdateExpectedSyncSource executes the provided function on an existing
 // SyncSource in the SyncSources, allowing updating multiple fields.
 func UpdateExpectedSyncSource[T syncsource.SyncSource](nt *NT, syncID core.ID, mutateFn func(T)) {
+	nt.T.Helper()
 	source, exists := nt.SyncSources[syncID]
 	if !exists {
-		nt.T.Fatalf("Failed to update expectation for %s %s: nt.SyncSources not registered", syncID.Kind, syncID.ObjectKey)
+		nt.T.Fatalf("Failed to update expectation for %s %s: not registered in nt.SyncSources", syncID.Kind, syncID.ObjectKey)
 	}
 	switch tSource := source.(type) {
 	case T:
@@ -59,9 +60,10 @@ func UpdateExpectedSyncSource[T syncsource.SyncSource](nt *NT, syncID core.ID, m
 // RepoSync with the provided Git dir, OCI dir.
 // Updates both the Directory & ExpectedDirectory.
 func SetExpectedSyncPath(nt *NT, syncID core.ID, syncPath string) {
+	nt.T.Helper()
 	source, exists := nt.SyncSources[syncID]
 	if !exists {
-		nt.T.Fatalf("Failed to update expectation for %s %s: nt.SyncSources not registered", syncID.Kind, syncID.ObjectKey)
+		nt.T.Fatalf("Failed to update expectation for %s %s: not registered in nt.SyncSources", syncID.Kind, syncID.ObjectKey)
 	}
 	switch tSource := source.(type) {
 	case *syncsource.GitSyncSource:
@@ -81,6 +83,7 @@ func SetExpectedSyncPath(nt *NT, syncID core.ID, syncPath string) {
 // RepoSync with the provided Git commit, without changing the git reference of
 // the source being pulled.
 func SetExpectedGitCommit(nt *NT, syncID core.ID, expectedCommit string) {
+	nt.T.Helper()
 	UpdateExpectedSyncSource(nt, syncID, func(source *syncsource.GitSyncSource) {
 		source.ExpectedCommit = expectedCommit
 	})
@@ -90,6 +93,7 @@ func SetExpectedGitCommit(nt *NT, syncID core.ID, expectedCommit string) {
 // or RepoSync with the provided OCI image digest, without changing the ID of
 // the image being pulled.
 func SetExpectedOCIImageDigest(nt *NT, syncID core.ID, expectedImageDigest string) {
+	nt.T.Helper()
 	UpdateExpectedSyncSource(nt, syncID, func(source *syncsource.OCISyncSource) {
 		source.ExpectedImageDigest = expectedImageDigest
 	})

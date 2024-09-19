@@ -23,6 +23,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/policy"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
@@ -43,9 +44,9 @@ func TestRootSyncSSHKnownHost(t *testing.T) {
 		nt.MustMergePatch(rootSecret, secretDataDeletePatch(controllers.KnownHostsKey))
 		err = nt.Watcher.WatchObject(kinds.Deployment(),
 			core.RootReconcilerPrefix, configsync.ControllerNamespace,
-			[]testpredicates.Predicate{
+			testwatcher.WatchPredicates(
 				testpredicates.DeploymentHasEnvVar(reconcilermanager.GitSync, controllers.GitSyncKnownHosts, "false"),
-			},
+			),
 		)
 		if err != nil {
 			nt.T.Error(err)
@@ -57,15 +58,12 @@ func TestRootSyncSSHKnownHost(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	err = nt.Watcher.WatchObject(kinds.Deployment(),
+	nt.Must(nt.Watcher.WatchObject(kinds.Deployment(),
 		core.RootReconcilerPrefix, configsync.ControllerNamespace,
-		[]testpredicates.Predicate{
+		testwatcher.WatchPredicates(
 			testpredicates.DeploymentHasEnvVar(reconcilermanager.GitSync, controllers.GitSyncKnownHosts, "false"),
-		},
-	)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		),
+	))
 
 	// get known host key value
 	knownHostValue, err := nomostest.GetKnownHosts(nt)
@@ -75,15 +73,12 @@ func TestRootSyncSSHKnownHost(t *testing.T) {
 
 	// apply known host key and validate
 	nt.MustMergePatch(rootSecret, secretDataPatch(controllers.KnownHostsKey, knownHostValue))
-	err = nt.Watcher.WatchObject(kinds.Deployment(),
+	nt.Must(nt.Watcher.WatchObject(kinds.Deployment(),
 		core.RootReconcilerPrefix, configsync.ControllerNamespace,
-		[]testpredicates.Predicate{
+		testwatcher.WatchPredicates(
 			testpredicates.DeploymentHasEnvVar(reconcilermanager.GitSync, controllers.GitSyncKnownHosts, "true"),
-		},
-	)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		),
+	))
 
 	// try syncing resource and validate
 	cmName := "configmap-test"
@@ -106,21 +101,16 @@ func TestRootSyncSSHKnownHost(t *testing.T) {
 	// validate root sync error using invalid known host value
 	knownHostValue = "invalid value"
 	nt.MustMergePatch(rootSecret, secretDataPatch(controllers.KnownHostsKey, knownHostValue))
-	err = nt.Watcher.WatchObject(kinds.Deployment(),
+	nt.Must(nt.Watcher.WatchObject(kinds.Deployment(),
 		core.RootReconcilerPrefix, configsync.ControllerNamespace,
-		[]testpredicates.Predicate{
+		testwatcher.WatchPredicates(
 			testpredicates.DeploymentHasEnvVar(reconcilermanager.GitSync, controllers.GitSyncKnownHosts, "true"),
-		},
-	)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-	err = nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace, []testpredicates.Predicate{
-		testpredicates.RootSyncHasSourceError(status.SourceErrorCode, "No ED25519 host key is known"),
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		),
+	))
+	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
+		testwatcher.WatchPredicates(
+			testpredicates.RootSyncHasSourceError(status.SourceErrorCode, "No ED25519 host key is known"),
+		)))
 }
 
 func TestRepoSyncSSHKnownHost(t *testing.T) {
@@ -140,9 +130,9 @@ func TestRepoSyncSSHKnownHost(t *testing.T) {
 		nt.MustMergePatch(repoSecret, secretDataDeletePatch(controllers.KnownHostsKey))
 		err = nt.Watcher.WatchObject(kinds.Deployment(),
 			repoReconcilerName, configsync.ControllerNamespace,
-			[]testpredicates.Predicate{
+			testwatcher.WatchPredicates(
 				testpredicates.DeploymentHasEnvVar(reconcilermanager.GitSync, controllers.GitSyncKnownHosts, "false"),
-			},
+			),
 		)
 		if err != nil {
 			nt.T.Error(err)
@@ -154,15 +144,12 @@ func TestRepoSyncSSHKnownHost(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	err = nt.Watcher.WatchObject(kinds.Deployment(),
+	nt.Must(nt.Watcher.WatchObject(kinds.Deployment(),
 		repoReconcilerName, configsync.ControllerNamespace,
-		[]testpredicates.Predicate{
+		testwatcher.WatchPredicates(
 			testpredicates.DeploymentHasEnvVar(reconcilermanager.GitSync, controllers.GitSyncKnownHosts, "false"),
-		},
-	)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		),
+	))
 
 	// get known host key value
 	knownHostValue, err := nomostest.GetKnownHosts(nt)
@@ -172,15 +159,12 @@ func TestRepoSyncSSHKnownHost(t *testing.T) {
 
 	// apply known host key and validate
 	nt.MustMergePatch(repoSecret, secretDataPatch(controllers.KnownHostsKey, knownHostValue))
-	err = nt.Watcher.WatchObject(kinds.Deployment(),
+	nt.Must(nt.Watcher.WatchObject(kinds.Deployment(),
 		repoReconcilerName, configsync.ControllerNamespace,
-		[]testpredicates.Predicate{
+		testwatcher.WatchPredicates(
 			testpredicates.DeploymentHasEnvVar(reconcilermanager.GitSync, controllers.GitSyncKnownHosts, "true"),
-		},
-	)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		),
+	))
 
 	// try syncing resource and validate
 	cmName := "configmap-test"
@@ -203,19 +187,14 @@ func TestRepoSyncSSHKnownHost(t *testing.T) {
 	// validate repo sync error using invalid known host value
 	knownHostValue = "invalid value"
 	nt.MustMergePatch(repoSecret, secretDataPatch(controllers.KnownHostsKey, knownHostValue))
-	err = nt.Watcher.WatchObject(kinds.Deployment(),
+	nt.Must(nt.Watcher.WatchObject(kinds.Deployment(),
 		repoReconcilerName, configsync.ControllerNamespace,
-		[]testpredicates.Predicate{
+		testwatcher.WatchPredicates(
 			testpredicates.DeploymentHasEnvVar(reconcilermanager.GitSync, controllers.GitSyncKnownHosts, "true"),
-		},
-	)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-	err = nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), configsync.RepoSyncName, backendNamespace, []testpredicates.Predicate{
-		testpredicates.RepoSyncHasSourceError(status.SourceErrorCode, "No ED25519 host key is known"),
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		),
+	))
+	nt.Must(nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), configsync.RepoSyncName, backendNamespace,
+		testwatcher.WatchPredicates(
+			testpredicates.RepoSyncHasSourceError(status.SourceErrorCode, "No ED25519 host key is known"),
+		)))
 }

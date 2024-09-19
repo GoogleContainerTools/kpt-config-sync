@@ -35,6 +35,7 @@ import (
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testutils"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/e2e/nomostest/workloadidentity"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -421,14 +422,16 @@ func TestWorkloadIdentity(t *testing.T) {
 			nt.T.Log("Validate the GSA annotation is added to the RSync's service accounts")
 			tg := taskgroup.New()
 			tg.Go(func() error {
-				return nt.Watcher.WatchObject(kinds.ServiceAccount(), rootReconcilerName, configsync.ControllerNamespace, []testpredicates.Predicate{
-					testpredicates.HasAnnotation(controllers.GCPSAAnnotationKey, tc.gsaEmail),
-				})
+				return nt.Watcher.WatchObject(kinds.ServiceAccount(), rootReconcilerName, configsync.ControllerNamespace,
+					testwatcher.WatchPredicates(
+						testpredicates.HasAnnotation(controllers.GCPSAAnnotationKey, tc.gsaEmail),
+					))
 			})
 			tg.Go(func() error {
-				return nt.Watcher.WatchObject(kinds.ServiceAccount(), nsReconcilerName, configsync.ControllerNamespace, []testpredicates.Predicate{
-					testpredicates.HasAnnotation(controllers.GCPSAAnnotationKey, tc.gsaEmail),
-				})
+				return nt.Watcher.WatchObject(kinds.ServiceAccount(), nsReconcilerName, configsync.ControllerNamespace,
+					testwatcher.WatchPredicates(
+						testpredicates.HasAnnotation(controllers.GCPSAAnnotationKey, tc.gsaEmail),
+					))
 			})
 			if tc.fleetWITest {
 				tg.Go(func() error {
@@ -635,14 +638,16 @@ func migrateFromGSAtoKSA(nt *nomostest.NT, fleetWITest bool, sourceType configsy
 	nt.T.Log("Validate the GSA annotation is removed from the RSync's service accounts")
 	tg := taskgroup.New()
 	tg.Go(func() error {
-		return nt.Watcher.WatchObject(kinds.ServiceAccount(), rootReconcilerName, configsync.ControllerNamespace, []testpredicates.Predicate{
-			testpredicates.MissingAnnotation(controllers.GCPSAAnnotationKey),
-		})
+		return nt.Watcher.WatchObject(kinds.ServiceAccount(), rootReconcilerName, configsync.ControllerNamespace,
+			testwatcher.WatchPredicates(
+				testpredicates.MissingAnnotation(controllers.GCPSAAnnotationKey),
+			))
 	})
 	tg.Go(func() error {
-		return nt.Watcher.WatchObject(kinds.ServiceAccount(), nsReconcilerName, configsync.ControllerNamespace, []testpredicates.Predicate{
-			testpredicates.MissingAnnotation(controllers.GCPSAAnnotationKey),
-		})
+		return nt.Watcher.WatchObject(kinds.ServiceAccount(), nsReconcilerName, configsync.ControllerNamespace,
+			testwatcher.WatchPredicates(
+				testpredicates.MissingAnnotation(controllers.GCPSAAnnotationKey),
+			))
 	})
 	if fleetWITest {
 		nt.T.Log("Validate the serviceaccount_impersonation_url is absent from the injected FWI credentials")

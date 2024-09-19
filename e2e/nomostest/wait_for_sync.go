@@ -41,6 +41,7 @@ type watchForAllSyncsOptions struct {
 	syncNamespaceRepos bool
 	skipRootRepos      map[string]bool
 	skipNonRootRepos   map[types.NamespacedName]bool
+	predicates         []testpredicates.Predicate
 }
 
 // WatchForAllSyncsOptions is an optional parameter for WaitForRepoSyncs.
@@ -50,6 +51,13 @@ type WatchForAllSyncsOptions func(*watchForAllSyncsOptions)
 func WithTimeout(timeout time.Duration) WatchForAllSyncsOptions {
 	return func(options *watchForAllSyncsOptions) {
 		options.timeout = timeout
+	}
+}
+
+// WithPredicates adds additional predicates for all reconcilers to WaitForRepoSyncs.
+func WithPredicates(predicates ...testpredicates.Predicate) WatchForAllSyncsOptions {
+	return func(options *watchForAllSyncsOptions) {
+		options.predicates = append(predicates, predicates...)
 	}
 }
 
@@ -116,6 +124,7 @@ func (nt *NT) WatchForAllSyncs(options ...WatchForAllSyncsOptions) error {
 		syncNamespaceRepos: true,
 		skipRootRepos:      make(map[string]bool),
 		skipNonRootRepos:   make(map[types.NamespacedName]bool),
+		predicates:         []testpredicates.Predicate{},
 	}
 	// Override defaults with specified options
 	for _, option := range options {
@@ -126,6 +135,13 @@ func (nt *NT) WatchForAllSyncs(options ...WatchForAllSyncsOptions) error {
 		if err := WaitForConfigSyncReady(nt); err != nil {
 			return err
 		}
+	}
+
+	watchOptions := []testwatcher.WatchOption{
+		testwatcher.WatchTimeout(opts.timeout),
+	}
+	if len(opts.predicates) > 0 {
+		watchOptions = append(watchOptions, testwatcher.WatchPredicates(opts.predicates...))
 	}
 
 	tg := taskgroup.New()
@@ -140,7 +156,7 @@ func (nt *NT) WatchForAllSyncs(options ...WatchForAllSyncsOptions) error {
 				return nt.WatchForSync(kinds.RootSyncV1Beta1(), idPtr.Name, idPtr.Namespace,
 					DefaultRootSha1Fn, RootSyncHasStatusSyncCommit,
 					&SyncPathPredicatePair{Path: source.Path(), Predicate: RootSyncHasStatusSyncPath},
-					testwatcher.WatchTimeout(opts.timeout))
+					watchOptions...)
 			})
 		}
 	}
@@ -155,7 +171,7 @@ func (nt *NT) WatchForAllSyncs(options ...WatchForAllSyncsOptions) error {
 				return nt.WatchForSync(kinds.RepoSyncV1Beta1(), idPtr.Name, idPtr.Namespace,
 					DefaultRepoSha1Fn, RepoSyncHasStatusSyncCommit,
 					&SyncPathPredicatePair{Path: source.Path(), Predicate: RepoSyncHasStatusSyncPath},
-					testwatcher.WatchTimeout(opts.timeout))
+					watchOptions...)
 			})
 		}
 	}
@@ -207,8 +223,9 @@ func (nt *NT) WatchForSync(
 	if syncDirPair != nil {
 		predicates = append(predicates, syncDirPair.Predicate(syncDirPair.Path))
 	}
+	opts = append(opts, testwatcher.WatchPredicates(predicates...))
 
-	err = nt.Watcher.WatchObject(gvk, name, namespace, predicates, opts...)
+	err = nt.Watcher.WatchObject(gvk, name, namespace, opts...)
 	if err != nil {
 		return fmt.Errorf("waiting for sync: %w", err)
 	}

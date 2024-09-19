@@ -626,14 +626,9 @@ func TestDriftKubectlAnnotateUnmanagedField(t *testing.T) {
 	}
 
 	// Remediator SHOULD NOT remove this field
-	err = nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
-		[]testpredicates.Predicate{
-			testpredicates.HasAnnotation("season", "summer"),
-		},
-		testwatcher.WatchTimeout(30*time.Second))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
+		testwatcher.WatchPredicates(testpredicates.HasAnnotation("season", "summer")),
+		testwatcher.WatchTimeout(30*time.Second)))
 	nomostest.WaitForWebhookReadiness(nt)
 
 	// Add the `client.lifecycle.config.k8s.io/mutation` annotation into the namespace object
@@ -655,14 +650,11 @@ func TestDriftKubectlAnnotateUnmanagedField(t *testing.T) {
 	}
 
 	// Remediator SHOULD NOT remove this field
-	err = nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
-		[]testpredicates.Predicate{
+	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
+		testwatcher.WatchPredicates(
 			testpredicates.HasAnnotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation),
-		},
-		testwatcher.WatchTimeout(30*time.Second))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		),
+		testwatcher.WatchTimeout(30*time.Second)))
 }
 
 // TestDriftKubectlAnnotateUnmanagedFieldWithIgnoreMutationAnnotation adds a new
@@ -686,14 +678,9 @@ func TestDriftKubectlAnnotateUnmanagedFieldWithIgnoreMutationAnnotation(t *testi
 	}
 
 	// Remediator SHOULD NOT remove this field
-	err = nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
-		[]testpredicates.Predicate{
-			testpredicates.HasAnnotation("season", "summer"),
-		},
-		testwatcher.WatchTimeout(30*time.Second))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
+		testwatcher.WatchPredicates(testpredicates.HasAnnotation("season", "summer")),
+		testwatcher.WatchTimeout(30*time.Second)))
 }
 
 // TestDriftKubectlAnnotateManagedField modifies a managed field, and verifies
@@ -732,13 +719,8 @@ func TestDriftKubectlAnnotateManagedField(t *testing.T) {
 	}
 
 	// Remediator SHOULD correct the annotation
-	err = nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
-		[]testpredicates.Predicate{
-			testpredicates.HasAnnotation("season", "summer"),
-		})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
+		testwatcher.WatchPredicates(testpredicates.HasAnnotation("season", "summer"))))
 
 	// Modify a Config Sync annotation
 	out, err = nt.Shell.Kubectl("annotate", "namespace", "bookstore", "--overwrite", fmt.Sprintf("%s=winter", metadata.ResourceManagementKey))
@@ -747,13 +729,10 @@ func TestDriftKubectlAnnotateManagedField(t *testing.T) {
 	}
 
 	// Remediator SHOULD correct the annotation
-	err = nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
-		[]testpredicates.Predicate{
+	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
+		testwatcher.WatchPredicates(
 			testpredicates.HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
-		})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		)))
 }
 
 // TestDriftKubectlAnnotateManagedFieldWithIgnoreMutationAnnotation modifies a
@@ -794,19 +773,17 @@ func TestDriftKubectlAnnotateManagedFieldWithIgnoreMutationAnnotation(t *testing
 	// racing with the applier and are actually testing the remediator.
 	tg := taskgroup.New()
 	tg.Go(func() error {
-		predicates := []testpredicates.Predicate{
-			testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
-			testpredicates.DeploymentMissingEnvVar(reconcilermanager.Reconciler, reconcilermanager.WebhookEnabled),
-		}
 		return nt.Watcher.WatchObject(kinds.Deployment(),
-			core.RootReconcilerName(rootSyncID.Name), configsync.ControllerNamespace, predicates)
+			core.RootReconcilerName(rootSyncID.Name), configsync.ControllerNamespace,
+			testwatcher.WatchPredicates(
+				testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
+				testpredicates.DeploymentMissingEnvVar(reconcilermanager.Reconciler, reconcilermanager.WebhookEnabled),
+			))
 	})
 	tg.Go(func() error {
 		// Note: this proves that the applier does not currently honor the ignore-mutation annotation.
 		return nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
-			[]testpredicates.Predicate{
-				testpredicates.HasAnnotation("season", "summer"),
-			})
+			testwatcher.WatchPredicates(testpredicates.HasAnnotation("season", "summer")))
 	})
 	nt.Must(tg.Wait())
 
@@ -861,13 +838,8 @@ func TestDriftKubectlAnnotateDeleteManagedFields(t *testing.T) {
 	}
 
 	// Remediator SHOULD correct it
-	err = nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
-		[]testpredicates.Predicate{
-			testpredicates.HasAnnotation("season", "summer"),
-		})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
+		testwatcher.WatchPredicates(testpredicates.HasAnnotation("season", "summer"))))
 
 	// Delete a Config Sync annotation
 	out, err = nt.Shell.Kubectl("annotate", "namespace", "bookstore", fmt.Sprintf("%s-", metadata.ResourceManagementKey))
@@ -876,13 +848,10 @@ func TestDriftKubectlAnnotateDeleteManagedFields(t *testing.T) {
 	}
 
 	// Remediator SHOULD correct it
-	err = nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
-		[]testpredicates.Predicate{
+	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
+		testwatcher.WatchPredicates(
 			testpredicates.HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
-		})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		)))
 }
 
 // TestDriftKubectlAnnotateDeleteManagedFieldsWithIgnoreMutationAnnotation
@@ -923,19 +892,17 @@ func TestDriftKubectlAnnotateDeleteManagedFieldsWithIgnoreMutationAnnotation(t *
 	// racing with the applier and are actually testing the remediator.
 	tg := taskgroup.New()
 	tg.Go(func() error {
-		predicates := []testpredicates.Predicate{
-			testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
-			testpredicates.DeploymentMissingEnvVar(reconcilermanager.Reconciler, reconcilermanager.WebhookEnabled),
-		}
 		return nt.Watcher.WatchObject(kinds.Deployment(),
-			core.RootReconcilerName(rootSyncID.Name), configsync.ControllerNamespace, predicates)
+			core.RootReconcilerName(rootSyncID.Name), configsync.ControllerNamespace,
+			testwatcher.WatchPredicates(
+				testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
+				testpredicates.DeploymentMissingEnvVar(reconcilermanager.Reconciler, reconcilermanager.WebhookEnabled),
+			))
 	})
 	tg.Go(func() error {
 		// Note: this proves that the applier does not currently honor the ignore-mutation annotation.
 		return nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
-			[]testpredicates.Predicate{
-				testpredicates.HasAnnotation("season", "summer"),
-			})
+			testwatcher.WatchPredicates(testpredicates.HasAnnotation("season", "summer")))
 	})
 	nt.Must(tg.Wait())
 
@@ -984,10 +951,10 @@ func TestDriftRemoveApplySetPartOfLabel(t *testing.T) {
 			metadata.ApplySetPartOfLabel, "wrong-applyset-id")))
 
 	// Remediator SHOULD correct it
-	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), namespace, "", []testpredicates.Predicate{
+	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), namespace, "", testwatcher.WatchPredicates(
 		testpredicates.HasLabel(metadata.ApplySetPartOfLabel, rootSync1ApplySetID),
 		testpredicates.HasAnnotation("season", "summer"),
-	}, testwatcher.WatchTimeout(10*time.Second)))
+	), testwatcher.WatchTimeout(10*time.Second)))
 
 	nt.T.Log("Removing the ApplySet ID label")
 	nsObj = k8sobjects.NamespaceObject(namespace)
@@ -996,10 +963,10 @@ func TestDriftRemoveApplySetPartOfLabel(t *testing.T) {
 			metadata.ApplySetPartOfLabel)))
 
 	// Remediator SHOULD correct it
-	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), namespace, "", []testpredicates.Predicate{
+	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), namespace, "", testwatcher.WatchPredicates(
 		testpredicates.HasLabel(metadata.ApplySetPartOfLabel, rootSync1ApplySetID),
 		testpredicates.HasAnnotation("season", "summer"),
-	}, testwatcher.WatchTimeout(10*time.Second)))
+	), testwatcher.WatchTimeout(10*time.Second)))
 }
 
 func writeObjectYAMLFile(path string, obj client.Object, scheme *runtime.Scheme) error {

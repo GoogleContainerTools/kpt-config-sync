@@ -67,10 +67,10 @@ func TestNamespaceRepo_Centralized(t *testing.T) {
 	// Log error if the Reconciling condition does not progress to False before
 	// the timeout expires.
 	err := nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), "repo-sync", bsNamespace,
-		[]testpredicates.Predicate{
+		testwatcher.WatchPredicates(
 			hasReconcilingStatus(metav1.ConditionFalse),
 			hasStalledStatus(metav1.ConditionFalse),
-		},
+		),
 		testwatcher.WatchTimeout(30*time.Second))
 	if err != nil {
 		nt.T.Errorf("RepoSync did not finish reconciling: %v", err)
@@ -546,10 +546,10 @@ func TestDeleteNamespaceReconcilerDeployment(t *testing.T) {
 	// Here we are checking for false condition which requires atleast 2 reconcile
 	// request to be processed by the controller.
 	err := nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSyncID.Name, repoSyncID.Namespace,
-		[]testpredicates.Predicate{
+		testwatcher.WatchPredicates(
 			hasReconcilingStatus(metav1.ConditionFalse),
 			hasStalledStatus(metav1.ConditionFalse),
-		})
+		))
 	if err != nil {
 		nt.T.Errorf("RepoSync did not finish reconciling: %v", err)
 	}
@@ -563,10 +563,10 @@ func TestDeleteNamespaceReconcilerDeployment(t *testing.T) {
 	// Verify that the deployment is re-created after deletion by checking the
 	// Reconciling and Stalled condition in RepoSync resource.
 	err = nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSyncID.Name, repoSyncID.Namespace,
-		[]testpredicates.Predicate{
+		testwatcher.WatchPredicates(
 			hasReconcilingStatus(metav1.ConditionFalse),
 			hasStalledStatus(metav1.ConditionFalse),
-		})
+		))
 	if err != nil {
 		nt.T.Errorf("RepoSync did not finish reconciling: %v", err)
 	}

@@ -24,6 +24,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/syncsource"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
@@ -42,7 +43,7 @@ func TestSyncingThroughAProxy(t *testing.T) {
 		nt.Must(nt.Watcher.WatchForNotFound(kinds.Deployment(), "tinyproxy-deployment", "proxy-test"))
 	})
 	nt.Must(nt.Watcher.WatchObject(kinds.Deployment(), "tinyproxy-deployment", "proxy-test",
-		[]testpredicates.Predicate{hasReadyReplicas(1)}))
+		testwatcher.WatchPredicates(hasReadyReplicas(1))))
 	nt.T.Log("Verify the NoOpProxyError")
 	rs := k8sobjects.RootSyncObjectV1Beta1(rootSyncID.Name)
 	nt.WaitForRootSyncStalledError(rs.Name, "Validation", `KNV1061: RootSyncs which specify spec.git.proxy must also specify spec.git.auth as one of "none", "cookiefile" or "token"`)

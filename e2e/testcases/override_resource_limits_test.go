@@ -117,17 +117,14 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 	}
 
 	// Verify the reconciler container of root-reconciler uses the new resource request and limits, and the git-sync container uses the default resource requests and limits.
-	err = nt.Watcher.WatchObject(kinds.Deployment(),
+	nt.Must(nt.Watcher.WatchObject(kinds.Deployment(),
 		rootReconcilerNN.Name, rootReconcilerNN.Namespace,
-		[]testpredicates.Predicate{
+		testwatcher.WatchPredicates(
 			testpredicates.GenerationEquals(rootReconcilerDeploymentGeneration),
 			testpredicates.DeploymentContainerResourcesEqual(updatedRootReconcilerResources),
 			testpredicates.DeploymentContainerResourcesEqual(defaultResources[reconcilermanager.GitSync]),
-		},
-	)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		),
+	))
 
 	// Verify ns-reconciler-backend uses the default resource requests and limits
 	err = nt.Validate(backendReconcilerNN.Name, backendReconcilerNN.Namespace, &appsv1.Deployment{},
@@ -251,18 +248,15 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 	}
 
 	// Verify the reconciler container root-reconciler uses the default resource requests and limits, and the git-sync container uses the new resource limits.
-	err = nt.Watcher.WatchObject(kinds.Deployment(),
+	nt.Must(nt.Watcher.WatchObject(kinds.Deployment(),
 		rootReconcilerNN.Name, rootReconcilerNN.Namespace,
-		[]testpredicates.Predicate{
+		testwatcher.WatchPredicates(
 			testpredicates.GenerationEquals(rootReconcilerDeploymentGeneration),
 			testpredicates.DeploymentContainerResourcesEqual(defaultResources[reconcilermanager.Reconciler]),
 			testpredicates.DeploymentContainerResourcesEqual(updatedRootReconcilerGitSyncResources),
-		},
+		),
 		testwatcher.WatchTimeout(30*time.Second),
-	)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	))
 
 	// Verify the resource limits of ns-reconciler-backend are not affected by the resource limit change of root-reconciler
 	err = nt.Validate(backendReconcilerNN.Name, backendReconcilerNN.Namespace, &appsv1.Deployment{},
@@ -289,17 +283,14 @@ func TestOverrideReconcilerResourcesV1Alpha1(t *testing.T) {
 	rootReconcilerDeploymentGeneration++
 
 	// Verify root-reconciler uses the default resource requests and limits
-	err = nt.Watcher.WatchObject(kinds.Deployment(),
+	nt.Must(nt.Watcher.WatchObject(kinds.Deployment(),
 		rootReconcilerNN.Name, rootReconcilerNN.Namespace,
-		[]testpredicates.Predicate{
+		testwatcher.WatchPredicates(
 			testpredicates.GenerationEquals(rootReconcilerDeploymentGeneration),
 			testpredicates.DeploymentContainerResourcesEqual(defaultResources[reconcilermanager.Reconciler]),
 			testpredicates.DeploymentContainerResourcesEqual(defaultResources[reconcilermanager.GitSync]),
-		},
-		testwatcher.WatchTimeout(30*time.Second))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		),
+		testwatcher.WatchTimeout(30*time.Second)))
 
 	// Verify the resource requests and limits of ns-reconciler-backend are not affected by the resource limit change of root-reconciler
 	err = nt.Validate(backendReconcilerNN.Name, backendReconcilerNN.Namespace, &appsv1.Deployment{},
@@ -480,17 +471,14 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 	}
 
 	// Verify the reconciler container of root-reconciler uses the new resource request and limits, and the git-sync container uses the default resource requests and limits.
-	err = nt.Watcher.WatchObject(kinds.Deployment(),
+	nt.Must(nt.Watcher.WatchObject(kinds.Deployment(),
 		rootReconcilerNN.Name, rootReconcilerNN.Namespace,
-		[]testpredicates.Predicate{
+		testwatcher.WatchPredicates(
 			testpredicates.GenerationEquals(rootReconcilerDeploymentGeneration),
 			testpredicates.DeploymentContainerResourcesEqual(updatedRootReconcilerResources),
 			testpredicates.DeploymentContainerResourcesEqual(defaultResources[reconcilermanager.GitSync]),
-		},
-		testwatcher.WatchTimeout(30*time.Second))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		),
+		testwatcher.WatchTimeout(30*time.Second)))
 
 	// Verify ns-reconciler-backend uses the default resource requests and limits
 	err = nt.Validate(backendReconcilerNN.Name, backendReconcilerNN.Namespace, &appsv1.Deployment{},
@@ -612,18 +600,15 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 	}
 
 	// Verify the reconciler container root-reconciler uses the default resource requests and limits, and the git-sync container uses the new resource limits.
-	err = nt.Watcher.WatchObject(kinds.Deployment(),
+	nt.Must(nt.Watcher.WatchObject(kinds.Deployment(),
 		rootReconcilerNN.Name, rootReconcilerNN.Namespace,
-		[]testpredicates.Predicate{
+		testwatcher.WatchPredicates(
 			testpredicates.GenerationEquals(rootReconcilerDeploymentGeneration),
 			testpredicates.DeploymentContainerResourcesEqual(defaultResources[reconcilermanager.Reconciler]),
 			testpredicates.DeploymentContainerResourcesEqual(updatedRootReconcilerGitSyncResources),
-		},
+		),
 		testwatcher.WatchTimeout(30*time.Second),
-	)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	))
 
 	// Verify the resource limits of ns-reconciler-backend are not affected by the resource limit change of root-reconciler
 	err = nt.Validate(backendReconcilerNN.Name, backendReconcilerNN.Namespace, &appsv1.Deployment{},
@@ -650,17 +635,14 @@ func TestOverrideReconcilerResourcesV1Beta1(t *testing.T) {
 	rootReconcilerDeploymentGeneration++
 
 	// Verify root-reconciler uses the default resource requests and limits
-	err = nt.Watcher.WatchObject(kinds.Deployment(),
+	nt.Must(nt.Watcher.WatchObject(kinds.Deployment(),
 		rootReconcilerNN.Name, rootReconcilerNN.Namespace,
-		[]testpredicates.Predicate{
+		testwatcher.WatchPredicates(
 			testpredicates.GenerationEquals(rootReconcilerDeploymentGeneration),
 			testpredicates.DeploymentContainerResourcesEqual(defaultResources[reconcilermanager.Reconciler]),
 			testpredicates.DeploymentContainerResourcesEqual(defaultResources[reconcilermanager.GitSync]),
-		},
-		testwatcher.WatchTimeout(30*time.Second))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		),
+		testwatcher.WatchTimeout(30*time.Second)))
 
 	// Verify the resource requests and limits of ns-reconciler-backend are not affected by the resource limit change of root-reconciler
 	err = nt.Validate(backendReconcilerNN.Name, backendReconcilerNN.Namespace, &appsv1.Deployment{},

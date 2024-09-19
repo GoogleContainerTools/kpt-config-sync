@@ -219,8 +219,8 @@ func TestOverrideGitSyncDepthV1Beta1(t *testing.T) {
 
 func validateDeploymentContainerHasEnvVar(nt *nomostest.NT, nn types.NamespacedName, container, key, value string) error {
 	return nt.Watcher.WatchObject(kinds.Deployment(), nn.Name, nn.Namespace,
-		[]testpredicates.Predicate{
+		testwatcher.WatchPredicates(
 			testpredicates.DeploymentHasEnvVar(container, key, value),
-		},
+		),
 		testwatcher.WatchTimeout(30*time.Second))
 }

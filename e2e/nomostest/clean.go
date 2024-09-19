@@ -37,6 +37,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -209,8 +210,8 @@ func uninstallUnmanagedPackagesOfType(nt *NT, gvk schema.GroupVersionKind) error
 		conditions = append(conditions, testpredicates.HasConditionStatus(nt.Scheme,
 			string(v1beta1.RepoSyncReconcilerFinalizerFailure), corev1.ConditionTrue))
 	}
-	conditions = []testpredicates.Predicate{
-		testpredicates.Or(nt.Logger, conditions...),
+	watchOptions := []testwatcher.WatchOption{
+		testwatcher.WatchPredicates(testpredicates.Or(nt.Logger, conditions...)),
 	}
 	// Delete the unmanaged packages in parallel
 	nt.T.Logf("[CLEANUP] Deleting unmanaged %s objects...", gvk.Kind)
@@ -237,7 +238,7 @@ func uninstallUnmanagedPackagesOfType(nt *NT, gvk schema.GroupVersionKind) error
 		}
 		tg.Go(func() error {
 			nt.T.Logf("[CLEANUP] Waiting for removal or failure of %s object %s ...", gvk.Kind, nn)
-			err := nt.Watcher.WatchObject(gvk, nn.Name, nn.Namespace, conditions)
+			err := nt.Watcher.WatchObject(gvk, nn.Name, nn.Namespace, watchOptions...)
 			if err == nil {
 				nt.T.Logf("[CLEANUP] Confirmed removal of %s object %s", gvk.Kind, nn)
 			}

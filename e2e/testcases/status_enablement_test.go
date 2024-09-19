@@ -54,31 +54,25 @@ func TestStatusEnabledAndDisabled(t *testing.T) {
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add a namespace and a configmap"))
 	nt.Must(nt.WatchForAllSyncs())
 
-	err := nt.Watcher.WatchObject(kinds.ResourceGroup(),
+	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(),
 		configsync.RootSyncName, configsync.ControllerNamespace,
-		[]testpredicates.Predicate{
+		testwatcher.WatchPredicates(
 			resourceGroupHasNoStatus,
 			testpredicates.HasLabel(common.InventoryLabel, id),
-		},
-		testwatcher.WatchTimeout(nt.DefaultWaitTimeout))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		),
+		testwatcher.WatchTimeout(nt.DefaultWaitTimeout)))
 
 	// Override the statusMode for root-reconciler to re-enable the status
 	nt.MustMergePatch(rootSync, `{"spec": {"override": {"statusMode": "enabled"}}}`)
 	nt.Must(nt.WatchForAllSyncs())
 
-	err = nt.Watcher.WatchObject(kinds.ResourceGroup(),
+	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(),
 		configsync.RootSyncName, configsync.ControllerNamespace,
-		[]testpredicates.Predicate{
+		testwatcher.WatchPredicates(
 			resourceGroupHasStatus,
 			testpredicates.HasLabel(common.InventoryLabel, id),
-		},
-		testwatcher.WatchTimeout(nt.DefaultWaitTimeout))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		),
+		testwatcher.WatchTimeout(nt.DefaultWaitTimeout)))
 }
 
 func resourceGroupHasNoStatus(obj client.Object) error {

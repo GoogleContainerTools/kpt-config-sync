@@ -270,7 +270,7 @@ func TestOciSyncWithDigest(t *testing.T) {
 	// RootSync should fail because image can no longer be pulled
 	nt.T.Log("Wait for RootSync to have source error")
 	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, configsync.ControllerNamespace,
-		[]testpredicates.Predicate{testpredicates.RootSyncHasSourceError(status.SourceErrorCode, "failed to pull image")}))
+		testwatcher.WatchPredicates(testpredicates.RootSyncHasSourceError(status.SourceErrorCode, "failed to pull image"))))
 	nt.WaitForRootSyncSourceError(rootSyncID.Name, status.SourceErrorCode, "failed to pull image")
 	// Specify image with digest
 	image, err = nt.BuildAndPushOCIImage(rootSyncKey, registryproviders.ImageInputObjects(nt.Scheme, bookinfoRole))
@@ -298,7 +298,7 @@ func TestOciSyncWithDigest(t *testing.T) {
 	nt.T.Log("Make sure RootSync remains healthy for 30 seconds")
 	// RootSync should remain healthy as long as the Pod isn't restarted (could be flaky)
 	err = nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, configsync.ControllerNamespace,
-		[]testpredicates.Predicate{testpredicates.RootSyncHasSourceError(status.SourceErrorCode, "failed to pull image")},
+		testwatcher.WatchPredicates(testpredicates.RootSyncHasSourceError(status.SourceErrorCode, "failed to pull image")),
 		testwatcher.WatchTimeout(30*time.Second)) // wait for source error to occur (it shouldn't)
 	if err == nil {
 		nt.T.Fatal("expected no source error code but found one")

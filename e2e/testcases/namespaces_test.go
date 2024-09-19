@@ -20,7 +20,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -30,6 +29,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
@@ -670,10 +670,10 @@ func TestDontDeleteAllNamespaces(t *testing.T) {
 	nt.Must(rootSyncGitRepo.RemoveSafetyNamespace())
 	nt.Must(rootSyncGitRepo.CommitAndPush("undeclare all Namespaces"))
 
-	require.NoError(nt.T,
-		nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace, []testpredicates.Predicate{
+	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
+		testwatcher.WatchPredicates(
 			testpredicates.RootSyncHasSyncError(status.EmptySourceErrorCode, ""),
-		}))
+		)))
 
 	// Wait 10 seconds before checking the namespaces.
 	// Checking the namespaces immediately may not catch the case where

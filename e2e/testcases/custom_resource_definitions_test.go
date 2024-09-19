@@ -76,12 +76,10 @@ func mustRemoveCustomResourceWithDefinition(nt *nomostest.NT, crd client.Object)
 	nt.Must(rootSyncGitRepo.Remove("acme/cluster/anvil-crd.yaml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Removing Anvil CRD but leaving Anvil CR"))
 
-	err = nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncNN.Name, rootSyncNN.Namespace, []testpredicates.Predicate{
-		testpredicates.RootSyncHasSourceError(nonhierarchical.UnsupportedCRDRemovalErrorCode, ""),
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncNN.Name, rootSyncNN.Namespace,
+		testwatcher.WatchPredicates(
+			testpredicates.RootSyncHasSourceError(nonhierarchical.UnsupportedCRDRemovalErrorCode, ""),
+		)))
 
 	rootSyncLabels, err := nomostest.MetricLabelsForRootSync(nt, rootSyncNN)
 	if err != nil {
@@ -441,28 +439,19 @@ func TestLargeCRD(t *testing.T) {
 	nt.Must(nt.WatchForAllSyncs())
 	nt.RenewClient()
 
-	err := nt.Watcher.WatchObject(kinds.CustomResourceDefinitionV1(), "challenges.acme.cert-manager.io", "", nil,
-		testwatcher.WatchTimeout(30*time.Second))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.CustomResourceDefinitionV1(), "challenges.acme.cert-manager.io", "",
+		testwatcher.WatchTimeout(30*time.Second)))
 
-	err = nt.Watcher.WatchObject(kinds.CustomResourceDefinitionV1(), "solrclouds.solr.apache.org", "", nil,
-		testwatcher.WatchTimeout(30*time.Second))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.CustomResourceDefinitionV1(), "solrclouds.solr.apache.org", "",
+		testwatcher.WatchTimeout(30*time.Second)))
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rootSyncGitRepo.MustGet(nt.T, "acme/cluster/challenges-acme-cert-manager-io.yaml"))
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rootSyncGitRepo.MustGet(nt.T, "acme/cluster/solrclouds-solr-apache-org.yaml"))
 
-	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	// update one CRD
 	crdFile := filepath.Join(".", "..", "testdata", "customresources", "challenges-acme-cert-manager-io_with_new_label.yaml")
@@ -474,12 +463,9 @@ func TestLargeCRD(t *testing.T) {
 	nt.Must(rootSyncGitRepo.CommitAndPush("Update label for one CRD"))
 	nt.Must(nt.WatchForAllSyncs())
 
-	err = nt.Watcher.WatchObject(kinds.CustomResourceDefinitionV1(), "challenges.acme.cert-manager.io", "",
-		[]testpredicates.Predicate{testpredicates.HasLabel("random-key", "random-value")},
-		testwatcher.WatchTimeout(30*time.Second))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.CustomResourceDefinitionV1(), "challenges.acme.cert-manager.io", "",
+		testwatcher.WatchPredicates(testpredicates.HasLabel("random-key", "random-value")),
+		testwatcher.WatchTimeout(30*time.Second)))
 }
 
 func hasRule(name string) testpredicates.Predicate {

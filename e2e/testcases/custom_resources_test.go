@@ -183,12 +183,9 @@ func TestSyncUpdateCustomResource(t *testing.T) {
 		}
 	})
 
-	err = nt.Watcher.WatchObject(kinds.CustomResourceDefinitionV1(), "anvils.acme.com", "",
-		[]testpredicates.Predicate{nomostest.IsEstablished},
-		testwatcher.WatchTimeout(30*time.Second))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.CustomResourceDefinitionV1(), "anvils.acme.com", "",
+		testwatcher.WatchPredicates(nomostest.IsEstablished),
+		testwatcher.WatchTimeout(30*time.Second)))
 
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/foo/ns.yaml", k8sobjects.NamespaceObject("foo")))
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/foo/anvil-v1.yaml", anvilCR("v1", "heavy", 10)))

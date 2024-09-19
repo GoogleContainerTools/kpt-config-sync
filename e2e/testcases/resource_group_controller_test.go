@@ -95,12 +95,10 @@ func TestResourceGroupControllerInKptGroup(t *testing.T) {
 
 	expectedStatus := testresourcegroup.EmptyStatus()
 	expectedStatus.ObservedGeneration = 1
-	err := nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace, []testpredicates.Predicate{
-		testpredicates.ResourceGroupStatusEquals(expectedStatus),
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace,
+		testwatcher.WatchPredicates(
+			testpredicates.ResourceGroupStatusEquals(expectedStatus),
+		)))
 
 	resources := []v1alpha1.ObjMetadata{
 		{
@@ -112,12 +110,9 @@ func TestResourceGroupControllerInKptGroup(t *testing.T) {
 			},
 		},
 	}
-	err = testresourcegroup.UpdateResourceGroup(nt.KubeClient, rgNN, func(rg *v1alpha1.ResourceGroup) {
+	nt.Must(testresourcegroup.UpdateResourceGroup(nt.KubeClient, rgNN, func(rg *v1alpha1.ResourceGroup) {
 		rg.Spec.Resources = resources
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	subRGNN := types.NamespacedName{
 		Name:      "group-b",
@@ -128,17 +123,14 @@ func TestResourceGroupControllerInKptGroup(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err = testresourcegroup.UpdateResourceGroup(nt.KubeClient, rgNN, func(rg *v1alpha1.ResourceGroup) {
+	nt.Must(testresourcegroup.UpdateResourceGroup(nt.KubeClient, rgNN, func(rg *v1alpha1.ResourceGroup) {
 		rg.Spec.Subgroups = []v1alpha1.GroupMetadata{
 			{
 				Name:      subRGNN.Name,
 				Namespace: subRGNN.Namespace,
 			},
 		}
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	expectedStatus.ObservedGeneration = 3
 	expectedStatus.ResourceStatuses = []v1alpha1.ResourceStatus{
@@ -165,12 +157,10 @@ func TestResourceGroupControllerInKptGroup(t *testing.T) {
 		},
 	}
 
-	err = nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace, []testpredicates.Predicate{
-		testpredicates.ResourceGroupStatusEquals(expectedStatus),
-	}, testwatcher.WatchTimeout(time.Minute))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace,
+		testwatcher.WatchPredicates(
+			testpredicates.ResourceGroupStatusEquals(expectedStatus),
+		), testwatcher.WatchTimeout(time.Minute)))
 
 	if err := testresourcegroup.CreateOrUpdateResources(nt.KubeClient, resources, resourceID); err != nil {
 		nt.T.Fatal(err)
@@ -185,12 +175,10 @@ func TestResourceGroupControllerInKptGroup(t *testing.T) {
 		},
 	}
 
-	err = nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace, []testpredicates.Predicate{
-		testpredicates.ResourceGroupStatusEquals(expectedStatus),
-	}, testwatcher.WatchTimeout(time.Minute))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace,
+		testwatcher.WatchPredicates(
+			testpredicates.ResourceGroupStatusEquals(expectedStatus),
+		), testwatcher.WatchTimeout(time.Minute)))
 
 	if err := testresourcegroup.CreateOrUpdateResources(nt.KubeClient, resources, "another"); err != nil {
 		nt.T.Fatal(err)
@@ -211,12 +199,10 @@ func TestResourceGroupControllerInKptGroup(t *testing.T) {
 		},
 	}
 
-	err = nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace, []testpredicates.Predicate{
-		testpredicates.ResourceGroupStatusEquals(expectedStatus),
-	}, testwatcher.WatchTimeout(time.Minute))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace,
+		testwatcher.WatchPredicates(
+			testpredicates.ResourceGroupStatusEquals(expectedStatus),
+		), testwatcher.WatchTimeout(time.Minute)))
 
 	if err := nt.KubeClient.Delete(rg); err != nil {
 		nt.T.Fatal(err)
@@ -255,12 +241,10 @@ func TestResourceGroupCustomResource(t *testing.T) {
 
 	expectedStatus := testresourcegroup.EmptyStatus()
 	expectedStatus.ObservedGeneration = 1
-	err := nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace, []testpredicates.Predicate{
-		testpredicates.ResourceGroupStatusEquals(expectedStatus),
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace,
+		testwatcher.WatchPredicates(
+			testpredicates.ResourceGroupStatusEquals(expectedStatus),
+		)))
 	crdObj := anvilV1CRD()
 	crdGVK := anvilGVK("v1")
 	resources := []v1alpha1.ObjMetadata{
@@ -273,12 +257,9 @@ func TestResourceGroupCustomResource(t *testing.T) {
 			},
 		},
 	}
-	err = testresourcegroup.UpdateResourceGroup(nt.KubeClient, rgNN, func(rg *v1alpha1.ResourceGroup) {
+	nt.Must(testresourcegroup.UpdateResourceGroup(nt.KubeClient, rgNN, func(rg *v1alpha1.ResourceGroup) {
 		rg.Spec.Resources = resources
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 	expectedStatus.ObservedGeneration = 2
 	expectedStatus.ResourceStatuses = []v1alpha1.ResourceStatus{
 		{
@@ -286,12 +267,10 @@ func TestResourceGroupCustomResource(t *testing.T) {
 			Status:      v1alpha1.NotFound,
 		},
 	}
-	err = nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace, []testpredicates.Predicate{
-		testpredicates.ResourceGroupStatusEquals(expectedStatus),
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace,
+		testwatcher.WatchPredicates(
+			testpredicates.ResourceGroupStatusEquals(expectedStatus),
+		)))
 	// Create CRD and CR
 	nt.T.Cleanup(func() {
 		crdObj := anvilV1CRD()
@@ -332,12 +311,10 @@ func TestResourceGroupCustomResource(t *testing.T) {
 			},
 		},
 	}
-	err = nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace, []testpredicates.Predicate{
-		testpredicates.ResourceGroupStatusEquals(expectedStatus),
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace,
+		testwatcher.WatchPredicates(
+			testpredicates.ResourceGroupStatusEquals(expectedStatus),
+		)))
 	if err := nt.KubeClient.Delete(crdObj); err != nil {
 		nt.T.Fatal(err)
 	}
@@ -347,12 +324,10 @@ func TestResourceGroupCustomResource(t *testing.T) {
 			Status:      v1alpha1.NotFound,
 		},
 	}
-	err = nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace, []testpredicates.Predicate{
-		testpredicates.ResourceGroupStatusEquals(expectedStatus),
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace,
+		testwatcher.WatchPredicates(
+			testpredicates.ResourceGroupStatusEquals(expectedStatus),
+		)))
 }
 
 func TestResourceGroupApplyStatus(t *testing.T) {
@@ -380,12 +355,10 @@ func TestResourceGroupApplyStatus(t *testing.T) {
 
 	expectedStatus := testresourcegroup.EmptyStatus()
 	expectedStatus.ObservedGeneration = 1
-	err := nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace, []testpredicates.Predicate{
-		testpredicates.ResourceGroupStatusEquals(expectedStatus),
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace,
+		testwatcher.WatchPredicates(
+			testpredicates.ResourceGroupStatusEquals(expectedStatus),
+		)))
 
 	nt.T.Log("Create and apply ConfigMaps")
 	resources := []v1alpha1.ObjMetadata{
@@ -447,15 +420,10 @@ func TestResourceGroupApplyStatus(t *testing.T) {
 		},
 	}
 	nt.T.Log("Apply all but the last ConfigMap to test NotFound error")
-	if err := testresourcegroup.CreateOrUpdateResources(nt.KubeClient, resources[:len(resources)-1], resourceID); err != nil {
-		nt.T.Fatal(err)
-	}
-	err = testresourcegroup.UpdateResourceGroup(nt.KubeClient, rgNN, func(rg *v1alpha1.ResourceGroup) {
+	nt.Must(testresourcegroup.CreateOrUpdateResources(nt.KubeClient, resources[:len(resources)-1], resourceID))
+	nt.Must(testresourcegroup.UpdateResourceGroup(nt.KubeClient, rgNN, func(rg *v1alpha1.ResourceGroup) {
 		rg.Spec.Resources = resources
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 	expectedStatus.ObservedGeneration = 2
 	expectedStatus.ResourceStatuses = []v1alpha1.ResourceStatus{
 		{
@@ -493,36 +461,30 @@ func TestResourceGroupApplyStatus(t *testing.T) {
 			Status:      v1alpha1.NotFound,
 		},
 	}
-	err = nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace, []testpredicates.Predicate{
-		testpredicates.ResourceGroupStatusEquals(expectedStatus),
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace,
+		testwatcher.WatchPredicates(
+			testpredicates.ResourceGroupStatusEquals(expectedStatus),
+		)))
 
 	nt.T.Log("inject resource status to verify reconcile behavior")
-	err = testresourcegroup.UpdateResourceGroup(nt.KubeClient, rgNN, func(rg *v1alpha1.ResourceGroup) {
+	nt.Must(testresourcegroup.UpdateResourceGroup(nt.KubeClient, rgNN, func(rg *v1alpha1.ResourceGroup) {
 		rg.Status.ResourceStatuses = nil
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 	nt.T.Log("verify that the controller reconciles to the original status")
-	err = nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace, []testpredicates.Predicate{
-		testpredicates.ResourceGroupStatusEquals(expectedStatus),
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace,
+		testwatcher.WatchPredicates(
+			testpredicates.ResourceGroupStatusEquals(expectedStatus),
+		)))
 	actualRG := &v1alpha1.ResourceGroup{}
 	if err := nt.KubeClient.Get(rgNN.Name, rgNN.Namespace, actualRG); err != nil {
 		nt.T.Fatal(err)
 	}
 	resourceVersion := actualRG.ResourceVersion
 	nt.T.Log("Wait and check to see we don't cause an infinite/recursive reconcile loop by ensuring the resourceVersion doesn't change.")
-	err = nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace, []testpredicates.Predicate{
-		testpredicates.ResourceVersionNotEquals(nt.Scheme, resourceVersion),
-	}, testwatcher.WatchTimeout(60*time.Second))
+	err := nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace,
+		testwatcher.WatchPredicates(
+			testpredicates.ResourceVersionNotEquals(nt.Scheme, resourceVersion),
+		), testwatcher.WatchTimeout(60*time.Second))
 	if err == nil {
 		nt.T.Fatal("expected ResourceGroup ResourceVersion to not change")
 	}

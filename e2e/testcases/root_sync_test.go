@@ -337,15 +337,12 @@ func TestRootSyncReconcilingStatus(t *testing.T) {
 	// Deployment is successfully created.
 	// Log error if the Reconciling condition does not progress to False before the timeout
 	// expires.
-	err := nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
-		[]testpredicates.Predicate{
+	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
+		testwatcher.WatchPredicates(
 			hasRootSyncReconcilingStatus(metav1.ConditionFalse),
 			hasRootSyncStalledStatus(metav1.ConditionFalse),
-		},
-		testwatcher.WatchTimeout(15*time.Second))
-	if err != nil {
-		nt.T.Errorf("RootSync did not finish reconciling: %v", err)
-	}
+		),
+		testwatcher.WatchTimeout(15*time.Second)))
 
 	if err := nomostest.ValidateStandardMetrics(nt); err != nil {
 		nt.T.Fatal(err)

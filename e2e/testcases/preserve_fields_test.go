@@ -72,11 +72,8 @@ func TestPreserveGeneratedServiceFields(t *testing.T) {
 	nt.Must(nt.WatchForAllSyncs())
 
 	// Ensure the Service has the target port we set.
-	err := nt.Watcher.WatchObject(kinds.Service(), serviceName, ns,
-		[]testpredicates.Predicate{hasTargetPort(targetPort1)})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.Service(), serviceName, ns,
+		testwatcher.WatchPredicates(hasTargetPort(targetPort1))))
 
 	// We want to wait until the Service specifies ClusterIP and NodePort.
 	// We're going to ensure these fields don't change during the test; ACM should
@@ -109,7 +106,7 @@ func TestPreserveGeneratedServiceFields(t *testing.T) {
 	// Potentially flaky check since other things can cause NodePort/ClusterIP
 	// to change; copied from bats.
 	err = nt.Watcher.WatchObject(kinds.Service(), serviceName, ns,
-		[]testpredicates.Predicate{hasDifferentNodePortOrClusterIP(generatedNodePort, generatedClusterIP)},
+		testwatcher.WatchPredicates(hasDifferentNodePortOrClusterIP(generatedNodePort, generatedClusterIP)),
 		testwatcher.WatchTimeout(30*time.Second))
 	if err == nil {
 		// We want non-nil error from the Retry above - if err is nil then at least
@@ -135,11 +132,8 @@ func TestPreserveGeneratedServiceFields(t *testing.T) {
 	nt.Must(nt.WatchForAllSyncs())
 
 	// Ensure the Service has the new target port we set.
-	err = nt.Watcher.WatchObject(kinds.Service(), serviceName, ns,
-		[]testpredicates.Predicate{hasTargetPort(targetPort2)})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.Service(), serviceName, ns,
+		testwatcher.WatchPredicates(hasTargetPort(targetPort2))))
 
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, updatedService)
 
@@ -194,28 +188,22 @@ aggregationRule:
 	nt.Must(nt.WatchForAllSyncs())
 
 	// Ensure the aggregate rule is actually aggregated.
-	err := nt.Watcher.WatchObject(kinds.ClusterRole(), aggregateRoleName, "",
-		[]testpredicates.Predicate{
+	nt.Must(nt.Watcher.WatchObject(kinds.ClusterRole(), aggregateRoleName, "",
+		testwatcher.WatchPredicates(
 			clusterRoleHasRules([]rbacv1.PolicyRule{
 				nsViewer.Rules[0], rbacViewer.Rules[0],
 			}),
-		},
-		testwatcher.WatchTimeout(30*time.Second))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		),
+		testwatcher.WatchTimeout(30*time.Second)))
 
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsViewer)
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rbacViewer)
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, aggregateViewer)
 
 	// Validate metrics.
-	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: rootSyncNN,
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	// Update aggregateRole with a new label.
 	nt.Must(rootSyncGitRepo.AddFile("acme/cluster/aggregate-viewer-cr.yaml", []byte(`
@@ -234,23 +222,17 @@ aggregationRule:
 	nt.Must(nt.WatchForAllSyncs())
 
 	// Ensure we don't overwrite the aggregate rules.
-	err = nt.Validate(aggregateRoleName, "", &rbacv1.ClusterRole{},
+	nt.Must(nt.Validate(aggregateRoleName, "", &rbacv1.ClusterRole{},
 		clusterRoleHasRules([]rbacv1.PolicyRule{
 			nsViewer.Rules[0], rbacViewer.Rules[0],
-		}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		})))
 
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, aggregateViewer)
 
 	// Validate metrics.
-	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: rootSyncNN,
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 }
 
 // TestPreserveLastApplied ensures we don't destroy the last-applied-configuration
@@ -290,13 +272,10 @@ func TestPreserveLastApplied(t *testing.T) {
 		nt.T.Fatal("got kubectl replace err = nil, want admission webhook to deny")
 	}
 
-	err = nt.Watcher.WatchObject(kinds.ClusterRole(), nsViewerName, "",
-		[]testpredicates.Predicate{
+	nt.Must(nt.Watcher.WatchObject(kinds.ClusterRole(), nsViewerName, "",
+		testwatcher.WatchPredicates(
 			testpredicates.HasExactlyAnnotationKeys(annotationKeys...),
-		})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		)))
 
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsViewer)
 

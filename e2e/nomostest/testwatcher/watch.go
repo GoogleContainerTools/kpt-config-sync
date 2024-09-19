@@ -49,6 +49,7 @@ type watchSpec struct {
 	timeout      time.Duration
 	ctx          context.Context
 	unstructured bool
+	predicates   []testpredicates.Predicate
 }
 
 // WatchTimeout provides the timeout option to Watch.
@@ -70,6 +71,13 @@ func WatchContext(ctx context.Context) WatchOption {
 func WatchUnstructured() WatchOption {
 	return func(watch *watchSpec) {
 		watch.unstructured = true
+	}
+}
+
+// WatchPredicates specifies additional predicates to watch for after sync.
+func WatchPredicates(predicates ...testpredicates.Predicate) WatchOption {
+	return func(options *watchSpec) {
+		options.predicates = append(options.predicates, predicates...)
 	}
 }
 
@@ -109,7 +117,7 @@ func NewWatcher(
 // resource type exists.
 // All Predicates need to handle nil objects (nil means Not Found).
 // If no Predicates are specified, WatchObject watches until the object exists.
-func (w *Watcher) WatchObject(gvk schema.GroupVersionKind, name, namespace string, predicates []testpredicates.Predicate, opts ...WatchOption) error {
+func (w *Watcher) WatchObject(gvk schema.GroupVersionKind, name, namespace string, opts ...WatchOption) error {
 	errPrefix := fmt.Sprintf("WatchObject(%s %s/%s)", gvk.Kind, namespace, name)
 
 	startTime := time.Now()
@@ -127,8 +135,8 @@ func (w *Watcher) WatchObject(gvk schema.GroupVersionKind, name, namespace strin
 	}
 
 	// Default to waiting until the object exists
-	if len(predicates) == 0 {
-		predicates = append(predicates, testpredicates.ObjectFoundPredicate)
+	if len(spec.predicates) == 0 {
+		spec.predicates = append(spec.predicates, testpredicates.ObjectFoundPredicate)
 	}
 
 	// If a timeout is specified (WatchTimeout(0) means no timeout),
@@ -208,7 +216,7 @@ func (w *Watcher) WatchObject(gvk schema.GroupVersionKind, name, namespace strin
 				errPrefix, log.AsYAMLDiffWithScheme(prevObj, cObj, w.scheme))
 		}
 
-		evalErrs = testpredicates.EvaluatePredicates(cObj, predicates)
+		evalErrs = testpredicates.EvaluatePredicates(cObj, spec.predicates)
 		if len(evalErrs) == 0 {
 			// Success! All predicates returned without error.
 			return true, nil
@@ -264,7 +272,7 @@ func (w *Watcher) WatchObject(gvk schema.GroupVersionKind, name, namespace strin
 				errPrefix, eType,
 				log.AsYAMLDiffWithScheme(prevObj, cObj, w.scheme))
 
-			evalErrs = testpredicates.EvaluatePredicates(cObj, predicates)
+			evalErrs = testpredicates.EvaluatePredicates(cObj, spec.predicates)
 			if len(evalErrs) == 0 {
 				// Success! All predicates returned without error.
 				return true, nil
@@ -385,15 +393,13 @@ func (w *Watcher) newListWatchForObject(ctx context.Context, itemGVK schema.Grou
 
 // WatchForCurrentStatus watches the object until it reconciles (Current).
 func (w *Watcher) WatchForCurrentStatus(gvk schema.GroupVersionKind, name, namespace string, opts ...WatchOption) error {
-	return w.WatchObject(gvk, name, namespace,
-		[]testpredicates.Predicate{testpredicates.StatusEquals(w.scheme, kstatus.CurrentStatus)},
-		opts...)
+	opts = append(opts, WatchPredicates(testpredicates.StatusEquals(w.scheme, kstatus.CurrentStatus)))
+	return w.WatchObject(gvk, name, namespace, opts...)
 }
 
 // WatchForNotFound waits for the passed object to be fully deleted or not found.
 // Returns an error if the object is not deleted before the timeout.
 func (w *Watcher) WatchForNotFound(gvk schema.GroupVersionKind, name, namespace string, opts ...WatchOption) error {
-	return w.WatchObject(gvk, name, namespace,
-		[]testpredicates.Predicate{testpredicates.ObjectNotFoundPredicate(w.scheme)},
-		opts...)
+	opts = append(opts, WatchPredicates(testpredicates.ObjectNotFoundPredicate(w.scheme)))
+	return w.WatchObject(gvk, name, namespace, opts...)
 }

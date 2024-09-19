@@ -30,6 +30,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/policy"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -141,9 +142,8 @@ func TestTargetingDifferentResourceQuotasToDifferentClusters(t *testing.T) {
 	// 	nt.T.Fatal(err)
 	// }
 	require.NoError(nt.T,
-		nt.Watcher.WatchObject(kinds.ResourceQuota(), rqLegacy.Name, rqLegacy.Namespace, []testpredicates.Predicate{
-			resourceQuotaHasHardPods(nt, testPodsQuota),
-		}))
+		nt.Watcher.WatchObject(kinds.ResourceQuota(), rqLegacy.Name, rqLegacy.Namespace,
+			testwatcher.WatchPredicates(resourceQuotaHasHardPods(nt, testPodsQuota))))
 
 	renameCluster(nt, configMapName, prodClusterName)
 	nt.Must(nt.WatchForAllSyncs())
@@ -156,9 +156,8 @@ func TestTargetingDifferentResourceQuotasToDifferentClusters(t *testing.T) {
 	// 	nt.T.Fatal(err)
 	// }
 	require.NoError(nt.T,
-		nt.Watcher.WatchObject(kinds.ResourceQuota(), rqInline.Name, rqInline.Namespace, []testpredicates.Predicate{
-			resourceQuotaHasHardPods(nt, prodPodsQuota),
-		}))
+		nt.Watcher.WatchObject(kinds.ResourceQuota(), rqInline.Name, rqInline.Namespace,
+			testwatcher.WatchPredicates(resourceQuotaHasHardPods(nt, prodPodsQuota))))
 
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rqInline)

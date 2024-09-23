@@ -92,3 +92,14 @@ func RetryWithBackoff(backoff wait.Backoff, f func() error) error {
 		return err
 	})
 }
+
+// CopyBackoff duplicates a wait.Backoff
+func CopyBackoff(in wait.Backoff) wait.Backoff {
+	return wait.Backoff{
+		Duration: in.Duration,
+		Factor:   in.Factor,
+		Jitter:   in.Jitter,
+		Steps:    in.Steps,
+		Cap:      in.Cap,
+	}
+}

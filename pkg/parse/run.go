@@ -19,10 +19,8 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
@@ -31,7 +29,6 @@ import (
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
-	"kpt.dev/configsync/pkg/reconciler/namespacecontroller"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/util"
 	webhookconfiguration "kpt.dev/configsync/pkg/webhook/configuration"
@@ -68,180 +65,31 @@ const (
 	RenderingNotRequired string = "Rendering not required but is currently enabled"
 )
 
-// RunOpts are the options used when calling Run
-type RunOpts struct {
-	runFunc RunFunc
-	backoff wait.Backoff
+// RunResult encapsulates the result of a RunFunc.
+// This simply allows explicitly naming return values in a way that makes the
+// implementation easier to read.
+type RunResult struct {
+	SourceChanged bool
+	Success       bool
 }
 
 // RunFunc is the function signature of the function that starts the parse-apply-watch loop
-type RunFunc func(ctx context.Context, p Parser, trigger string, state *reconcilerState)
+type RunFunc func(ctx context.Context, p Parser, trigger string, state *reconcilerState) RunResult
 
-// Run keeps checking whether a parse-apply-watch loop is necessary and starts a loop if needed.
-func Run(ctx context.Context, p Parser, nsControllerState *namespacecontroller.State, runOpts RunOpts) {
-	opts := p.options()
-	// Use timers, not tickers.
-	// Tickers can cause memory leaks and continuous execution, when execution
-	// takes longer than the tick duration.
-	runTimer := opts.Clock.NewTimer(opts.PollingPeriod)
-	defer runTimer.Stop()
-
-	resyncTimer := opts.Clock.NewTimer(opts.ResyncPeriod)
-	defer resyncTimer.Stop()
-
-	retryTimer := opts.Clock.NewTimer(opts.RetryPeriod)
-	defer retryTimer.Stop()
-
-	statusUpdateTimer := opts.Clock.NewTimer(opts.StatusUpdatePeriod)
-	defer statusUpdateTimer.Stop()
-
-	nsEventPeriod := time.Second
-	nsEventTimer := opts.Clock.NewTimer(nsEventPeriod)
-	defer nsEventTimer.Stop()
-
-	runFn := runOpts.runFunc
-	state := &reconcilerState{
-		backoff:     runOpts.backoff,
-		retryTimer:  retryTimer,
-		retryPeriod: opts.RetryPeriod,
-	}
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-
-		// Re-apply even if no changes have been detected.
-		// This case should be checked first since it resets the cache.
-		// If the reconciler is in the process of reconciling a given commit, the resync won't
-		// happen until the ongoing reconciliation is done.
-		case <-resyncTimer.C():
-			klog.Infof("It is time for a force-resync")
-			// Reset the cache partially to make sure all the steps of a parse-apply-watch loop will run.
-			// The cached sourceState will not be reset to avoid reading all the source files unnecessarily.
-			// The cached needToRetry will not be reset to avoid resetting the backoff retries.
-			state.resetPartialCache()
-			runFn(ctx, p, triggerResync, state)
-
-			resyncTimer.Reset(opts.ResyncPeriod) // Schedule resync attempt
-			// we should not reset retryTimer under this `case` since it is not aware of the
-			// state of backoff retry.
-			statusUpdateTimer.Reset(opts.StatusUpdatePeriod) // Schedule status update attempt
-
-		// Re-import declared resources from the filesystem (from git-sync/helm-sync/oci-sync).
-		// If the reconciler is in the process of reconciling a given commit, the re-import won't
-		// happen until the ongoing reconciliation is done.
-		case <-runTimer.C():
-			runFn(ctx, p, triggerReimport, state)
-
-			runTimer.Reset(opts.PollingPeriod) // Schedule re-import attempt
-			// we should not reset retryTimer under this `case` since it is not aware of the
-			// state of backoff retry.
-			statusUpdateTimer.Reset(opts.StatusUpdatePeriod) // Schedule status update attempt
-
-		// Retry if there was an error, conflict, or any watches need to be updated.
-		case <-retryTimer.C():
-			var trigger string
-			if opts.HasManagementConflict() {
-				// Reset the cache partially to make sure all the steps of a parse-apply-watch loop will run.
-				// The cached sourceState will not be reset to avoid reading all the source files unnecessarily.
-				// The cached needToRetry will not be reset to avoid resetting the backoff retries.
-				state.resetPartialCache()
-				trigger = triggerManagementConflict
-			} else if state.cache.needToRetry {
-				trigger = triggerRetry
-			} else if opts.needToUpdateWatch() {
-				trigger = triggerWatchUpdate
-			} else {
-				// Reset retryTimer here to make sure it can be fired in the future.
-				// Image the following scenario:
-				// When the for loop starts, retryTimer fires first, none of triggerManagementConflict,
-				// triggerRetry, and triggerWatchUpdate is true. If we don't reset retryTimer here, when
-				// the `run` function fails when runTimer or resyncTimer fires, the retry logic under this `case`
-				// will never be executed.
-				retryTimer.Reset(opts.RetryPeriod)
-				continue
-			}
-			if state.backoff.Steps == 0 {
-				klog.Infof("Retry limit (%v) has been reached", retryLimit)
-				// Don't reset retryTimer if retry limit has been reached.
-				continue
-			}
-
-			retryDuration := state.backoff.Step()
-			retries := retryLimit - state.backoff.Steps
-			klog.Infof("a retry is triggered (trigger type: %v, retries: %v/%v)", trigger, retries, retryLimit)
-			// During the execution of `run`, if a new commit is detected,
-			// retryTimer will be reset to `Options.RetryPeriod`, and state.backoff is reset to `defaultBackoff()`.
-			// In this case, `run` will try to sync the configs from the new commit instead of the old commit
-			// being retried.
-			runFn(ctx, p, trigger, state)
-			// Reset retryTimer after `run` to make sure `retryDuration` happens between the end of one execution
-			// of `run` and the start of the next execution.
-			retryTimer.Reset(retryDuration)
-			statusUpdateTimer.Reset(opts.StatusUpdatePeriod) // Schedule status update attempt
-
-		// Update the sync status to report management conflicts (from the remediator).
-		case <-statusUpdateTimer.C():
-			// Publish the sync status periodically to update remediator errors.
-			// Skip updates if the remediator is not running yet, paused, or watches haven't been updated yet.
-			// This implies that this reconciler has successfully parsed, rendered, validated, and synced.
-			if opts.Remediating() {
-				klog.V(3).Info("Updating sync status (periodic while not syncing)")
-				// Don't update the sync spec or commit.
-				if err := setSyncStatus(ctx, p, state, state.status.SyncStatus.Spec, false, state.status.SyncStatus.Commit, p.SyncErrors()); err != nil {
-					klog.Warningf("failed to update sync status: %v", err)
-				}
-			}
-
-			statusUpdateTimer.Reset(opts.StatusUpdatePeriod) // Schedule status update attempt
-			// we should not reset retryTimer under this `case` since it is not aware of the
-			// state of backoff retry.
-
-		// Execute the entire parse-apply-watch loop for a namespace event.
-		case <-nsEventTimer.C():
-			if nsControllerState == nil {
-				// If the Namespace Controller is not running, stop the timer without
-				// closing the channel.
-				nsEventTimer.Stop()
-				continue
-			}
-			if nsControllerState.ScheduleSync() {
-				klog.Infof("A new sync is triggered by a Namespace event")
-				// Reset the cache partially to make sure all the steps of a parse-apply-watch loop will run.
-				// The cached sourceState will not be reset to avoid reading all the source files unnecessarily.
-				// The cached needToRetry will not be reset to avoid resetting the backoff retries.
-				state.resetPartialCache()
-				runFn(ctx, p, namespaceEvent, state)
-			}
-			// we should not reset retryTimer under this `case` since it is not aware of the
-			// state of backoff retry.
-			nsEventTimer.Reset(nsEventPeriod) // Schedule namespace event check attempt
-		}
-	}
-}
-
-// DefaultRunOpts returns the default options for Run
-func DefaultRunOpts() RunOpts {
-	return RunOpts{
-		runFunc: run,
-		backoff: defaultBackoff(),
-	}
-}
-
-func run(ctx context.Context, p Parser, trigger string, state *reconcilerState) {
-	// Initialize state from RSync status.
+// DefaultRunFunc is the default implementation for RunOpts.RunFunc.
+func DefaultRunFunc(ctx context.Context, p Parser, trigger string, state *reconcilerState) RunResult {
+	result := RunResult{}
+	// Initialize status
+	// TODO: Populate status from RSync status
 	if state.status == nil {
 		reconcilerStatus, err := p.ReconcilerStatusFromCluster(ctx)
 		if err != nil {
 			state.invalidate(status.Append(nil, err))
-			return
+			return result
 		}
 		state.status = reconcilerStatus
 	}
-
 	opts := p.options()
-
 	var syncDir cmpath.Absolute
 	gs := &SourceStatus{}
 	// pull the source commit and directory with retries within 5 minutes.
@@ -264,7 +112,7 @@ func run(ctx context.Context, p Parser, trigger string, state *reconcilerState) 
 			if setSourceStatusErr != nil {
 				// If there were fetch errors, log those too
 				state.invalidate(status.Append(gs.Errs, setSourceStatusErr))
-				return
+				return result
 			}
 			// Cache the latest source status in memory
 			state.status.SourceStatus = gs
@@ -273,7 +121,7 @@ func run(ctx context.Context, p Parser, trigger string, state *reconcilerState) 
 		// If there were fetch errors, stop, log them, and retry later
 		if gs.Errs != nil {
 			state.invalidate(gs.Errs)
-			return
+			return result
 		}
 	}
 
@@ -302,7 +150,7 @@ func run(ctx context.Context, p Parser, trigger string, state *reconcilerState) 
 				var m status.MultiError
 				state.invalidate(status.Append(m, setRenderingStatusErr))
 			}
-			return
+			return result
 		}
 		if err != nil {
 			rs.Message = RenderingFailed
@@ -315,7 +163,7 @@ func run(ctx context.Context, p Parser, trigger string, state *reconcilerState) 
 				state.status.SyncingConditionLastUpdate = rs.LastUpdate
 			}
 			state.invalidate(status.Append(rs.Errs, setRenderingStatusErr))
-			return
+			return result
 		}
 	}
 
@@ -334,15 +182,14 @@ func run(ctx context.Context, p Parser, trigger string, state *reconcilerState) 
 	}
 	if errs := read(ctx, p, trigger, state, ps); errs != nil {
 		state.invalidate(errs)
-		return
+		return result
 	}
 
 	newSyncDir := state.cache.source.syncDir
 
 	if newSyncDir != oldSyncDir {
-		// Reset the backoff and retryTimer since it is a new commit
-		state.backoff = defaultBackoff()
-		state.retryTimer.Reset(state.retryPeriod)
+		// If the commit changed and parsing succeeded, trigger retries to start again, if stopped.
+		result.SourceChanged = true
 	}
 
 	// The parse-apply-watch sequence will be skipped if the trigger type is `triggerReimport` and
@@ -350,17 +197,19 @@ func run(ctx context.Context, p Parser, trigger string, state *reconcilerState) 
 	//   * If a former parse-apply-watch sequence for syncDir succeeded, there is no need to run the sequence again;
 	//   * If all the former parse-apply-watch sequences for syncDir failed, the next retry will call the sequence.
 	if trigger == triggerReimport && oldSyncDir == newSyncDir {
-		return
+		return result
 	}
 
 	errs := parseAndUpdate(ctx, p, trigger, state)
 	if errs != nil {
 		state.invalidate(errs)
-		return
+		return result
 	}
 
 	// Only checkpoint the state after *everything* succeeded, including status update.
 	state.checkpoint()
+	result.Success = true
+	return result
 }
 
 // read reads config files from source if no rendering is needed, or from hydrated output if rendering is done.

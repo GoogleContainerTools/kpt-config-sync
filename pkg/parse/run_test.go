@@ -45,7 +45,6 @@ import (
 	"kpt.dev/configsync/pkg/importer/reader"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
-	"kpt.dev/configsync/pkg/reconciler/namespacecontroller"
 	"kpt.dev/configsync/pkg/remediator/conflict"
 	remediatorfake "kpt.dev/configsync/pkg/remediator/fake"
 	"kpt.dev/configsync/pkg/rootsync"
@@ -62,7 +61,7 @@ const (
 	symLink = "rev"
 )
 
-func newParser(t *testing.T, clock clock.Clock, fakeClient client.Client, fs FileSource, renderingEnabled bool, retryPeriod time.Duration, pollingPeriod time.Duration) Parser {
+func newParser(t *testing.T, clock clock.Clock, fakeClient client.Client, fs FileSource, renderingEnabled bool) Parser {
 	parser := &root{}
 	converter, err := openapitest.ValueConverterForTest()
 	if err != nil {
@@ -94,9 +93,6 @@ func newParser(t *testing.T, clock clock.Clock, fakeClient client.Client, fs Fil
 			SyncErrorCache: NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
 		},
 		RenderingEnabled: renderingEnabled,
-		RetryPeriod:      retryPeriod,
-		ResyncPeriod:     2 * time.Second,
-		PollingPeriod:    pollingPeriod,
 	}
 
 	return parser
@@ -212,24 +208,26 @@ func TestRun(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name                 string
-		commit               string
-		renderingEnabled     bool
-		hasKustomization     bool
-		hydratedRootExist    bool
-		retryCap             time.Duration
-		srcRootCreateLatency time.Duration
-		sourceError          string
-		hydratedError        string
-		hydrationDone        bool
-		needRetry            bool
-		expectedRootSync     *v1beta1.RootSync
+		name                  string
+		commit                string
+		renderingEnabled      bool
+		hasKustomization      bool
+		hydratedRootExist     bool
+		retryCap              time.Duration
+		srcRootCreateLatency  time.Duration
+		sourceError           string
+		hydratedError         string
+		hydrationDone         bool
+		expectedSourceChanged bool
+		needRetry             bool
+		expectedRootSync      *v1beta1.RootSync
 	}{
 		{
-			name:                 "source commit directory isn't created within the retry cap",
-			retryCap:             5 * time.Millisecond,
-			srcRootCreateLatency: 10 * time.Millisecond,
-			needRetry:            true,
+			name:                  "source commit directory isn't created within the retry cap",
+			retryCap:              5 * time.Millisecond,
+			srcRootCreateLatency:  10 * time.Millisecond,
+			expectedSourceChanged: false,
+			needRetry:             true,
 			expectedRootSync: func() *v1beta1.RootSync {
 				rs := rootSyncOutput.DeepCopy()
 				rs.ObjectMeta.ResourceVersion = "2" // Create + Update (source status)
@@ -264,10 +262,11 @@ func TestRun(t *testing.T) {
 			}(),
 		},
 		{
-			name:                 "source commit directory created within the retry cap",
-			retryCap:             100 * time.Millisecond,
-			srcRootCreateLatency: 5 * time.Millisecond,
-			needRetry:            false,
+			name:                  "source commit directory created within the retry cap",
+			retryCap:              100 * time.Millisecond,
+			srcRootCreateLatency:  5 * time.Millisecond,
+			expectedSourceChanged: true,
+			needRetry:             false,
 			expectedRootSync: func() *v1beta1.RootSync {
 				rs := rootSyncOutput.DeepCopy()
 				// Create + Update (source status) + Update (rendering status) + Update (sync status)
@@ -317,9 +316,10 @@ func TestRun(t *testing.T) {
 			}(),
 		},
 		{
-			name:        "source fetch error",
-			sourceError: "git sync permission issue",
-			needRetry:   true,
+			name:                  "source fetch error",
+			sourceError:           "git sync permission issue",
+			expectedSourceChanged: false,
+			needRetry:             true,
 			expectedRootSync: func() *v1beta1.RootSync {
 				rs := rootSyncOutput.DeepCopy()
 				// Create + Update (source status)
@@ -355,10 +355,11 @@ func TestRun(t *testing.T) {
 			}(),
 		},
 		{
-			name:              "rendering in progress",
-			renderingEnabled:  true,
-			hydratedRootExist: true,
-			needRetry:         true,
+			name:                  "rendering in progress",
+			renderingEnabled:      true,
+			hydratedRootExist:     true,
+			expectedSourceChanged: false,
+			needRetry:             true,
 			expectedRootSync: func() *v1beta1.RootSync {
 				rs := rootSyncOutput.DeepCopy()
 				// Create + Update (source status) + Update (rendering status)
@@ -398,13 +399,14 @@ func TestRun(t *testing.T) {
 			}(),
 		},
 		{
-			name:              "hydration error",
-			renderingEnabled:  true,
-			hasKustomization:  true,
-			hydratedRootExist: true,
-			hydrationDone:     true,
-			hydratedError:     `{"code": "1068", "error": "rendering error"}`,
-			needRetry:         true,
+			name:                  "hydration error",
+			renderingEnabled:      true,
+			hasKustomization:      true,
+			hydratedRootExist:     true,
+			hydrationDone:         true,
+			hydratedError:         `{"code": "1068", "error": "rendering error"}`,
+			expectedSourceChanged: false,
+			needRetry:             true,
 			expectedRootSync: func() *v1beta1.RootSync {
 				rs := rootSyncOutput.DeepCopy()
 				// Create + Update (source status) + Update (rendering status)
@@ -450,12 +452,13 @@ func TestRun(t *testing.T) {
 		},
 		// TODO: Add source parse error test case (with and without rendering)
 		{
-			name:              "successful read",
-			renderingEnabled:  true,
-			hasKustomization:  true,
-			hydratedRootExist: true,
-			hydrationDone:     true,
-			needRetry:         false,
+			name:                  "successful read",
+			renderingEnabled:      true,
+			hasKustomization:      true,
+			hydratedRootExist:     true,
+			hydrationDone:         true,
+			expectedSourceChanged: true,
+			needRetry:             false,
 			expectedRootSync: func() *v1beta1.RootSync {
 				rs := rootSyncOutput.DeepCopy()
 				// Create + Update (source status) + Update (rendering status) + Update (sync status)
@@ -505,10 +508,11 @@ func TestRun(t *testing.T) {
 			}(),
 		},
 		{
-			name:              "successful read without hydration",
-			hydratedRootExist: false,
-			hydrationDone:     false,
-			needRetry:         false,
+			name:                  "successful read without hydration",
+			hydratedRootExist:     false,
+			hydrationDone:         false,
+			expectedSourceChanged: true,
+			needRetry:             false,
 			expectedRootSync: func() *v1beta1.RootSync {
 				rs := rootSyncOutput.DeepCopy()
 				// Create + Update (source status) + Update (rendering status) + Update (sync status)
@@ -558,12 +562,13 @@ func TestRun(t *testing.T) {
 			}(),
 		},
 		{
-			name:              "error because hydration enabled with wet source",
-			renderingEnabled:  true,
-			hasKustomization:  false,
-			hydratedRootExist: false,
-			hydrationDone:     true,
-			needRetry:         true,
+			name:                  "error because hydration enabled with wet source",
+			renderingEnabled:      true,
+			hasKustomization:      false,
+			hydratedRootExist:     false,
+			hydrationDone:         true,
+			expectedSourceChanged: false,
+			needRetry:             true,
 			expectedRootSync: func() *v1beta1.RootSync {
 				rs := rootSyncOutput.DeepCopy()
 				// Create + Update (source status) + Update (rendering status)
@@ -610,12 +615,13 @@ func TestRun(t *testing.T) {
 			}(),
 		},
 		{
-			name:              "error because hydration disabled with dry source",
-			renderingEnabled:  false,
-			hasKustomization:  true,
-			hydratedRootExist: true,
-			hydrationDone:     true,
-			needRetry:         true,
+			name:                  "error because hydration disabled with dry source",
+			renderingEnabled:      false,
+			hasKustomization:      true,
+			hydratedRootExist:     true,
+			hydrationDone:         true,
+			expectedSourceChanged: false,
+			needRetry:             true,
 			expectedRootSync: func() *v1beta1.RootSync {
 				rs := rootSyncOutput.DeepCopy()
 				// Create + Update (source status) + Update (rendering status)
@@ -746,15 +752,12 @@ func TestRun(t *testing.T) {
 				SourceBranch: fileSource.SourceBranch,
 			}
 			fakeClient := syncerFake.NewClient(t, core.Scheme, k8sobjects.RootSyncObjectV1Beta1(rootSyncName))
-			parser := newParser(t, fakeClock, fakeClient, fs, tc.renderingEnabled, configsync.DefaultReconcilerRetryPeriod, configsync.DefaultReconcilerPollingPeriod)
-			state := &reconcilerState{
-				backoff:     defaultBackoff(),
-				retryTimer:  fakeClock.NewTimer(configsync.DefaultReconcilerRetryPeriod),
-				retryPeriod: configsync.DefaultReconcilerRetryPeriod,
-			}
+			parser := newParser(t, fakeClock, fakeClient, fs, tc.renderingEnabled)
+			state := &reconcilerState{}
 			t.Logf("start running test at %v", time.Now())
-			run(context.Background(), parser, triggerReimport, state)
+			result := DefaultRunFunc(context.Background(), parser, triggerReimport, state)
 
+			assert.Equal(t, tc.expectedSourceChanged, result.SourceChanged)
 			assert.Equal(t, tc.needRetry, state.cache.needToRetry)
 
 			rs := &v1beta1.RootSync{}
@@ -765,47 +768,5 @@ func TestRun(t *testing.T) {
 			// Block and wait for the goroutine to complete.
 			<-doneCh
 		})
-	}
-}
-
-func TestBackoffRetryCount(t *testing.T) {
-	realClock := clock.RealClock{}
-	fakeClient := syncerFake.NewClient(t, core.Scheme, k8sobjects.RootSyncObjectV1Beta1(rootSyncName))
-	parser := newParser(t, realClock, fakeClient, FileSource{}, false, 10*time.Microsecond, 150*time.Microsecond)
-	testState := &namespacecontroller.State{}
-	reimportCount := 0
-	retryCount := 0
-	testIsDone := func(reimportCount *int, _ *int) bool {
-		return *reimportCount == 35
-	}
-
-	t.Logf("start running test at %v", time.Now())
-
-	ctx, cancel := context.WithCancel(context.Background())
-	backoff := defaultBackoff()
-	backoff.Duration = 10 * time.Microsecond
-
-	Run(ctx, parser, testState, RunOpts{
-		runFunc: mockRun(&reimportCount, &retryCount, cancel, testIsDone),
-		backoff: backoff,
-	})
-
-	assert.Equal(t, 12, retryCount)
-}
-
-func mockRun(reimportCount *int, retryCount *int, cancelFn func(), testIsDone func(reimportCount *int, retryCount *int) bool) RunFunc {
-	return func(_ context.Context, _ Parser, trigger string, state *reconcilerState) {
-		state.cache.needToRetry = true
-
-		switch trigger {
-		case triggerReimport:
-			*reimportCount++
-		case triggerRetry:
-			*retryCount++
-		}
-
-		if testIsDone(reimportCount, retryCount) {
-			cancelFn()
-		}
 	}
 }

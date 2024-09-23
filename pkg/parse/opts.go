@@ -52,17 +52,6 @@ type Options struct {
 	// SyncName is the name of the RootSync or RepoSync object.
 	SyncName string
 
-	// PollingPeriod is the period of time between checking the filesystem for
-	// source updates to sync.
-	PollingPeriod time.Duration
-
-	// ResyncPeriod is the period of time between forced re-sync from source
-	// (even without a new commit).
-	ResyncPeriod time.Duration
-
-	// RetryPeriod is how long the Parser waits between retries, after an error.
-	RetryPeriod time.Duration
-
 	// StatusUpdatePeriod is how long the Parser waits between updates of the
 	// sync status, to account for management conflict errors from the Remediator.
 	StatusUpdatePeriod time.Duration

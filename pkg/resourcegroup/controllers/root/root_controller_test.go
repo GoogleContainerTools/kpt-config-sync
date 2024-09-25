@@ -240,7 +240,8 @@ func TestOnwedByConfigSyncPredicate(t *testing.T) {
 		)
 	}
 
-	delete := func(o client.Object) bool {
+	// not allowed to redefine delete, so we use a different name
+	yeet := func(o client.Object) bool {
 		return OwnedByConfigSyncPredicate{}.Delete(
 			event.TypedDeleteEvent[client.Object]{Object: o},
 		)
@@ -267,9 +268,9 @@ func TestOnwedByConfigSyncPredicate(t *testing.T) {
 		{name: "update old not owned, new owned by someone else", got: update(notOwned, ownedBySomeoneElse), want: false},
 		{name: "update old owned by someone else, new not owned", got: update(ownedBySomeoneElse, notOwned), want: false},
 
-		{name: "delete owned by configsync", got: delete(ownedByConfigSync), want: true},
-		{name: "delete owned by someone else", got: delete(ownedBySomeoneElse), want: false},
-		{name: "delete not owned", got: delete(notOwned), want: false},
+		{name: "delete owned by configsync", got: yeet(ownedByConfigSync), want: true},
+		{name: "delete owned by someone else", got: yeet(ownedBySomeoneElse), want: false},
+		{name: "delete not owned", got: yeet(notOwned), want: false},
 
 		{name: "generic owned by configsync", got: generic(ownedByConfigSync), want: true},
 		{name: "generic owned by someone else", got: generic(ownedBySomeoneElse), want: false},

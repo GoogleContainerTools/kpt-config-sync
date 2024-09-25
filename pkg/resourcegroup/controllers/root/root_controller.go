@@ -300,17 +300,25 @@ func isConditionTrue(cType v1alpha1.ConditionType, conditions []v1alpha1.Conditi
 	return false
 }
 
+// OwnedByConfigSyncPredicate filters events for objects that have the label "app.kubernetes.io/managed-by=configmanagement.gke.io"
 type OwnedByConfigSyncPredicate struct{}
 
+// Create implements predicate.Predicate
 func (OwnedByConfigSyncPredicate) Create(e event.CreateEvent) bool {
 	return isOwnedByConfigSync(e.Object)
 }
+
+// Delete implements predicate.Predicate
 func (OwnedByConfigSyncPredicate) Delete(e event.DeleteEvent) bool {
 	return isOwnedByConfigSync(e.Object)
 }
+
+// Update implements predicate.Predicate
 func (OwnedByConfigSyncPredicate) Update(e event.UpdateEvent) bool {
 	return isOwnedByConfigSync(e.ObjectOld) || isOwnedByConfigSync(e.ObjectNew)
 }
+
+// Generic implements predicate.Predicate
 func (OwnedByConfigSyncPredicate) Generic(e event.GenericEvent) bool {
 	return isOwnedByConfigSync(e.Object)
 }

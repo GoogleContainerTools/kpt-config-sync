@@ -309,7 +309,7 @@ func (OwnedByConfigSyncPredicate) Delete(e event.DeleteEvent) bool {
 	return isOwnedByConfigSync(e.Object)
 }
 func (OwnedByConfigSyncPredicate) Update(e event.UpdateEvent) bool {
-	return isOwnedByConfigSync(e.ObjectOld)
+	return isOwnedByConfigSync(e.ObjectOld) || isOwnedByConfigSync(e.ObjectNew)
 }
 func (OwnedByConfigSyncPredicate) Generic(e event.GenericEvent) bool {
 	return isOwnedByConfigSync(e.Object)

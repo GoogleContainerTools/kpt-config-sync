@@ -305,22 +305,27 @@ type OwnedByConfigSyncPredicate struct{}
 
 // Create implements predicate.Predicate
 func (OwnedByConfigSyncPredicate) Create(e event.CreateEvent) bool {
-	return isOwnedByConfigSync(e.Object)
+	return !isResourceGroup(e.Object) || isOwnedByConfigSync(e.Object)
 }
 
 // Delete implements predicate.Predicate
 func (OwnedByConfigSyncPredicate) Delete(e event.DeleteEvent) bool {
-	return isOwnedByConfigSync(e.Object)
+	return !isResourceGroup(e.Object) || isOwnedByConfigSync(e.Object)
 }
 
 // Update implements predicate.Predicate
 func (OwnedByConfigSyncPredicate) Update(e event.UpdateEvent) bool {
-	return isOwnedByConfigSync(e.ObjectOld) || isOwnedByConfigSync(e.ObjectNew)
+	return !isResourceGroup(e.ObjectOld) || !isResourceGroup(e.ObjectNew) || isOwnedByConfigSync(e.ObjectOld) || isOwnedByConfigSync(e.ObjectNew)
 }
 
 // Generic implements predicate.Predicate
 func (OwnedByConfigSyncPredicate) Generic(e event.GenericEvent) bool {
-	return isOwnedByConfigSync(e.Object)
+	return !isResourceGroup(e.Object) || isOwnedByConfigSync(e.Object)
+}
+
+func isResourceGroup(o client.Object) bool {
+	return o.GetObjectKind().GroupVersionKind().Group == v1alpha1.SchemeGroupVersion.Group &&
+		o.GetObjectKind().GroupVersionKind().Kind == v1alpha1.ResourceGroupKind
 }
 
 func isOwnedByConfigSync(o client.Object) bool {

@@ -53,6 +53,7 @@ type ClientSet struct {
 	Client       client.Client
 	Mapper       meta.RESTMapper
 	StatusMode   string
+	ApplySetID   string
 }
 
 // NewClientSet constructs a new ClientSet.
@@ -113,5 +114,6 @@ func NewClientSet(c client.Client, configFlags *genericclioptions.ConfigFlags, s
 		Client:       c,
 		Mapper:       mapper,
 		StatusMode:   statusMode,
+		ApplySetID:   applySetID,
 	}, nil
 }

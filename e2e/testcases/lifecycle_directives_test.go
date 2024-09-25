@@ -26,9 +26,11 @@ import (
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
+	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/syncer/differ"
 	"kpt.dev/configsync/pkg/util"
 	"sigs.k8s.io/cli-utils/pkg/common"
@@ -42,10 +44,7 @@ func TestPreventDeletionNamespace(t *testing.T) {
 	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	// Ensure the Namespace doesn't already exist.
-	err := nt.ValidateNotFound("shipping", "", &corev1.Namespace{})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.ValidateNotFound("shipping", "", &corev1.Namespace{}))
 
 	role := k8sobjects.RoleObject(core.Name("shipping-admin"))
 	role.Rules = []rbacv1.PolicyRule{{
@@ -61,23 +60,22 @@ func TestPreventDeletionNamespace(t *testing.T) {
 	nt.Must(rootSyncGitRepo.CommitAndPush("declare Namespace with prevent deletion lifecycle annotation"))
 	nt.Must(nt.WatchForAllSyncs())
 
-	err = nt.Validate("shipping", "", &corev1.Namespace{},
+	rsObj := &v1beta1.RootSync{}
+	nt.Must(nt.KubeClient.Get(rootSyncNN.Name, rootSyncNN.Namespace, rsObj))
+	applySetID := core.GetLabel(rsObj, metadata.ApplySetParentIDLabel)
+
+	nt.Must(nt.Validate("shipping", "", &corev1.Namespace{},
 		testpredicates.NotPendingDeletion,
 		testpredicates.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
-		testpredicates.HasAllNomosMetadata())
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		testpredicates.HasAllNomosMetadata(),
+		testpredicates.HasLabel(metadata.ApplySetPartOfLabel, applySetID)))
 
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, role)
 
-	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: rootSyncNN,
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	// Delete the declaration and ensure the Namespace isn't deleted.
 	nt.Must(rootSyncGitRepo.Remove("acme/namespaces/shipping/ns.yaml"))
@@ -86,28 +84,21 @@ func TestPreventDeletionNamespace(t *testing.T) {
 	nt.Must(nt.WatchForAllSyncs())
 
 	// Ensure we kept the undeclared Namespace that had the "deletion: prevent" annotation.
-	err = nt.Validate("shipping", "", &corev1.Namespace{},
+	nt.Must(nt.Validate("shipping", "", &corev1.Namespace{},
 		testpredicates.NotPendingDeletion,
 		testpredicates.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
-		testpredicates.NoConfigSyncMetadata())
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		testpredicates.NoConfigSyncMetadata(),
+		testpredicates.MissingLabel(metadata.ApplySetPartOfLabel)))
+
 	// Ensure we deleted the undeclared Role that doesn't have the annotation.
-	err = nt.ValidateNotFound("shipping-admin", "shipping", &rbacv1.Role{})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.ValidateNotFound("shipping-admin", "shipping", &rbacv1.Role{}))
 
 	nt.MetricsExpectations.RemoveObject(configsync.RootSyncKind, rootSyncNN, nsObj)
 	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, role)
 
-	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: rootSyncNN,
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	// Remove the lifecycle annotation from the namespace so that the namespace can be deleted after the test case.
 	nsObj = k8sobjects.NamespaceObject("shipping")
@@ -118,12 +109,9 @@ func TestPreventDeletionNamespace(t *testing.T) {
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
 	nt.MetricsExpectations.RemoveObject(configsync.RootSyncKind, rootSyncNN, role)
 
-	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: rootSyncNN,
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 }
 
 func TestPreventDeletionRole(t *testing.T) {
@@ -132,10 +120,7 @@ func TestPreventDeletionRole(t *testing.T) {
 	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	// Ensure the Namespace doesn't already exist.
-	err := nt.ValidateNotFound("shipping-admin", "shipping", &rbacv1.Role{})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.ValidateNotFound("shipping-admin", "shipping", &rbacv1.Role{}))
 
 	// Declare the Role with the lifecycle annotation, and ensure it is created.
 	role := k8sobjects.RoleObject(core.Name("shipping-admin"), preventDeletion)
@@ -150,53 +135,47 @@ func TestPreventDeletionRole(t *testing.T) {
 	nt.Must(rootSyncGitRepo.CommitAndPush("declare Role with prevent deletion lifecycle annotation"))
 	nt.Must(nt.WatchForAllSyncs())
 
+	rsObj := &v1beta1.RootSync{}
+	nt.Must(nt.KubeClient.Get(rootSyncNN.Name, rootSyncNN.Namespace, rsObj))
+	applySetID := core.GetLabel(rsObj, metadata.ApplySetParentIDLabel)
+
 	// ensure that the Role is created with the preventDeletion annotation
-	err = nt.Validate("shipping-admin", "shipping", &rbacv1.Role{},
+	nt.Must(nt.Validate("shipping-admin", "shipping", &rbacv1.Role{},
 		testpredicates.NotPendingDeletion,
 		testpredicates.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
-		testpredicates.HasAllNomosMetadata())
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		testpredicates.HasAllNomosMetadata(),
+		testpredicates.HasLabel(metadata.ApplySetPartOfLabel, applySetID)))
 
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, role)
 
 	// Validate metrics.
-	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: rootSyncNN,
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	// Delete the declaration and ensure the Namespace isn't deleted.
 	nt.Must(rootSyncGitRepo.Remove("acme/namespaces/shipping/role.yaml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("remove Role declaration"))
 	nt.Must(nt.WatchForAllSyncs())
 
-	err = nt.Validate("shipping-admin", "shipping", &rbacv1.Role{},
+	nt.Must(nt.Validate("shipping-admin", "shipping", &rbacv1.Role{},
 		testpredicates.NotPendingDeletion,
 		testpredicates.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
-		testpredicates.NoConfigSyncMetadata())
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		testpredicates.NoConfigSyncMetadata(),
+		testpredicates.MissingLabel(metadata.ApplySetPartOfLabel)))
 
 	nt.MetricsExpectations.RemoveObject(configsync.RootSyncKind, rootSyncNN, role)
 
 	// Validate metrics.
-	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: rootSyncNN,
 		// Adjust operations for this edge case.
 		// Deletion is prevented, but management annotations/labels are removed.
 		Operations: []metrics.ObjectOperation{
 			{Operation: metrics.UpdateOperation, Count: 1}, // Role
 		},
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	// Remove the lifecycle annotation from the role so that the role can be deleted after the test case.
 	delete(role.Annotations, common.LifecycleDeleteAnnotation)
@@ -204,23 +183,18 @@ func TestPreventDeletionRole(t *testing.T) {
 	nt.Must(rootSyncGitRepo.CommitAndPush("remove the lifecycle annotation from Role"))
 	nt.Must(nt.WatchForAllSyncs())
 
-	err = nt.Validate("shipping-admin", "shipping", &rbacv1.Role{},
+	nt.Must(nt.Validate("shipping-admin", "shipping", &rbacv1.Role{},
 		testpredicates.NotPendingDeletion,
 		testpredicates.MissingAnnotation(common.LifecycleDeleteAnnotation),
-		testpredicates.HasAllNomosMetadata())
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		testpredicates.HasAllNomosMetadata(),
+		testpredicates.HasLabel(metadata.ApplySetPartOfLabel, applySetID)))
 
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, role)
 
 	// Validate metrics.
-	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: rootSyncNN,
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 }
 
 func TestPreventDeletionClusterRole(t *testing.T) {
@@ -229,10 +203,7 @@ func TestPreventDeletionClusterRole(t *testing.T) {
 	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
 	// Ensure the ClusterRole doesn't already exist.
-	err := nt.ValidateNotFound("test-admin", "", &rbacv1.ClusterRole{})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.ValidateNotFound("test-admin", "", &rbacv1.ClusterRole{}))
 
 	// Declare the ClusterRole with the lifecycle annotation, and ensure it is created.
 	clusterRole := k8sobjects.ClusterRoleObject(core.Name("test-admin"), preventDeletion)
@@ -245,26 +216,26 @@ func TestPreventDeletionClusterRole(t *testing.T) {
 	nt.Must(rootSyncGitRepo.CommitAndPush("declare ClusterRole with prevent deletion lifecycle annotation"))
 	nt.Must(nt.WatchForAllSyncs())
 
-	err = nt.Validate("test-admin", "", &rbacv1.ClusterRole{},
+	rsObj := &v1beta1.RootSync{}
+	nt.Must(nt.KubeClient.Get(rootSyncNN.Name, rootSyncNN.Namespace, rsObj))
+	applySetID := core.GetLabel(rsObj, metadata.ApplySetParentIDLabel)
+
+	nt.Must(nt.Validate("test-admin", "", &rbacv1.ClusterRole{},
 		testpredicates.NotPendingDeletion,
 		testpredicates.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
-		testpredicates.HasAllNomosMetadata())
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		testpredicates.HasAllNomosMetadata(),
+		testpredicates.HasLabel(metadata.ApplySetPartOfLabel, applySetID)))
 
 	// Delete the declaration and ensure the ClusterRole isn't deleted.
 	nt.Must(rootSyncGitRepo.Remove("acme/cluster/cr.yaml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("remove ClusterRole bar declaration"))
 	nt.Must(nt.WatchForAllSyncs())
 
-	err = nt.Validate("test-admin", "", &rbacv1.ClusterRole{},
+	nt.Must(nt.Validate("test-admin", "", &rbacv1.ClusterRole{},
 		testpredicates.NotPendingDeletion,
 		testpredicates.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
-		testpredicates.NoConfigSyncMetadata())
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		testpredicates.NoConfigSyncMetadata(),
+		testpredicates.MissingLabel(metadata.ApplySetPartOfLabel)))
 
 	// Remove the lifecycle annotation from the cluster-role so that it can be deleted after the test case.
 	delete(clusterRole.Annotations, common.LifecycleDeleteAnnotation)
@@ -272,23 +243,18 @@ func TestPreventDeletionClusterRole(t *testing.T) {
 	nt.Must(rootSyncGitRepo.CommitAndPush("remove the lifecycle annotation from ClusterRole"))
 	nt.Must(nt.WatchForAllSyncs())
 
-	err = nt.Validate("test-admin", "", &rbacv1.ClusterRole{},
+	nt.Must(nt.Validate("test-admin", "", &rbacv1.ClusterRole{},
 		testpredicates.NotPendingDeletion,
 		testpredicates.MissingAnnotation(common.LifecycleDeleteAnnotation),
-		testpredicates.HasAllNomosMetadata())
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		testpredicates.HasAllNomosMetadata(),
+		testpredicates.HasLabel(metadata.ApplySetPartOfLabel, applySetID)))
 
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, clusterRole)
 
 	// Validate metrics.
-	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: rootSyncNN,
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 }
 
 func skipAutopilotManagedNamespace(nt *nomostest.NT, ns string) bool {
@@ -297,9 +263,10 @@ func skipAutopilotManagedNamespace(nt *nomostest.NT, ns string) bool {
 }
 
 func TestPreventDeletionSpecialNamespaces(t *testing.T) {
+	rootSyncID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t, nomostesting.Lifecycle,
-		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
-	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
+		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured))
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
 
 	// Build list of special namespaces to test.
 	// Skip namespaces managed by GKE Autopilot, if on an Autopilot cluster
@@ -319,24 +286,25 @@ func TestPreventDeletionSpecialNamespaces(t *testing.T) {
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add special namespaces and one non-special namespace"))
 	nt.Must(nt.WatchForAllSyncs())
 
+	rsObj := &v1beta1.RootSync{}
+	nt.Must(nt.KubeClient.Get(rootSyncID.Name, rootSyncID.Namespace, rsObj))
+	applySetID := core.GetLabel(rsObj, metadata.ApplySetParentIDLabel)
+
 	// Verify that the special namespaces have the `client.lifecycle.config.k8s.io/deletion: detach` annotation.
 	for ns := range specialNamespaces {
-		if err := nt.Validate(ns, "", &corev1.Namespace{},
+		nt.Must(nt.Validate(ns, "", &corev1.Namespace{},
 			testpredicates.NotPendingDeletion,
 			testpredicates.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
-			testpredicates.HasAllNomosMetadata()); err != nil {
-			nt.T.Fatal(err)
-		}
+			testpredicates.HasAllNomosMetadata(),
+			testpredicates.HasLabel(metadata.ApplySetPartOfLabel, applySetID)))
 	}
 
 	// Verify that the bookstore namespace does not have the `client.lifecycle.config.k8s.io/deletion: detach` annotation.
-	err := nt.Validate(bookstoreNS.Name, bookstoreNS.Namespace, &corev1.Namespace{},
+	nt.Must(nt.Validate(bookstoreNS.Name, bookstoreNS.Namespace, &corev1.Namespace{},
 		testpredicates.NotPendingDeletion,
 		testpredicates.MissingAnnotation(common.LifecycleDeleteAnnotation),
-		testpredicates.HasAllNomosMetadata())
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+		testpredicates.HasAllNomosMetadata(),
+		testpredicates.HasLabel(metadata.ApplySetPartOfLabel, applySetID)))
 
 	for ns := range specialNamespaces {
 		nt.Must(rootSyncGitRepo.Remove(fmt.Sprintf("acme/ns-%s.yaml", ns)))
@@ -347,20 +315,16 @@ func TestPreventDeletionSpecialNamespaces(t *testing.T) {
 
 	// Verify that the special namespaces still exist and have the `client.lifecycle.config.k8s.io/deletion: detach` annotation.
 	for ns := range specialNamespaces {
-		if err := nt.Validate(ns, "", &corev1.Namespace{},
+		nt.Must(nt.Validate(ns, "", &corev1.Namespace{},
 			testpredicates.NotPendingDeletion,
 			testpredicates.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
-			testpredicates.NoConfigSyncMetadata()); err != nil {
-			nt.T.Fatal(err)
-		}
+			testpredicates.NoConfigSyncMetadata(),
+			testpredicates.MissingLabel(metadata.ApplySetPartOfLabel)))
 	}
 
 	// Verify that the bookstore namespace is removed.
 	// Namespace should be marked as deleted, but may not be NotFound yet,
 	// because its  finalizer will block until all objects in that namespace are
 	// deleted.
-	err = nt.Watcher.WatchForNotFound(kinds.Namespace(), bookstoreNS.Name, bookstoreNS.Namespace)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchForNotFound(kinds.Namespace(), bookstoreNS.Name, bookstoreNS.Namespace))
 }

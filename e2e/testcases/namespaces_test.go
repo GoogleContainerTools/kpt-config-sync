@@ -31,6 +31,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
@@ -232,6 +233,10 @@ func TestManagementDisabledNamespace(t *testing.T) {
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 
+	rsObj := &v1beta1.RootSync{}
+	nt.Must(nt.KubeClient.Get(rootSyncNN.Name, rootSyncNN.Namespace, rsObj))
+	applySetID := core.GetLabel(rsObj, metadata.ApplySetParentIDLabel)
+
 	namespacesToTest := []string{"foo", metav1.NamespaceDefault}
 	for _, nsName := range namespacesToTest {
 		// Create nsObj.
@@ -243,26 +248,21 @@ func TestManagementDisabledNamespace(t *testing.T) {
 		nt.Must(nt.WatchForAllSyncs())
 
 		// Test that the namespace exists with expected config management labels and annotations.
-		err := nt.Validate(nsObj.Name, "", &corev1.Namespace{}, testpredicates.HasAllNomosMetadata())
-		if err != nil {
-			nt.T.Fatal(err)
-		}
+		nt.Must(nt.Validate(nsObj.Name, "", &corev1.Namespace{},
+			testpredicates.HasAllNomosMetadata(),
+			testpredicates.HasLabel(metadata.ApplySetPartOfLabel, applySetID)))
 
 		// Test that the configmap exists with expected config management labels and annotations.
-		err = nt.Validate(cm1.Name, cm1.Namespace, &corev1.ConfigMap{}, testpredicates.HasAllNomosMetadata())
-		if err != nil {
-			nt.T.Fatal(err)
-		}
+		nt.Must(nt.Validate(cm1.Name, cm1.Namespace, &corev1.ConfigMap{},
+			testpredicates.HasAllNomosMetadata(),
+			testpredicates.HasLabel(metadata.ApplySetPartOfLabel, applySetID)))
 
 		nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
 		nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, cm1)
 
-		err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 			Sync: nomostest.RootSyncNN(configsync.RootSyncName),
-		})
-		if err != nil {
-			nt.T.Fatal(err)
-		}
+		}))
 
 		// Update the namespace and the configmap to be no longer be managed
 		nsObj.Annotations[metadata.ResourceManagementKey] = metadata.ResourceManagementDisabled
@@ -273,26 +273,21 @@ func TestManagementDisabledNamespace(t *testing.T) {
 		nt.Must(nt.WatchForAllSyncs())
 
 		// Test that the now unmanaged namespace does not contain any config management labels or annotations
-		err = nt.Validate(nsObj.Name, "", &corev1.Namespace{}, testpredicates.NoConfigSyncMetadata())
-		if err != nil {
-			nt.T.Fatal(err)
-		}
+		nt.Must(nt.Validate(nsObj.Name, "", &corev1.Namespace{},
+			testpredicates.NoConfigSyncMetadata(),
+			testpredicates.MissingLabel(metadata.ApplySetPartOfLabel)))
 
 		// Test that the now unmanaged configmap does not contain any config management labels or annotations
-		err = nt.Validate(cm1.Name, cm1.Namespace, &corev1.ConfigMap{}, testpredicates.NoConfigSyncMetadata())
-		if err != nil {
-			nt.T.Fatal(err)
-		}
+		nt.Must(nt.Validate(cm1.Name, cm1.Namespace, &corev1.ConfigMap{},
+			testpredicates.NoConfigSyncMetadata(),
+			testpredicates.MissingLabel(metadata.ApplySetPartOfLabel)))
 
 		nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
 		nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, cm1)
 
-		err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 			Sync: nomostest.RootSyncNN(configsync.RootSyncName),
-		})
-		if err != nil {
-			nt.T.Fatal(err)
-		}
+		}))
 
 		// Remove the namspace and the configmap from the repository
 		nt.Must(rootSyncGitRepo.Remove(fmt.Sprintf("acme/namespaces/%s", nsName)))
@@ -300,26 +295,21 @@ func TestManagementDisabledNamespace(t *testing.T) {
 		nt.Must(nt.WatchForAllSyncs())
 
 		// Test that the namespace still exists on the cluster, and does not contain any config management labels or annotations
-		err = nt.Validate(nsObj.Name, "", &corev1.Namespace{}, testpredicates.NoConfigSyncMetadata())
-		if err != nil {
-			nt.T.Fatal(err)
-		}
+		nt.Must(nt.Validate(nsObj.Name, "", &corev1.Namespace{},
+			testpredicates.NoConfigSyncMetadata(),
+			testpredicates.MissingLabel(metadata.ApplySetPartOfLabel)))
 
 		// Test that the configmap still exists on the cluster, and does not contain any config management labels or annotations
-		err = nt.Validate(cm1.Name, cm1.Namespace, &corev1.ConfigMap{}, testpredicates.NoConfigSyncMetadata())
-		if err != nil {
-			nt.T.Fatal(err)
-		}
+		nt.Must(nt.Validate(cm1.Name, cm1.Namespace, &corev1.ConfigMap{},
+			testpredicates.NoConfigSyncMetadata(),
+			testpredicates.MissingLabel(metadata.ApplySetPartOfLabel)))
 
 		nt.MetricsExpectations.RemoveObject(configsync.RootSyncKind, rootSyncNN, nsObj)
 		nt.MetricsExpectations.RemoveObject(configsync.RootSyncKind, rootSyncNN, cm1)
 
-		err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+		nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 			Sync: nomostest.RootSyncNN(configsync.RootSyncName),
-		})
-		if err != nil {
-			nt.T.Fatal(err)
-		}
+		}))
 	}
 }
 
@@ -343,14 +333,22 @@ func TestManagementDisabledConfigMap(t *testing.T) {
 	}))
 	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
+	rsObj := &v1beta1.RootSync{}
+	nt.Must(nt.KubeClient.Get(rootSyncNN.Name, rootSyncNN.Namespace, rsObj))
+	applySetID := core.GetLabel(rsObj, metadata.ApplySetParentIDLabel)
+
 	// Test that the namespace exists with expected config management labels and annotations.
-	err := nt.Validate(fooNamespace.Name, "", &corev1.Namespace{}, testpredicates.HasAllNomosMetadata())
+	err := nt.Validate(fooNamespace.Name, "", &corev1.Namespace{},
+		testpredicates.HasAllNomosMetadata(),
+		testpredicates.HasLabel(metadata.ApplySetPartOfLabel, applySetID))
 	if err != nil {
 		nt.T.Error(err)
 	}
 
 	// Test that cm1 exists with expected config management labels and annotations.
-	err = nt.Validate(cm1.Name, cm1.Namespace, &corev1.ConfigMap{}, testpredicates.HasAllNomosMetadata())
+	err = nt.Validate(cm1.Name, cm1.Namespace, &corev1.ConfigMap{},
+		testpredicates.HasAllNomosMetadata(),
+		testpredicates.HasLabel(metadata.ApplySetPartOfLabel, applySetID))
 	if err != nil {
 		nt.T.Error(err)
 	}
@@ -362,7 +360,9 @@ func TestManagementDisabledConfigMap(t *testing.T) {
 	}
 
 	// Test that cm3 exists with expected config management labels and annotations.
-	err = nt.Validate(cm3.Name, cm3.Namespace, &corev1.ConfigMap{}, testpredicates.HasAllNomosMetadata())
+	err = nt.Validate(cm3.Name, cm3.Namespace, &corev1.ConfigMap{},
+		testpredicates.HasAllNomosMetadata(),
+		testpredicates.HasLabel(metadata.ApplySetPartOfLabel, applySetID))
 	if err != nil {
 		nt.T.Error(err)
 	}
@@ -389,7 +389,9 @@ func TestManagementDisabledConfigMap(t *testing.T) {
 	nt.Must(nt.WatchForAllSyncs())
 
 	// Test that the now unmanaged configmap does not contain any config management labels or annotations
-	err = nt.Validate(cm1.Name, cm1.Namespace, &corev1.ConfigMap{}, testpredicates.NoConfigSyncMetadata())
+	err = nt.Validate(cm1.Name, cm1.Namespace, &corev1.ConfigMap{},
+		testpredicates.NoConfigSyncMetadata(),
+		testpredicates.MissingLabel(metadata.ApplySetPartOfLabel))
 	if err != nil {
 		nt.T.Error(err)
 	}
@@ -421,7 +423,9 @@ func TestManagementDisabledConfigMap(t *testing.T) {
 	nt.Must(nt.WatchForAllSyncs())
 
 	// Test that the configmap still exists on the cluster, and does not contain any config management labels or annotations
-	err = nt.Validate(cm1.Name, cm1.Namespace, &corev1.ConfigMap{}, testpredicates.NoConfigSyncMetadata())
+	err = nt.Validate(cm1.Name, cm1.Namespace, &corev1.ConfigMap{},
+		testpredicates.NoConfigSyncMetadata(),
+		testpredicates.MissingLabel(metadata.ApplySetPartOfLabel))
 	if err != nil {
 		nt.T.Error(err)
 	}
@@ -491,7 +495,8 @@ func TestSyncLabelsAndAnnotationsOnKubeSystem(t *testing.T) {
 
 	// Test that the kube-system namespace exists without the label and annotation.
 	err = nt.Validate(kubeSystemNamespace.Name, "", &corev1.Namespace{},
-		testpredicates.MissingLabel("test-corp.com/awesome-controller-flavour"), testpredicates.MissingAnnotation("test-corp.com/awesome-controller-mixin"))
+		testpredicates.MissingLabel("test-corp.com/awesome-controller-flavour"),
+		testpredicates.MissingAnnotation("test-corp.com/awesome-controller-mixin"))
 	if err != nil {
 		nt.T.Error(err)
 	}
@@ -512,7 +517,9 @@ func TestSyncLabelsAndAnnotationsOnKubeSystem(t *testing.T) {
 	nt.Must(nt.WatchForAllSyncs())
 
 	// Test that the now unmanaged kube-system namespace does not contain any config management labels or annotations.
-	err = nt.Validate(kubeSystemNamespace.Name, "", &corev1.Namespace{}, testpredicates.NoConfigSyncMetadata())
+	err = nt.Validate(kubeSystemNamespace.Name, "", &corev1.Namespace{},
+		testpredicates.NoConfigSyncMetadata(),
+		testpredicates.MissingLabel(metadata.ApplySetPartOfLabel))
 	if err != nil {
 		nt.T.Error(err)
 	}

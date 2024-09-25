@@ -80,9 +80,7 @@ func TestReconcilerFinalizer_Orphan(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Add(deployment1Path, deployment1))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Adding deployment helloworld-1 to RootSync"))
 	nt.Must(nt.WatchForAllSyncs())
-	if err := nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), deployment1.Name, deployment1.Namespace); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), deployment1.Name, deployment1.Namespace))
 
 	// Tail reconciler logs and print if there's an error.
 	// This is necessary because if the RootSync are deleted, the
@@ -93,16 +91,12 @@ func TestReconcilerFinalizer_Orphan(t *testing.T) {
 	go nomostest.TailReconcilerLogs(ctx, nt, nomostest.RootReconcilerObjectKey(rootSyncKey.Name))
 
 	nt.T.Log("Disabling RootSync deletion propagation")
-	rootSync := k8sobjects.RootSyncObjectV1Beta1(rootSyncKey.Name)
-	err := nt.KubeClient.Get(rootSync.GetName(), rootSync.GetNamespace(), rootSync)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	rootSync := &v1beta1.RootSync{}
+	nt.Must(nt.KubeClient.Get(rootSyncID.Name, rootSyncID.Namespace, rootSync))
+	applySetID := core.GetLabel(rootSync, metadata.ApplySetParentIDLabel)
+
 	if nomostest.SetDeletionPropagationPolicy(rootSync, metadata.DeletionPropagationPolicyOrphan) {
-		err = nt.KubeClient.Update(rootSync)
-		if err != nil {
-			nt.T.Fatal(err)
-		}
+		nt.Must(nt.KubeClient.Update(rootSync))
 	}
 	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync.GetName(), rootSync.GetNamespace(),
 		testwatcher.WatchPredicates(
@@ -111,26 +105,27 @@ func TestReconcilerFinalizer_Orphan(t *testing.T) {
 		)))
 
 	// Delete the RootSync
-	err = nt.KubeClient.Delete(rootSync)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.KubeClient.Delete(rootSync))
 
 	// The RootSync should skip finalizing and be deleted immediately
-	err = nt.Watcher.WatchForNotFound(kinds.RootSyncV1Beta1(), rootSync.GetName(), rootSync.GetNamespace())
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchForNotFound(kinds.RootSyncV1Beta1(), rootSync.GetName(), rootSync.GetNamespace()))
+
 	tg := taskgroup.New()
 	tg.Go(func() error {
 		// Namespace1 should NOT have been deleted, because it was orphaned by the RootSync.
 		return nt.Watcher.WatchObject(kinds.Namespace(), namespace1.GetName(), namespace1.GetNamespace(),
-			testwatcher.WatchPredicates(testpredicates.HasAllNomosMetadata())) // metadata NOT removed when orphaned
+			testwatcher.WatchPredicates(
+				testpredicates.HasAllNomosMetadata(), // metadata NOT removed when orphaned
+				testpredicates.HasLabel(metadata.ApplySetPartOfLabel, applySetID),
+			))
 	})
 	tg.Go(func() error {
 		// Deployment1 should NOT have been deleted, because it was orphaned by the RootSync.
 		return nt.Watcher.WatchObject(kinds.Deployment(), deployment1.GetName(), deployment1.GetNamespace(),
-			testwatcher.WatchPredicates(testpredicates.HasAllNomosMetadata())) // metadata NOT removed when orphaned
+			testwatcher.WatchPredicates(
+				testpredicates.HasAllNomosMetadata(), // metadata NOT removed when orphaned
+				testpredicates.HasLabel(metadata.ApplySetPartOfLabel, applySetID),
+			))
 	})
 	if err := tg.Wait(); err != nil {
 		nt.T.Fatal(err)
@@ -383,9 +378,7 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Add(deployment1Path, deployment1))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Adding deployment helloworld-1 to RootSync"))
 	nt.Must(nt.WatchForAllSyncs())
-	if err := nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), deployment1.Name, deployment1.Namespace); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), deployment1.Name, deployment1.Namespace))
 
 	// Add deployment-helloworld-2 to RepoSync
 	deployment2Path := nomostest.StructuredNSPath(deployment2NN.Namespace, "deployment-helloworld-2")
@@ -395,9 +388,7 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 	nt.Must(repoSyncGitRepo.Add(deployment2Path, deployment2))
 	nt.Must(repoSyncGitRepo.CommitAndPush("Adding deployment helloworld-2 to RepoSync"))
 	nt.Must(nt.WatchForAllSyncs())
-	if err := nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), deployment2.Name, deployment2.Namespace); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), deployment2.Name, deployment2.Namespace))
 
 	// Tail reconciler logs and print if there's an error.
 	// This is necessary because if the RootSync/RepoSync are deleted, the
@@ -409,16 +400,10 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 	go nomostest.TailReconcilerLogs(ctx, nt, nomostest.NsReconcilerObjectKey(repoSyncKey.Namespace, repoSyncKey.Name))
 
 	nt.T.Log("Enabling RootSync deletion propagation")
-	rootSync := k8sobjects.RootSyncObjectV1Beta1(rootSyncKey.Name)
-	err := nt.KubeClient.Get(rootSync.Name, rootSync.Namespace, rootSync)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	rootSync := &v1beta1.RootSync{}
+	nt.Must(nt.KubeClient.Get(rootSyncID.Name, rootSyncID.Namespace, rootSync))
 	if nomostest.SetDeletionPropagationPolicy(rootSync, metadata.DeletionPropagationPolicyForeground) {
-		err = nt.KubeClient.Update(rootSync)
-		if err != nil {
-			nt.T.Fatal(err)
-		}
+		nt.Must(nt.KubeClient.Update(rootSync))
 	}
 	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync.GetName(), rootSync.GetNamespace(),
 		testwatcher.WatchPredicates(
@@ -439,6 +424,10 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 			testpredicates.MissingFinalizer(metadata.ReconcilerFinalizer),
 		)))
 
+	repoSync = &v1beta1.RepoSync{}
+	nt.Must(nt.KubeClient.Get(repoSyncID.Name, repoSyncID.Namespace, repoSync))
+	repoSyncApplySetID := core.GetLabel(repoSync, metadata.ApplySetParentIDLabel)
+
 	// Abandon the test namespace, otherwise it will block the finalizer
 	namespace1Path := nomostest.StructuredNSPath(namespace1NN.Name, namespace1NN.Name)
 	namespace1 := rootSyncGitRepo.MustGet(nt.T, namespace1Path)
@@ -448,10 +437,7 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 	nt.Must(nt.WatchForAllSyncs())
 
 	// Delete the RootSync
-	err = nt.KubeClient.Delete(rootSync)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.KubeClient.Delete(rootSync))
 
 	tg := taskgroup.New()
 	tg.Go(func() error {
@@ -466,24 +452,26 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 		// After RepoSync and Deployment1 are deleted, the RootSync should have its finalizer removed and be garbage collected
 		return nt.Watcher.WatchForNotFound(kinds.RootSyncV1Beta1(), rootSync.GetName(), rootSync.GetNamespace())
 	})
-	if err := tg.Wait(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(tg.Wait())
+
 	tg = taskgroup.New()
 	tg.Go(func() error {
 		// Namespace1 should NOT have been deleted, because it was abandoned by the RootSync.
-		// TODO: Use NoConfigSyncMetadata predicate once metadata removal is fixed (b/256043590)
 		return nt.Watcher.WatchObject(kinds.Namespace(), namespace1.GetName(), namespace1.GetNamespace(),
-			testwatcher.WatchPredicates())
+			testwatcher.WatchPredicates(
+				testpredicates.NoConfigSyncMetadata(),
+				testpredicates.MissingLabel(metadata.ApplySetPartOfLabel),
+			))
 	})
 	tg.Go(func() error {
 		// Deployment2 should NOT have been deleted, because it was orphaned by the RepoSync.
 		return nt.Watcher.WatchObject(kinds.Deployment(), deployment2.GetName(), deployment2.GetNamespace(),
-			testwatcher.WatchPredicates(testpredicates.HasAllNomosMetadata()))
+			testwatcher.WatchPredicates(
+				testpredicates.HasAllNomosMetadata(), // metadata NOT removed when orphaned
+				testpredicates.HasLabel(metadata.ApplySetPartOfLabel, repoSyncApplySetID),
+			))
 	})
-	if err := tg.Wait(); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(tg.Wait())
 }
 
 // TestReconcileFinalizerReconcileTimeout verifies that the reconciler finalizer

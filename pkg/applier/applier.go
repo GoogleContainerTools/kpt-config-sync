@@ -829,8 +829,9 @@ func (s *supervisor) abandonObject(ctx context.Context, obj client.Object) error
 		fromObj.SetLabels(uObj.GetLabels())
 
 		toObj := fromObj.DeepCopy()
-		updated := metadata.RemoveConfigSyncMetadata(toObj)
-		if !updated {
+		updated1 := metadata.RemoveConfigSyncMetadata(toObj)
+		updated2 := metadata.RemoveApplySetPartOfLabel(toObj, s.clientSet.ApplySetID)
+		if !updated1 && !updated2 {
 			return nil
 		}
 		// Use merge-patch instead of server-side-apply, because we don't have

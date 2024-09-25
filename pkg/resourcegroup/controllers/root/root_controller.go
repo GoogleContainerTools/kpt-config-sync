@@ -27,6 +27,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/retry"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
+	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/handler"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/resourcegroup"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/resourcemap"
@@ -211,6 +212,8 @@ func NewController(mgr manager.Manager, channel chan event.GenericEvent,
 		WithEventFilter(ResourceGroupPredicate{}).
 		// skip the Generic events
 		WithEventFilter(NoGenericEventPredicate{}).
+		// only reconcile resource groups owned by Config Sync
+		WithEventFilter(OwnedByConfigSyncPredicate{}).
 		Watches(&apiextensionsv1.CustomResourceDefinition{}, &handler.CRDEventHandler{
 			Mapping: resMap,
 			Channel: channel,
@@ -295,4 +298,25 @@ func isConditionTrue(cType v1alpha1.ConditionType, conditions []v1alpha1.Conditi
 	}
 
 	return false
+}
+
+type OwnedByConfigSyncPredicate struct{}
+
+func (OwnedByConfigSyncPredicate) Create(e event.CreateEvent) bool {
+	return isOwnedByConfigSync(e.Object)
+}
+func (OwnedByConfigSyncPredicate) Delete(e event.DeleteEvent) bool {
+	return isOwnedByConfigSync(e.Object)
+}
+func (OwnedByConfigSyncPredicate) Update(e event.UpdateEvent) bool {
+	return isOwnedByConfigSync(e.ObjectOld)
+}
+func (OwnedByConfigSyncPredicate) Generic(e event.GenericEvent) bool {
+	return isOwnedByConfigSync(e.Object)
+}
+
+func isOwnedByConfigSync(o client.Object) bool {
+	labels := o.GetLabels()
+	owner, ok := labels[metadata.ManagedByKey]
+	return ok && owner == metadata.ManagedByValue
 }

@@ -16,6 +16,7 @@ package root
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -195,4 +196,99 @@ func TestRootReconciler(t *testing.T) {
 	go func() { e = <-reconcilerKpt.channel }()
 	time.Sleep(time.Second)
 	assert.Equal(t, "group0", e.Object.GetName())
+}
+
+func TestOnwedByConfigSyncPredicate(t *testing.T) {
+	type testCase struct {
+		name  string
+		input client.Object
+		want  bool
+	}
+
+	testCases := []testCase{
+		{
+			name: "owned by configsync",
+			input: &v1alpha1.ResourceGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"app.kubernetes.io/managed-by": "configmanagement.gke.io",
+					},
+					Namespace: "foo",
+					Name:      "bar",
+				},
+			},
+			want: true,
+		},
+		{
+			name: "owned by someone else",
+			input: &v1alpha1.ResourceGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"app.kubernetes.io/managed-by": "someone-else",
+					},
+					Namespace: "foo",
+					Name:      "bar",
+				},
+			},
+			want: false,
+		},
+		{
+			name: "not owned",
+			input: &v1alpha1.ResourceGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "foo",
+					Name:      "bar",
+				},
+			},
+			want: false,
+		},
+	}
+
+	for _, testCase := range testCases {
+		for _, method := range []struct {
+			name string
+			f    func(client.Object) bool
+		}{
+			{
+				name: "CREATE",
+				f: func(o client.Object) bool {
+					return OwnedByConfigSyncPredicate{}.Create(
+						event.TypedCreateEvent[client.Object]{Object: testCase.input},
+					)
+				},
+			},
+			{
+				name: "UPDATE",
+				f: func(o client.Object) bool {
+					return OwnedByConfigSyncPredicate{}.Update(
+						event.TypedUpdateEvent[client.Object]{ObjectOld: testCase.input},
+					)
+				},
+			},
+			{
+				name: "DELETE",
+				f: func(o client.Object) bool {
+					return OwnedByConfigSyncPredicate{}.Delete(
+						event.TypedDeleteEvent[client.Object]{Object: testCase.input},
+					)
+				},
+			},
+			{
+				name: "GENERIC",
+				f: func(o client.Object) bool {
+					return OwnedByConfigSyncPredicate{}.Generic(
+						event.TypedGenericEvent[client.Object]{Object: testCase.input},
+					)
+				},
+			},
+		} {
+			t.Run(fmt.Sprintf("%s %s", method.name, testCase.name), func(t *testing.T) {
+				t.Parallel()
+				got := method.f(testCase.input)
+				if got != testCase.want {
+					t.Errorf("%s %s = %v, want %v", method.name, testCase.name, got, testCase.want)
+				}
+			})
+		}
+	}
 }

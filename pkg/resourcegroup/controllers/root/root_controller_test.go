@@ -16,7 +16,6 @@ package root
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -200,95 +199,89 @@ func TestRootReconciler(t *testing.T) {
 
 func TestOnwedByConfigSyncPredicate(t *testing.T) {
 	type testCase struct {
-		name  string
-		input client.Object
-		want  bool
+		name string
+		got  bool
+		want bool
+	}
+
+	ownedByConfigSync := &v1alpha1.ResourceGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Labels: map[string]string{
+				"app.kubernetes.io/managed-by": "configmanagement.gke.io",
+			},
+			Namespace: "foo",
+			Name:      "bar",
+		},
+	}
+	ownedBySomeoneElse := &v1alpha1.ResourceGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Labels: map[string]string{
+				"app.kubernetes.io/managed-by": "someone-else",
+			},
+			Namespace: "foo",
+			Name:      "bar",
+		},
+	}
+	notOwned := &v1alpha1.ResourceGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "foo",
+			Name:      "bar",
+		},
+	}
+
+	create := func(o client.Object) bool {
+		return OwnedByConfigSyncPredicate{}.Create(
+			event.TypedCreateEvent[client.Object]{Object: o},
+		)
+	}
+	update := func(o client.Object, n client.Object) bool {
+		return OwnedByConfigSyncPredicate{}.Update(
+			event.TypedUpdateEvent[client.Object]{ObjectOld: o, ObjectNew: n},
+		)
+	}
+
+	delete := func(o client.Object) bool {
+		return OwnedByConfigSyncPredicate{}.Delete(
+			event.TypedDeleteEvent[client.Object]{Object: o},
+		)
+	}
+
+	generic := func(o client.Object) bool {
+		return OwnedByConfigSyncPredicate{}.Generic(
+			event.TypedGenericEvent[client.Object]{Object: o},
+		)
 	}
 
 	testCases := []testCase{
-		{
-			name: "owned by configsync",
-			input: &v1alpha1.ResourceGroup{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						"app.kubernetes.io/managed-by": "configmanagement.gke.io",
-					},
-					Namespace: "foo",
-					Name:      "bar",
-				},
-			},
-			want: true,
-		},
-		{
-			name: "owned by someone else",
-			input: &v1alpha1.ResourceGroup{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						"app.kubernetes.io/managed-by": "someone-else",
-					},
-					Namespace: "foo",
-					Name:      "bar",
-				},
-			},
-			want: false,
-		},
-		{
-			name: "not owned",
-			input: &v1alpha1.ResourceGroup{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace: "foo",
-					Name:      "bar",
-				},
-			},
-			want: false,
-		},
+		{name: "create owned by configsync", got: create(ownedByConfigSync), want: true},
+		{name: "create owned by someone else", got: create(ownedBySomeoneElse), want: false},
+		{name: "create not owned", got: create(notOwned), want: false},
+
+		{name: "update both owned by configsync", got: update(ownedByConfigSync, ownedByConfigSync), want: true},
+		{name: "update old owned by configsync, new owned by someone else", got: update(ownedByConfigSync, ownedBySomeoneElse), want: true},
+		{name: "update old owned by someone else, new owned by configsync", got: update(ownedBySomeoneElse, ownedByConfigSync), want: true},
+		{name: "update both owned by someone else", got: update(ownedBySomeoneElse, ownedBySomeoneElse), want: false},
+		{name: "update old not owned, new owned by configsync", got: update(notOwned, ownedByConfigSync), want: true},
+		{name: "update old owned by configsync, new not owned", got: update(ownedByConfigSync, notOwned), want: true},
+		{name: "update both not owned", got: update(notOwned, notOwned), want: false},
+		{name: "update old not owned, new owned by someone else", got: update(notOwned, ownedBySomeoneElse), want: false},
+		{name: "update old owned by someone else, new not owned", got: update(ownedBySomeoneElse, notOwned), want: false},
+
+		{name: "delete owned by configsync", got: delete(ownedByConfigSync), want: true},
+		{name: "delete owned by someone else", got: delete(ownedBySomeoneElse), want: false},
+		{name: "delete not owned", got: delete(notOwned), want: false},
+
+		{name: "generic owned by configsync", got: generic(ownedByConfigSync), want: true},
+		{name: "generic owned by someone else", got: generic(ownedBySomeoneElse), want: false},
+		{name: "generic not owned", got: generic(notOwned), want: false},
 	}
 
 	for _, testCase := range testCases {
-		for _, method := range []struct {
-			name string
-			f    func(client.Object) bool
-		}{
-			{
-				name: "CREATE",
-				f: func(o client.Object) bool {
-					return OwnedByConfigSyncPredicate{}.Create(
-						event.TypedCreateEvent[client.Object]{Object: testCase.input},
-					)
-				},
-			},
-			{
-				name: "UPDATE",
-				f: func(o client.Object) bool {
-					return OwnedByConfigSyncPredicate{}.Update(
-						event.TypedUpdateEvent[client.Object]{ObjectOld: testCase.input},
-					)
-				},
-			},
-			{
-				name: "DELETE",
-				f: func(o client.Object) bool {
-					return OwnedByConfigSyncPredicate{}.Delete(
-						event.TypedDeleteEvent[client.Object]{Object: testCase.input},
-					)
-				},
-			},
-			{
-				name: "GENERIC",
-				f: func(o client.Object) bool {
-					return OwnedByConfigSyncPredicate{}.Generic(
-						event.TypedGenericEvent[client.Object]{Object: testCase.input},
-					)
-				},
-			},
-		} {
-			t.Run(fmt.Sprintf("%s %s", method.name, testCase.name), func(t *testing.T) {
-				t.Parallel()
-				got := method.f(testCase.input)
-				if got != testCase.want {
-					t.Errorf("%s %s = %v, want %v", method.name, testCase.name, got, testCase.want)
-				}
-			})
-		}
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			if testCase.got != testCase.want {
+				t.Errorf("%s = %v, want %v", testCase.name, testCase.got, testCase.want)
+			}
+		})
 	}
 }

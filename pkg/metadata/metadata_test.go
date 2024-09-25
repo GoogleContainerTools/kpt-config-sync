@@ -19,12 +19,15 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/syncer/syncertest"
+	"sigs.k8s.io/cli-utils/pkg/testutil"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -146,5 +149,78 @@ func TestRemoveConfigSyncMetadata(t *testing.T) {
 	updated = metadata.RemoveConfigSyncMetadata(obj)
 	if updated {
 		t.Errorf("the labels and annotations shouldn't be updated in this case")
+	}
+}
+
+func TestRemoveApplySetPartOfLabel(t *testing.T) {
+	tests := []struct {
+		name        string
+		obj         client.Object
+		applySetID  string
+		wantUpdated bool
+		wantObj     client.Object
+	}{
+		{
+			name: "noop no labels",
+			obj: k8sobjects.UnstructuredObject(kinds.Deployment(), core.Name("deploy"),
+				core.Annotation(metadata.OwningInventoryKey, "random-value")),
+			applySetID:  "example",
+			wantUpdated: false,
+			wantObj: k8sobjects.UnstructuredObject(kinds.Deployment(), core.Name("deploy"),
+				core.Annotation(metadata.OwningInventoryKey, "random-value")),
+		},
+		{
+			name: "noop no key match",
+			obj: k8sobjects.UnstructuredObject(kinds.Deployment(), core.Name("deploy"),
+				core.Annotation(metadata.OwningInventoryKey, "random-value"),
+				core.Label(metadata.SystemLabel, "random-value")),
+			applySetID:  "example",
+			wantUpdated: false,
+			wantObj: k8sobjects.UnstructuredObject(kinds.Deployment(), core.Name("deploy"),
+				core.Annotation(metadata.OwningInventoryKey, "random-value"),
+				core.Label(metadata.SystemLabel, "random-value")),
+		},
+		{
+			name: "noop no value match",
+			obj: k8sobjects.UnstructuredObject(kinds.Deployment(), core.Name("deploy"),
+				core.Annotation(metadata.OwningInventoryKey, "random-value"),
+				core.Label(metadata.SystemLabel, "random-value"),
+				core.Label(metadata.ApplySetPartOfLabel, "example")),
+			applySetID:  "example-2",
+			wantUpdated: false,
+			wantObj: k8sobjects.UnstructuredObject(kinds.Deployment(), core.Name("deploy"),
+				core.Annotation(metadata.OwningInventoryKey, "random-value"),
+				core.Label(metadata.SystemLabel, "random-value"),
+				core.Label(metadata.ApplySetPartOfLabel, "example")),
+		},
+		{
+			name: "removal",
+			obj: k8sobjects.UnstructuredObject(kinds.Deployment(), core.Name("deploy"),
+				core.Annotation(metadata.OwningInventoryKey, "random-value"),
+				core.Label(metadata.SystemLabel, "random-value"),
+				core.Label(metadata.ApplySetPartOfLabel, "example")),
+			applySetID:  "example",
+			wantUpdated: true,
+			wantObj: k8sobjects.UnstructuredObject(kinds.Deployment(), core.Name("deploy"),
+				core.Annotation(metadata.OwningInventoryKey, "random-value"),
+				core.Label(metadata.SystemLabel, "random-value")),
+		},
+		{
+			name: "removal to empty",
+			obj: k8sobjects.UnstructuredObject(kinds.Deployment(), core.Name("deploy"),
+				core.Label(metadata.ApplySetPartOfLabel, "example")),
+			applySetID:  "example",
+			wantUpdated: true,
+			wantObj:     k8sobjects.UnstructuredObject(kinds.Deployment(), core.Name("deploy")),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			obj, err := kinds.ObjectAsClientObject(tt.obj.DeepCopyObject())
+			require.NoError(t, err)
+			updated := metadata.RemoveApplySetPartOfLabel(obj, tt.applySetID)
+			assert.Equal(t, tt.wantUpdated, updated)
+			testutil.AssertEqual(t, tt.wantObj, obj)
+		})
 	}
 }

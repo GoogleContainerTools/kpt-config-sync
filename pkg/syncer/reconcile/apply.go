@@ -69,16 +69,17 @@ type clientApplier struct {
 	openAPIResources openapi.Resources
 	client           *syncerclient.Client
 	fights           fight.Detector
+	applySetID       string
 }
 
 var _ Applier = &clientApplier{}
 
 // NewApplierForMultiRepo returns a new clientApplier for callers with multi repo feature enabled.
-func NewApplierForMultiRepo(cfg *rest.Config, client *syncerclient.Client) (Applier, error) {
-	return newApplier(cfg, client)
+func NewApplierForMultiRepo(cfg *rest.Config, client *syncerclient.Client, applySetID string) (Applier, error) {
+	return newApplier(cfg, client, applySetID)
 }
 
-func newApplier(cfg *rest.Config, client *syncerclient.Client) (Applier, error) {
+func newApplier(cfg *rest.Config, client *syncerclient.Client, applySetID string) (Applier, error) {
 	c, err := dynamic.NewForConfig(cfg)
 	if err != nil {
 		return nil, err
@@ -100,6 +101,7 @@ func newApplier(cfg *rest.Config, client *syncerclient.Client) (Applier, error) 
 		openAPIResources: oa,
 		client:           client,
 		fights:           fight.NewDetector(),
+		applySetID:       applySetID,
 	}, nil
 }
 
@@ -175,7 +177,9 @@ func (c *clientApplier) Update(ctx context.Context, intendedState, currentState 
 func (c *clientApplier) RemoveNomosMeta(ctx context.Context, u *unstructured.Unstructured, controller string) status.Error {
 	var changed bool
 	_, err := c.client.Apply(ctx, u, func(obj client.Object) (client.Object, error) {
-		changed = metadata.RemoveConfigSyncMetadata(obj)
+		changed1 := metadata.RemoveConfigSyncMetadata(obj)
+		changed2 := metadata.RemoveApplySetPartOfLabel(obj, c.applySetID)
+		changed := changed1 || changed2
 		if !changed {
 			return obj, syncerclient.NoUpdateNeeded()
 		}

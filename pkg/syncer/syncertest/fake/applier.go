@@ -33,6 +33,7 @@ type Applier struct {
 	CreateError  status.Error
 	UpdateError  status.Error
 	DeleteError  status.Error
+	ApplySetID   string
 }
 
 var _ reconcile.Applier = &Applier{}
@@ -63,8 +64,10 @@ func (a *Applier) Update(ctx context.Context, intendedState, _ *unstructured.Uns
 
 // RemoveNomosMeta implements reconcile.Applier.
 func (a *Applier) RemoveNomosMeta(ctx context.Context, intent *unstructured.Unstructured, _ string) status.Error {
-	updated := metadata.RemoveConfigSyncMetadata(intent)
-	if !updated {
+	changed1 := metadata.RemoveConfigSyncMetadata(intent)
+	changed2 := metadata.RemoveApplySetPartOfLabel(intent, a.ApplySetID)
+	changed := changed1 || changed2
+	if !changed {
 		return nil
 	}
 

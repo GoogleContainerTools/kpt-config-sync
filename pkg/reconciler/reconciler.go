@@ -185,8 +185,9 @@ func Run(opts Options) {
 	}
 
 	// Configure the Applier.
+	applySetID := applyset.IDFromSync(opts.SyncName, opts.ReconcilerScope)
 	genericClient := syncerclient.New(cl, metrics.APICallDuration)
-	baseApplier, err := reconcile.NewApplierForMultiRepo(cfg, genericClient)
+	baseApplier, err := reconcile.NewApplierForMultiRepo(cfg, genericClient, applySetID)
 	if err != nil {
 		klog.Fatalf("Instantiating Applier: %v", err)
 	}
@@ -198,7 +199,6 @@ func Run(opts Options) {
 	if reconcileTimeout < 0 {
 		klog.Fatalf("Invalid reconcileTimeout: %v, timeout should not be negative", reconcileTimeout)
 	}
-	applySetID := applyset.IDFromSync(opts.SyncName, opts.ReconcilerScope)
 	clientSet, err := applier.NewClientSet(cl, configFlags, opts.StatusMode, applySetID)
 	if err != nil {
 		klog.Fatalf("Error creating clients: %v", err)

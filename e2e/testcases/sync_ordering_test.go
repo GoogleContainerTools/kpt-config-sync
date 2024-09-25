@@ -31,6 +31,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
@@ -45,9 +46,10 @@ import (
 // The sync ordering feature is only supported in the multi-repo mode.
 
 func TestMultiDependencies(t *testing.T) {
+	rootSyncID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t, nomostesting.Lifecycle,
-		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
-	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
+		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured))
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
 
 	namespaceName := "bookstore"
 	nt.T.Logf("Remove the namespace %q if it already exists", namespaceName)
@@ -67,19 +69,13 @@ func TestMultiDependencies(t *testing.T) {
 	nt.Must(nt.WatchForAllSyncs())
 
 	ns := &corev1.Namespace{}
-	if err := nt.KubeClient.Get(namespaceName, "", ns); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.KubeClient.Get(namespaceName, "", ns))
 
 	cm1 := &corev1.ConfigMap{}
-	if err := nt.KubeClient.Get(cm1Name, namespaceName, cm1); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.KubeClient.Get(cm1Name, namespaceName, cm1))
 
 	cm2 := &corev1.ConfigMap{}
-	if err := nt.KubeClient.Get(cm2Name, namespaceName, cm2); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.KubeClient.Get(cm2Name, namespaceName, cm2))
 
 	nt.T.Logf("Verify that the namespace is created before the configmaps in it")
 	if cm1.CreationTimestamp.Before(&ns.CreationTimestamp) {
@@ -96,9 +92,8 @@ func TestMultiDependencies(t *testing.T) {
 	}
 
 	nt.T.Logf("Verify that cm2 has the dependsOn annotation")
-	if err := nt.Validate(cm2Name, namespaceName, &corev1.ConfigMap{}, testpredicates.HasAnnotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm1")); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(cm2Name, namespaceName, &corev1.ConfigMap{},
+		testpredicates.HasAnnotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm1")))
 
 	// There are 2 configmaps in the namespace at this point: cm1, cm2.
 	// The dependency graph is:
@@ -114,14 +109,10 @@ func TestMultiDependencies(t *testing.T) {
 
 	nt.T.Logf("Verify that cm1 is created before cm3")
 	cm1 = &corev1.ConfigMap{}
-	if err := nt.KubeClient.Get(cm1Name, namespaceName, cm1); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.KubeClient.Get(cm1Name, namespaceName, cm1))
 
 	cm3 := &corev1.ConfigMap{}
-	if err := nt.KubeClient.Get(cm3Name, namespaceName, cm3); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.KubeClient.Get(cm3Name, namespaceName, cm3))
 	if cm3.CreationTimestamp.Before(&cm1.CreationTimestamp) {
 		nt.T.Fatalf("an object (%s) should be created after its dependency (%s)", core.GKNN(cm3), core.GKNN(cm1))
 	}
@@ -143,14 +134,10 @@ func TestMultiDependencies(t *testing.T) {
 
 	nt.T.Log("Verify that cm1 is created before cm0")
 	cm1 = &corev1.ConfigMap{}
-	if err := nt.KubeClient.Get(cm1Name, namespaceName, cm1); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.KubeClient.Get(cm1Name, namespaceName, cm1))
 
 	cm0 := &corev1.ConfigMap{}
-	if err := nt.KubeClient.Get(cm3Name, namespaceName, cm0); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.KubeClient.Get(cm3Name, namespaceName, cm0))
 	if cm0.CreationTimestamp.Before(&cm1.CreationTimestamp) {
 		nt.T.Fatalf("Declaring the dependency of an existing object (%s) on a non-existing object (%s) should not cause the existing object to be recreated", core.GKNN(cm1), core.GKNN(cm0))
 	}
@@ -169,9 +156,8 @@ func TestMultiDependencies(t *testing.T) {
 	nt.WaitForRootSyncSyncError(configsync.RootSyncName, applier.ApplierErrorCode, "cyclic dependency", nil)
 
 	nt.T.Log("Verify that cm0 does not have the dependsOn annotation")
-	if err := nt.Validate(cm0Name, namespaceName, &corev1.ConfigMap{}, testpredicates.MissingAnnotation(dependson.Annotation)); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(cm0Name, namespaceName, &corev1.ConfigMap{},
+		testpredicates.MissingAnnotation(dependson.Annotation)))
 
 	nt.T.Log("Remove the cyclic dependency from the Git repo")
 	nt.Must(rootSyncGitRepo.Add("acme/cm0.yaml", k8sobjects.ConfigMapObject(core.Name(cm0Name), core.Namespace(namespaceName))))
@@ -191,15 +177,10 @@ func TestMultiDependencies(t *testing.T) {
 	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("Verify that cm3 is removed")
-	err := nt.Watcher.WatchForNotFound(kinds.ConfigMap(), cm3Name, namespaceName)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchForNotFound(kinds.ConfigMap(), cm3Name, namespaceName))
 
 	nt.T.Log("Verify that cm1 is still on the cluster")
-	if err := nt.Validate(cm1Name, namespaceName, &corev1.ConfigMap{}); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(cm1Name, namespaceName, &corev1.ConfigMap{}))
 
 	// There are 3 configmaps in the namespace at this point: cm0, cm1, cm2.
 	// The dependency graph is:
@@ -214,16 +195,10 @@ func TestMultiDependencies(t *testing.T) {
 	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("Verify that cm1 is removed")
-	err = nt.Watcher.WatchForNotFound(kinds.ConfigMap(), cm1Name, namespaceName)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchForNotFound(kinds.ConfigMap(), cm1Name, namespaceName))
 
 	nt.T.Log("Verify that cm2 is removed")
-	err = nt.Watcher.WatchForNotFound(kinds.ConfigMap(), cm2Name, namespaceName)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchForNotFound(kinds.ConfigMap(), cm2Name, namespaceName))
 
 	// There are 1 configmap in the namespace at this point: cm0.
 
@@ -238,19 +213,16 @@ func TestMultiDependencies(t *testing.T) {
 	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Logf("Verify that cm1 has the dependsOn annotation, and depends on cm0")
-	if err := nt.Validate(cm1Name, namespaceName, &corev1.ConfigMap{}, testpredicates.HasAnnotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm0")); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(cm1Name, namespaceName, &corev1.ConfigMap{},
+		testpredicates.HasAnnotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm0")))
 
 	nt.T.Logf("Verify that cm2 has the dependsOn annotation, and depends on cm0")
-	if err := nt.Validate(cm2Name, namespaceName, &corev1.ConfigMap{}, testpredicates.HasAnnotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm0")); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(cm2Name, namespaceName, &corev1.ConfigMap{},
+		testpredicates.HasAnnotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm0")))
 
 	nt.T.Logf("Verify that cm3 has the dependsOn annotation, and depends on cm0")
-	if err := nt.Validate(cm3Name, namespaceName, &corev1.ConfigMap{}, testpredicates.HasAnnotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm0")); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(cm3Name, namespaceName, &corev1.ConfigMap{},
+		testpredicates.HasAnnotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm0")))
 
 	// There are 4 configmaps in the namespace at this point: cm0, cm1, cm2 and cm3.
 	// The dependency graph is:
@@ -266,15 +238,19 @@ func TestMultiDependencies(t *testing.T) {
 	nt.Must(rootSyncGitRepo.CommitAndPush("Disable cm3 by adding the `configmanagement.gke.io/managed: disabled` annotation"))
 	nt.Must(nt.WatchForAllSyncs())
 
+	rsObj := &v1beta1.RootSync{}
+	nt.Must(nt.KubeClient.Get(rootSyncID.Name, rootSyncID.Namespace, rsObj))
+	applySetID := core.GetLabel(rsObj, metadata.ApplySetParentIDLabel)
+
 	nt.T.Log("Verify that cm3 no longer has the CS metadata")
-	if err := nt.Validate(cm3Name, namespaceName, &corev1.ConfigMap{}, testpredicates.NoConfigSyncMetadata()); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(cm3Name, namespaceName, &corev1.ConfigMap{},
+		testpredicates.NoConfigSyncMetadata(),
+		testpredicates.MissingLabel(metadata.ApplySetPartOfLabel)))
 
 	nt.T.Log("Verify that cm0 still has the CS metadata")
-	if err := nt.Validate(cm0Name, namespaceName, &corev1.ConfigMap{}, testpredicates.HasAllNomosMetadata()); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(cm0Name, namespaceName, &corev1.ConfigMap{},
+		testpredicates.HasAllNomosMetadata(),
+		testpredicates.HasLabel(metadata.ApplySetPartOfLabel, applySetID)))
 
 	// There are 4 configmaps in the namespace at this point: cm0, cm1, cm2 and cm3.
 	// The inventory tracks 3 configmaps: cm0, cm1, cm2. The dependency graph is:
@@ -288,9 +264,8 @@ func TestMultiDependencies(t *testing.T) {
 	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("Verify that cm2 no longer has the dependsOn annotation")
-	if err := nt.Validate(cm2Name, namespaceName, &corev1.ConfigMap{}, testpredicates.MissingAnnotation(dependson.Annotation)); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(cm2Name, namespaceName, &corev1.ConfigMap{},
+		testpredicates.MissingAnnotation(dependson.Annotation)))
 
 	// There are 4 configmaps in the namespace at this point: cm0, cm1, cm2 and cm3.
 	// The inventory tracks 3 configmaps: cm0, cm1, cm2. The dependency graph is:
@@ -307,14 +282,14 @@ func TestMultiDependencies(t *testing.T) {
 	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("Verify that cm1 no longer has the CS metadata")
-	if err := nt.Validate(cm1Name, namespaceName, &corev1.ConfigMap{}, testpredicates.NoConfigSyncMetadata()); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(cm1Name, namespaceName, &corev1.ConfigMap{},
+		testpredicates.NoConfigSyncMetadata(),
+		testpredicates.MissingLabel(metadata.ApplySetPartOfLabel)))
 
 	nt.T.Log("Verify that cm0 no longer has the CS metadata")
-	if err := nt.Validate(cm0Name, namespaceName, &corev1.ConfigMap{}, testpredicates.NoConfigSyncMetadata()); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(cm0Name, namespaceName, &corev1.ConfigMap{},
+		testpredicates.NoConfigSyncMetadata(),
+		testpredicates.MissingLabel(metadata.ApplySetPartOfLabel)))
 
 }
 

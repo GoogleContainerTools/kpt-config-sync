@@ -137,3 +137,20 @@ func RemoveConfigSyncMetadata(obj client.Object) bool {
 	after := len(obj.GetAnnotations()) + len(obj.GetLabels())
 	return before != after
 }
+
+// RemoveApplySetPartOfLabel removes the ApplySet part-of label IFF the value
+// matches the specified applySetID.
+// The resource is modified in place. Returns true if the object was modified.
+func RemoveApplySetPartOfLabel(obj client.Object, applySetID string) bool {
+	labels := obj.GetLabels()
+	if labels == nil {
+		return false
+	}
+	v, found := labels[ApplySetPartOfLabel]
+	if !found || v != applySetID {
+		return false
+	}
+	delete(labels, ApplySetPartOfLabel)
+	obj.SetLabels(labels)
+	return true
+}

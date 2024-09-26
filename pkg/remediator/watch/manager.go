@@ -17,9 +17,11 @@ package watch
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 
 	"golang.org/x/exp/maps"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -29,10 +31,12 @@ import (
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
+	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/remediator/conflict"
 	"kpt.dev/configsync/pkg/remediator/queue"
 	"kpt.dev/configsync/pkg/status"
 	syncerclient "kpt.dev/configsync/pkg/syncer/client"
+	"kpt.dev/configsync/pkg/util/customresource"
 )
 
 // Manager accepts new resource lists that are parsed from Git and then
@@ -57,7 +61,11 @@ type Manager struct {
 	watcherFactory watcherFactory
 
 	// mapper is the RESTMapper used by the watcherFactory
-	mapper meta.RESTMapper
+	mapper ResettableRESTMapper
+
+	conflictHandler conflict.Handler
+
+	crdController *controllers.CRDController
 
 	// labelSelector filters watches
 	labelSelector labels.Selector
@@ -69,14 +77,13 @@ type Manager struct {
 	// watcherMap maps GVKs to their associated watchers
 	watcherMap map[schema.GroupVersionKind]Runnable
 	// needsUpdate indicates if the Manager's watches need to be updated.
-	needsUpdate     bool
-	conflictHandler conflict.Handler
+	needsUpdate bool
 }
 
 // Options contains options for creating a watch manager.
 type Options struct {
 	watcherFactory watcherFactory
-	mapper         meta.RESTMapper
+	mapper         ResettableRESTMapper
 }
 
 // DefaultOptions return the default options with a ListerWatcherFactory built
@@ -95,7 +102,8 @@ func DefaultOptions(cfg *rest.Config) (*Options, error) {
 
 // NewManager starts a new watch manager
 func NewManager(scope declared.Scope, syncName string, cfg *rest.Config,
-	q *queue.ObjectQueue, decls *declared.Resources, options *Options, ch conflict.Handler) (*Manager, error) {
+	q *queue.ObjectQueue, decls *declared.Resources, options *Options,
+	ch conflict.Handler, crdController *controllers.CRDController) (*Manager, error) {
 	if options == nil {
 		var err error
 		options, err = DefaultOptions(cfg)
@@ -120,6 +128,7 @@ func NewManager(scope declared.Scope, syncName string, cfg *rest.Config,
 		labelSelector:   labelSelector,
 		queue:           q,
 		conflictHandler: ch,
+		crdController:   crdController,
 	}, nil
 }
 
@@ -155,20 +164,21 @@ func (m *Manager) AddWatches(ctx context.Context, gvkMap map[schema.GroupVersion
 	// Start new watchers
 	var errs status.MultiError
 	for gvk := range gvkMap {
+		// Update the CRD Observer
+		m.startWatchingCRD(gvk, commit)
 		// Skip watchers that are already started
 		if w, isWatched := m.watcherMap[gvk]; isWatched {
 			w.SetLatestCommit(commit)
 			continue
 		}
 		// Only start watcher if the resource exists.
-		// Watch will be started later by UpdateWatches, after the applier succeeds.
-		// TODO: register pending resources and start watching them when the CRD is established
+		// Pending watches will be started later by the CRD Observer or UpdateWatches.
 		if _, err := m.mapper.RESTMapping(gvk.GroupKind(), gvk.Version); err != nil {
 			switch {
 			case meta.IsNoMatchError(err):
 				statusErr := syncerclient.ConflictWatchResourceDoesNotExist(err, gvk)
 				klog.Infof("Remediator skipped starting resource watch: "+
-					"%v. The remediator will start the resource watch after the sync has succeeded.", statusErr)
+					"%v. The remediator will start the resource watch after the CRD is established.", statusErr)
 				// This is expected behavior before a sync attempt.
 				// It likely means a CR and CRD are in the same ApplySet.
 				// So don't record a resource conflict metric or return an error here.
@@ -221,26 +231,30 @@ func (m *Manager) UpdateWatches(ctx context.Context, gvkMap map[schema.GroupVers
 			// Remove all conflict errors for objects with the same GK because
 			// the objects are no longer managed by the reconciler.
 			m.conflictHandler.ClearConflictErrorsWithKind(gvk.GroupKind())
+			// Update the CRD Observer
+			m.stopWatchingCRD(gvk)
 		}
 	}
 
 	// Start new watchers
 	var errs status.MultiError
 	for gvk := range gvkMap {
+		// Update the CRD Observer
+		m.startWatchingCRD(gvk, commit)
 		// Skip watchers that are already started
 		if w, isWatched := m.watcherMap[gvk]; isWatched {
 			w.SetLatestCommit(commit)
 			continue
 		}
 		// Only start watcher if the resource exists.
-		// All resources should exist and be established by now. If not, error.
+		// Pending watches will be started later by the CRD Observer or UpdateWatches.
 		if _, err := m.mapper.RESTMapping(gvk.GroupKind(), gvk.Version); err != nil {
 			switch {
 			case meta.IsNoMatchError(err):
 				statusErr := syncerclient.ConflictWatchResourceDoesNotExist(err, gvk)
 				klog.Warningf("Remediator encountered a resource conflict: "+
 					"%v. To resolve the conflict, the remediator will enqueue a resync "+
-					"and restart the resource watch after the sync has succeeded.", statusErr)
+					"and restart the resource watch after the CRD is established.", statusErr)
 				// This is unexpected behavior after a successful sync.
 				// It likely means that some other controller deleted managed objects shortly after they were applied.
 				// So record a resource conflict metric and return an error.
@@ -326,4 +340,66 @@ func (m *Manager) stopWatcher(gvk schema.GroupVersionKind) {
 	// Stop the watcher.
 	w.Stop()
 	delete(m.watcherMap, gvk)
+}
+
+func (m *Manager) startWatchingCRD(gvk schema.GroupVersionKind, commit string) {
+	m.crdController.SetReconciler(gvk.GroupKind(), func(ctx context.Context, crd *apiextensionsv1.CustomResourceDefinition) error {
+		if customresource.IsEstablished(crd) {
+			if err := discoverResourceForKind(m.mapper, gvk); err != nil {
+				// Trigger retry by controller-manager
+				return err
+			}
+			// Start watching this resource.
+			gvkMap := map[schema.GroupVersionKind]struct{}{gvk: {}}
+			return m.AddWatches(ctx, gvkMap, commit)
+		}
+		// Else, if not established
+		if err := forgetResourceForKind(m.mapper, gvk); err != nil {
+			// Trigger retry by controller-manager
+			return err
+		}
+		// Don't stop watching until UpdateWatches is called by the Updater,
+		// confirming that the object has been removed from the ApplySet.
+		// Otherwise the remediator may miss object deletion events that
+		// come after the CRD deletion event.
+		return nil
+	})
+}
+
+func (m *Manager) stopWatchingCRD(gvk schema.GroupVersionKind) {
+	m.crdController.DeleteReconciler(gvk.GroupKind())
+}
+
+// discoverResourceForKind resets the RESTMapper if needed, to discover the
+// resource that maps to the specified kind.
+func discoverResourceForKind(mapper ResettableRESTMapper, gvk schema.GroupVersionKind) error {
+	if _, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version); err != nil {
+		if meta.IsNoMatchError(err) {
+			klog.Infof("Remediator resetting RESTMapper to discover resource: %v", gvk)
+			if err := mapper.Reset(); err != nil {
+				return fmt.Errorf("remediator failed to reset RESTMapper: %w", err)
+			}
+		} else {
+			return fmt.Errorf("remediator failed to map kind to resource: %w", err)
+		}
+	}
+	// Else, mapper already up to date
+	return nil
+}
+
+// forgetResourceForKind resets the RESTMapper if needed, to forget the resource
+// that maps to the specified kind.
+func forgetResourceForKind(mapper ResettableRESTMapper, gvk schema.GroupVersionKind) error {
+	if _, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version); err != nil {
+		if !meta.IsNoMatchError(err) {
+			return fmt.Errorf("remediator failed to map kind to resource: %w", err)
+		}
+		// Else, mapper already up to date
+	} else {
+		klog.Infof("Remediator resetting RESTMapper to forget resource: %v", gvk)
+		if err := mapper.Reset(); err != nil {
+			return fmt.Errorf("remediator failed to reset RESTMapper: %w", err)
+		}
+	}
+	return nil
 }

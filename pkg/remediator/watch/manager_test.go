@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/kinds"
+	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/status"
 	syncerclient "kpt.dev/configsync/pkg/syncer/client"
 	"kpt.dev/configsync/pkg/syncer/syncertest/fake"
@@ -237,11 +238,16 @@ func TestManager_AddWatches(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			fakeMapper := testutil.NewFakeRESTMapper(tc.mappedGVKs...)
+			newMapperFn := func() (meta.RESTMapper, error) {
+				// AddWatches doesn't call Reset. So we don't need to impl it.
+				return fakeMapper, nil
+			}
 			options := &Options{
 				watcherFactory: testRunnables(tc.failedWatchers, currentCommit),
-				mapper:         fakeMapper,
+				mapper:         NewReplaceOnResetRESTMapper(fakeMapper, newMapperFn),
 			}
-			m, err := NewManager(":test", "rs", nil, nil, &declared.Resources{}, options, fake.NewConflictHandler())
+			m, err := NewManager(":test", "rs", nil, nil, &declared.Resources{},
+				options, fake.NewConflictHandler(), &controllers.CRDController{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -414,11 +420,16 @@ func TestManager_UpdateWatches(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			fakeMapper := testutil.NewFakeRESTMapper(tc.mappedGVKs...)
+			newMapperFn := func() (meta.RESTMapper, error) {
+				// UpdateWatches doesn't call Reset. So we don't need to impl it.
+				return fakeMapper, nil
+			}
 			options := &Options{
 				watcherFactory: testRunnables(tc.failedWatchers, currentCommit),
-				mapper:         fakeMapper,
+				mapper:         NewReplaceOnResetRESTMapper(fakeMapper, newMapperFn),
 			}
-			m, err := NewManager(":test", "rs", nil, nil, &declared.Resources{}, options, fake.NewConflictHandler())
+			m, err := NewManager(":test", "rs", nil, nil, &declared.Resources{},
+				options, fake.NewConflictHandler(), &controllers.CRDController{})
 			if err != nil {
 				t.Fatal(err)
 			}

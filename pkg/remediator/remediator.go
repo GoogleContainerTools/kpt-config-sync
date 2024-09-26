@@ -23,6 +23,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/declared"
+	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/remediator/conflict"
 	"kpt.dev/configsync/pkg/remediator/queue"
 	"kpt.dev/configsync/pkg/remediator/reconcile"
@@ -101,6 +102,7 @@ func New(
 	applier syncerreconcile.Applier,
 	conflictHandler conflict.Handler,
 	fightHandler fight.Handler,
+	crdController *controllers.CRDController,
 	decls *declared.Resources,
 	numWorkers int,
 ) (*Remediator, error) {
@@ -117,7 +119,7 @@ func New(
 		conflictHandler: conflictHandler,
 	}
 
-	watchMgr, err := watch.NewManager(scope, syncName, cfg, q, decls, nil, conflictHandler)
+	watchMgr, err := watch.NewManager(scope, syncName, cfg, q, decls, nil, conflictHandler, crdController)
 	if err != nil {
 		return nil, fmt.Errorf("creating watch manager: %w", err)
 	}

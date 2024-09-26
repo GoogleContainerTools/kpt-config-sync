@@ -61,10 +61,10 @@ type ListerWatcherFactory func(gvk schema.GroupVersionKind, namespace string) Li
 
 // DynamicListerWatcherFactory provides a ListerWatcher method that implements
 // the ListerWatcherFactory interface. It uses the specified DynamicClient and
-// RESTMapper.
+// ResettableRESTMapper.
 type DynamicListerWatcherFactory struct {
 	DynamicClient *dynamic.DynamicClient
-	Mapper        meta.RESTMapper
+	Mapper        ResettableRESTMapper
 }
 
 // ListerWatcher constructs a ListerWatcher for the specified GroupVersionKind
@@ -77,19 +77,30 @@ func (dlwf *DynamicListerWatcherFactory) ListerWatcher(gvk schema.GroupVersionKi
 func DynamicListerWatcherFactoryFromConfig(cfg *rest.Config) (*DynamicListerWatcherFactory, error) {
 	dynamicClient, err := dynamic.NewForConfig(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build dynamic client: %w", err)
+		return nil, fmt.Errorf("creating DynamicClient: %w", err)
 	}
 	httpClient, err := rest.HTTPClientFor(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create HTTPClient: %w", err)
+		return nil, fmt.Errorf("creating HTTPClient: %w", err)
 	}
 	mapper, err := apiutil.NewDynamicRESTMapper(cfg, httpClient)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build mapper: %w", err)
+		return nil, fmt.Errorf("creating DynamicRESTMapper: %w", err)
+	}
+	// DynamicRESTMapper dynamically and transparently discovers new resources,
+	// when a NoMatchFound error is encountered, but it doesn't automatically
+	// invalidate deleted resources. So use ReplaceOnResetRESTMapper to replace
+	// the whole DynamicRESTMapper when Reset is called.
+	newMapperFn := func() (meta.RESTMapper, error) {
+		m, err := apiutil.NewDynamicRESTMapper(cfg, httpClient)
+		if err != nil {
+			return nil, fmt.Errorf("creating DynamicRESTMapper: %w", err)
+		}
+		return m, nil
 	}
 	return &DynamicListerWatcherFactory{
 		DynamicClient: dynamicClient,
-		Mapper:        mapper,
+		Mapper:        NewReplaceOnResetRESTMapper(mapper, newMapperFn),
 	}, nil
 }
 

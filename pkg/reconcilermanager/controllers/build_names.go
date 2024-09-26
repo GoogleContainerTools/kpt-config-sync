@@ -22,15 +22,25 @@ import (
 )
 
 const (
+	// RepoSyncClusterScopeClusterRoleName is the name of the ClusterRole with
+	// cluster-scoped read permissions for the namespace reconciler.
+	// e.g. configsync.gke.io:ns-reconciler:cluster-scope
+	RepoSyncClusterScopeClusterRoleName = configsync.GroupName + ":" + core.NsReconcilerPrefix + ":cluster-scope"
 	// RepoSyncBaseClusterRoleName is the namespace reconciler permissions name.
 	// e.g. configsync.gke.io:ns-reconciler
 	RepoSyncBaseClusterRoleName = configsync.GroupName + ":" + core.NsReconcilerPrefix
 	// RootSyncBaseClusterRoleName is the root reconciler base ClusterRole name.
 	// e.g. configsync.gke.io:root-reconciler
 	RootSyncBaseClusterRoleName = configsync.GroupName + ":" + core.RootReconcilerPrefix
+	// RepoSyncClusterScopeClusterRoleBindingName is the name of the default
+	// ClusterRoleBinding created for RepoSync objects. This contains basic
+	// cluster-scoped permissions for RepoSync reconcilers
+	// (e.g. CustomResourceDefinition watch).
+	RepoSyncClusterScopeClusterRoleBindingName = RepoSyncClusterScopeClusterRoleName
 	// RepoSyncBaseRoleBindingName is the name of the default RoleBinding created
-	// for RepoSync objects. This contains basic permissions for RepoSync reconcilers
-	//(e.g. RepoSync status update).
+	// for RepoSync objects. This contains basic namespace-scoped permissions
+	// for RepoSync reconcilers
+	// (e.g. RepoSync status update).
 	RepoSyncBaseRoleBindingName = RepoSyncBaseClusterRoleName
 	// RootSyncLegacyClusterRoleBindingName is the name of the legacy ClusterRoleBinding created
 	// for RootSync objects. It is always bound to cluster-admin.

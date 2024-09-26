@@ -19,6 +19,7 @@ resources:
 # Applying hierarchyconfig-crd.yaml allows client-side validation of the HierarchyConfig resources.
 - ../hierarchyconfig-crd.yaml
 - ../namespace-selector-crd.yaml
+- ../ns-reconciler-cluster-scope-cluster-role.yaml
 - ../ns-reconciler-base-cluster-role.yaml
 - ../root-reconciler-base-cluster-role.yaml
 - ../otel-agent-cm.yaml

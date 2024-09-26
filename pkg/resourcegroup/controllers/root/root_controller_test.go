@@ -213,6 +213,8 @@ func TestOwnedByConfigSyncPredicate(t *testing.T) {
 			Name:      "bar",
 		},
 	}
+	ownedByConfigSync.SetGroupVersionKind(v1alpha1.SchemeGroupVersion.WithKind("ResourceGroup"))
+
 	ownedBySomeoneElse := &v1alpha1.ResourceGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels: map[string]string{
@@ -222,12 +224,15 @@ func TestOwnedByConfigSyncPredicate(t *testing.T) {
 			Name:      "bar",
 		},
 	}
+	ownedBySomeoneElse.SetGroupVersionKind(v1alpha1.SchemeGroupVersion.WithKind("ResourceGroup"))
+
 	notOwned := &v1alpha1.ResourceGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "foo",
 			Name:      "bar",
 		},
 	}
+	notOwned.SetGroupVersionKind(v1alpha1.SchemeGroupVersion.WithKind("ResourceGroup"))
 
 	create := func(o client.Object) bool {
 		return OwnedByConfigSyncPredicate{}.Create(

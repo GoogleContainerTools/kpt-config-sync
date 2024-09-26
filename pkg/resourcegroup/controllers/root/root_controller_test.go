@@ -197,7 +197,7 @@ func TestRootReconciler(t *testing.T) {
 	assert.Equal(t, "group0", e.Object.GetName())
 }
 
-func TestOnwedByConfigSyncPredicate(t *testing.T) {
+func TestOwnedByConfigSyncPredicate(t *testing.T) {
 	type testCase struct {
 		name string
 		got  bool

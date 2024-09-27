@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -195,4 +196,106 @@ func TestRootReconciler(t *testing.T) {
 	go func() { e = <-reconcilerKpt.channel }()
 	time.Sleep(time.Second)
 	assert.Equal(t, "group0", e.Object.GetName())
+}
+
+func TestOwnedByConfigSyncPredicate(t *testing.T) {
+	type testCase struct {
+		name string
+		got  bool
+		want bool
+	}
+
+	ownedByConfigSync := &v1alpha1.ResourceGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Labels: map[string]string{
+				"app.kubernetes.io/managed-by": "configmanagement.gke.io",
+			},
+			Namespace: "foo",
+			Name:      "bar",
+		},
+	}
+	ownedByConfigSync.SetGroupVersionKind(v1alpha1.SchemeGroupVersion.WithKind("ResourceGroup"))
+
+	ownedBySomeoneElse := &v1alpha1.ResourceGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Labels: map[string]string{
+				"app.kubernetes.io/managed-by": "someone-else",
+			},
+			Namespace: "foo",
+			Name:      "bar",
+		},
+	}
+	ownedBySomeoneElse.SetGroupVersionKind(v1alpha1.SchemeGroupVersion.WithKind("ResourceGroup"))
+
+	notOwned := &v1alpha1.ResourceGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "foo",
+			Name:      "bar",
+		},
+	}
+	notOwned.SetGroupVersionKind(v1alpha1.SchemeGroupVersion.WithKind("ResourceGroup"))
+
+	notResourceGroup := &v1.CustomResourceDefinition{ObjectMeta: metav1.ObjectMeta{Name: "foo"}}
+	notResourceGroup.SetGroupVersionKind(v1.SchemeGroupVersion.WithKind("CustomResourceDefinition"))
+
+	create := func(o client.Object) bool {
+		return OwnedByConfigSyncPredicate{}.Create(
+			event.TypedCreateEvent[client.Object]{Object: o},
+		)
+	}
+	update := func(o client.Object, n client.Object) bool {
+		return OwnedByConfigSyncPredicate{}.Update(
+			event.TypedUpdateEvent[client.Object]{ObjectOld: o, ObjectNew: n},
+		)
+	}
+
+	// not allowed to redefine delete, so we use a different name
+	yeet := func(o client.Object) bool {
+		return OwnedByConfigSyncPredicate{}.Delete(
+			event.TypedDeleteEvent[client.Object]{Object: o},
+		)
+	}
+
+	generic := func(o client.Object) bool {
+		return OwnedByConfigSyncPredicate{}.Generic(
+			event.TypedGenericEvent[client.Object]{Object: o},
+		)
+	}
+
+	testCases := []testCase{
+		{name: "create owned by configsync", got: create(ownedByConfigSync), want: true},
+		{name: "create owned by someone else", got: create(ownedBySomeoneElse), want: false},
+		{name: "create not owned", got: create(notOwned), want: false},
+		{name: "create non-resourcegroup owned by configsync", got: create(notResourceGroup), want: true},
+
+		{name: "update both owned by configsync", got: update(ownedByConfigSync, ownedByConfigSync), want: true},
+		{name: "update old owned by configsync, new owned by someone else", got: update(ownedByConfigSync, ownedBySomeoneElse), want: true},
+		{name: "update old owned by someone else, new owned by configsync", got: update(ownedBySomeoneElse, ownedByConfigSync), want: true},
+		{name: "update both owned by someone else", got: update(ownedBySomeoneElse, ownedBySomeoneElse), want: false},
+		{name: "update old not owned, new owned by configsync", got: update(notOwned, ownedByConfigSync), want: true},
+		{name: "update old owned by configsync, new not owned", got: update(ownedByConfigSync, notOwned), want: true},
+		{name: "update both not owned", got: update(notOwned, notOwned), want: false},
+		{name: "update old not owned, new owned by someone else", got: update(notOwned, ownedBySomeoneElse), want: false},
+		{name: "update old owned by someone else, new not owned", got: update(ownedBySomeoneElse, notOwned), want: false},
+		{name: "update non-resourcegroup owned by configsync", got: update(notResourceGroup, notResourceGroup), want: true},
+
+		{name: "delete owned by configsync", got: yeet(ownedByConfigSync), want: true},
+		{name: "delete owned by someone else", got: yeet(ownedBySomeoneElse), want: false},
+		{name: "delete not owned", got: yeet(notOwned), want: false},
+		{name: "delete non-resourcegroup owned by configsync", got: yeet(notResourceGroup), want: true},
+
+		{name: "generic owned by configsync", got: generic(ownedByConfigSync), want: true},
+		{name: "generic owned by someone else", got: generic(ownedBySomeoneElse), want: false},
+		{name: "generic not owned", got: generic(notOwned), want: false},
+		{name: "generic non-resourcegroup owned by configsync", got: generic(notResourceGroup), want: true},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Parallel()
+			if testCase.got != testCase.want {
+				t.Errorf("%s = %v, want %v", testCase.name, testCase.got, testCase.want)
+			}
+		})
+	}
 }

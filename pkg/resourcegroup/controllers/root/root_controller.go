@@ -27,6 +27,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/retry"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
+	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/handler"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/resourcegroup"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/resourcemap"
@@ -211,6 +212,8 @@ func NewController(mgr manager.Manager, channel chan event.GenericEvent,
 		WithEventFilter(ResourceGroupPredicate{}).
 		// skip the Generic events
 		WithEventFilter(NoGenericEventPredicate{}).
+		// only reconcile resource groups owned by Config Sync
+		WithEventFilter(OwnedByConfigSyncPredicate{}).
 		Watches(&apiextensionsv1.CustomResourceDefinition{}, &handler.CRDEventHandler{
 			Mapping: resMap,
 			Channel: channel,
@@ -295,4 +298,38 @@ func isConditionTrue(cType v1alpha1.ConditionType, conditions []v1alpha1.Conditi
 	}
 
 	return false
+}
+
+// OwnedByConfigSyncPredicate filters events for objects that have the label "app.kubernetes.io/managed-by=configmanagement.gke.io"
+type OwnedByConfigSyncPredicate struct{}
+
+// Create implements predicate.Predicate
+func (OwnedByConfigSyncPredicate) Create(e event.CreateEvent) bool {
+	return !isResourceGroup(e.Object) || isOwnedByConfigSync(e.Object)
+}
+
+// Delete implements predicate.Predicate
+func (OwnedByConfigSyncPredicate) Delete(e event.DeleteEvent) bool {
+	return !isResourceGroup(e.Object) || isOwnedByConfigSync(e.Object)
+}
+
+// Update implements predicate.Predicate
+func (OwnedByConfigSyncPredicate) Update(e event.UpdateEvent) bool {
+	return !isResourceGroup(e.ObjectOld) || !isResourceGroup(e.ObjectNew) || isOwnedByConfigSync(e.ObjectOld) || isOwnedByConfigSync(e.ObjectNew)
+}
+
+// Generic implements predicate.Predicate
+func (OwnedByConfigSyncPredicate) Generic(e event.GenericEvent) bool {
+	return !isResourceGroup(e.Object) || isOwnedByConfigSync(e.Object)
+}
+
+func isResourceGroup(o client.Object) bool {
+	return o.GetObjectKind().GroupVersionKind().Group == v1alpha1.SchemeGroupVersion.Group &&
+		o.GetObjectKind().GroupVersionKind().Kind == v1alpha1.ResourceGroupKind
+}
+
+func isOwnedByConfigSync(o client.Object) bool {
+	labels := o.GetLabels()
+	owner, ok := labels[metadata.ManagedByKey]
+	return ok && owner == metadata.ManagedByValue
 }

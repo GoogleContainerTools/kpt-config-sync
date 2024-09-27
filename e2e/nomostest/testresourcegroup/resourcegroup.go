@@ -25,6 +25,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
+	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/resourcegroup"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/status"
 	"sigs.k8s.io/cli-utils/pkg/common"
@@ -45,6 +46,7 @@ func New(nn types.NamespacedName, id string) *v1alpha1.ResourceGroup {
 	if id != "" {
 		rg.SetLabels(map[string]string{
 			common.InventoryLabel: id,
+			metadata.ManagedByKey: metadata.ManagedByValue,
 		})
 	}
 	return rg

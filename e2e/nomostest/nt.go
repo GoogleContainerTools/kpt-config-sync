@@ -896,10 +896,27 @@ func (nt *NT) autopilotClusterSupportsBursting() (bool, error) {
 		return false, err
 	}
 	minInitialVersion := clusterversion.ClusterVersion{Major: 1, Minor: 26}
-	minCurrentVersion := clusterversion.ClusterVersion{
-		Major: 1, Minor: 30, Patch: 2, Suffix: "-gke.1394000"}
-	return initialClusterVersion.IsAtLeast(minInitialVersion) &&
-		nt.ClusterVersion.IsAtLeast(minCurrentVersion), nil
+	if !initialClusterVersion.IsAtLeast(minInitialVersion) {
+		return false, nil
+	}
+
+	minCurrentVersion := clusterversion.ClusterVersion{Major: 1, Minor: 30, Patch: 2, Suffix: "-gke.1394000"}
+	args = []string{"get", "nodes", "-o", `jsonpath={.items[*].status.nodeInfo.kubeletVersion}`}
+	out, err = nt.Shell.Kubectl(args...)
+	if err != nil {
+		return false, err
+	}
+	versions := strings.Split(strings.TrimSpace(string(out)), " ")
+	for _, nodeVersion := range versions {
+		v, err := clusterversion.ParseClusterVersion(nodeVersion)
+		if err != nil {
+			return false, err
+		}
+		if !v.IsAtLeast(minCurrentVersion) {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 func (nt *NT) detectClusterSupportsBursting() {

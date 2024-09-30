@@ -1267,7 +1267,10 @@ func TestRoot_SourceReconcilerErrorsMetricValidation(t *testing.T) {
 			fakeConfigParser := &fsfake.ConfigParser{
 				Outputs: []fsfake.ParserOutputs{
 					// One Parse call, with errors
-					{Errors: tc.parseErrors},
+					{
+						Errors:      tc.parseErrors,
+						FileObjects: nil,
+					},
 				},
 			}
 			fakeApplier := &applierfake.Applier{

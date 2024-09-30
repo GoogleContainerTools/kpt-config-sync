@@ -183,7 +183,7 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		OCIClient:               sharedNt.OCIClient,
 	}
 
-	t.Logf("using shared test env: %s, cluster version: %s, cluster hash: %s", sharedNt.ClusterName, nt.ClusterVersion, nt.ClusterHash)
+	t.Logf("using shared test env: %s, cluster version: %s, cluster hash: %s, support bursting: %t", nt.ClusterName, nt.ClusterVersion, nt.ClusterHash, nt.ClusterSupportsBursting)
 
 	if opts.SkipConfigSyncInstall {
 		return nt

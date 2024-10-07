@@ -64,13 +64,7 @@ func TestRepoSyncReconcilerDeploymentLifecycle(t *testing.T) {
 	errCh := startControllerManager(ctx, t, fakeClient, testReconciler)
 
 	// Wait for manager to exit before returning
-	defer func() {
-		cancel()
-		t.Log("waiting for controller-manager to stop")
-		for err := range errCh {
-			require.NoError(t, err)
-		}
-	}()
+	defer stopControllerManager(t, cancel, errCh)
 
 	watchCtx, watchCancel := context.WithTimeout(ctx, 10*time.Second)
 	defer watchCancel()
@@ -187,13 +181,7 @@ func TestReconcileInvalidRepoSyncLifecycle(t *testing.T) {
 	errCh := startControllerManager(ctx, t, fakeClient, testReconciler)
 
 	// Wait for manager to exit before returning
-	defer func() {
-		cancel()
-		t.Log("waiting for controller-manager to stop")
-		for err := range errCh {
-			require.NoError(t, err)
-		}
-	}()
+	defer stopControllerManager(t, cancel, errCh)
 
 	t.Log("watching for RepoSync status update")
 	watchCtx, watchCancel := context.WithTimeout(ctx, 10*time.Second)
@@ -260,13 +248,7 @@ func TestReconcileRepoSyncLifecycleValidToInvalid(t *testing.T) {
 	errCh := startControllerManager(ctx, t, fakeClient, testReconciler)
 
 	// Wait for manager to exit before returning
-	defer func() {
-		cancel()
-		t.Log("waiting for controller-manager to stop")
-		for err := range errCh {
-			require.NoError(t, err)
-		}
-	}()
+	defer stopControllerManager(t, cancel, errCh)
 
 	reconcilerKey := core.NsReconcilerObjectKey(rs.Namespace, rs.Name)
 

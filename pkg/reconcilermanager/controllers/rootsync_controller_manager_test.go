@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr/testr"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -78,13 +79,7 @@ func TestRootSyncReconcilerDeploymentLifecycle(t *testing.T) {
 	errCh := startControllerManager(ctx, t, fakeClient, testReconciler)
 
 	// Wait for manager to exit before returning
-	defer func() {
-		cancel()
-		t.Log("waiting for controller-manager to stop")
-		for err := range errCh {
-			require.NoError(t, err)
-		}
-	}()
+	defer stopControllerManager(t, cancel, errCh)
 
 	watchCtx, watchCancel := context.WithTimeout(ctx, 10*time.Second)
 	defer watchCancel()
@@ -201,13 +196,7 @@ func TestReconcileInvalidRootSyncLifecycle(t *testing.T) {
 	errCh := startControllerManager(ctx, t, fakeClient, testReconciler)
 
 	// Wait for manager to exit before returning
-	defer func() {
-		cancel()
-		t.Log("waiting for controller-manager to stop")
-		for err := range errCh {
-			require.NoError(t, err)
-		}
-	}()
+	defer stopControllerManager(t, cancel, errCh)
 
 	t.Log("watching for RootSync status update")
 	watchCtx, watchCancel := context.WithTimeout(ctx, 10*time.Second)
@@ -274,13 +263,7 @@ func TestReconcileRootSyncLifecycleValidToInvalid1(t *testing.T) {
 	errCh := startControllerManager(ctx, t, fakeClient, testReconciler)
 
 	// Wait for manager to exit before returning
-	defer func() {
-		cancel()
-		t.Log("waiting for controller-manager to stop")
-		for err := range errCh {
-			require.NoError(t, err)
-		}
-	}()
+	defer stopControllerManager(t, cancel, errCh)
 
 	reconcilerKey := core.RootReconcilerObjectKey(rs.Name)
 
@@ -517,13 +500,7 @@ func testDriftProtection(t *testing.T, fakeClient *syncerFake.Client, testReconc
 	errCh := startControllerManager(ctx, t, fakeClient, testReconciler)
 
 	// Wait for manager to exit before returning
-	defer func() {
-		cancel()
-		t.Log("waiting for controller-manager to stop")
-		for err := range errCh {
-			require.NoError(t, err)
-		}
-	}()
+	defer stopControllerManager(t, cancel, errCh)
 
 	key := objKeyFunc(client.ObjectKeyFromObject(syncObj))
 
@@ -648,6 +625,16 @@ func startControllerManager(ctx context.Context, t *testing.T, fakeClient *synce
 	}
 
 	return errCh
+}
+
+func stopControllerManager(t *testing.T, cancel context.CancelFunc, errCh <-chan error) {
+	cancel()
+	t.Log("waiting for controller-manager to stop")
+	for err := range errCh {
+		// Error/Assert instead of Fatal/Require, to avoid panic when called async.
+		// Go tests that panic in a defer can be flakey.
+		assert.NoError(t, err)
+	}
 }
 
 func logObjectYAMLIfFailed(t *testing.T, fakeClient *syncerFake.Client, obj client.Object) {

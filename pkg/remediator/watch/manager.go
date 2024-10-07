@@ -19,6 +19,7 @@ import (
 	"errors"
 	"sync"
 
+	"golang.org/x/exp/maps"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -147,7 +148,7 @@ func (m *Manager) AddWatches(ctx context.Context, gvkMap map[schema.GroupVersion
 	defer m.mux.Unlock()
 	m.watching = true
 
-	klog.V(3).Infof("AddWatches(%v)", gvkMap)
+	klog.V(3).Infof("AddWatches(%v)", maps.Keys(gvkMap))
 
 	var startedWatches uint64
 
@@ -165,7 +166,12 @@ func (m *Manager) AddWatches(ctx context.Context, gvkMap map[schema.GroupVersion
 		if _, err := m.mapper.RESTMapping(gvk.GroupKind(), gvk.Version); err != nil {
 			switch {
 			case meta.IsNoMatchError(err):
-				klog.Infof("Remediator skipped adding watch for resource %v: %v: resource watch will be started after apply is successful", gvk, err)
+				statusErr := syncerclient.ConflictWatchResourceDoesNotExist(err, gvk)
+				klog.Infof("Remediator skipped starting resource watch: "+
+					"%v. The remediator will start the resource watch after the sync has succeeded.", statusErr)
+				// This is expected behavior before a sync attempt.
+				// It likely means a CR and CRD are in the same ApplySet.
+				// So don't record a resource conflict metric or return an error here.
 			default:
 				errs = status.Append(errs, status.APIServerErrorWrap(err))
 			}
@@ -180,9 +186,9 @@ func (m *Manager) AddWatches(ctx context.Context, gvkMap map[schema.GroupVersion
 	}
 
 	if startedWatches > 0 {
-		klog.Infof("The remediator made new progress: started %d new watches", startedWatches)
+		klog.Infof("Remediator started %d new watches", startedWatches)
 	} else {
-		klog.V(4).Infof("The remediator made no new progress")
+		klog.V(4).Infof("Remediator watches unchanged")
 	}
 	return errs
 }
@@ -200,7 +206,7 @@ func (m *Manager) UpdateWatches(ctx context.Context, gvkMap map[schema.GroupVers
 	defer m.mux.Unlock()
 	m.watching = true
 
-	klog.V(3).Infof("UpdateWatches(%v)", gvkMap)
+	klog.V(3).Infof("UpdateWatches(%v)", maps.Keys(gvkMap))
 
 	m.needsUpdate = false
 
@@ -228,8 +234,15 @@ func (m *Manager) UpdateWatches(ctx context.Context, gvkMap map[schema.GroupVers
 		if _, err := m.mapper.RESTMapping(gvk.GroupKind(), gvk.Version); err != nil {
 			switch {
 			case meta.IsNoMatchError(err):
+				statusErr := syncerclient.ConflictWatchResourceDoesNotExist(err, gvk)
+				klog.Warningf("Remediator encountered a resource conflict: "+
+					"%v. To resolve the conflict, the remediator will enqueue a resync "+
+					"and restart the resource watch after the sync has succeeded.", statusErr)
+				// This is unexpected behavior after a successful sync.
+				// It likely means that some other controller deleted managed objects shortly after they were applied.
+				// So record a resource conflict metric and return an error.
 				metrics.RecordResourceConflict(ctx, commit)
-				errs = status.Append(errs, syncerclient.ConflictWatchResourceDoesNotExist(err, gvk))
+				errs = status.Append(errs, statusErr)
 			default:
 				errs = status.Append(errs, status.APIServerErrorWrap(err))
 			}
@@ -244,9 +257,9 @@ func (m *Manager) UpdateWatches(ctx context.Context, gvkMap map[schema.GroupVers
 	}
 
 	if startedWatches > 0 || stoppedWatches > 0 {
-		klog.Infof("The remediator made new progress: started %d new watches, and stopped %d watches", startedWatches, stoppedWatches)
+		klog.Infof("Remediator started %d new watches and stopped %d watches", startedWatches, stoppedWatches)
 	} else {
-		klog.V(4).Infof("The remediator made no new progress")
+		klog.V(4).Infof("Remediator watches unchanged")
 	}
 	return errs
 }
@@ -284,10 +297,12 @@ func (m *Manager) startWatcher(ctx context.Context, gvk schema.GroupVersionKind,
 // threadsafe.
 func (m *Manager) runWatcher(ctx context.Context, r Runnable, gvk schema.GroupVersionKind) {
 	if err := r.Run(ctx); err != nil {
-		if errors.Is(err, context.Canceled) {
-			klog.Infof("Watcher stopped for %s: %v", gvk, status.FormatSingleLine(err))
+		// TODO: Make status.Error work with errors.Is unwrapping.
+		// For now, check the Cause directly, to avoid logging a warning on shutdown.
+		if errors.Is(err.Cause(), context.Canceled) {
+			klog.Infof("Watcher stopped for %s: %v", gvk, context.Canceled)
 		} else {
-			klog.Warningf("Error running watcher for %s: %v", gvk, status.FormatSingleLine(err))
+			klog.Warningf("Watcher errored for %s: %v", gvk, status.FormatSingleLine(err))
 		}
 		m.mux.Lock()
 		delete(m.watcherMap, gvk)

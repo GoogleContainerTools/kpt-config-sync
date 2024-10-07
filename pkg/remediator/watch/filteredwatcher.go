@@ -350,8 +350,12 @@ func (w *filteredWatcher) start(ctx context.Context, resourceVersion string) (bo
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return false, status.InternalWrapf(err, "failed to start watch for %s", w.gvk)
 		} else if apierrors.IsNotFound(err) {
+			statusErr := syncerclient.ConflictWatchResourceDoesNotExist(err, w.gvk)
+			klog.Warningf("Remediator encountered a resource conflict: "+
+				"%v. To resolve the conflict, the remediator will enqueue a resync "+
+				"and restart the resource watch after the sync has succeeded.", statusErr)
 			metrics.RecordResourceConflict(ctx, w.getLatestCommit())
-			return false, syncerclient.ConflictWatchResourceDoesNotExist(err, w.gvk)
+			return false, statusErr
 		}
 		return false, status.APIServerErrorf(err, "failed to start watch for %s", w.gvk)
 	}

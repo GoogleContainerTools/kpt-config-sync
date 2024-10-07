@@ -39,12 +39,10 @@ func (bf *baseFinalizer) destroy(ctx context.Context) status.MultiError {
 			}
 		}
 	}
-	klog.V(1).Info("Destroyer starting...")
+	klog.Info("Destroyer starting...")
 	// start := time.Now()
 	objStatusMap, syncStats := bf.Destroyer.Destroy(ctx, eventHandler)
-	if syncStats.Empty() {
-		klog.V(4).Info("Destroyer made no new progress")
-	} else {
+	if !syncStats.Empty() {
 		klog.Infof("Destroyer made new progress: %s", syncStats.String())
 		objStatusMap.Log(klog.V(0))
 	}
@@ -52,10 +50,9 @@ func (bf *baseFinalizer) destroy(ctx context.Context) status.MultiError {
 	// We don't have the commit here, so we can't send the apply metric.
 	// metrics.RecordApplyDuration(ctx, metrics.StatusTagKey(errs), commit, start)
 	if err != nil {
-		klog.Warningf("Failed to destroy declared resources: %v", err)
+		klog.Warningf("Destroyer failed: %v", err)
 		return err
 	}
-	klog.V(4).Info("Destroyer completed without error: all resources are deleted.")
-	klog.V(3).Info("Applier stopped")
+	klog.Info("Destroyer succeeded")
 	return nil
 }

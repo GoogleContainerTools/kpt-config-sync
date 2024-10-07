@@ -98,6 +98,9 @@ func (r *reconciler) Remediate(ctx context.Context, id core.ID, obj client.Objec
 		switch err.Code() {
 		case syncerclient.ResourceConflictCode:
 			// Record cache conflict (create/delete/update failure due to found/not-found/resource-version)
+			klog.Warningf("Remediator encountered a resource conflict: "+
+				"%v. To resolve the conflict, the remediator will fetch the latest object from the cluster "+
+				"and requeue it for remediation", err)
 			metrics.RecordResourceConflict(ctx, commit)
 		case status.ManagementConflictErrorCode:
 			if mce, ok := err.(status.ManagementConflictError); ok {

@@ -45,8 +45,10 @@ type Handler interface {
 
 // Record a management conflict error, including log and metric.
 func Record(ctx context.Context, handler Handler, err status.ManagementConflictError, commit string) {
-	klog.Errorf("Management conflict detected. "+
-		"Reconciler %q received a watch event for object %q, which is manage by namespace reconciler %q. ",
+	klog.Errorf("Remediator detected a management conflict: "+
+		"reconciler %q received a watch event for object %q, which is managed by namespace reconciler %q. "+
+		"To resolve the conflict, remove the object from one of the sources of truth "+
+		"so that the object is only managed by one reconciler.",
 		err.DesiredManager(), err.ObjectID(), err.CurrentManager())
 	handler.AddConflictError(err.ObjectID(), err)
 	// TODO: Use separate metrics for management conflicts vs resource conflicts

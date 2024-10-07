@@ -209,23 +209,20 @@ func (u *Updater) apply(ctx context.Context, objs []client.Object, commit string
 			}
 		}
 	}
-	klog.V(1).Info("Applier starting...")
+	klog.Info("Applier starting...")
 	start := time.Now()
 	u.SyncErrorCache.ResetApplyErrors()
 	objStatusMap, syncStats := u.Applier.Apply(ctx, eventHandler, objs)
-	if syncStats.Empty() {
-		klog.V(4).Info("Applier made no new progress")
-	} else {
+	if !syncStats.Empty() {
 		klog.Infof("Applier made new progress: %s", syncStats.String())
 		objStatusMap.Log(klog.V(0))
 	}
 	metrics.RecordApplyDuration(ctx, metrics.StatusTagKey(err), commit, start)
 	if err != nil {
-		klog.Warningf("Failed to apply declared resources: %v", err)
+		klog.Warningf("Applier failed: %v", err)
 		return err
 	}
-	klog.V(4).Info("Apply completed without error: all resources are up to date.")
-	klog.V(3).Info("Applier stopped")
+	klog.Info("Applier succeeded")
 	return nil
 }
 

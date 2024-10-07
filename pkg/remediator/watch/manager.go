@@ -212,6 +212,9 @@ func (m *Manager) UpdateWatches(ctx context.Context, gvkMap map[schema.GroupVers
 			// It is safe to stop the watcher.
 			m.stopWatcher(gvk)
 			stoppedWatches++
+			// Remove all conflict errors for objects with the same GK because
+			// the objects are no longer managed by the reconciler.
+			m.conflictHandler.ClearConflictErrorsWithKind(gvk.GroupKind())
 		}
 	}
 
@@ -307,8 +310,5 @@ func (m *Manager) stopWatcher(gvk schema.GroupVersionKind) {
 
 	// Stop the watcher.
 	w.Stop()
-	// Remove all conflict errors for objects with the same GK because the
-	// objects are no longer managed by the reconciler.
-	w.ClearManagementConflictsWithKind(gvk.GroupKind())
 	delete(m.watcherMap, gvk)
 }

@@ -73,7 +73,6 @@ const maxWatchRetryFactor = 18
 type Runnable interface {
 	Stop()
 	Run(ctx context.Context) status.Error
-	ClearManagementConflictsWithKind(gk schema.GroupKind)
 	SetLatestCommit(string)
 }
 
@@ -155,10 +154,6 @@ func (w *filteredWatcher) addError(errorID string) bool {
 		return true
 	}
 	return false
-}
-
-func (w *filteredWatcher) ClearManagementConflictsWithKind(gk schema.GroupKind) {
-	w.conflictHandler.ClearConflictErrorsWithKind(gk)
 }
 
 // SetLatestCommit sets the latest observed commit which references the GVK

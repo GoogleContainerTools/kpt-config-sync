@@ -20,7 +20,6 @@ import (
 	"sync"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
@@ -31,6 +30,7 @@ import (
 	"kpt.dev/configsync/pkg/status"
 	syncerreconcile "kpt.dev/configsync/pkg/syncer/reconcile"
 	"kpt.dev/configsync/pkg/syncer/reconcile/fight"
+	utilwatch "kpt.dev/configsync/pkg/util/watch"
 )
 
 // Remediator knows how to keep the state of a Kubernetes cluster in sync with
@@ -98,7 +98,8 @@ var _ Interface = &Remediator{}
 func New(
 	scope declared.Scope,
 	syncName string,
-	cfg *rest.Config,
+	watcherFactory watch.WatcherFactory,
+	mapper utilwatch.ResettableRESTMapper,
 	applier syncerreconcile.Applier,
 	conflictHandler conflict.Handler,
 	fightHandler fight.Handler,
@@ -119,7 +120,7 @@ func New(
 		conflictHandler: conflictHandler,
 	}
 
-	watchMgr, err := watch.NewManager(scope, syncName, cfg, q, decls, nil, conflictHandler, crdController)
+	watchMgr, err := watch.NewManager(scope, syncName, q, decls, watcherFactory, mapper, conflictHandler, crdController)
 	if err != nil {
 		return nil, fmt.Errorf("creating watch manager: %w", err)
 	}

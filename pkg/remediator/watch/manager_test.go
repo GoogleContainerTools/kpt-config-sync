@@ -33,6 +33,7 @@ import (
 	syncerclient "kpt.dev/configsync/pkg/syncer/client"
 	"kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/testerrors"
+	utilwatch "kpt.dev/configsync/pkg/util/watch"
 	"sigs.k8s.io/cli-utils/pkg/testutil"
 )
 
@@ -53,7 +54,7 @@ func fakeError(gvk schema.GroupVersionKind) status.Error {
 	return status.APIServerErrorf(errors.New("failed"), "watcher failed for %s", gvk.String())
 }
 
-func testRunnables(errOnType map[schema.GroupVersionKind]bool, commit string) watcherFactory {
+func testRunnables(errOnType map[schema.GroupVersionKind]bool, commit string) WatcherFactory {
 	return func(cfg watcherConfig) (runnable Runnable, err status.Error) {
 		if errOnType[cfg.gvk] {
 			return nil, fakeError(cfg.gvk)
@@ -237,17 +238,16 @@ func TestManager_AddWatches(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			watcherFactory := testRunnables(tc.failedWatchers, currentCommit)
 			fakeMapper := testutil.NewFakeRESTMapper(tc.mappedGVKs...)
 			newMapperFn := func() (meta.RESTMapper, error) {
 				// AddWatches doesn't call Reset. So we don't need to impl it.
 				return fakeMapper, nil
 			}
-			options := &Options{
-				watcherFactory: testRunnables(tc.failedWatchers, currentCommit),
-				mapper:         NewReplaceOnResetRESTMapper(fakeMapper, newMapperFn),
-			}
-			m, err := NewManager(":test", "rs", nil, nil, &declared.Resources{},
-				options, fake.NewConflictHandler(), &controllers.CRDController{})
+			mapper := utilwatch.NewReplaceOnResetRESTMapper(fakeMapper, newMapperFn)
+			m, err := NewManager(":test", "rs", nil, &declared.Resources{},
+				watcherFactory, mapper, fake.NewConflictHandler(),
+				&controllers.CRDController{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -419,17 +419,16 @@ func TestManager_UpdateWatches(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			watcherFactory := testRunnables(tc.failedWatchers, currentCommit)
 			fakeMapper := testutil.NewFakeRESTMapper(tc.mappedGVKs...)
 			newMapperFn := func() (meta.RESTMapper, error) {
 				// UpdateWatches doesn't call Reset. So we don't need to impl it.
 				return fakeMapper, nil
 			}
-			options := &Options{
-				watcherFactory: testRunnables(tc.failedWatchers, currentCommit),
-				mapper:         NewReplaceOnResetRESTMapper(fakeMapper, newMapperFn),
-			}
-			m, err := NewManager(":test", "rs", nil, nil, &declared.Resources{},
-				options, fake.NewConflictHandler(), &controllers.CRDController{})
+			mapper := utilwatch.NewReplaceOnResetRESTMapper(fakeMapper, newMapperFn)
+			m, err := NewManager(":test", "rs", nil, &declared.Resources{},
+				watcherFactory, mapper, fake.NewConflictHandler(),
+				&controllers.CRDController{})
 			if err != nil {
 				t.Fatal(err)
 			}

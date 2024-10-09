@@ -17,7 +17,6 @@ package watch
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 
 	"golang.org/x/exp/maps"
@@ -25,7 +24,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/applyset"
 	"kpt.dev/configsync/pkg/declared"
@@ -37,6 +35,7 @@ import (
 	"kpt.dev/configsync/pkg/status"
 	syncerclient "kpt.dev/configsync/pkg/syncer/client"
 	"kpt.dev/configsync/pkg/util/customresource"
+	utilwatch "kpt.dev/configsync/pkg/util/watch"
 )
 
 // Manager accepts new resource lists that are parsed from Git and then
@@ -48,9 +47,6 @@ type Manager struct {
 	// syncName is the corresponding RootSync|RepoSync name of the reconciler process running the Manager.
 	syncName string
 
-	// cfg is the rest config used to talk to apiserver.
-	cfg *rest.Config
-
 	// resources is the declared resources that are parsed from Git.
 	resources *declared.Resources
 
@@ -58,10 +54,10 @@ type Manager struct {
 	queue *queue.ObjectQueue
 
 	// watcherFactory is the function to create a watcher.
-	watcherFactory watcherFactory
+	watcherFactory WatcherFactory
 
 	// mapper is the RESTMapper used by the watcherFactory
-	mapper ResettableRESTMapper
+	mapper utilwatch.ResettableRESTMapper
 
 	conflictHandler conflict.Handler
 
@@ -80,37 +76,17 @@ type Manager struct {
 	needsUpdate bool
 }
 
-// Options contains options for creating a watch manager.
-type Options struct {
-	watcherFactory watcherFactory
-	mapper         ResettableRESTMapper
-}
-
-// DefaultOptions return the default options with a ListerWatcherFactory built
-// from the specified REST config.
-func DefaultOptions(cfg *rest.Config) (*Options, error) {
-	factory, err := DynamicListerWatcherFactoryFromConfig(cfg)
-	if err != nil {
-		return nil, status.APIServerError(err, "failed to build ListerWatcherFactory")
-	}
-
-	return &Options{
-		watcherFactory: watcherFactoryFromListerWatcherFactory(factory.ListerWatcher),
-		mapper:         factory.Mapper,
-	}, nil
-}
-
 // NewManager starts a new watch manager
-func NewManager(scope declared.Scope, syncName string, cfg *rest.Config,
-	q *queue.ObjectQueue, decls *declared.Resources, options *Options,
-	ch conflict.Handler, crdController *controllers.CRDController) (*Manager, error) {
-	if options == nil {
-		var err error
-		options, err = DefaultOptions(cfg)
-		if err != nil {
-			return nil, err
-		}
-	}
+func NewManager(
+	scope declared.Scope,
+	syncName string,
+	q *queue.ObjectQueue,
+	decls *declared.Resources,
+	watcherFactory WatcherFactory,
+	mapper utilwatch.ResettableRESTMapper,
+	ch conflict.Handler,
+	crdController *controllers.CRDController,
+) (*Manager, error) {
 
 	// Only watch & remediate objects applied by this reconciler
 	labelSelector := labels.Set{
@@ -120,11 +96,10 @@ func NewManager(scope declared.Scope, syncName string, cfg *rest.Config,
 	return &Manager{
 		scope:           scope,
 		syncName:        syncName,
-		cfg:             cfg,
 		resources:       decls,
 		watcherMap:      make(map[schema.GroupVersionKind]Runnable),
-		watcherFactory:  options.watcherFactory,
-		mapper:          options.mapper,
+		watcherFactory:  watcherFactory,
+		mapper:          mapper,
 		labelSelector:   labelSelector,
 		queue:           q,
 		conflictHandler: ch,
@@ -291,7 +266,6 @@ func (m *Manager) startWatcher(ctx context.Context, gvk schema.GroupVersionKind,
 	}
 	cfg := watcherConfig{
 		gvk:             gvk,
-		config:          m.cfg,
 		resources:       m.resources,
 		queue:           m.queue,
 		scope:           m.scope,
@@ -345,19 +319,11 @@ func (m *Manager) stopWatcher(gvk schema.GroupVersionKind) {
 func (m *Manager) startWatchingCRD(gvk schema.GroupVersionKind, commit string) {
 	m.crdController.SetReconciler(gvk.GroupKind(), func(ctx context.Context, crd *apiextensionsv1.CustomResourceDefinition) error {
 		if customresource.IsEstablished(crd) {
-			if err := discoverResourceForKind(m.mapper, gvk); err != nil {
-				// Trigger retry by controller-manager
-				return err
-			}
 			// Start watching this resource.
 			gvkMap := map[schema.GroupVersionKind]struct{}{gvk: {}}
 			return m.AddWatches(ctx, gvkMap, commit)
 		}
-		// Else, if not established
-		if err := forgetResourceForKind(m.mapper, gvk); err != nil {
-			// Trigger retry by controller-manager
-			return err
-		}
+		// Else, if not established...
 		// Don't stop watching until UpdateWatches is called by the Updater,
 		// confirming that the object has been removed from the ApplySet.
 		// Otherwise the remediator may miss object deletion events that
@@ -368,38 +334,4 @@ func (m *Manager) startWatchingCRD(gvk schema.GroupVersionKind, commit string) {
 
 func (m *Manager) stopWatchingCRD(gvk schema.GroupVersionKind) {
 	m.crdController.DeleteReconciler(gvk.GroupKind())
-}
-
-// discoverResourceForKind resets the RESTMapper if needed, to discover the
-// resource that maps to the specified kind.
-func discoverResourceForKind(mapper ResettableRESTMapper, gvk schema.GroupVersionKind) error {
-	if _, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version); err != nil {
-		if meta.IsNoMatchError(err) {
-			klog.Infof("Remediator resetting RESTMapper to discover resource: %v", gvk)
-			if err := mapper.Reset(); err != nil {
-				return fmt.Errorf("remediator failed to reset RESTMapper: %w", err)
-			}
-		} else {
-			return fmt.Errorf("remediator failed to map kind to resource: %w", err)
-		}
-	}
-	// Else, mapper already up to date
-	return nil
-}
-
-// forgetResourceForKind resets the RESTMapper if needed, to forget the resource
-// that maps to the specified kind.
-func forgetResourceForKind(mapper ResettableRESTMapper, gvk schema.GroupVersionKind) error {
-	if _, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version); err != nil {
-		if !meta.IsNoMatchError(err) {
-			return fmt.Errorf("remediator failed to map kind to resource: %w", err)
-		}
-		// Else, mapper already up to date
-	} else {
-		klog.Infof("Remediator resetting RESTMapper to forget resource: %v", gvk)
-		if err := mapper.Reset(); err != nil {
-			return fmt.Errorf("remediator failed to reset RESTMapper: %w", err)
-		}
-	}
-	return nil
 }

@@ -24,6 +24,9 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/klog/v2"
+	"kpt.dev/configsync/pkg/util/customresource"
+	utilwatch "kpt.dev/configsync/pkg/util/watch"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -93,6 +96,7 @@ func (s *CRDController) getReconciler(gk schema.GroupKind) CRDReconcileFunc {
 type CRDMetaController struct {
 	loggingController
 	cache             cache.Cache
+	mapper            utilwatch.ResettableRESTMapper
 	delegate          *CRDController
 	observedResources map[schema.GroupResource]schema.GroupKind
 }
@@ -100,19 +104,28 @@ type CRDMetaController struct {
 var _ reconcile.Reconciler = &CRDMetaController{}
 
 // NewCRDMetaController constructs a new CRDMetaController.
-func NewCRDMetaController(delegate *CRDController, cache cache.Cache, log logr.Logger) *CRDMetaController {
+func NewCRDMetaController(
+	delegate *CRDController,
+	cache cache.Cache,
+	mapper utilwatch.ResettableRESTMapper,
+	log logr.Logger,
+) *CRDMetaController {
 	return &CRDMetaController{
 		loggingController: loggingController{
 			log: log,
 		},
 		cache:             cache,
+		mapper:            mapper,
 		delegate:          delegate,
 		observedResources: make(map[schema.GroupResource]schema.GroupKind),
 	}
 }
 
-// Reconcile checks is the CRD exists and delegates to the CRDController to
+// Reconcile checks if the CRD exists and delegates to the CRDController to
 // reconcile the update.
+//
+// Reconcile also handles auto-discovery and auto-invalidation of custom
+// resources by calling Reset on the RESTMapper, as needed.
 func (r *CRDMetaController) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
 	crdName := req.Name
 	ctx = r.setLoggerValues(ctx, "crd", crdName)
@@ -156,6 +169,18 @@ func (r *CRDMetaController) Reconcile(ctx context.Context, req reconcile.Request
 
 	r.logger(ctx).Info("CRDMetaController handling CRD status update", "name", crdName)
 
+	if customresource.IsEstablished(crdObj) {
+		if err := discoverResourceForKind(r.mapper, kind); err != nil {
+			// Retry with backoff
+			return reconcile.Result{}, err
+		}
+	} else {
+		if err := forgetResourceForKind(r.mapper, kind); err != nil {
+			// Retry with backoff
+			return reconcile.Result{}, err
+		}
+	}
+
 	if err := r.delegate.Reconcile(ctx, kind, crdObj); err != nil {
 		// Retry with backoff
 		return reconcile.Result{}, err
@@ -171,4 +196,38 @@ func (r *CRDMetaController) Register(mgr controllerruntime.Manager) error {
 	return controllerruntime.NewControllerManagedBy(mgr).
 		For(&apiextensionsv1.CustomResourceDefinition{}).
 		Complete(r)
+}
+
+// discoverResourceForKind resets the RESTMapper if needed, to discover the
+// resource that maps to the specified kind.
+func discoverResourceForKind(mapper utilwatch.ResettableRESTMapper, gk schema.GroupKind) error {
+	if _, err := mapper.RESTMapping(gk); err != nil {
+		if meta.IsNoMatchError(err) {
+			klog.Infof("Remediator resetting RESTMapper to discover resource: %v", gk)
+			if err := mapper.Reset(); err != nil {
+				return fmt.Errorf("remediator failed to reset RESTMapper: %w", err)
+			}
+		} else {
+			return fmt.Errorf("remediator failed to map kind to resource: %w", err)
+		}
+	}
+	// Else, mapper already up to date
+	return nil
+}
+
+// forgetResourceForKind resets the RESTMapper if needed, to forget the resource
+// that maps to the specified kind.
+func forgetResourceForKind(mapper utilwatch.ResettableRESTMapper, gk schema.GroupKind) error {
+	if _, err := mapper.RESTMapping(gk); err != nil {
+		if !meta.IsNoMatchError(err) {
+			return fmt.Errorf("remediator failed to map kind to resource: %w", err)
+		}
+		// Else, mapper already up to date
+	} else {
+		klog.Infof("Remediator resetting RESTMapper to forget resource: %v", gk)
+		if err := mapper.Reset(); err != nil {
+			return fmt.Errorf("remediator failed to reset RESTMapper: %w", err)
+		}
+	}
+	return nil
 }

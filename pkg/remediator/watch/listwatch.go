@@ -26,10 +26,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/rest"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
-	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
+	utilwatch "kpt.dev/configsync/pkg/util/watch"
 )
 
 // Lister is any object that performs listing of a resource.
@@ -64,44 +63,13 @@ type ListerWatcherFactory func(gvk schema.GroupVersionKind, namespace string) Li
 // ResettableRESTMapper.
 type DynamicListerWatcherFactory struct {
 	DynamicClient *dynamic.DynamicClient
-	Mapper        ResettableRESTMapper
+	Mapper        utilwatch.ResettableRESTMapper
 }
 
 // ListerWatcher constructs a ListerWatcher for the specified GroupVersionKind
 // and Namespace.
 func (dlwf *DynamicListerWatcherFactory) ListerWatcher(gvk schema.GroupVersionKind, namespace string) ListerWatcher {
 	return NewListWatchFromClient(dlwf.DynamicClient, dlwf.Mapper, gvk, namespace)
-}
-
-// DynamicListerWatcherFactoryFromConfig constructs a DynamicListerWatcherFactory
-func DynamicListerWatcherFactoryFromConfig(cfg *rest.Config) (*DynamicListerWatcherFactory, error) {
-	dynamicClient, err := dynamic.NewForConfig(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("creating DynamicClient: %w", err)
-	}
-	httpClient, err := rest.HTTPClientFor(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("creating HTTPClient: %w", err)
-	}
-	mapper, err := apiutil.NewDynamicRESTMapper(cfg, httpClient)
-	if err != nil {
-		return nil, fmt.Errorf("creating DynamicRESTMapper: %w", err)
-	}
-	// DynamicRESTMapper dynamically and transparently discovers new resources,
-	// when a NoMatchFound error is encountered, but it doesn't automatically
-	// invalidate deleted resources. So use ReplaceOnResetRESTMapper to replace
-	// the whole DynamicRESTMapper when Reset is called.
-	newMapperFn := func() (meta.RESTMapper, error) {
-		m, err := apiutil.NewDynamicRESTMapper(cfg, httpClient)
-		if err != nil {
-			return nil, fmt.Errorf("creating DynamicRESTMapper: %w", err)
-		}
-		return m, nil
-	}
-	return &DynamicListerWatcherFactory{
-		DynamicClient: dynamicClient,
-		Mapper:        NewReplaceOnResetRESTMapper(mapper, newMapperFn),
-	}, nil
 }
 
 // ListFunc knows how to list resources.

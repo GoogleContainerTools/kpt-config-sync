@@ -700,6 +700,35 @@ func (r *reconcilerBase) updateRBACBinding(ctx context.Context, reconcilerRef, r
 	return nil
 }
 
+func (r *reconcilerBase) upsertSharedClusterRoleBinding(ctx context.Context, name, clusterRole string, reconcilerRef, rsRef types.NamespacedName) error {
+	crbRef := client.ObjectKey{Name: name}
+	childCRB := &rbacv1.ClusterRoleBinding{}
+	childCRB.Name = crbRef.Name
+
+	labelMap := ManagedObjectLabelMap(r.syncKind, rsRef)
+	// Remove sync-name label since the ClusterRoleBinding may be shared
+	delete(labelMap, metadata.SyncNameLabel)
+
+	op, err := CreateOrUpdate(ctx, r.client, childCRB, func() error {
+		core.AddLabels(childCRB, labelMap)
+		childCRB.RoleRef = rolereference(clusterRole, "ClusterRole")
+		childCRB.Subjects = addSubject(childCRB.Subjects, r.serviceAccountSubject(reconcilerRef))
+		// Remove any existing OwnerReferences, now that we're using finalizers.
+		childCRB.OwnerReferences = nil
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if op != controllerutil.OperationResultNone {
+		r.logger(ctx).Info("Managed object upsert successful",
+			logFieldObjectRef, crbRef.String(),
+			logFieldObjectKind, "ClusterRoleBinding",
+			logFieldOperation, op)
+	}
+	return nil
+}
+
 func (r *reconcilerBase) isKnownHostsEnabled(auth configsync.AuthType) bool {
 	if auth == configsync.AuthSSH && r.knownHostExist {
 		return true

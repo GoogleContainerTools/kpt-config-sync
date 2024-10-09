@@ -79,6 +79,8 @@ type RootSyncReconciler struct {
 	reconcilerBase
 
 	lock sync.Mutex
+
+	controller controller.Controller
 }
 
 // NewRootSyncReconciler returns a new RootSyncReconciler.
@@ -416,6 +418,14 @@ func (r *RootSyncReconciler) deleteManagedObjects(ctx context.Context, reconcile
 
 // Register RootSync controller with reconciler-manager.
 func (r *RootSyncReconciler) Register(mgr controllerruntime.Manager, watchFleetMembership bool) error {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
+	// Avoid re-registering the controller
+	if r.controller != nil {
+		return nil
+	}
+
 	controllerBuilder := controllerruntime.NewControllerManagedBy(mgr).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 1,
@@ -451,7 +461,10 @@ func (r *RootSyncReconciler) Register(mgr controllerruntime.Manager, watchFleetM
 			handler.EnqueueRequestsFromMapFunc(r.mapMembershipToRootSyncs),
 			builder.WithPredicates(predicate.GenerationChangedPredicate{}))
 	}
-	return controllerBuilder.Complete(r)
+
+	ctrlr, err := controllerBuilder.Build(r)
+	r.controller = ctrlr
+	return err
 }
 
 func withNamespace(obj client.Object, ns string) client.Object {
@@ -1005,7 +1018,7 @@ func (r *RootSyncReconciler) manageRBACBindings(ctx context.Context, reconcilerR
 		}
 		return nil
 	}
-	// Add the base ClusterRole for basic root reconciler functionality
+	// Minimum required cluster-scoped & all-namespace read/write permissions
 	if err := r.upsertSharedClusterRoleBinding(ctx, RootSyncBaseClusterRoleBindingName, RootSyncBaseClusterRoleName, reconcilerRef, rsRef); err != nil {
 		return err
 	}
@@ -1044,36 +1057,6 @@ func (r *RootSyncReconciler) manageRBACBindings(ctx context.Context, reconcilerR
 	// This ensures smooth migrations for users upgrading past that version boundary.
 	if err := r.deleteSharedClusterRoleBinding(ctx, RootSyncLegacyClusterRoleBindingName, reconcilerRef); err != nil && !apierrors.IsNotFound(err) {
 		return fmt.Errorf("deleting legacy binding: %w", err)
-	}
-	return nil
-}
-
-func (r *RootSyncReconciler) upsertSharedClusterRoleBinding(ctx context.Context, name, clusterRole string, reconcilerRef, rsRef types.NamespacedName) error {
-	crbRef := client.ObjectKey{Name: name}
-	childCRB := &rbacv1.ClusterRoleBinding{}
-	childCRB.Name = crbRef.Name
-
-	labelMap := ManagedObjectLabelMap(r.syncKind, rsRef)
-	// Remove sync-name label since the ClusterRoleBinding may be shared
-	delete(labelMap, metadata.SyncNameLabel)
-
-	op, err := CreateOrUpdate(ctx, r.client, childCRB, func() error {
-		core.AddLabels(childCRB, labelMap)
-		childCRB.OwnerReferences = nil
-		childCRB.RoleRef = rolereference(clusterRole, "ClusterRole")
-		childCRB.Subjects = addSubject(childCRB.Subjects, r.serviceAccountSubject(reconcilerRef))
-		// Remove existing OwnerReferences, now that we're using finalizers.
-		childCRB.OwnerReferences = nil
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-	if op != controllerutil.OperationResultNone {
-		r.logger(ctx).Info("Managed object upsert successful",
-			logFieldObjectRef, crbRef.String(),
-			logFieldObjectKind, "ClusterRoleBinding",
-			logFieldOperation, op)
 	}
 	return nil
 }

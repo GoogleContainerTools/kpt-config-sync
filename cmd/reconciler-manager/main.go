@@ -21,6 +21,7 @@ import (
 	"os"
 
 	"github.com/go-logr/logr"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,6 +34,7 @@ import (
 	"kpt.dev/configsync/pkg/profiler"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
+	"kpt.dev/configsync/pkg/util/customresource"
 	"kpt.dev/configsync/pkg/util/log"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -95,9 +97,10 @@ func main() {
 	}
 	watchFleetMembership := fleetMembershipCRDExists(dynamicClient, mgr.GetRESTMapper(), &setupLog)
 
-	crdController := controllers.NewCRDReconciler(
+	crdController := &controllers.CRDController{}
+	crdMetaController := controllers.NewCRDMetaController(crdController, mgr.GetCache(),
 		textlogger.NewLogger(textlogger.NewConfig()).WithName("controllers").WithName("CRD"))
-	if err := crdController.Register(mgr); err != nil {
+	if err := crdMetaController.Register(mgr); err != nil {
 		setupLog.Error(err, "failed to register controller", "controller", "CRD")
 		os.Exit(1)
 	}
@@ -108,11 +111,15 @@ func main() {
 		mgr.GetClient(), watcher, dynamicClient,
 		textlogger.NewLogger(textlogger.NewConfig()).WithName("controllers").WithName(configsync.RepoSyncKind),
 		mgr.GetScheme())
-	crdController.SetCRDHandler(configsync.RepoSyncCRDName, func() error {
-		if err := repoSyncController.Register(mgr, watchFleetMembership); err != nil {
-			return fmt.Errorf("registering %s controller: %w", configsync.RepoSyncKind, err)
+	crdController.SetReconciler(kinds.RepoSyncV1Beta1().GroupKind(), func(_ context.Context, crd *apiextensionsv1.CustomResourceDefinition) error {
+		if customresource.IsEstablished(crd) {
+			if err := repoSyncController.Register(mgr, watchFleetMembership); err != nil {
+				return fmt.Errorf("registering %s controller: %w", configsync.RepoSyncKind, err)
+			}
+			setupLog.Info("RepoSync controller registration successful")
 		}
-		setupLog.Info("RepoSync controller registration successful")
+		// Don't stop the RepoSync controller when its CRD is deleted,
+		// otherwise we may miss RepoSync object deletion events.
 		return nil
 	})
 	setupLog.Info("RepoSync controller registration scheduled")
@@ -122,11 +129,15 @@ func main() {
 		mgr.GetClient(), watcher, dynamicClient,
 		textlogger.NewLogger(textlogger.NewConfig()).WithName("controllers").WithName(configsync.RootSyncKind),
 		mgr.GetScheme())
-	crdController.SetCRDHandler(configsync.RootSyncCRDName, func() error {
-		if err := rootSyncController.Register(mgr, watchFleetMembership); err != nil {
-			return fmt.Errorf("registering %s controller: %w", configsync.RootSyncKind, err)
+	crdController.SetReconciler(kinds.RootSyncV1Beta1().GroupKind(), func(_ context.Context, crd *apiextensionsv1.CustomResourceDefinition) error {
+		if customresource.IsEstablished(crd) {
+			if err := rootSyncController.Register(mgr, watchFleetMembership); err != nil {
+				return fmt.Errorf("registering %s controller: %w", configsync.RootSyncKind, err)
+			}
+			setupLog.Info("RootSync controller registration successful")
 		}
-		setupLog.Info("RootSync controller registration successful")
+		// Don't stop the RootSync controller when its CRD is deleted,
+		// otherwise we may miss RootSync object deletion events.
 		return nil
 	})
 	setupLog.Info("RootSync controller registration scheduled")

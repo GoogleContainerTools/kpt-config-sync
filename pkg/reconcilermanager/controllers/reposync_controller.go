@@ -74,7 +74,7 @@ type RepoSyncReconciler struct {
 	// configMapWatches stores which namespaces where we are currently watching ConfigMaps
 	configMapWatches map[string]bool
 
-	controller *controller.Controller
+	controller controller.Controller
 
 	cache cache.Cache
 }
@@ -260,8 +260,13 @@ func (r *RepoSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 		return fmt.Errorf("upserting service account: %w", err)
 	}
 
-	// Overwrite reconciler rolebinding.
+	// Namespace-scoped read/write permissions
 	if _, err := r.upsertSharedRoleBinding(ctx, reconcilerRef, rsRef); err != nil {
+		return fmt.Errorf("upserting role binding: %w", err)
+	}
+
+	// Cluster-scoped read permissions
+	if err := r.upsertSharedClusterRoleBinding(ctx, RepoSyncClusterScopeClusterRoleBindingName, RepoSyncClusterScopeClusterRoleName, reconcilerRef, rsRef); err != nil {
 		return fmt.Errorf("upserting role binding: %w", err)
 	}
 
@@ -459,6 +464,10 @@ func (r *RepoSyncReconciler) deleteManagedObjects(ctx context.Context, reconcile
 		return fmt.Errorf("deleting role binding: %w", err)
 	}
 
+	if err := r.deleteSharedClusterRoleBinding(ctx, RepoSyncClusterScopeClusterRoleBindingName, reconcilerRef); err != nil {
+		return fmt.Errorf("deleting cluster role binding: %w", err)
+	}
+
 	if err := r.deleteHelmConfigMapCopies(ctx, rsRef, nil); err != nil {
 		return fmt.Errorf("deleting helm config maps: %w", err)
 	}
@@ -472,6 +481,14 @@ func (r *RepoSyncReconciler) deleteManagedObjects(ctx context.Context, reconcile
 
 // Register RepoSync controller with reconciler-manager.
 func (r *RepoSyncReconciler) Register(mgr controllerruntime.Manager, watchFleetMembership bool) error {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
+	// Avoid re-registering the controller
+	if r.controller != nil {
+		return nil
+	}
+
 	controllerBuilder := controllerruntime.NewControllerManagedBy(mgr).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: 1,
@@ -504,7 +521,7 @@ func (r *RepoSyncReconciler) Register(mgr controllerruntime.Manager, watchFleetM
 	}
 
 	ctrlr, err := controllerBuilder.Build(r)
-	r.controller = &ctrlr
+	r.controller = ctrlr
 	r.cache = mgr.GetCache()
 	return err
 }
@@ -524,7 +541,7 @@ func (r *RepoSyncReconciler) watchConfigMaps(rs *v1beta1.RepoSync) error {
 
 	if _, ok := r.configMapWatches[rs.Namespace]; !ok {
 		klog.Infoln("Adding watch for ConfigMaps in namespace ", rs.Namespace)
-		ctrlr := *r.controller
+		ctrlr := r.controller
 
 		if err := ctrlr.Watch(source.Kind(r.cache, withNamespace(&corev1.ConfigMap{}, rs.Namespace),
 			handler.EnqueueRequestsFromMapFunc(r.mapConfigMapToRepoSyncs),

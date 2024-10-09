@@ -98,13 +98,16 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	// Resource Conflict errors from the remediator are not exposed as errors
-	// in the RootSync status. Instead, the error is recorded as a metric and
-	// logged as a warning. Then the object is refreshed from the server and
-	// re-enqueued for remediation.
+	// Resource conflict errors are recorded as status errors when the
+	// remediator watches are updated after an apply succeeds, but not when
+	// watches are updated before the apply attempt or from watch events handled
+	// by the remediator. So we don't expect to see a resource conflict error
+	// in the RootSync status until after the next apply attempt fails, which
+	// won't happen until the next automatic re-sync (1hr default).
 	//
-	// Validate that deleting the CRD of a managed CR causes at least of of the
-	// following errors:
+	// However, we do expect the remediator to get a deletion event for each
+	// Anvil object after the Anvil CRD is deleted. This can be surfaced as one
+	// of the following errors:
 	// - NoResourceMatchError
 	// - NoKindMatchError
 	// - ObjectNotFound
@@ -117,7 +120,7 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 	// TODO: distinguish between management conflict (unexpected manager annotation) and resource conflict (resource version change)
 	nt.Must(nomostest.ValidateMetrics(nt,
 		nomostest.ReconcilerErrorMetrics(nt, rootSyncLabels, firstCommitHash, metrics.ErrorSummary{
-			Conflicts: 1,
+			Conflicts: 1, // at least 1
 		})))
 
 	// Reset discovery client to invalidate the cached Anvil CRD

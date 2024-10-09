@@ -1,4 +1,4 @@
-# Copyright 2023 Google LLC
+# Copyright 2024 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,26 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# This ClusterRole is used by both root-reconcilers and ns-reconcilers.
+# It includes read access for cluster-scope resources.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: configsync.gke.io:root-reconciler
+  name: configsync.gke.io:ns-reconciler:cluster-scope
   labels:
     configmanagement.gke.io/system: "true"
     configmanagement.gke.io/arch: "csmr"
 rules:
-- apiGroups: ["configsync.gke.io"]
-  resources: ["rootsyncs"]
-  verbs: ["get","list","watch","update","patch"]
-- apiGroups: ["configsync.gke.io"]
-  resources: ["rootsyncs/status"]
-  verbs: ["get","list","watch","update","patch"]
-- apiGroups: ["kpt.dev"]
-  resources: ["resourcegroups"]
-  verbs: ["*"]
-- apiGroups: ["kpt.dev"]
-  resources: ["resourcegroups/status"]
-  verbs: ["*"]
 - apiGroups: ["apiextensions.k8s.io"]
   resources: ["customresourcedefinitions"]
   verbs: ["get","list","watch"]

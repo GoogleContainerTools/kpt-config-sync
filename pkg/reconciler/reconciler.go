@@ -37,6 +37,7 @@ import (
 	"kpt.dev/configsync/pkg/parse/events"
 	"kpt.dev/configsync/pkg/reconciler/finalizer"
 	"kpt.dev/configsync/pkg/reconciler/namespacecontroller"
+	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/remediator"
 	"kpt.dev/configsync/pkg/remediator/conflict"
 	"kpt.dev/configsync/pkg/remediator/watch"
@@ -219,10 +220,11 @@ func Run(opts Options) {
 		klog.Fatalf("Error creating rest config for the remediator: %v", err)
 	}
 
+	crdController := &controllers.CRDController{}
 	conflictHandler := conflict.NewHandler()
 	fightHandler := fight.NewHandler()
 
-	rem, err := remediator.New(opts.ReconcilerScope, opts.SyncName, cfgForWatch, baseApplier, conflictHandler, fightHandler, decls, opts.NumWorkers)
+	rem, err := remediator.New(opts.ReconcilerScope, opts.SyncName, cfgForWatch, baseApplier, conflictHandler, fightHandler, crdController, decls, opts.NumWorkers)
 	if err != nil {
 		klog.Fatalf("Instantiating Remediator: %v", err)
 	}
@@ -329,6 +331,12 @@ func Run(opts Options) {
 	mgr, err := ctrl.NewManager(cfgForWatch, mgrOptions)
 	if err != nil {
 		klog.Fatalf("Instantiating Controller Manager: %v", err)
+	}
+
+	crdMetaController := controllers.NewCRDMetaController(crdController, mgr.GetCache(),
+		textlogger.NewLogger(textlogger.NewConfig()).WithName("controllers").WithName("CRD"))
+	if err := crdMetaController.Register(mgr); err != nil {
+		klog.Fatalf("Instantiating CRD Controller: %v", err)
 	}
 
 	// This cancelFunc will be used by the Finalizer to stop all the other

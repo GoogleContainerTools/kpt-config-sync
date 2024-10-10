@@ -21,7 +21,6 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/watch"
-	"k8s.io/client-go/rest"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/remediator/conflict"
 	"kpt.dev/configsync/pkg/remediator/queue"
@@ -32,7 +31,6 @@ import (
 // to create a watcher.
 type watcherConfig struct {
 	gvk             schema.GroupVersionKind
-	config          *rest.Config
 	resources       *declared.Resources
 	queue           *queue.ObjectQueue
 	scope           declared.Scope
@@ -43,12 +41,12 @@ type watcherConfig struct {
 	commit          string
 }
 
-// watcherFactory knows how to build watch.Runnables.
-type watcherFactory func(cfg watcherConfig) (Runnable, status.Error)
+// WatcherFactory knows how to build watch.Runnables.
+type WatcherFactory func(cfg watcherConfig) (Runnable, status.Error)
 
-// watcherFactoryFromListerWatcherFactory returns a new watcherFactory that uses
+// WatcherFactoryFromListerWatcherFactory returns a new watcherFactory that uses
 // the specified ListerWatcherFactory.
-func watcherFactoryFromListerWatcherFactory(factory ListerWatcherFactory) watcherFactory {
+func WatcherFactoryFromListerWatcherFactory(factory ListerWatcherFactory) WatcherFactory {
 	factoryPtr := factory
 	return func(cfg watcherConfig) (Runnable, status.Error) {
 		if cfg.startWatch == nil {

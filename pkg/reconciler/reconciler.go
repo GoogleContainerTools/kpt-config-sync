@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/textlogger"
@@ -46,10 +47,10 @@ import (
 	"kpt.dev/configsync/pkg/syncer/reconcile"
 	"kpt.dev/configsync/pkg/syncer/reconcile/fight"
 	"kpt.dev/configsync/pkg/util"
+	utilwatch "kpt.dev/configsync/pkg/util/watch"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 )
 
@@ -166,15 +167,9 @@ func Run(opts Options) {
 		klog.Fatalf("Error creating discovery client: %v", err)
 	}
 
-	// Use the DynamicRESTMapper as the default RESTMapper does not detect when
-	// new types become available
-	httpClient, err := rest.HTTPClientFor(cfg)
+	mapper, err := utilwatch.ReplaceOnResetRESTMapperFromConfig(cfg)
 	if err != nil {
-		klog.Fatalf("Error creating HTTPClient: %v", err)
-	}
-	mapper, err := apiutil.NewDynamicRESTMapper(cfg, httpClient)
-	if err != nil {
-		klog.Fatalf("Error creating DynamicRESTMapper: %v", err)
+		klog.Fatalf("Error creating resettable rest mapper: %v", err)
 	}
 
 	cl, err := client.New(cfg, client.Options{
@@ -219,12 +214,20 @@ func Run(opts Options) {
 	if err != nil {
 		klog.Fatalf("Error creating rest config for the remediator: %v", err)
 	}
-
+	dynamicClient, err := dynamic.NewForConfig(cfgForWatch)
+	if err != nil {
+		klog.Fatalf("Error creating DynamicClient for the remediator: %v", err)
+	}
+	lwFactory := &watch.DynamicListerWatcherFactory{
+		DynamicClient: dynamicClient,
+		Mapper:        mapper,
+	}
+	watcherFactory := watch.WatcherFactoryFromListerWatcherFactory(lwFactory.ListerWatcher)
 	crdController := &controllers.CRDController{}
 	conflictHandler := conflict.NewHandler()
 	fightHandler := fight.NewHandler()
 
-	rem, err := remediator.New(opts.ReconcilerScope, opts.SyncName, cfgForWatch, baseApplier, conflictHandler, fightHandler, crdController, decls, opts.NumWorkers)
+	rem, err := remediator.New(opts.ReconcilerScope, opts.SyncName, watcherFactory, mapper, baseApplier, conflictHandler, fightHandler, crdController, decls, opts.NumWorkers)
 	if err != nil {
 		klog.Fatalf("Instantiating Remediator: %v", err)
 	}
@@ -333,8 +336,9 @@ func Run(opts Options) {
 		klog.Fatalf("Instantiating Controller Manager: %v", err)
 	}
 
-	crdMetaController := controllers.NewCRDMetaController(crdController, mgr.GetCache(),
-		textlogger.NewLogger(textlogger.NewConfig()).WithName("controllers").WithName("CRD"))
+	crdControllerLogger := textlogger.NewLogger(textlogger.NewConfig()).WithName("controllers").WithName("CRD")
+	crdMetaController := controllers.NewCRDMetaController(crdController,
+		mgr.GetCache(), mapper, crdControllerLogger)
 	if err := crdMetaController.Register(mgr); err != nil {
 		klog.Fatalf("Instantiating CRD Controller: %v", err)
 	}

@@ -15,10 +15,13 @@
 package watch
 
 import (
+	"fmt"
 	"sync"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
 // ResettableRESTMapper is a RESTMapper which is capable of resetting itself
@@ -44,6 +47,32 @@ type mapper struct {
 }
 
 var _ ResettableRESTMapper = &mapper{}
+
+// ReplaceOnResetRESTMapperFromConfig builds a ResettableRESTMapper using a
+// DynamicRESTMapper that is replaced when Reset is called.
+//
+// DynamicRESTMapper dynamically and transparently discovers new resources, when
+// a NoMatchFound error is encountered, but it doesn't automatically invalidate
+// deleted resources. So use ReplaceOnResetRESTMapper to replace the whole
+// DynamicRESTMapper when Reset is called.
+func ReplaceOnResetRESTMapperFromConfig(cfg *rest.Config) (ResettableRESTMapper, error) {
+	httpClient, err := rest.HTTPClientFor(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("creating HTTPClient: %w", err)
+	}
+	initialMapper, err := apiutil.NewDynamicRESTMapper(cfg, httpClient)
+	if err != nil {
+		return nil, fmt.Errorf("creating DynamicRESTMapper: %w", err)
+	}
+	newMapperFn := func() (meta.RESTMapper, error) {
+		m, err := apiutil.NewDynamicRESTMapper(cfg, httpClient)
+		if err != nil {
+			return nil, fmt.Errorf("creating DynamicRESTMapper: %w", err)
+		}
+		return m, nil
+	}
+	return NewReplaceOnResetRESTMapper(initialMapper, newMapperFn), nil
+}
 
 // NewReplaceOnResetRESTMapper wraps the provided RESTMapper and replaces it
 // using the MapperFunc when the Reset method is called.

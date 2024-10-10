@@ -18,6 +18,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 
 	"github.com/go-logr/logr"
@@ -26,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2/textlogger"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
@@ -36,6 +38,7 @@ import (
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/util/customresource"
 	"kpt.dev/configsync/pkg/util/log"
+	utilwatch "kpt.dev/configsync/pkg/util/watch"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	// +kubebuilder:scaffold:imports
@@ -71,8 +74,19 @@ func main() {
 	setupLog.Info(fmt.Sprintf("running with flags --cluster-name=%s; --reconciler-polling-period=%s; --hydration-polling-period=%s",
 		*clusterName, *reconcilerPollingPeriod, *hydrationPollingPeriod))
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	cfg := ctrl.GetConfigOrDie()
+
+	mapper, err := utilwatch.ReplaceOnResetRESTMapperFromConfig(cfg)
+	if err != nil {
+		setupLog.Error(err, "failed to create resettable rest mapper")
+		os.Exit(1)
+	}
+
+	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme: core.Scheme,
+		MapperProvider: func(_ *rest.Config, _ *http.Client) (meta.RESTMapper, error) {
+			return mapper, nil
+		},
 	})
 	if err != nil {
 		setupLog.Error(err, "failed to start manager")
@@ -82,24 +96,25 @@ func main() {
 	// support the Watch method. So build another with shared config.
 	// This one can be used for watching and bypassing the cache, as needed.
 	// Use with discretion.
-	watcher, err := client.NewWithWatch(mgr.GetConfig(), client.Options{
+	watcher, err := client.NewWithWatch(cfg, client.Options{
 		Scheme: mgr.GetScheme(),
-		Mapper: mgr.GetRESTMapper(),
+		Mapper: mapper,
 	})
 	if err != nil {
 		setupLog.Error(err, "failed to create watching client")
 		os.Exit(1)
 	}
-	dynamicClient, err := dynamic.NewForConfig(mgr.GetConfig())
+	dynamicClient, err := dynamic.NewForConfig(cfg)
 	if err != nil {
 		setupLog.Error(err, "failed to build dynamic client")
 		os.Exit(1)
 	}
-	watchFleetMembership := fleetMembershipCRDExists(dynamicClient, mgr.GetRESTMapper(), &setupLog)
+	watchFleetMembership := fleetMembershipCRDExists(dynamicClient, mapper, &setupLog)
 
 	crdController := &controllers.CRDController{}
-	crdMetaController := controllers.NewCRDMetaController(crdController, mgr.GetCache(),
-		textlogger.NewLogger(textlogger.NewConfig()).WithName("controllers").WithName("CRD"))
+	crdControllerLogger := textlogger.NewLogger(textlogger.NewConfig()).WithName("controllers").WithName("CRD")
+	crdMetaController := controllers.NewCRDMetaController(crdController,
+		mgr.GetCache(), mapper, crdControllerLogger)
 	if err := crdMetaController.Register(mgr); err != nil {
 		setupLog.Error(err, "failed to register controller", "controller", "CRD")
 		os.Exit(1)

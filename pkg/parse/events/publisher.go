@@ -129,6 +129,8 @@ type RetrySyncPublisher struct {
 	currentBackoff wait.Backoff
 	retryLimit     int
 	timer          clock.Timer
+
+	runAttempted bool
 }
 
 // Type of events produced by this publisher.
@@ -153,15 +155,22 @@ func (s *RetrySyncPublisher) Start(ctx context.Context) reflect.Value {
 // If the maximum number of retries has been reached, the HandleFunc is NOT
 // called and an empty Result is returned.
 func (s *RetrySyncPublisher) Publish(subscriber Subscriber) Result {
-	if s.currentBackoff.Steps == 0 {
-		klog.Infof("Retry limit (%v) has been reached", s.retryLimit)
-		// Don't reset retryTimer if retry limit has been reached.
-		return Result{}
-	}
+	var retryDuration time.Duration
+	if s.runAttempted {
+		// If run is attempted, set the retry timer with backoff.
+		if s.currentBackoff.Steps == 0 {
+			klog.Infof("Retry limit (%v) has been reached", s.retryLimit)
+			// Don't reset retryTimer if retry limit has been reached.
+			return Result{}
+		}
 
-	retryDuration := s.currentBackoff.Step()
-	retries := s.retryLimit - s.currentBackoff.Steps
-	klog.Infof("a retry is triggered (retries: %v/%v)", retries, s.retryLimit)
+		retryDuration = s.currentBackoff.Step()
+		retries := s.retryLimit - s.currentBackoff.Steps
+		klog.Infof("a retry is triggered (retries: %v/%v)", retries, s.retryLimit)
+	} else {
+		// If no run is attempted, send the event to check for conflicts & watch update every 1s.
+		retryDuration = time.Second
+	}
 
 	result := subscriber.Handle(Event{Type: s.EventType})
 
@@ -176,6 +185,7 @@ func (s *RetrySyncPublisher) HandleResult(result Result) {
 		s.currentBackoff = util.CopyBackoff(s.Backoff)
 		s.timer.Reset(s.currentBackoff.Duration)
 	}
+	s.runAttempted = result.RunAttempted
 }
 
 // NewResetOnRunAttemptPublisher constructs an ResetOnRunPublisher that

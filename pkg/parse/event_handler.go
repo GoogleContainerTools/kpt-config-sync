@@ -134,6 +134,10 @@ func (s *EventHandler) Handle(event events.Event) events.Result {
 			break
 		}
 
+		// Set TriggerRetryBackoff to true so the RetrySyncPublisher can publish
+		// retry events with backoff.
+		eventResult.TriggerRetryBackoff = true
+
 		// During the execution of `run`, if a new commit is detected,
 		// retryTimer will be reset to `Options.RetryPeriod`, and state.backoff is reset to `defaultBackoff()`.
 		// In this case, `run` will try to sync the configs from the new commit instead of the old commit
@@ -147,6 +151,7 @@ func (s *EventHandler) Handle(event events.Event) events.Result {
 	// If the run succeeded or source changed, reset the retry backoff.
 	if runResult.Success || runResult.SourceChanged {
 		eventResult.ResetRetryBackoff = true
+		eventResult.TriggerRetryBackoff = false
 	}
 	return eventResult
 }

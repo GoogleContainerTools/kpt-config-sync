@@ -26,11 +26,12 @@ import (
 
 func TestFunnel_Start(t *testing.T) {
 	tests := []struct {
-		name           string
-		builder        *PublishingGroupBuilder
-		stepSize       time.Duration
-		steps          []time.Duration
-		expectedEvents []eventResult
+		name                   string
+		builder                *PublishingGroupBuilder
+		stepSize               time.Duration
+		steps                  []time.Duration
+		expectedRemainingSteps int
+		expectedEvents         []eventResult
 	}{
 		{
 			name: "SyncEvents From SyncPeriod",
@@ -117,7 +118,7 @@ func TestFunnel_Start(t *testing.T) {
 			},
 		},
 		{
-			name: "RetryEvents From RetryBackoff",
+			name: "RetryEvents From RetryBackoff with TriggerRetryBackoff on and 0 factor",
 			builder: &PublishingGroupBuilder{
 				RetryBackoff: wait.Backoff{
 					Duration: time.Second,
@@ -128,21 +129,69 @@ func TestFunnel_Start(t *testing.T) {
 			stepSize: time.Second,
 			expectedEvents: []eventResult{
 				{
-					Event:  Event{Type: RetrySyncEventType},
+					Event: Event{Type: RetrySyncEventType}, // 1s, backoff disabled, retry duration 1s
+					Result: Result{
+						TriggerRetryBackoff: true,
+					},
+				},
+				{
+					Event: Event{Type: RetrySyncEventType}, // 2s, backoff enabled, but factor is 0, so just 1s delay
+					Result: Result{
+						TriggerRetryBackoff: true,
+					},
+				},
+				{
+					Event: Event{Type: RetrySyncEventType}, // 3s backoff enabled, but factor is 0, so just 1s delay
+					Result: Result{
+						TriggerRetryBackoff: true,
+					},
+				},
+				{
+					Event: Event{Type: RetrySyncEventType}, // 4s backoff enabled, but factor is 0, so just 1s delay
+					Result: Result{
+						TriggerRetryBackoff: true,
+					},
+				},
+				// No more retry events until another event sets ResetRetryBackoff=true
+			},
+			expectedRemainingSteps: 0, // reach the retry limit
+		},
+		{
+			name: "RetryEvents From RetryBackoff with TriggerRetryBackoff off and 0 factor",
+			builder: &PublishingGroupBuilder{
+				RetryBackoff: wait.Backoff{
+					Duration: time.Second,
+					Factor:   0, // no backoff, just 1s delay
+					Steps:    3, // at least as many as we expect
+				},
+			},
+			stepSize: time.Second,
+			expectedEvents: []eventResult{
+				{
+					Event:  Event{Type: RetrySyncEventType}, // 1s, backoff disabled, retry duration 1s
 					Result: Result{},
 				},
 				{
-					Event:  Event{Type: RetrySyncEventType},
+					Event:  Event{Type: RetrySyncEventType}, // 1s, backoff disabled, retry duration 1s
 					Result: Result{},
 				},
 				{
-					Event:  Event{Type: RetrySyncEventType},
+					Event:  Event{Type: RetrySyncEventType}, // 1s, backoff disabled, retry duration 1s
+					Result: Result{},
+				},
+				{
+					Event:  Event{Type: RetrySyncEventType}, // 1s, backoff disabled, retry duration 1s
+					Result: Result{},
+				},
+				{
+					Event:  Event{Type: RetrySyncEventType}, // 1s, backoff disabled, retry duration 1s
 					Result: Result{},
 				},
 			},
+			expectedRemainingSteps: 3, // backoff disabled, so remaining steps not changed.
 		},
 		{
-			name: "RetryEvents From RetryBackoff with max steps",
+			name: "RetryEvents From RetryBackoff with TriggerRetryBackoff on and non-zero factor",
 			builder: &PublishingGroupBuilder{
 				RetryBackoff: wait.Backoff{
 					Duration: time.Second,
@@ -152,25 +201,85 @@ func TestFunnel_Start(t *testing.T) {
 			},
 			steps: []time.Duration{
 				time.Second,
-				3 * time.Second, //+2
-				7 * time.Second, //+4
-				8 * time.Second, //+1
+				2 * time.Second,  //+1
+				3 * time.Second,  //+1
+				5 * time.Second,  //+2
+				9 * time.Second,  //+4
+				10 * time.Second, //+1
 			},
 			expectedEvents: []eventResult{
 				{
-					Event:  Event{Type: RetrySyncEventType}, // 1s
-					Result: Result{},
+					Event: Event{Type: RetrySyncEventType}, // 1s, backoff disabled, retry duration 1s
+					Result: Result{
+						TriggerRetryBackoff: true,
+					},
 				},
 				{
-					Event:  Event{Type: RetrySyncEventType}, // 3s
-					Result: Result{},
+					Event: Event{Type: RetrySyncEventType}, // 2s, backoff enabled, retry duration 1s
+					Result: Result{
+						TriggerRetryBackoff: true,
+					},
 				},
 				{
-					Event:  Event{Type: RetrySyncEventType}, // 7s
-					Result: Result{},
+					Event: Event{Type: RetrySyncEventType}, // 3s, backoff enabled, retry duration 2s
+					Result: Result{
+						TriggerRetryBackoff: true,
+					},
+				},
+				{
+					Event: Event{Type: RetrySyncEventType}, // 5s, backoff enabled, retry duration 4s
+					Result: Result{
+						TriggerRetryBackoff: true,
+					},
 				},
 				// No more retry events until another event sets ResetRetryBackoff=true
 			},
+			expectedRemainingSteps: 0, // reach the retry limit
+		},
+		{
+			name: "RetryEvents From RetryBackoff with TriggerRetryBackoff off and non-zero factor",
+			builder: &PublishingGroupBuilder{
+				RetryBackoff: wait.Backoff{
+					Duration: time.Second,
+					Factor:   2, // double the delay each time
+					Steps:    3,
+				},
+			},
+			steps: []time.Duration{
+				time.Second,
+				2 * time.Second,  //+1
+				3 * time.Second,  //+1
+				5 * time.Second,  //+2
+				9 * time.Second,  //+4
+				10 * time.Second, //+1
+			},
+			expectedEvents: []eventResult{
+				{
+					Event:  Event{Type: RetrySyncEventType}, // 1s, backoff disabled, retry duration 1s
+					Result: Result{},
+				},
+				{
+					Event:  Event{Type: RetrySyncEventType}, // 2s, backoff disabled, retry duration 1s
+					Result: Result{},
+				},
+				{
+					Event:  Event{Type: RetrySyncEventType}, // 3s, backoff disabled, retry duration 1s
+					Result: Result{},
+				},
+				{
+					Event:  Event{Type: RetrySyncEventType}, // 5s, backoff disabled, retry duration 1s
+					Result: Result{},
+				},
+				{
+					Event:  Event{Type: RetrySyncEventType}, // 9s, backoff disabled, retry duration 1s
+					Result: Result{},
+				},
+				{
+					Event:  Event{Type: RetrySyncEventType}, // 10s, backoff disabled, retry duration 1s
+					Result: Result{},
+				},
+			},
+			expectedRemainingSteps: 3, // backoff disabled, so remaining steps not changed.
 		},
 		{
 			name: "RetryEvents From RetryBackoff with ResetRetryBackoff",
@@ -184,35 +293,58 @@ func TestFunnel_Start(t *testing.T) {
 			},
 			steps: []time.Duration{
 				time.Second,
-				3 * time.Second, //+2
-				7 * time.Second, //+4
-				10 * time.Second,
+				2 * time.Second,  //+1
+				3 * time.Second,  //+2
+				5 * time.Second,  //+4
+				10 * time.Second, //+10 for sync event
 				11 * time.Second, //+1
+				12 * time.Second, //+1
 			},
 			expectedEvents: []eventResult{
 				{
-					Event:  Event{Type: RetrySyncEventType}, // 1s
-					Result: Result{},
+					Event: Event{Type: RetrySyncEventType}, // 1s, backoff disabled and retry duration 1s
+					Result: Result{
+						TriggerRetryBackoff: true,
+					},
 				},
 				{
-					Event:  Event{Type: RetrySyncEventType}, // 3s
-					Result: Result{},
+					Event: Event{Type: RetrySyncEventType}, // 2s, backoff enabled and retry duration 1s
+					Result: Result{
+						TriggerRetryBackoff: true,
+					},
 				},
 				{
-					Event:  Event{Type: RetrySyncEventType}, // 7s
-					Result: Result{},
+					Event: Event{Type: RetrySyncEventType}, // 3s backoff enabled and retry duration 2s
+					Result: Result{
+						TriggerRetryBackoff: true,
+					},
 				},
 				{
-					Event: Event{Type: SyncEventType}, // 10s
+					Event: Event{Type: RetrySyncEventType}, // 5s backoff enabled and retry duration 4s
+					Result: Result{
+						TriggerRetryBackoff: true,
+					},
+				},
+				{
+					Event: Event{Type: SyncEventType}, // 10s backoff enabled and retry duration 1s
 					Result: Result{
 						ResetRetryBackoff: true,
 					},
 				},
 				{
-					Event:  Event{Type: RetrySyncEventType}, // 11s
-					Result: Result{},
+					Event: Event{Type: RetrySyncEventType}, // 11s backoff disabled and retry duration 1s
+					Result: Result{
+						TriggerRetryBackoff: true,
+					},
+				},
+				{
+					Event: Event{Type: RetrySyncEventType}, // 12s backoff enabled and retry duration 1s
+					Result: Result{
+						TriggerRetryBackoff: true,
+					},
 				},
 			},
+			expectedRemainingSteps: 2,
 		},
 		{
 			name: "SyncEvents, StatusEventType, ResyncEvents",
@@ -470,6 +602,7 @@ func TestFunnel_Start(t *testing.T) {
 				}
 			}
 
+			publishers := tc.builder.Build()
 			subscriber := &testSubscriber{
 				T:              t,
 				ExpectedEvents: tc.expectedEvents,
@@ -477,7 +610,7 @@ func TestFunnel_Start(t *testing.T) {
 				DoneFunc:       cancel,
 			}
 			funnel := &Funnel{
-				Publishers: tc.builder.Build(),
+				Publishers: publishers,
 				Subscriber: subscriber,
 			}
 			doneCh := funnel.Start(ctx)
@@ -493,6 +626,12 @@ func TestFunnel_Start(t *testing.T) {
 				expectedEvents = append(expectedEvents, e.Event)
 			}
 
+			for _, publisher := range publishers {
+				if publisher.Type() == RetrySyncEventType {
+					retryPublisher := publisher.(*RetrySyncPublisher)
+					testutil.AssertEqual(t, tc.expectedRemainingSteps, retryPublisher.currentBackoff.Steps)
+				}
+			}
 			testutil.AssertEqual(t, expectedEvents, subscriber.ReceivedEvents)
 		})
 	}

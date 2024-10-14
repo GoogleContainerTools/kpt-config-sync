@@ -58,6 +58,10 @@ ENV CGO_ENABLED=0
 # but not any more so we have to install it ourselves.
 RUN go install golang.org/x/tools/cmd/goimports@v0.7.0
 
+RUN go install github.com/sigstore/cosign/cmd/cosign@latest
+
+ENV COSIGN_PASSWORD=""
+
 # gotopt2 parses command line options
 # v0.1.2
 ARG GOTOPT2_REPO="github.com/filmil/gotopt2"
@@ -80,7 +84,8 @@ RUN apt-get update \
   git \
   musl-dev \
   shellcheck \
-  wget
+  wget \
+  openssl
 
 # Starting from go 1.10, build and test results are cached, which speeds up
 # following runs.

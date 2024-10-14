@@ -25,6 +25,7 @@ import (
 	"math/big"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -55,6 +56,14 @@ const (
 	// git-server to authenticate clients.
 	gitServerSecretName = "ssh-pub"
 
+	// cosignSecretName is the name of the Secret that stores
+	// the public key used by the pre-sync webhook server to verify OCI images.
+	cosignSecretName = "cosign-key"
+
+	// OCISignatureVerificationSecretName is the name of the Secret
+	// that stores the TLS certificates for the pre-sync webhook server.
+	OCISignatureVerificationSecretName = "oci-image-verification-key"
+
 	// GitSyncSource is the name of the git-server sync source. Used by the git
 	// source type.
 	GitSyncSource SyncSource = "git-server"
@@ -70,6 +79,30 @@ func sshDir(nt *NT) string {
 
 func sslDir(nt *NT, syncSource SyncSource) string {
 	return filepath.Join(nt.TmpDir, string(syncSource), "ssl")
+}
+
+func cosignDir(nt *NT) string {
+	return filepath.Join(nt.TmpDir, "cosign")
+}
+
+func CosignPrivateKeyPath(nt *NT) string {
+	return filepath.Join(cosignDir(nt), "cosign.key")
+}
+
+func cosignPublicKeyPath(nt *NT) string {
+	return filepath.Join(cosignDir(nt), "cosign.pub")
+}
+
+func tlsDir(nt *NT) string {
+	return filepath.Join(nt.TmpDir, "tls")
+}
+
+func tlsKeyPath(nt *NT) string {
+	return filepath.Join(tlsDir(nt), "tls.key")
+}
+
+func tlsCertPath(nt *NT) string {
+	return filepath.Join(tlsDir(nt), "tls.crt")
 }
 
 func privateKeyPath(nt *NT) string {
@@ -290,6 +323,100 @@ func generateSSLKeys(nt *NT, syncSource SyncSource, namespace string, domains []
 	}
 
 	return caCertPath(nt, syncSource), nil
+}
+
+// generateCosignKeyPair generates a Cosign key pair using the `cosign` command
+// and moves the generated keys to the specified directory. The two files will
+// be named as cosign.key and cosign.pub. Subject to change based on Cosign.
+func generateCosignKeyPair(nt *NT) error {
+	if err := os.MkdirAll(cosignDir(nt), fileMode); err != nil {
+		return fmt.Errorf("creating cosign key pair directory: %w", err)
+	}
+
+	nt.T.Log("Generating Cosign key pair...")
+	cmd := exec.Command("cosign", "generate-key-pair")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("error running cosign command: %v", err)
+	}
+
+	nt.T.Log("Cosign key pair generated.")
+
+	err = moveFile("cosign.key", CosignPrivateKeyPath(nt))
+	if err != nil {
+		return fmt.Errorf("failed to move cosign.key: %v", err)
+	}
+
+	err = moveFile("cosign.pub", cosignPublicKeyPath(nt))
+	if err != nil {
+		return fmt.Errorf("failed to move cosign.key: %v", err)
+	}
+
+	nt.T.Logf("Moved Cosign keys to %s\n", cosignDir(nt))
+	return nil
+}
+
+func moveFile(src, dest string) error {
+	err := os.MkdirAll(filepath.Dir(dest), fileMode)
+	if err != nil {
+		return fmt.Errorf("failed to create directory: %v", err)
+	}
+
+	err = os.Rename(src, dest)
+	if err != nil {
+		return fmt.Errorf("failed to move file from %s to %s: %v", src, dest, err)
+	}
+	return nil
+}
+
+// createKubernetesSecret creates a Kubernetes secret with the given name, namespace, type, and optional extra arguments.
+func createKubernetesSecret(nt *NT, secretName, namespace, secretType string, args ...string) error {
+	nt.T.Logf("Creating Kubernetes secret: %s\n", secretName)
+
+	baseArgs := []string{"create", "secret", secretType, secretName}
+	baseArgs = append(baseArgs, args...)
+	baseArgs = append(baseArgs, "-n", namespace)
+	_, err := nt.Shell.Kubectl(baseArgs...)
+	if err != nil {
+		return err
+	}
+
+	nt.T.Logf("Secret %s created.\n", secretName)
+	return nil
+}
+
+// generateTLSKeyPair generates a TLS key pair using OpenSSL and saves the
+// certificate and key to files.
+func generateTLSKeyPair(nt *NT) error {
+	if err := os.MkdirAll(tlsDir(nt), fileMode); err != nil {
+		return fmt.Errorf("creating tls directory: %w", err)
+	}
+
+	nt.T.Log("Generating TLS key pair...")
+	cmd := exec.Command("openssl", "req", "-nodes", "-x509", "-sha256", "-newkey", "rsa:4096",
+		"-keyout", tlsKeyPath(nt), "-out", tlsCertPath(nt), "-days", "365",
+		"-subj", "/CN=oci-signature-verification-server.config-management-pre-sync.svc",
+		"-addext", "subjectAltName = DNS:oci-signature-verification-server,DNS:oci-signature-verification-server.config-management-pre-sync,DNS:oci-signature-verification-server.config-management-pre-sync.svc")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("error generating TLS key pair with OpenSSL: %v", err)
+	}
+
+	if _, err := os.Stat(tlsCertPath(nt)); os.IsNotExist(err) {
+		return fmt.Errorf("tls.crt file was not generated")
+	}
+	if _, err := os.Stat(tlsKeyPath(nt)); os.IsNotExist(err) {
+		return fmt.Errorf("tls.key file was not generated")
+	}
+
+	nt.T.Log("TLS key pair generated.")
+
+	return nil
 }
 
 // downloadSSHKey downloads the private SSH key from Cloud Secret Manager.

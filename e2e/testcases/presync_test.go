@@ -33,6 +33,7 @@ import (
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reposync"
 	"kpt.dev/configsync/pkg/rootsync"
+	"kpt.dev/configsync/pkg/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -42,27 +43,68 @@ func TestAddPreSyncAnnotationRepoSync(t *testing.T) {
 		ntopts.RequireOCIProvider,
 		ntopts.SyncWithGitSource(repoSyncID),
 		ntopts.RepoSyncPermissions(policy.RBACAdmin(), policy.CoreAdmin()))
+	if err := nomostest.SetupPreSync(nt); err != nil {
+		nt.T.Fatal(err)
+	}
 	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 	repoSyncKey := repoSyncID.ObjectKey
 	gitSource := nt.SyncSources[repoSyncID]
+
+	nt.T.Log("Create first OCI image with latest tag.")
 	bookinfoRole := k8sobjects.RoleObject(core.Name("bookinfo-admin"))
 	image, err := nt.BuildAndPushOCIImage(repoSyncKey, registryproviders.ImageInputObjects(nt.Scheme, bookinfoRole))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.T.Log("Create RepoSync with OCI image")
+
+	nt.T.Log("Create RepoSync with first OCI image")
 	repoSyncOCI := nt.RepoSyncObjectOCI(repoSyncKey, image.OCIImageID().WithoutDigest(), "", image.Digest)
 	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(repoSyncID.Namespace, repoSyncID.Name), repoSyncOCI))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Set the RepoSync to sync from OCI"))
-	nt.Must(nt.WatchForAllSyncs())
+	nt.Must(nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSyncID.Name, namespaceRepo,
+		testwatcher.WatchPredicates(testpredicates.RepoSyncHasSourceError(status.SourceErrorCode, "no signatures found"))))
 
+	nt.T.Log("Create second image with latest tag.")
+	bookstoreSA := k8sobjects.ServiceAccountObject("bookstore-sa")
+	image1, err := nt.BuildAndPushOCIImage(repoSyncKey, registryproviders.ImageInputObjects(nt.Scheme, bookinfoRole, bookstoreSA))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	imageURL, err := image.RemoteAddressWithDigest()
+	if err != nil {
+		nt.T.Fatal("Failed to get first image remote URL %s", err)
+	}
+	nt.T.Logf("Signing first test image %s", imageURL)
+	_, err = nt.Shell.ExecWithDebug("cosign", "sign", imageURL, "--key", nomostest.CosignPrivateKeyPath(nt), "--yes")
+	if err != nil {
+		nt.T.Fatalf("Failed to sign first test image %s", err)
+	}
+
+	nt.T.Log("Checking no signature error still exists for second image.")
+	nt.Must(nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSyncID.Name, namespaceRepo,
+		testwatcher.WatchPredicates(testpredicates.RepoSyncHasSourceError(status.SourceErrorCode, "no signatures found"))))
+
+	imageURL1, err := image1.RemoteAddressWithDigest()
+	if err != nil {
+		nt.T.Fatal("Failed to get second image remote URL %s", err)
+	}
+	nt.T.Logf("Signing second test image %s", imageURL1)
+	_, err = nt.Shell.ExecWithDebug("cosign", "sign", imageURL1, "--key", nomostest.CosignPrivateKeyPath(nt), "--yes")
+	if err != nil {
+		nt.T.Fatalf("Failed to sign second test image %s", err)
+	}
+	nt.T.Log("Update source expectation for watch")
+	repoSyncOCI = nt.RepoSyncObjectOCI(repoSyncKey, image.OCIImageID().WithoutDigest(), "", image1.Digest)
+	nt.Must(nt.WatchForAllSyncs())
 	err = nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSyncID.Name, repoSyncID.Namespace,
 		testwatcher.WatchPredicates(
-			checkRepoSyncPreSyncAnnotations(),
+			checkRepoSyncPreSyncAnnotations(image1, nt),
 		))
 	if err != nil {
 		nt.T.Fatalf("Source annotation not updated for RepoSync %v", err)
 	}
+
 	nt.T.Log("Set the RepoSync to sync from Git")
 	nt.SyncSources[repoSyncID] = gitSource
 	repoSyncGit := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, repoSyncID.ObjectKey)
@@ -86,20 +128,62 @@ func TestAddPreSyncAnnotationRootSync(t *testing.T) {
 		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured),
 		ntopts.RequireOCIProvider,
 	)
+	if err := nomostest.SetupPreSync(nt); err != nil {
+		nt.T.Fatal(err)
+	}
 	gitSource := nt.SyncSources[rootSyncID]
+
+	nt.T.Log("Create first OCI image with latest tag.")
 	bookinfoRole := k8sobjects.RoleObject(core.Name("bookinfo-admin"))
 	image, err := nt.BuildAndPushOCIImage(rootSyncKey, registryproviders.ImageInputObjects(nt.Scheme, bookinfoRole))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.T.Log("Create RootSync with OCI image")
+
+	nt.T.Log("Create RootSync with first OCI image")
 	rootSyncOCI := nt.RootSyncObjectOCI(rootSyncKey.Name, image.OCIImageID().WithoutDigest(), "", image.Digest)
 	nt.Must(nt.KubeClient.Apply(rootSyncOCI))
-	nt.Must(nt.WatchForAllSyncs())
+	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, configsync.ControllerNamespace,
+		testwatcher.WatchPredicates(testpredicates.RootSyncHasSourceError(status.SourceErrorCode, "no signatures found"))))
 
+	nt.T.Log("Create second image with latest tag.")
+	bookstoreSA := k8sobjects.ServiceAccountObject("bookstore-sa")
+	image1, err := nt.BuildAndPushOCIImage(rootSyncKey, registryproviders.ImageInputObjects(nt.Scheme, bookinfoRole, bookstoreSA))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	imageURL, err := image.RemoteAddressWithDigest()
+	if err != nil {
+		nt.T.Fatal("Failed to get first image remote URL %s", err)
+	}
+	nt.T.Logf("Signing first test image %s", imageURL)
+	_, err = nt.Shell.ExecWithDebug("cosign", "sign", imageURL, "--key", nomostest.CosignPrivateKeyPath(nt), "--yes")
+	if err != nil {
+		nt.T.Fatalf("Failed to sign first test image %s", err)
+	}
+
+	nt.T.Log("Checking no signature error still exists for second image.")
+	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, configsync.ControllerNamespace,
+		testwatcher.WatchPredicates(testpredicates.RootSyncHasSourceError(status.SourceErrorCode, "no signatures found"))))
+
+	imageURL1, err := image1.RemoteAddressWithDigest()
+	if err != nil {
+		nt.T.Fatal("Failed to get second image remote URL %s", err)
+	}
+	nt.T.Logf("Signing second test image %s", imageURL1)
+	_, err = nt.Shell.ExecWithDebug("cosign", "sign", imageURL1, "--key", nomostest.CosignPrivateKeyPath(nt), "--yes")
+	if err != nil {
+		nt.T.Fatalf("Failed to sign second test image %s", err)
+	}
+
+	nt.T.Log("Update source expectation for watch")
+	rootSyncOCI = nt.RootSyncObjectOCI(rootSyncKey.Name, image.OCIImageID().WithoutDigest(), "", image1.Digest)
+	nt.Must(nt.WatchForAllSyncs())
+	nt.T.Log("Check RootSync is synced to second image and annotations are updated.")
 	err = nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, rootSyncID.Namespace,
 		testwatcher.WatchPredicates(
-			checkRootSyncPreSyncAnnotations(),
+			checkRootSyncPreSyncAnnotations(image1, nt),
 		))
 	if err != nil {
 		nt.T.Fatalf("Source annotation not updated for RootSync %v", err)
@@ -120,7 +204,7 @@ func TestAddPreSyncAnnotationRootSync(t *testing.T) {
 	}
 }
 
-func checkRootSyncPreSyncAnnotations() testpredicates.Predicate {
+func checkRootSyncPreSyncAnnotations(image *registryproviders.OCIImage, nt *nomostest.NT) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
 			return testpredicates.ErrObjectNotFound
@@ -140,7 +224,7 @@ func checkRootSyncPreSyncAnnotations() testpredicates.Predicate {
 		if !ok {
 			return fmt.Errorf("object %q does not have annotation %q", o.GetName(), metadata.SourceURLAnnotationKey)
 		}
-		if syncingCommit != commitAnnotation {
+		if syncingCommit != commitAnnotation || syncingCommit != image.OCIImageID().DigestWithoutPrefix() {
 			return fmt.Errorf("object %s has commit annotation %s, but is being synced with commit %s",
 				o.GetName(),
 				commitAnnotation,
@@ -148,17 +232,18 @@ func checkRootSyncPreSyncAnnotations() testpredicates.Predicate {
 			)
 		}
 		if syncingImage != repoAnnotation {
-			return fmt.Errorf("object %s has commit annotation %s, but is being synced with commit %s",
+			return fmt.Errorf("object %s not synced to expected source url %s. Source URL annotation: %s, synced image url: %s",
 				o.GetName(),
-				commitAnnotation,
-				syncingCommit,
+				image.OCIImageID().Address(),
+				repoAnnotation,
+				syncingImage,
 			)
 		}
 		return nil
 	}
 }
 
-func checkRepoSyncPreSyncAnnotations() testpredicates.Predicate {
+func checkRepoSyncPreSyncAnnotations(image *registryproviders.OCIImage, nt *nomostest.NT) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
 			return testpredicates.ErrObjectNotFound
@@ -178,7 +263,7 @@ func checkRepoSyncPreSyncAnnotations() testpredicates.Predicate {
 		if !ok {
 			return fmt.Errorf("object %q does not have annotation %q", o.GetName(), metadata.SourceURLAnnotationKey)
 		}
-		if syncingCommit != commitAnnotation {
+		if syncingCommit != commitAnnotation || syncingCommit != image.OCIImageID().DigestWithoutPrefix() {
 			return fmt.Errorf("object %s has commit annotation %s, but is being synced with commit %s",
 				o.GetName(),
 				commitAnnotation,
@@ -186,10 +271,11 @@ func checkRepoSyncPreSyncAnnotations() testpredicates.Predicate {
 			)
 		}
 		if syncingImage != repoAnnotation {
-			return fmt.Errorf("object %s has commit annotation %s, but is being synced with commit %s",
+			return fmt.Errorf("object %s not synced to expected source url %s. Source URL annotation: %s, synced image url: %s",
 				o.GetName(),
-				commitAnnotation,
-				syncingCommit,
+				image.OCIImageID().Address(),
+				repoAnnotation,
+				syncingImage,
 			)
 		}
 		return nil

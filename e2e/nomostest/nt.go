@@ -156,6 +156,12 @@ type NT struct {
 	// registryCACertPath is the path to the CA cert used for communicating with the Registry server.
 	registryCACertPath string
 
+	// OCISignatureVerificationCertPath is the path to certs used for communicating with PreSync Webhook Server.
+	OCISignatureVerificationCertPath string
+
+	// cosignPrivateKeyPath is the path to Cosign key pairs for signing OCI images
+	cosignPrivateKeyPath string
+
 	// prometheusPortForwarder is the local port forwarding for the prometheus deployment.
 	prometheusPortForwarder *portforwarder.PortForwarder
 
@@ -515,7 +521,8 @@ func (nt *NT) testLogs(previousPodLog bool) {
 	// temporarily to see how presubmit responds.
 	nt.PodLogs(configmanagement.ControllerNamespace, reconcilermanager.ManagerName, reconcilermanager.ManagerName, previousPodLog)
 	nt.PodLogs(configmanagement.ControllerNamespace, configuration.ShortName, configuration.ShortName, previousPodLog)
-	nt.PodLogs("resource-group-system", "resource-group-controller-manager", "manager", false)
+	nt.PodLogs(configmanagement.RGControllerNamespace, configmanagement.RGControllerName, "manager", previousPodLog)
+	nt.PodLogs(testPreSyncNamespace, testOCISignatureVerificationServer, "", previousPodLog)
 	for id := range nt.SyncSources {
 		var reconcilerName string
 		switch id.Kind {

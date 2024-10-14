@@ -269,6 +269,27 @@ push-vulnerability-scanner:
 	docker tag $(VULNERABILITY_SCANNER_IMAGE) $(VULNERABILITY_SCANNER_SHA_IMAGE)
 	docker push $(VULNERABILITY_SCANNER_SHA_IMAGE)
 
+##################################################
+# E2E OCI signature verification webhook server
+# Only run when changes are made to
+# test/docker/presync-webhook-server
+##################################################
+
+E2E_TEST_IMAGE_PRESYNC_WEBHOOK_SERVER := $(TEST_INFRA_REGISTRY)/oci-signature-verification-server:v1.0.0-$(shell git rev-parse --short HEAD)
+# Builds the container used by e2e tests to test OCI image signature verification.
+.PHONY: build-presync-webhook-server
+build-presync-webhook-server:
+	@echo "+++ Building $(E2E_TEST_IMAGE_PRESYNC_WEBHOOK_SERVER)"
+	docker buildx build \
+		-t $(E2E_TEST_IMAGE_PRESYNC_WEBHOOK_SERVER) \
+		test/docker/presync-webhook-server/
+
+.PHONY: push-presync-webhook-server
+push-presync-webhook-server:
+	@echo "+++ Pushing $(E2E_TEST_IMAGE_PRESYNC_WEBHOOK_SERVER)"
+	@gcloud $(GCLOUD_QUIET) auth configure-docker $(firstword $(subst /, ,$(E2E_TEST_IMAGE_PRESYNC_WEBHOOK_SERVER)))
+	@docker push $(E2E_TEST_IMAGE_PRESYNC_WEBHOOK_SERVER)
+
 .PHONY: deploy
 deploy:
 	kubectl apply -f $(OSS_MANIFEST_STAGING_DIR)/config-sync-manifest.yaml

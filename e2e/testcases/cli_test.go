@@ -1709,3 +1709,172 @@ func TestNomosMigrateMonoRepo(t *testing.T) {
 	nt.T.Log("Waiting for RootSync to be synced")
 	nt.Must(nt.WatchForAllSyncs(nomostest.SkipReadyCheck()))
 }
+
+// This test case validates the behavior of the uninstall script defined
+// at installation/uninstall_configmanagement.sh
+func TestACMUninstallScript(t *testing.T) {
+	nt := nomostest.New(t, nomostesting.NomosCLI, ntopts.SkipConfigSyncInstall)
+
+	nt.T.Cleanup(func() {
+		// Restore state of Config Sync installation after test
+		if err := nomostest.InstallConfigSync(nt); err != nil {
+			nt.T.Fatal(err)
+		}
+	})
+	nt.T.Cleanup(func() {
+		cmObj := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "configmanagement.gke.io/v1",
+				"kind":       "ConfigManagement",
+				"metadata": map[string]interface{}{
+					"name": "config-management",
+				},
+			},
+		}
+
+		if err := nt.KubeClient.MergePatch(cmObj, `{"metadata":{"finalizers":[]}}`); err != nil {
+			if apierrors.IsNotFound(err) {
+				return // object already deleted, exit early to prevent watch error (GVK not found)
+			}
+			nt.T.Error(err)
+		}
+		// Delete the ConfigManagement CR, in case the test failed early.
+		if err := nt.KubeClient.Delete(cmObj); err != nil {
+			if apierrors.IsNotFound(err) {
+				return // object already deleted, exit early to prevent watch error (GVK not found)
+			}
+			nt.T.Fatal(err)
+		}
+		if err := nt.Watcher.WatchForNotFound(kinds.ConfigManagement(), cmObj.GetName(), "", testwatcher.WatchUnstructured()); err != nil {
+			nt.T.Fatal(err)
+		}
+	})
+	nt.T.Cleanup(func() {
+		if t.Failed() {
+			nt.PodLogs(configsync.ControllerNamespace, util.ACMOperatorDeployment, "", false)
+		}
+		// Delete the ConfigManagement operator in case the test failed early.
+		// If this lingers around it could cause issues for subsequent tests.
+		cmDeployment := k8sobjects.DeploymentObject(
+			core.Namespace(configsync.ControllerNamespace),
+			core.Name(util.ACMOperatorDeployment),
+		)
+		if err := nt.KubeClient.Delete(cmDeployment, client.PropagationPolicy(metav1.DeletePropagationForeground)); err != nil && !apierrors.IsNotFound(err) {
+			nt.T.Fatal(err)
+		}
+		if err := nt.Watcher.WatchForNotFound(kinds.Deployment(), util.ACMOperatorDeployment, configsync.ControllerNamespace); err != nil {
+			nt.T.Error(err)
+		}
+	})
+
+	nt.T.Log("Installing ConfigManagement")
+	nt.MustKubectl("apply", "-f", "../testdata/configmanagement/1.18.0/config-management-operator.yaml")
+
+	tg := taskgroup.New()
+	tg.Go(func() error {
+		return nt.Watcher.WatchForCurrentStatus(kinds.CustomResourceDefinitionV1(), util.ConfigManagementCRDName, "")
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), util.ACMOperatorDeployment, configsync.ControllerNamespace)
+	})
+	nt.Must(tg.Wait())
+
+	cmObj := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "configmanagement.gke.io/v1",
+			"kind":       "ConfigManagement",
+			"metadata": map[string]interface{}{
+				"name": "config-management",
+			},
+			"spec": map[string]interface{}{
+				"enableMultiRepo": true,
+				"hierarchyController": map[string]interface{}{
+					"enabled": true,
+				},
+			},
+		},
+	}
+
+	nt.T.Log("Configuring ConfigManagement for multi-repo mode")
+	if err := nt.KubeClient.Create(cmObj); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.Must(nt.Watcher.WatchObject(kinds.Deployment(), "reconciler-manager", configsync.ControllerNamespace,
+		testwatcher.WatchPredicates(
+			testpredicates.DeploymentContainerImageEquals(
+				"reconciler-manager",
+				"gcr.io/config-management-release/reconciler-manager:v1.18.0-rc.3",
+			),
+		)))
+
+	nt.T.Log("Running uninstall script should fail when HNC is enabled")
+	out, err := nt.Shell.Command("./../../installation/uninstall_configmanagement.sh").CombinedOutput()
+	if err == nil {
+		nt.T.Fatal("Expected uninstall script to return non-zero exit code")
+	}
+	assert.Contains(t, string(out), "Hierarchy Controller is enabled on the ConfigManagement object. It must be disabled before migrating.")
+
+	nt.T.Log("Disabling HNC")
+	cmObj = &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "configmanagement.gke.io/v1",
+			"kind":       "ConfigManagement",
+			"metadata": map[string]interface{}{
+				"name": "config-management",
+			},
+			"spec": map[string]interface{}{
+				"enableMultiRepo": true,
+				"hierarchyController": map[string]interface{}{
+					"enabled": false,
+				},
+			},
+		},
+	}
+	nt.Must(nt.KubeClient.Apply(cmObj))
+	nt.Must(nt.Watcher.WatchForNotFound(kinds.Namespace(), "hnc-system", ""))
+	nt.Must(nt.Validate(util.ACMOperatorDeployment, configsync.ControllerNamespace, k8sobjects.DeploymentObject()))
+
+	nt.T.Log("Running uninstall script to remove ACM operator")
+	nt.Must(nt.Shell.Command("./../../installation/uninstall_configmanagement.sh").CombinedOutput())
+
+	nt.T.Log("Wait for legacy resources to be NotFound...")
+	tg = taskgroup.New()
+	tg.Go(func() error {
+		return nt.Watcher.WatchForNotFound(kinds.Deployment(),
+			util.ACMOperatorDeployment, configsync.ControllerNamespace)
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchForNotFound(kinds.Deployment(),
+			"git-importer", configsync.ControllerNamespace)
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchForNotFound(kinds.CustomResourceDefinitionV1(),
+			util.ConfigManagementCRDName, "")
+	})
+	if err := tg.Wait(); err != nil {
+		nt.T.Fatal(err)
+	}
+
+	nt.T.Log("Wait for expected resources to be current...")
+	tg = taskgroup.New()
+	tg.Go(func() error {
+		return nt.Watcher.WatchForCurrentStatus(kinds.Deployment(),
+			util.ReconcilerManagerName, configsync.ControllerNamespace)
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchForCurrentStatus(kinds.Deployment(),
+			configmanagement.RGControllerName, configmanagement.RGControllerNamespace)
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchForNotFound(kinds.Deployment(),
+			core.RootReconcilerName(configsync.RootSyncName), configsync.ControllerNamespace)
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchForNotFound(kinds.RootSyncV1Beta1(),
+			configsync.RootSyncName, configsync.ControllerNamespace)
+	})
+	if err := tg.Wait(); err != nil {
+		nt.T.Fatal(err)
+	}
+}

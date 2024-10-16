@@ -1,4 +1,4 @@
-// Copyright 2022 Google LLC
+// Copyright 2024 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,23 +34,23 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-const testPreSyncNamespace = "config-management-pre-sync"
-const testOCISignatureVerificationServer = "oci-signature-verification-server"
+const testOCISignatureVerificationNamespace = "oci-image-verification"
+const testOCISignatureVerificationServerName = "oci-signature-verification-server"
 
-const testPreSyncSA = "pre-sync-sa"
+const testOCISignatureVerificationSAName = "oci-signature-verification-sa"
 
 const testImageValidationWebhook = "image-verification-webhook"
 
-const testOCISignatureVerificationServerImage = testing.TestInfraArtifactRepositoryAddress + "/oci-signature-verification-server:v1.0.0-1252b2d8"
+const testOCISignatureVerificationServerImage = testing.TestInfraArtifactRepositoryAddress + "/oci-signature-verification-server:v1.0.0-8f51c844"
 
-// SetupPreSync sets up the pre-sync environment, including the namespace, service account,
+// SetupOCISignatureVerification sets up the OCI signature verification environment, including the namespace, service account,
 // OCI signature verification server, and validating webhook configuration.
-func SetupPreSync(nt *NT) error {
-	nt.T.Logf("creating pre-sync namesapce")
-	if err := nt.KubeClient.Create(preSyncNamespace()); err != nil {
+func SetupOCISignatureVerification(nt *NT) error {
+	nt.T.Logf("creating OCI signature verification namespace and service account")
+	if err := nt.KubeClient.Create(testOCISignatureVerificationNS()); err != nil {
 		return err
 	}
-	if err := nt.KubeClient.Create(PreSyncServiceAccount()); err != nil {
+	if err := nt.KubeClient.Create(testOCISignatureVerificationSA()); err != nil {
 		return err
 	}
 
@@ -59,10 +59,10 @@ func SetupPreSync(nt *NT) error {
 	}
 
 	if err := installOCISignatureVerificationServer(nt); err != nil {
-		nt.describeNotRunningTestPods(testPreSyncNamespace)
+		nt.describeNotRunningTestPods(testOCISignatureVerificationNamespace)
 		return fmt.Errorf("waiting for git-server Deployment to become available: %w", err)
 	}
-	if err := applyOCISignatureVerificationValidatingWebhookConfiguration(nt); err != nil {
+	if err := testOCISignatureVerificationValidatingWebhookConfiguration(nt); err != nil {
 		return fmt.Errorf("applying OCI signature verification ValidatingWebhookConfiguration: %w", err)
 	}
 	return nil
@@ -75,7 +75,7 @@ func auth(nt *NT) error {
 		return err
 	}
 
-	err = createKubernetesSecret(nt, cosignSecretName, testPreSyncNamespace, "generic", "--from-file", cosignPublicKeyPath(nt))
+	err = createKubernetesSecret(nt, cosignSecretName, testOCISignatureVerificationNamespace, "generic", "--from-file", cosignPublicKeyPath(nt))
 	if err != nil {
 		return err
 	}
@@ -85,7 +85,7 @@ func auth(nt *NT) error {
 		return err
 	}
 
-	err = createKubernetesSecret(nt, OCISignatureVerificationSecretName, testPreSyncNamespace, "tls", fmt.Sprintf("--cert=%s", tlsCertPath(nt)), fmt.Sprintf("--key=%s", tlsKeyPath(nt)))
+	err = createKubernetesSecret(nt, OCISignatureVerificationSecretName, testOCISignatureVerificationNamespace, "tls", fmt.Sprintf("--cert=%s", tlsCertPath(nt)), fmt.Sprintf("--key=%s", tlsKeyPath(nt)))
 	if err != nil {
 		return err
 	}
@@ -96,7 +96,7 @@ func auth(nt *NT) error {
 // installOCISignatureVerificationServer installs the pre-sync webhook server Pod, and returns a callback that
 // waits for the Pod to become available.
 func installOCISignatureVerificationServer(nt *NT) error {
-	objs := OCISignatureVerificationServer()
+	objs := testOCISignatureVerificationServer()
 
 	for _, o := range objs {
 		if err := nt.KubeClient.Apply(o); err != nil {
@@ -105,57 +105,57 @@ func installOCISignatureVerificationServer(nt *NT) error {
 		}
 	}
 
-	return nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), testOCISignatureVerificationServer, testPreSyncNamespace)
+	return nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), testOCISignatureVerificationServerName, testOCISignatureVerificationNamespace)
 }
 
-func OCISignatureVerificationServer() []client.Object {
+func testOCISignatureVerificationServer() []client.Object {
 	objs := []client.Object{
-		OCISignatureVerificationService(),
-		OCISignatureVerificationDeployment(),
+		testOCISignatureVerificationService(),
+		testOCISignatureVerificationDeployment(),
 	}
 	return objs
 }
 
-func preSyncNamespace() *corev1.Namespace {
-	return k8sobjects.NamespaceObject(testPreSyncNamespace)
+func testOCISignatureVerificationNS() *corev1.Namespace {
+	return k8sobjects.NamespaceObject(testOCISignatureVerificationNamespace)
 }
 
-func PreSyncServiceAccount() *corev1.ServiceAccount {
-	return k8sobjects.ServiceAccountObject(testPreSyncSA,
-		core.Namespace(testPreSyncNamespace),
+func testOCISignatureVerificationSA() *corev1.ServiceAccount {
+	return k8sobjects.ServiceAccountObject(testOCISignatureVerificationSAName,
+		core.Namespace(testOCISignatureVerificationNamespace),
 		core.Annotation(controllers.GCPSAAnnotationKey, fmt.Sprintf("%s@%s.iam.gserviceaccount.com",
 			registryproviders.ArtifactRegistryReaderName, *e2e.GCPProject)))
 }
 
-func OCISignatureVerificationService() *corev1.Service {
+func testOCISignatureVerificationService() *corev1.Service {
 	service := k8sobjects.ServiceObject(
-		core.Name(testOCISignatureVerificationServer),
-		core.Namespace(testPreSyncNamespace),
+		core.Name(testOCISignatureVerificationServerName),
+		core.Namespace(testOCISignatureVerificationNamespace),
 	)
 	service.Spec.Ports = []corev1.ServicePort{{Name: "port", Port: 443}}
-	service.Spec.Selector = map[string]string{"app": testOCISignatureVerificationServer}
+	service.Spec.Selector = map[string]string{"app": testOCISignatureVerificationServerName}
 	return service
 }
 
-func OCISignatureVerificationDeployment() *appsv1.Deployment {
-	deployment := k8sobjects.DeploymentObject(core.Name(testOCISignatureVerificationServer),
-		core.Namespace(testPreSyncNamespace),
-		core.Labels(map[string]string{"app": testOCISignatureVerificationServer}),
+func testOCISignatureVerificationDeployment() *appsv1.Deployment {
+	deployment := k8sobjects.DeploymentObject(core.Name(testOCISignatureVerificationServerName),
+		core.Namespace(testOCISignatureVerificationNamespace),
+		core.Labels(map[string]string{"app": testOCISignatureVerificationServerName}),
 	)
 
 	deployment.Spec = appsv1.DeploymentSpec{
 		Selector: &v1.LabelSelector{
-			MatchLabels: map[string]string{"app": testOCISignatureVerificationServer},
+			MatchLabels: map[string]string{"app": testOCISignatureVerificationServerName},
 		},
 		Template: corev1.PodTemplateSpec{
 			ObjectMeta: v1.ObjectMeta{
-				Labels: map[string]string{"app": testOCISignatureVerificationServer},
+				Labels: map[string]string{"app": testOCISignatureVerificationServerName},
 				Annotations: map[string]string{
 					"safeToEvictAnnotation": "false",
 				},
 			},
 			Spec: corev1.PodSpec{
-				ServiceAccountName: testPreSyncSA,
+				ServiceAccountName: testOCISignatureVerificationSAName,
 				Volumes: []corev1.Volume{
 					{
 						Name: "ca-certs",
@@ -194,7 +194,7 @@ func OCISignatureVerificationDeployment() *appsv1.Deployment {
 						ReadinessProbe: &corev1.Probe{
 							ProbeHandler: corev1.ProbeHandler{
 								TCPSocket: &corev1.TCPSocketAction{
-									Port: intstr.FromInt(443),
+									Port: intstr.FromInt32(443),
 								},
 							},
 							FailureThreshold: 2,
@@ -210,7 +210,7 @@ func OCISignatureVerificationDeployment() *appsv1.Deployment {
 	return deployment
 }
 
-func applyOCISignatureVerificationValidatingWebhookConfiguration(nt *NT) error {
+func testOCISignatureVerificationValidatingWebhookConfiguration(nt *NT) error {
 	caBundle, err := getCABundle(tlsCertPath(nt))
 	if err != nil {
 		return fmt.Errorf("getting CA Bundle: %v", err)
@@ -223,8 +223,8 @@ func applyOCISignatureVerificationValidatingWebhookConfiguration(nt *NT) error {
 			Name: "imageverification.webhook.com",
 			ClientConfig: admissionv1.WebhookClientConfig{
 				Service: &admissionv1.ServiceReference{
-					Name:      testOCISignatureVerificationServer,
-					Namespace: testPreSyncNamespace,
+					Name:      testOCISignatureVerificationServerName,
+					Namespace: testOCISignatureVerificationNamespace,
 					Path:      ptr.To("/validate"),
 					Port:      ptr.To(int32(443)),
 				},

@@ -275,20 +275,20 @@ push-vulnerability-scanner:
 # test/docker/presync-webhook-server
 ##################################################
 
-E2E_TEST_IMAGE_PRESYNC_WEBHOOK_SERVER := $(TEST_INFRA_REGISTRY)/oci-signature-verification-server:v1.0.0-$(shell git rev-parse --short HEAD)
+E2E_TEST_IMAGE_OCI_SIGNATURE_VERIFICATION_SERVER := $(TEST_INFRA_REGISTRY)/oci-signature-verification-server:v1.0.0-$(shell git rev-parse --short HEAD)
 # Builds the container used by e2e tests to test OCI image signature verification.
-.PHONY: build-presync-webhook-server
-build-presync-webhook-server:
-	@echo "+++ Building $(E2E_TEST_IMAGE_PRESYNC_WEBHOOK_SERVER)"
+.PHONY: build-oci-signature-verification-server
+build-oci-signature-verification-server:
+	@echo "+++ Building $(E2E_TEST_IMAGE_OCI_SIGNATURE_VERIFICATION_SERVER)"
 	docker buildx build \
-		-t $(E2E_TEST_IMAGE_PRESYNC_WEBHOOK_SERVER) \
+		-t $(E2E_TEST_IMAGE_OCI_SIGNATURE_VERIFICATION_SERVER) \
 		test/docker/presync-webhook-server/
 
-.PHONY: push-presync-webhook-server
-push-presync-webhook-server:
-	@echo "+++ Pushing $(E2E_TEST_IMAGE_PRESYNC_WEBHOOK_SERVER)"
-	@gcloud $(GCLOUD_QUIET) auth configure-docker $(firstword $(subst /, ,$(E2E_TEST_IMAGE_PRESYNC_WEBHOOK_SERVER)))
-	@docker push $(E2E_TEST_IMAGE_PRESYNC_WEBHOOK_SERVER)
+.PHONY: push-oci-signature-verification-server
+push-oci-signature-verification-server:
+	@echo "+++ Pushing $(E2E_TEST_IMAGE_OCI_SIGNATURE_VERIFICATION_SERVER)"
+	@gcloud $(GCLOUD_QUIET) auth configure-docker $(firstword $(subst /, ,$(E2E_TEST_IMAGE_OCI_SIGNATURE_VERIFICATION_SERVER)))
+	@docker push $(E2E_TEST_IMAGE_OCI_SIGNATURE_VERIFICATION_SERVER)
 
 .PHONY: deploy
 deploy:

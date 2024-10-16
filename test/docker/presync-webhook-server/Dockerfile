@@ -25,7 +25,7 @@ RUN go install github.com/sigstore/cosign/v2/cmd/cosign@v2.4.1
 ENV GOPATH=/go
 ENV PATH "/go/bin:/usr/local/go/bin:$PATH"
 
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o webhook-server main.go
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o webhook-server oci-signature-verification-server.go
 
 # Final stage
 FROM gcr.io/google.com/cloudsdktool/google-cloud-cli:slim

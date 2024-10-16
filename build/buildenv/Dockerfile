@@ -58,7 +58,7 @@ ENV CGO_ENABLED=0
 # but not any more so we have to install it ourselves.
 RUN go install golang.org/x/tools/cmd/goimports@v0.7.0
 
-RUN go install github.com/sigstore/cosign/cmd/cosign@latest
+RUN go install github.com/sigstore/cosign/cmd/cosign@v2.4.1
 
 ENV COSIGN_PASSWORD=""
 

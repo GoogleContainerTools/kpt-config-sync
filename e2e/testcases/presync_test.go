@@ -43,7 +43,7 @@ func TestAddPreSyncAnnotationRepoSync(t *testing.T) {
 		ntopts.RequireOCIProvider,
 		ntopts.SyncWithGitSource(repoSyncID),
 		ntopts.RepoSyncPermissions(policy.RBACAdmin(), policy.CoreAdmin()))
-	if err := nomostest.SetupPreSync(nt); err != nil {
+	if err := nomostest.SetupOCISignatureVerification(nt); err != nil {
 		nt.T.Fatal(err)
 	}
 	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
@@ -95,11 +95,11 @@ func TestAddPreSyncAnnotationRepoSync(t *testing.T) {
 		nt.T.Fatalf("Failed to sign second test image %s", err)
 	}
 	nt.T.Log("Update source expectation for watch")
-	repoSyncOCI = nt.RepoSyncObjectOCI(repoSyncKey, image.OCIImageID().WithoutDigest(), "", image1.Digest)
+	_ = nt.RepoSyncObjectOCI(repoSyncKey, image.OCIImageID().WithoutDigest(), "", image1.Digest)
 	nt.Must(nt.WatchForAllSyncs())
 	err = nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSyncID.Name, repoSyncID.Namespace,
 		testwatcher.WatchPredicates(
-			checkRepoSyncPreSyncAnnotations(image1, nt),
+			checkRepoSyncPreSyncAnnotations(image1),
 		))
 	if err != nil {
 		nt.T.Fatalf("Source annotation not updated for RepoSync %v", err)
@@ -128,7 +128,7 @@ func TestAddPreSyncAnnotationRootSync(t *testing.T) {
 		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured),
 		ntopts.RequireOCIProvider,
 	)
-	if err := nomostest.SetupPreSync(nt); err != nil {
+	if err := nomostest.SetupOCISignatureVerification(nt); err != nil {
 		nt.T.Fatal(err)
 	}
 	gitSource := nt.SyncSources[rootSyncID]
@@ -178,12 +178,12 @@ func TestAddPreSyncAnnotationRootSync(t *testing.T) {
 	}
 
 	nt.T.Log("Update source expectation for watch")
-	rootSyncOCI = nt.RootSyncObjectOCI(rootSyncKey.Name, image.OCIImageID().WithoutDigest(), "", image1.Digest)
+	_ = nt.RootSyncObjectOCI(rootSyncKey.Name, image.OCIImageID().WithoutDigest(), "", image1.Digest)
 	nt.Must(nt.WatchForAllSyncs())
 	nt.T.Log("Check RootSync is synced to second image and annotations are updated.")
 	err = nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, rootSyncID.Namespace,
 		testwatcher.WatchPredicates(
-			checkRootSyncPreSyncAnnotations(image1, nt),
+			checkRootSyncPreSyncAnnotations(image1),
 		))
 	if err != nil {
 		nt.T.Fatalf("Source annotation not updated for RootSync %v", err)
@@ -204,7 +204,7 @@ func TestAddPreSyncAnnotationRootSync(t *testing.T) {
 	}
 }
 
-func checkRootSyncPreSyncAnnotations(image *registryproviders.OCIImage, nt *nomostest.NT) testpredicates.Predicate {
+func checkRootSyncPreSyncAnnotations(image *registryproviders.OCIImage) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
 			return testpredicates.ErrObjectNotFound
@@ -243,7 +243,7 @@ func checkRootSyncPreSyncAnnotations(image *registryproviders.OCIImage, nt *nomo
 	}
 }
 
-func checkRepoSyncPreSyncAnnotations(image *registryproviders.OCIImage, nt *nomostest.NT) testpredicates.Predicate {
+func checkRepoSyncPreSyncAnnotations(image *registryproviders.OCIImage) testpredicates.Predicate {
 	return func(o client.Object) error {
 		if o == nil {
 			return testpredicates.ErrObjectNotFound

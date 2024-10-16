@@ -90,7 +90,7 @@ OTELCONTRIBCOL_VERSION := v0.103.0-gke.4
 OTELCONTRIBCOL_IMAGE_NAME := gcr.io/config-management-release/otelcontribcol:$(OTELCONTRIBCOL_VERSION)
 
 # Directory used for staging Docker contexts.
-STAGING_DIR := $(OUTPUT_DIR)/staging
+STAGING_DIR ?= $(OUTPUT_DIR)/staging
 
 # Directory used for staging the manifest primitives.
 NOMOS_MANIFEST_STAGING_DIR := $(STAGING_DIR)/operator
@@ -311,9 +311,15 @@ build-status:
 test-unit: buildenv-dirs "$(KUSTOMIZE)"
 	@./scripts/test-unit.sh $(NOMOS_GO_PKG)
 
+# small unit test to verify the behavior of an example kustomization for manual install
+.PHONY: test-kustomization
+test-kustomization:
+	$(MAKE) build-manifests STAGING_DIR=$(OUTPUT_DIR)/testing REGISTRY=gcr.io/cs-test IMAGE_TAG=placeholder
+	@./scripts/test-kustomization.sh
+
 # Runs unit tests and linter.
 .PHONY: test
-test: test-unit lint
+test: test-unit test-kustomization lint
 
 # The presubmits have made side-effects in the past, which makes their
 # validation suspect (as the repository they are validating is different

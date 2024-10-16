@@ -85,6 +85,7 @@ func cosignDir(nt *NT) string {
 	return filepath.Join(nt.TmpDir, "cosign")
 }
 
+// CosignPrivateKeyPath returns the private key for signing image
 func CosignPrivateKeyPath(nt *NT) string {
 	return filepath.Join(cosignDir(nt), "cosign.key")
 }
@@ -397,8 +398,8 @@ func generateTLSKeyPair(nt *NT) error {
 	nt.T.Log("Generating TLS key pair...")
 	cmd := exec.Command("openssl", "req", "-nodes", "-x509", "-sha256", "-newkey", "rsa:4096",
 		"-keyout", tlsKeyPath(nt), "-out", tlsCertPath(nt), "-days", "365",
-		"-subj", "/CN=oci-signature-verification-server.config-management-pre-sync.svc",
-		"-addext", "subjectAltName = DNS:oci-signature-verification-server,DNS:oci-signature-verification-server.config-management-pre-sync,DNS:oci-signature-verification-server.config-management-pre-sync.svc")
+		"-subj", "/CN=oci-signature-verification-server.oci-image-verification.svc",
+		"-addext", "subjectAltName = DNS:oci-signature-verification-server,DNS:oci-signature-verification-server.oci-image-verification,DNS:oci-signature-verification-server.oci-image-verification.svc")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 

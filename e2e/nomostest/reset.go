@@ -52,7 +52,7 @@ var sharedTestNamespaces = []string{
 	testGitNamespace,
 	TestRegistryNamespace,
 	prometheusNamespace,
-	testPreSyncNamespace,
+	testOCISignatureVerificationNamespace,
 }
 
 // protectedNamespaces is a list of namespaces that should never be deleted.

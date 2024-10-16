@@ -1,3 +1,17 @@
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package main
 
 import (
@@ -12,11 +26,12 @@ import (
 
 	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/klog/v2"
 )
 
 const (
-	SourceURL    = "configsync.gke.io/source-url"
-	SourceCommit = "configsync.gke.io/source-commit"
+	sourceURL    = "configsync.gke.io/source-url"
+	sourceCommit = "configsync.gke.io/source-commit"
 )
 
 var authorized bool
@@ -49,7 +64,7 @@ func validateImage(image, commit string) error {
 		return fmt.Errorf("failed to replace tag with digest: %v", err)
 	}
 	cmd := exec.Command("cosign", "verify", imageWithDigest, "--key", "/cosign-key/cosign.pub")
-	log.Printf("command %s, url: %s, digest: %s", cmd.String(), image, commit)
+	klog.Infof("command %s, url: %s, digest: %s", cmd.String(), image, commit)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("cosign verification failed: %s, output: %s", err, string(output))
@@ -64,10 +79,10 @@ func replaceTagWithDigest(imageURL, commitSHA string) (string, error) {
 	}
 	imageWithoutTag := strings.Split(imageURL, ":")[0]
 
-	// image URL has digeset
+	// image URL has digest
 	if strings.Contains(imageURL, "@sha256:") {
 		URLWithSha := fmt.Sprintf("%s:%s", imageWithoutTag, commitSHA)
-		log.Printf("Replaced existing digest with new digest: %s", URLWithSha)
+		klog.Infof("Replaced existing digest with new digest: %s", URLWithSha)
 		return URLWithSha, nil
 	}
 
@@ -82,7 +97,7 @@ func auth() error {
 	defer authMutex.Unlock()
 
 	if authorized {
-		log.Printf("Skip authorizing docker as already done")
+		klog.Infof("Skip authorizing docker as already done")
 		return nil
 	}
 	gcloudCmd := exec.Command("gcloud", "auth", "print-access-token")
@@ -98,7 +113,7 @@ func auth() error {
 	if err != nil {
 		return fmt.Errorf("gcloud auth ar failed: %s, output: %s", err, string(output))
 	}
-	log.Printf("Docker authorization done: %s", string(output))
+	klog.Infof("Docker authorization done: %s", string(output))
 	authorized = true
 	return nil
 }
@@ -106,60 +121,60 @@ func auth() error {
 func handleWebhook(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		log.Printf("Failed to read request body: %v", err)
+		klog.Errorf("Failed to read request body: %v", err)
 		http.Error(w, "Failed to read request body", http.StatusBadRequest)
 		return
 	}
 
 	var admissionReview admissionv1.AdmissionReview
 	if err := json.Unmarshal(body, &admissionReview); err != nil {
-		log.Printf("Failed to unmarshal admission review: %v", err)
+		klog.Errorf("Failed to unmarshal admission review: %v", err)
 		http.Error(w, "Failed to unmarshal admission review", http.StatusBadRequest)
 		return
 	}
 
 	oldAnnotations, err := getAnnotations(admissionReview.Request.OldObject.Raw)
 	if err != nil {
-		log.Printf("Failed to extract old annotations: %v", err)
+		klog.Errorf("Failed to extract old annotations: %v", err)
 	}
 
 	newAnnotations, err := getAnnotations(admissionReview.Request.Object.Raw)
 	if err != nil {
-		log.Printf("Failed to extract new annotations: %v", err)
+		klog.Errorf("Failed to extract new annotations: %v", err)
 	}
 
 	response := &admissionv1.AdmissionResponse{
 		UID: admissionReview.Request.UID,
 	}
 
-	if newAnnotations[SourceURL] != oldAnnotations[SourceURL] ||
-		newAnnotations[SourceCommit] != oldAnnotations[SourceCommit] {
-		log.Printf("Detected pre-sync annotation changes")
+	if newAnnotations[sourceURL] != oldAnnotations[sourceURL] ||
+		newAnnotations[sourceCommit] != oldAnnotations[sourceCommit] {
+		klog.Infof("Detected pre-sync annotation changes")
 		if err := auth(); err != nil {
-			log.Printf("Failed to authorize docker %v", err)
+			klog.Errorf("Failed to authorize docker %v", err)
 			response.Result = &metav1.Status{
 				Message: fmt.Sprintf("Failed to authorize docker: %v", err),
 			}
 			response.Allowed = false
 		}
-		if err := validateImage(newAnnotations[SourceURL], newAnnotations[SourceCommit]); err != nil {
-			log.Printf("Image validation failed: %v", err)
+		if err := validateImage(newAnnotations[sourceURL], newAnnotations[sourceCommit]); err != nil {
+			klog.Errorf("Image validation failed: %v", err)
 			response.Allowed = false
 			response.Result = &metav1.Status{
 				Message: fmt.Sprintf("Image validation failed: %v", err),
 			}
 		} else {
-			log.Printf("Image validation successful for %s", newAnnotations[SourceURL])
+			klog.Infof("Image validation successful for %s", newAnnotations[sourceURL])
 			response.Allowed = true
 		}
 	} else {
-		log.Printf("No annotation changes detected")
+		klog.Infof("No annotation changes detected")
 		response.Allowed = true
 	}
 
 	admissionReview.Response = response
 	if err := json.NewEncoder(w).Encode(admissionReview); err != nil {
-		log.Printf("Failed to encode admission response: %v", err)
+		klog.Infof("Failed to encode admission response: %v", err)
 	}
 }
 

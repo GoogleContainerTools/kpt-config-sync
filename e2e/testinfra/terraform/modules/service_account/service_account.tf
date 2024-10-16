@@ -72,7 +72,7 @@ resource "google_service_account_iam_member" "k8s_sa_binding" {
     "serviceAccount:${data.google_project.project.project_id}.svc.id.goog[config-management-system/ns-reconciler-test-ns-level-1-7]",
     "serviceAccount:${data.google_project.project.project_id}.svc.id.goog[config-management-system/ns-reconciler-test-ns-level-2-7]",
     "serviceAccount:${data.google_project.project.project_id}.svc.id.goog[config-management-system/ns-reconciler-test-ns-level-3-7]",
-    "serviceAccount:${data.google_project.project.project_id}.svc.id.goog[config-management-pre-sync/pre-sync-sa]",
+    "serviceAccount:${data.google_project.project.project_id}.svc.id.goog[oci-image-verification/oci-signature-verification-sa]",
   ])
   service_account_id = google_service_account.gcp_sa.name
   role               = "roles/iam.workloadIdentityUser"

@@ -58,10 +58,6 @@ ENV CGO_ENABLED=0
 # but not any more so we have to install it ourselves.
 RUN go install golang.org/x/tools/cmd/goimports@v0.7.0
 
-RUN go install github.com/sigstore/cosign/cmd/cosign@v2.4.1
-
-ENV COSIGN_PASSWORD=""
-
 # gotopt2 parses command line options
 # v0.1.2
 ARG GOTOPT2_REPO="github.com/filmil/gotopt2"
@@ -92,6 +88,10 @@ RUN apt-get update \
 ENV GOCACHE=/go/cache
 
 COPY --from=tools-base /go/bin/* /bin/
+
+# Install Cosign for signing test images
+RUN go install github.com/sigstore/cosign/cmd/cosign@v2.4.1
+ENV COSIGN_PASSWORD=""
 
 # Install gcloud & gsutil
 # Requires /.config/ & /.gsutil/ volumes mounted for authentication

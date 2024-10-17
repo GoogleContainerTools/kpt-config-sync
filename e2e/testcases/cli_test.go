@@ -1378,6 +1378,9 @@ func TestNomosMigrate(t *testing.T) {
 			},
 			"spec": map[string]interface{}{
 				"enableMultiRepo": true,
+				"hierarchyController": map[string]interface{}{
+					"enabled": true,
+				},
 			},
 		},
 	}
@@ -1394,6 +1397,33 @@ func TestNomosMigrate(t *testing.T) {
 				"gcr.io/config-management-release/reconciler-manager:v1.18.0-rc.3",
 			),
 		)))
+
+	nt.T.Log("Running nomos migrate should fail when HNC is enabled")
+	out, err := nt.Shell.Command("nomos", "migrate", "--remove-configmanagement").CombinedOutput()
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	assert.Contains(t, string(out), "Hierarchy Controller is enabled on the ConfigManagement object. It must be disabled before migrating.")
+
+	nt.T.Log("Disabling HNC")
+	cmObj = &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "configmanagement.gke.io/v1",
+			"kind":       "ConfigManagement",
+			"metadata": map[string]interface{}{
+				"name": "config-management",
+			},
+			"spec": map[string]interface{}{
+				"enableMultiRepo": true,
+				"hierarchyController": map[string]interface{}{
+					"enabled": false,
+				},
+			},
+		},
+	}
+	nt.Must(nt.KubeClient.Apply(cmObj))
+	nt.Must(nt.Watcher.WatchForNotFound(kinds.Namespace(), "hnc-system", ""))
+	nt.Must(nt.Validate(util.ACMOperatorDeployment, configsync.ControllerNamespace, k8sobjects.DeploymentObject()))
 
 	nt.T.Log("Running nomos migrate to migrate from ConfigManagement to OSS install")
 	nt.Must(nt.Shell.Command("nomos", "migrate", "--remove-configmanagement").CombinedOutput())

@@ -202,6 +202,15 @@ func (c *ConfigManagementClient) RemoveFinalizers(ctx context.Context) error {
 	return err
 }
 
+// IsHNCEnabled returns if the ConfigManagement object has HNC enabled.
+func (c *ConfigManagementClient) IsHNCEnabled(ctx context.Context) (bool, error) {
+	isHNCEnabled, err := c.NestedBool(ctx, "spec", "hierarchyController", "enabled")
+	if err != nil {
+		return false, err
+	}
+	return isHNCEnabled, nil
+}
+
 // IsOssInstallation will check for the existence of ConfigManagement object, Operator deployment, and RootSync CRD
 // If RootSync CRD exist but ConfigManagement and Operator doesn't, it indicates an OSS installation
 func IsOssInstallation(ctx context.Context, c *ConfigManagementClient, cl client.Client, ck *kubernetes.Clientset) (bool, error) {

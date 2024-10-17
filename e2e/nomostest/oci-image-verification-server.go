@@ -21,6 +21,7 @@ import (
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
@@ -65,6 +66,47 @@ func SetupOCISignatureVerification(nt *NT) error {
 	if err := testOCISignatureVerificationValidatingWebhookConfiguration(nt); err != nil {
 		return fmt.Errorf("applying OCI signature verification ValidatingWebhookConfiguration: %w", err)
 	}
+	return nil
+}
+
+// TeardownOCISignatureVerification removes the OCI signature verification environment,
+// including the validating webhook configuration, server deployment, service, namespace, and related resources.
+func TeardownOCISignatureVerification(nt *NT) error {
+	nt.T.Log("Tearing down OCI signature verification environment")
+	if err := nt.KubeClient.Delete(k8sobjects.AdmissionWebhookObject(testImageValidationWebhook)); err != nil && !apierrors.IsNotFound(err) {
+		nt.T.Logf("Error deleting ValidatingWebhookConfiguration: %v", err)
+	}
+	objs := testOCISignatureVerificationServer()
+	for _, o := range objs {
+		if err := nt.KubeClient.Delete(o); err != nil && !apierrors.IsNotFound(err) {
+			nt.T.Logf("Error deleting %T %s/%s: %v", o, o.GetNamespace(), o.GetName(), err)
+		}
+	}
+	secrets := []string{cosignSecretName, OCISignatureVerificationSecretName}
+	for _, secretName := range secrets {
+		if err := nt.KubeClient.Delete(k8sobjects.SecretObject(secretName, core.Namespace(testOCISignatureVerificationNamespace))); err != nil && !apierrors.IsNotFound(err) {
+			nt.T.Logf("Error deleting Secret %s: %v", secretName, err)
+		}
+	}
+	if err := nt.KubeClient.Delete(testOCISignatureVerificationSA()); err != nil && !apierrors.IsNotFound(err) {
+		nt.T.Logf("Error deleting ServiceAccount: %v", err)
+	}
+	if err := nt.KubeClient.Delete(testOCISignatureVerificationNS()); err != nil && !apierrors.IsNotFound(err) {
+		nt.T.Logf("Error deleting Namespace: %v", err)
+	}
+	filesToDelete := []string{
+		cosignPublicKeyPath(nt),
+		CosignPrivateKeyPath(nt),
+		tlsCertPath(nt),
+		tlsKeyPath(nt),
+	}
+	for _, file := range filesToDelete {
+		if err := os.Remove(file); err != nil && !os.IsNotExist(err) {
+			nt.T.Logf("Error deleting file %s: %v", file, err)
+		}
+	}
+
+	nt.T.Log("OCI signature verification environment teardown complete")
 	return nil
 }
 

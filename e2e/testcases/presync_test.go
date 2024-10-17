@@ -43,16 +43,22 @@ func TestAddPreSyncAnnotationRepoSync(t *testing.T) {
 		ntopts.RequireOCIProvider,
 		ntopts.SyncWithGitSource(repoSyncID),
 		ntopts.RepoSyncPermissions(policy.RBACAdmin(), policy.CoreAdmin()))
+
 	if err := nomostest.SetupOCISignatureVerification(nt); err != nil {
 		nt.T.Fatal(err)
 	}
+	nt.T.Cleanup(func() {
+		if err := nomostest.TeardownOCISignatureVerification(nt); err != nil {
+			nt.T.Error(err)
+		}
+	})
 	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 	repoSyncKey := repoSyncID.ObjectKey
 	gitSource := nt.SyncSources[repoSyncID]
 
 	nt.T.Log("Create first OCI image with latest tag.")
-	bookinfoRole := k8sobjects.RoleObject(core.Name("bookinfo-admin"))
-	image, err := nt.BuildAndPushOCIImage(repoSyncKey, registryproviders.ImageInputObjects(nt.Scheme, bookinfoRole))
+	bookInfoRole := k8sobjects.RoleObject(core.Name("book-info-admin"))
+	image, err := nt.BuildAndPushOCIImage(repoSyncKey, registryproviders.ImageInputObjects(nt.Scheme, bookInfoRole))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -66,7 +72,7 @@ func TestAddPreSyncAnnotationRepoSync(t *testing.T) {
 
 	nt.T.Log("Create second image with latest tag.")
 	bookstoreSA := k8sobjects.ServiceAccountObject("bookstore-sa")
-	image1, err := nt.BuildAndPushOCIImage(repoSyncKey, registryproviders.ImageInputObjects(nt.Scheme, bookinfoRole, bookstoreSA))
+	image1, err := nt.BuildAndPushOCIImage(repoSyncKey, registryproviders.ImageInputObjects(nt.Scheme, bookInfoRole, bookstoreSA))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -119,6 +125,9 @@ func TestAddPreSyncAnnotationRepoSync(t *testing.T) {
 	if err != nil {
 		nt.T.Fatalf("Source annotations still exist when RepoSync is syncing from Git %v", err)
 	}
+	if err := nomostest.TeardownOCISignatureVerification(nt); err != nil {
+		nt.T.Fatal(err)
+	}
 }
 
 func TestAddPreSyncAnnotationRootSync(t *testing.T) {
@@ -128,14 +137,20 @@ func TestAddPreSyncAnnotationRootSync(t *testing.T) {
 		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured),
 		ntopts.RequireOCIProvider,
 	)
+
 	if err := nomostest.SetupOCISignatureVerification(nt); err != nil {
 		nt.T.Fatal(err)
 	}
+	nt.T.Cleanup(func() {
+		if err := nomostest.TeardownOCISignatureVerification(nt); err != nil {
+			nt.T.Error(err)
+		}
+	})
 	gitSource := nt.SyncSources[rootSyncID]
 
 	nt.T.Log("Create first OCI image with latest tag.")
-	bookinfoRole := k8sobjects.RoleObject(core.Name("bookinfo-admin"))
-	image, err := nt.BuildAndPushOCIImage(rootSyncKey, registryproviders.ImageInputObjects(nt.Scheme, bookinfoRole))
+	bookInfoRole := k8sobjects.RoleObject(core.Name("book-info-admin"))
+	image, err := nt.BuildAndPushOCIImage(rootSyncKey, registryproviders.ImageInputObjects(nt.Scheme, bookInfoRole))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -148,7 +163,7 @@ func TestAddPreSyncAnnotationRootSync(t *testing.T) {
 
 	nt.T.Log("Create second image with latest tag.")
 	bookstoreSA := k8sobjects.ServiceAccountObject("bookstore-sa")
-	image1, err := nt.BuildAndPushOCIImage(rootSyncKey, registryproviders.ImageInputObjects(nt.Scheme, bookinfoRole, bookstoreSA))
+	image1, err := nt.BuildAndPushOCIImage(rootSyncKey, registryproviders.ImageInputObjects(nt.Scheme, bookInfoRole, bookstoreSA))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -201,6 +216,9 @@ func TestAddPreSyncAnnotationRootSync(t *testing.T) {
 		))
 	if err != nil {
 		nt.T.Fatalf("Source annotations still exist when RootSync is syncing from Git %v", err)
+	}
+	if err := nomostest.TeardownOCISignatureVerification(nt); err != nil {
+		nt.T.Fatal(err)
 	}
 }
 

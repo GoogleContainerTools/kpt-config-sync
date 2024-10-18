@@ -15,23 +15,33 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
-	"os/exec"
 	"strings"
 	"sync"
 
+	credentials "cloud.google.com/go/iam/credentials/apiv1"
+	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/sigstore/cosign/v2/pkg/cosign"
+	ociremote "github.com/sigstore/cosign/v2/pkg/oci/remote"
+	"github.com/sigstore/cosign/v2/pkg/signature"
+	"google.golang.org/api/option"
+	credentialspb "google.golang.org/genproto/googleapis/iam/credentials/v1"
 	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 )
 
 const (
-	sourceURL    = "configsync.gke.io/source-url"
-	sourceCommit = "configsync.gke.io/source-commit"
+	sourceURL     = "configsync.gke.io/source-url"
+	sourceCommit  = "configsync.gke.io/source-commit"
+	publicKeyPath = "/cosign-key/cosign.pub"
 )
 
 var authorized bool
@@ -53,29 +63,89 @@ func getAnnotations(raw []byte) (map[string]string, error) {
 	return nil, fmt.Errorf("no annotations found")
 }
 
-// validateImage verifies the signature of an OCI image using Cosign.
-// It replaces the image tag with the given commit SHA to ensure the correct image is verified.
-func validateImage(image, commit string) error {
+type GoogleAuthKeychain struct {
+	accessToken string
+}
+
+func (gk *GoogleAuthKeychain) Resolve(target authn.Resource) (authn.Authenticator, error) {
+	return authn.FromConfig(authn.AuthConfig{
+		Username: "oauth2accesstoken",
+		Password: gk.accessToken,
+	}), nil
+}
+
+// Function to acquire OAuth2 access token programmatically
+func getGoogleAccessToken(ctx context.Context) (string, error) {
+	client, err := credentials.NewIamCredentialsClient(ctx, option.WithScopes("https://www.googleapis.com/auth/cloud-platform"))
+	if err != nil {
+		return "", fmt.Errorf("failed to create IAM credentials client: %v", err)
+	}
+	defer client.Close()
+
+	req := &credentialspb.GenerateAccessTokenRequest{
+		Name:  "projects/-/serviceAccounts/e2e-test-ar-reader@peip-monitor.iam.gserviceaccount.com",
+		Scope: []string{"https://www.googleapis.com/auth/cloud-platform"},
+	}
+
+	resp, err := client.GenerateAccessToken(ctx, req)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate access token: %v", err)
+	}
+	return resp.AccessToken, nil
+}
+
+func getAuthenticatedKeychain(ctx context.Context) (authn.Keychain, error) {
+	accessToken, err := getGoogleAccessToken(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Google access token: %v", err)
+	}
+
+	return &GoogleAuthKeychain{accessToken: accessToken}, nil
+}
+
+func verifyImageSignature(image, commit string) error {
 	if image == "" || commit == "" {
 		return nil
 	}
+	ctx := context.Background()
+	pubKey, err := signature.LoadPublicKey(ctx, publicKeyPath)
+	if err != nil {
+		return fmt.Errorf("error loading public key: %v", err)
+	}
+
+	keychain, err := getAuthenticatedKeychain(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get authenticated keychain: %v", err)
+	}
+
+	opts := &cosign.CheckOpts{
+		RegistryClientOpts: []ociremote.Option{ociremote.WithRemoteOptions(remote.WithAuthFromKeychain(keychain))},
+		SigVerifier:        pubKey,
+		IgnoreTlog:         true,
+	}
+
 	imageWithDigest, err := replaceTagWithDigest(image, commit)
 	if err != nil {
 		return fmt.Errorf("failed to replace tag with digest: %v", err)
 	}
-	cmd := exec.Command("cosign", "verify", imageWithDigest, "--key", "/cosign-key/cosign.pub")
-	klog.Infof("command %s, url: %s, digest: %s", cmd.String(), image, commit)
-	output, err := cmd.CombinedOutput()
+	ref, err := name.ParseReference(imageWithDigest)
 	if err != nil {
-		return fmt.Errorf("cosign verification failed: %s, output: %s", err, string(output))
+		return fmt.Errorf("failed to parse image reference: %v", err)
 	}
+	_, _, err = cosign.VerifyImageSignatures(ctx, ref, opts)
+	if err != nil {
+		return fmt.Errorf("image verification failed: %v", err)
+	}
+
+	klog.Infof("Image %s verified successfully", imageWithDigest)
 	return nil
 }
 
 // replaceTagWithDigest replaces the tag in an image URL with the given digest SHA.
 func replaceTagWithDigest(imageURL, commitSHA string) (string, error) {
 	if !strings.Contains(imageURL, ":") {
-		return "", fmt.Errorf("invalid image URL format: no tag or digest found")
+		klog.Infof("Source URL does not contain label or digest, skip parsing")
+		return "", nil
 	}
 	imageWithoutTag := strings.Split(imageURL, ":")[0]
 
@@ -89,33 +159,6 @@ func replaceTagWithDigest(imageURL, commitSHA string) (string, error) {
 	// image URL has tag
 	URLWithSha := fmt.Sprintf("%s@sha256:%s", imageWithoutTag, commitSHA)
 	return URLWithSha, nil
-}
-
-// auth authenticates Cosign with the Docker registry using gcloud credentials.
-func auth() error {
-	authMutex.Lock()
-	defer authMutex.Unlock()
-
-	if authorized {
-		klog.Infof("Skip authorizing docker as already done")
-		return nil
-	}
-	gcloudCmd := exec.Command("gcloud", "auth", "print-access-token")
-	accessTokenBytes, err := gcloudCmd.Output()
-	if err != nil {
-		return fmt.Errorf("Error fetching access token: %v\n", err)
-	}
-	accessToken := string(accessTokenBytes)
-	accessToken = accessToken[:len(accessToken)-1] // Remove the trailing newline
-
-	cmd := exec.Command("cosign", "login", "us-docker.pkg.dev", "-u", "oauth2accesstoken", "-p", accessToken)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("gcloud auth ar failed: %s, output: %s", err, string(output))
-	}
-	klog.Infof("Docker authorization done: %s", string(output))
-	authorized = true
-	return nil
 }
 
 func handleWebhook(w http.ResponseWriter, r *http.Request) {
@@ -150,14 +193,7 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 	if newAnnotations[sourceURL] != oldAnnotations[sourceURL] ||
 		newAnnotations[sourceCommit] != oldAnnotations[sourceCommit] {
 		klog.Infof("Detected pre-sync annotation changes")
-		if err := auth(); err != nil {
-			klog.Errorf("Failed to authorize docker %v", err)
-			response.Result = &metav1.Status{
-				Message: fmt.Sprintf("Failed to authorize docker: %v", err),
-			}
-			response.Allowed = false
-		}
-		if err := validateImage(newAnnotations[sourceURL], newAnnotations[sourceCommit]); err != nil {
+		if err := verifyImageSignature(newAnnotations[sourceURL], newAnnotations[sourceCommit]); err != nil {
 			klog.Errorf("Image validation failed: %v", err)
 			response.Allowed = false
 			response.Result = &metav1.Status{

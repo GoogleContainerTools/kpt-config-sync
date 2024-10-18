@@ -20,26 +20,24 @@ COPY . .
 
 RUN go mod init presync-webhook-server || true && go mod tidy
 
-RUN go install github.com/sigstore/cosign/v2/cmd/cosign@v2.4.1
-
 ENV GOPATH=/go
 ENV PATH "/go/bin:/usr/local/go/bin:$PATH"
 
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o webhook-server oci-signature-verification-server.go
 
-# Final stage
-FROM gcr.io/google.com/cloudsdktool/google-cloud-cli:slim
+# Final stage - runtime image
+FROM debian:bullseye-slim
+
 WORKDIR /
 
-RUN apt-get update && apt-get install -y google-cloud-sdk-gke-gcloud-auth-plugin
+# Install minimal necessary packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
 
-ENV GOPATH=/go
-ENV PATH "/go/bin:/usr/local/go/bin:$PATH"
-
+# Copy the built binary from the builder stage
 COPY --from=builder /app/webhook-server /webhook-server
-COPY --from=builder /go/bin/cosign /usr/local/bin/cosign
 
 RUN chmod +x /webhook-server
-RUN chmod +x /usr/local/bin/cosign
 
 CMD ["/webhook-server"]

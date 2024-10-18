@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2022 Google LLC
+# Copyright 2024 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,35 +15,8 @@
 
 set -euo pipefail
 
-if [[ -z "$(which addlicense)" ]]; then
-  echo "addlicense not in PATH"
-  exit 1
-fi
-
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-cd "${REPO_ROOT}"
 
-ignores=(
-  "-ignore=vendor/**"
-  "-ignore=e2e/testdata/helm-charts/**"
-  "-ignore=test/kustomization/expected.yaml"
-  "-ignore=.output/**"
-  "-ignore=e2e/testdata/*.xml"
-  "-ignore=.idea/**"
-  "-ignore=.vscode/**"
-)
+out=$(kustomize build --load-restrictor=LoadRestrictionsNone "${REPO_ROOT}/test/kustomization" | sed -e "s|gcr.io/cs-test/|example.com/|g")
 
-case "$1" in
-  lint)
-    "addlicense" -check "${ignores[@]}" . 2>&1 | sed '/ skipping: / d'
-    ;;
-  add)
-    "addlicense" -v -c "Google LLC" -f LICENSE_TEMPLATE \
-      "${ignores[@]}" \
-      . 2>&1 | sed '/ skipping: / d'
-    ;;
-  *)
-    echo "Usage: $0 (lint|add)"
-    exit 1
-    ;;
-esac
+diff "${REPO_ROOT}/test/kustomization/expected.yaml" <( echo "${out}" )

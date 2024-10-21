@@ -127,7 +127,7 @@ retag-images-multirepo: retag-images
 
 # Build Config Sync manifests for ACM operator and OSS.
 .PHONY: build-manifests
-build-manifests: build-manifests-operator build-manifests-oss
+build-manifests: build-manifests-operator build-manifests-oss package-kustomize-bundle
 
 # Build Config Sync manifests for OSS installations
 .PHONY: build-manifests-oss
@@ -196,6 +196,24 @@ docker-registry: "$(KIND)"
 .PHONY: config-sync-manifest-local
 config-sync-manifest-local: REGISTRY := localhost:5000
 config-sync-manifest-local: docker-registry config-sync-manifest
+
+###################################
+# Kustomize bundle
+###################################
+
+# Packages the kustomization file into a tarball alongside the built config sync
+# manifests. Assumes the Config Sync manifests are already built in the output dir.
+.PHONY: package-kustomize-bundle
+package-kustomize-bundle:
+	mkdir -p $(OUTPUT_DIR)/tmp/kustomization/manifests
+	cp $(OSS_MANIFEST_STAGING_DIR)/* $(OUTPUT_DIR)/tmp/kustomization/manifests
+	cp ./installation/* $(OUTPUT_DIR)/tmp/kustomization
+	sed -i \
+		-e "s|CONFIG_SYNC_MANIFEST|./manifests/config-sync-manifest.yaml|g" \
+		-e "s|ADMISSION_WEBHOOK_MANIFEST|./manifests/admission-webhook.yaml|g" \
+		$(OUTPUT_DIR)/tmp/kustomization/kustomization.yaml
+	cd $(OUTPUT_DIR)/tmp/kustomization && tar -czvf $(OSS_MANIFEST_STAGING_DIR)/kustomization.tar.gz .
+	rm -rf $(OUTPUT_DIR)/tmp/kustomization
 
 ###################################
 # E2E Git Server

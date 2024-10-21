@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 	"sync"
@@ -158,22 +157,36 @@ func verifyImageSignature(image, commit string) error {
 
 // replaceTagWithDigest replaces the tag in an image URL with the given digest SHA.
 func replaceTagWithDigest(imageURL, commitSHA string) (string, error) {
-	if !strings.Contains(imageURL, ":") {
-		klog.Infof("Source URL does not contain label or digest, skip parsing")
-		return "", nil
-	}
-	imageWithoutTag := strings.Split(imageURL, ":")[0]
+	parts := strings.Split(imageURL, "@sha256:")
 
-	// image URL has digest
-	if strings.Contains(imageURL, "@sha256:") {
-		URLWithSha := fmt.Sprintf("%s:%s", imageWithoutTag, commitSHA)
-		klog.Infof("Replaced existing digest with new digest: %s", URLWithSha)
-		return URLWithSha, nil
+	var baseURL string
+	var existingDigest string
+
+	if len(parts) > 2 {
+		return "", fmt.Errorf("invalid image URL format: multiple `@sha256:` found, %s", imageURL)
+	} else if len(parts) == 2 {
+		baseURL = parts[0]
+		existingDigest = parts[1]
+	} else {
+		baseURL = imageURL
 	}
 
-	// image URL has tag
-	URLWithSha := fmt.Sprintf("%s@sha256:%s", imageWithoutTag, commitSHA)
-	return URLWithSha, nil
+	tagParts := strings.Split(baseURL, ":")
+	if len(tagParts) > 2 {
+		return "", fmt.Errorf("invalid image URL format: multiple colons in base URL %s", imageURL)
+	}
+	baseURLWithoutTag := tagParts[0]
+
+	// Verify if there's an existing digest
+	if existingDigest != "" {
+		if existingDigest == commitSHA {
+			klog.Infof("Existing digest matches commitSHA: %s", imageURL)
+			return imageURL, nil
+		}
+		return "", fmt.Errorf("existing digest (%s) does not match commitSHA (%s)", existingDigest, commitSHA)
+	}
+
+	return fmt.Sprintf("%s@sha256:%s", baseURLWithoutTag, commitSHA), nil
 }
 
 func handleWebhook(w http.ResponseWriter, r *http.Request) {
@@ -231,6 +244,6 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	http.HandleFunc("/validate", handleWebhook)
-	log.Println("Starting webhook server on port 443...")
-	log.Fatal(http.ListenAndServeTLS(":443", "/tls/tls.crt", "/tls/tls.key", nil))
+	klog.Info("Starting webhook server on port 443...")
+	klog.Fatal(http.ListenAndServeTLS(":443", "/tls/tls.crt", "/tls/tls.key", nil))
 }

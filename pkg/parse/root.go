@@ -16,9 +16,10 @@ package parse
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"reflect"
 	"strconv"
+	"strings"
 
 	"github.com/elliotchance/orderedmap/v2"
 	"github.com/google/go-cmp/cmp"
@@ -267,12 +268,21 @@ func (p *root) setSourceAnnotations(ctx context.Context, commit string) error {
 	if err := p.Client.Get(ctx, rootsync.ObjectKey(p.SyncName), rs); err != nil {
 		return status.APIServerError(err, "failed to get RootSync for parser")
 	}
-	existing := rs.DeepCopy()
 
-	// Always update the source-commit annotation
+	var patchOperations []map[string]interface{}
+
+	annotations := rs.GetAnnotations()
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+
 	currentSourceCommit := rs.GetAnnotations()[metadata.SourceCommitAnnotationKey]
 	if commit != currentSourceCommit {
-		core.SetAnnotation(rs, metadata.SourceCommitAnnotationKey, commit)
+		patchOperations = append(patchOperations, map[string]interface{}{
+			"op":    "replace",
+			"path":  fmt.Sprintf("/metadata/annotations/%s", escapeJSONPointer(metadata.SourceCommitAnnotationKey)),
+			"value": commit,
+		})
 	}
 
 	// Update the source-url annotation based on the source type
@@ -284,17 +294,32 @@ func (p *root) setSourceAnnotations(ctx context.Context, commit string) error {
 	currentImageURL := rs.GetAnnotations()[metadata.SourceURLAnnotationKey]
 	if newSourceURL != currentImageURL {
 		if newSourceURL == "" {
-			core.RemoveAnnotations(rs, metadata.SourceURLAnnotationKey)
+			patchOperations = append(patchOperations, map[string]interface{}{
+				"op":   "remove",
+				"path": fmt.Sprintf("/metadata/annotations/%s", escapeJSONPointer(metadata.SourceURLAnnotationKey)),
+			})
 		} else {
-			core.SetAnnotation(rs, metadata.SourceURLAnnotationKey, newSourceURL)
+			patchOperations = append(patchOperations, map[string]interface{}{
+				"op":    "replace",
+				"path":  fmt.Sprintf("/metadata/annotations/%s", escapeJSONPointer(metadata.SourceURLAnnotationKey)),
+				"value": newSourceURL,
+			})
 		}
 	}
 
-	// Patch the RepoSync if any annotations were updated
-	if !reflect.DeepEqual(existing.GetAnnotations(), rs.GetAnnotations()) {
-		return p.Client.Patch(ctx, rs, client.MergeFrom(existing), client.FieldOwner(configsync.FieldManager))
+	if len(patchOperations) == 0 {
+		return nil
 	}
-	return nil
+	patchData, err := json.Marshal(patchOperations)
+	if err != nil {
+		return fmt.Errorf("failed to marshal patch operations: %v", err)
+	}
+
+	return p.Client.Patch(ctx, rs, client.RawPatch(types.JSONPatchType, patchData), client.FieldOwner(configsync.FieldManager))
+}
+
+func escapeJSONPointer(s string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(s, "~", "~0"), "/", "~1")
 }
 
 func (p *root) setRequiresRendering(ctx context.Context, renderingRequired bool) error {

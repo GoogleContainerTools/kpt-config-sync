@@ -16,14 +16,15 @@ package parse
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"reflect"
 	"strconv"
 
 	"github.com/google/go-cmp/cmp"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -180,12 +181,21 @@ func (p *namespace) setSourceAnnotations(ctx context.Context, commit string) err
 	if err := p.Client.Get(ctx, reposync.ObjectKey(p.Scope, p.SyncName), rs); err != nil {
 		return status.APIServerError(err, "failed to get RepoSync for parser")
 	}
-	existing := rs.DeepCopy()
 
-	// Always update the source-commit annotation
+	var patchOperations []map[string]interface{}
+
+	annotations := rs.GetAnnotations()
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+
 	currentSourceCommit := rs.GetAnnotations()[metadata.SourceCommitAnnotationKey]
 	if commit != currentSourceCommit {
-		core.SetAnnotation(rs, metadata.SourceCommitAnnotationKey, commit)
+		patchOperations = append(patchOperations, map[string]interface{}{
+			"op":    "replace",
+			"path":  fmt.Sprintf("/metadata/annotations/%s", escapeJSONPointer(metadata.SourceCommitAnnotationKey)),
+			"value": commit,
+		})
 	}
 
 	// Update the source-url annotation based on the source type
@@ -197,17 +207,28 @@ func (p *namespace) setSourceAnnotations(ctx context.Context, commit string) err
 	currentImageURL := rs.GetAnnotations()[metadata.SourceURLAnnotationKey]
 	if newSourceURL != currentImageURL {
 		if newSourceURL == "" {
-			core.RemoveAnnotations(rs, metadata.SourceURLAnnotationKey)
+			patchOperations = append(patchOperations, map[string]interface{}{
+				"op":   "remove",
+				"path": fmt.Sprintf("/metadata/annotations/%s", escapeJSONPointer(metadata.SourceURLAnnotationKey)),
+			})
 		} else {
-			core.SetAnnotation(rs, metadata.SourceURLAnnotationKey, newSourceURL)
+			patchOperations = append(patchOperations, map[string]interface{}{
+				"op":    "replace",
+				"path":  fmt.Sprintf("/metadata/annotations/%s", escapeJSONPointer(metadata.SourceURLAnnotationKey)),
+				"value": newSourceURL,
+			})
 		}
 	}
 
-	// Patch the RepoSync if any annotations were updated
-	if !reflect.DeepEqual(existing.GetAnnotations(), rs.GetAnnotations()) {
-		return p.Client.Patch(ctx, rs, client.MergeFrom(existing), client.FieldOwner(configsync.FieldManager))
+	if len(patchOperations) == 0 {
+		return nil
 	}
-	return nil
+	patchData, err := json.Marshal(patchOperations)
+	if err != nil {
+		return fmt.Errorf("failed to marshal patch operations: %v", err)
+	}
+
+	return p.Client.Patch(ctx, rs, client.RawPatch(types.JSONPatchType, patchData), client.FieldOwner(configsync.FieldManager))
 }
 
 func (p *namespace) setRequiresRendering(ctx context.Context, renderingRequired bool) error {

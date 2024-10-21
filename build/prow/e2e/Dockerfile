@@ -35,6 +35,9 @@ ENV CGO_ENABLED=0
 # Get go-junit-report
 RUN go install github.com/jstemmer/go-junit-report/v2@v2.0.0
 
+# Install Cosign for signing test images
+RUN go install github.com/sigstore/cosign/v2/cmd/cosign@v2.4.1
+
 # Build e2e image
 FROM ${DOCKER_CLI_IMAGE} as gke-e2e
 

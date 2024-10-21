@@ -89,10 +89,6 @@ ENV GOCACHE=/go/cache
 
 COPY --from=tools-base /go/bin/* /bin/
 
-# Install Cosign for signing test images
-RUN go install github.com/sigstore/cosign/cmd/cosign@v2.4.1
-ENV COSIGN_PASSWORD=""
-
 # Install gcloud & gsutil
 # Requires /.config/ & /.gsutil/ volumes mounted for authentication
 COPY --from=gcloud-install /usr/lib/google-cloud-sdk /usr/lib/google-cloud-sdk

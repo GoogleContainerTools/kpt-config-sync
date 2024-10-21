@@ -24,6 +24,7 @@ import (
 	"strings"
 	"sync"
 
+	"cloud.google.com/go/compute/metadata"
 	credentials "cloud.google.com/go/iam/credentials/apiv1"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
@@ -42,6 +43,7 @@ const (
 	sourceURL     = "configsync.gke.io/source-url"
 	sourceCommit  = "configsync.gke.io/source-commit"
 	publicKeyPath = "/cosign-key/cosign.pub"
+	testGSA       = "e2e-test-ar-reader"
 )
 
 var authorized bool
@@ -63,6 +65,15 @@ func getAnnotations(raw []byte) (map[string]string, error) {
 	return nil, fmt.Errorf("no annotations found")
 }
 
+func getProjectID() (string, error) {
+	metadataClient := metadata.NewClient(nil)
+	projectID, err := metadataClient.ProjectID()
+	if err != nil {
+		return "", fmt.Errorf("Failed to get project ID from metadata server: %v", err)
+	}
+	return projectID, nil
+}
+
 type GoogleAuthKeychain struct {
 	accessToken string
 }
@@ -82,8 +93,12 @@ func getGoogleAccessToken(ctx context.Context) (string, error) {
 	}
 	defer client.Close()
 
+	projecID, err := getProjectID()
+	if err != nil {
+		klog.Error(err)
+	}
 	req := &credentialspb.GenerateAccessTokenRequest{
-		Name:  "projects/-/serviceAccounts/e2e-test-ar-reader@peip-monitor.iam.gserviceaccount.com",
+		Name:  fmt.Sprintf("projects/-/serviceAccounts/%s@%s.iam.gserviceaccount.com", testGSA, projecID),
 		Scope: []string{"https://www.googleapis.com/auth/cloud-platform"},
 	}
 

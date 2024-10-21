@@ -1809,7 +1809,7 @@ func TestACMUninstallScript(t *testing.T) {
 		)))
 
 	nt.T.Log("Running uninstall script should fail when HNC is enabled")
-	out, err := nt.Shell.Command("./../../installation/uninstall_configmanagement.sh").CombinedOutput()
+	out, err := nt.Shell.Command("./../testdata/configmanagement/uninstall/uninstall_configmanagement.sh").CombinedOutput()
 	if err == nil {
 		nt.T.Fatal("Expected uninstall script to return non-zero exit code")
 	}
@@ -1836,7 +1836,7 @@ func TestACMUninstallScript(t *testing.T) {
 	nt.Must(nt.Validate(util.ACMOperatorDeployment, configsync.ControllerNamespace, k8sobjects.DeploymentObject()))
 
 	nt.T.Log("Running uninstall script to remove ACM operator")
-	nt.Must(nt.Shell.Command("./../../installation/uninstall_configmanagement.sh").CombinedOutput())
+	nt.Must(nt.Shell.Command("./../testdata/configmanagement/uninstall/uninstall_configmanagement.sh").CombinedOutput())
 
 	nt.T.Log("Wait for legacy resources to be NotFound...")
 	tg = taskgroup.New()

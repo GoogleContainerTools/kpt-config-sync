@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/google/go-cmp/cmp"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -186,13 +187,23 @@ func (p *namespace) setSourceAnnotations(ctx context.Context, commit string) err
 
 	annotations := rs.GetAnnotations()
 	if annotations == nil {
+		patchOperations = append(patchOperations, map[string]interface{}{
+			"op":    "add",
+			"path":  "/metadata/annotations",
+			"value": map[string]string{},
+		})
 		annotations = make(map[string]string)
 	}
 
-	currentSourceCommit := rs.GetAnnotations()[metadata.SourceCommitAnnotationKey]
-	if commit != currentSourceCommit {
+	if _, exists := annotations[metadata.SourceCommitAnnotationKey]; exists {
 		patchOperations = append(patchOperations, map[string]interface{}{
 			"op":    "replace",
+			"path":  fmt.Sprintf("/metadata/annotations/%s", escapeJSONPointer(metadata.SourceCommitAnnotationKey)),
+			"value": commit,
+		})
+	} else {
+		patchOperations = append(patchOperations, map[string]interface{}{
+			"op":    "add",
 			"path":  fmt.Sprintf("/metadata/annotations/%s", escapeJSONPointer(metadata.SourceCommitAnnotationKey)),
 			"value": commit,
 		})
@@ -209,12 +220,12 @@ func (p *namespace) setSourceAnnotations(ctx context.Context, commit string) err
 		if newSourceURL == "" {
 			patchOperations = append(patchOperations, map[string]interface{}{
 				"op":   "remove",
-				"path": fmt.Sprintf("/metadata/annotations/%s", escapeJSONPointer(metadata.SourceURLAnnotationKey)),
+				"path": fmt.Sprintf("/metadata/annotations/%s", metadata.SourceURLAnnotationKey),
 			})
 		} else {
 			patchOperations = append(patchOperations, map[string]interface{}{
 				"op":    "replace",
-				"path":  fmt.Sprintf("/metadata/annotations/%s", escapeJSONPointer(metadata.SourceURLAnnotationKey)),
+				"path":  fmt.Sprintf("/metadata/annotations/%s", metadata.SourceURLAnnotationKey),
 				"value": newSourceURL,
 			})
 		}
@@ -229,6 +240,10 @@ func (p *namespace) setSourceAnnotations(ctx context.Context, commit string) err
 	}
 
 	return p.Client.Patch(ctx, rs, client.RawPatch(types.JSONPatchType, patchData), client.FieldOwner(configsync.FieldManager))
+}
+
+func escapeJSONPointer(s string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(s, "~", "~0"), "/", "~1")
 }
 
 func (p *namespace) setRequiresRendering(ctx context.Context, renderingRequired bool) error {

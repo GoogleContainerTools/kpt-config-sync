@@ -21,7 +21,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"sync"
 
 	"cloud.google.com/go/compute/metadata"
 	credentials "cloud.google.com/go/iam/credentials/apiv1"
@@ -44,9 +43,6 @@ const (
 	publicKeyPath = "/cosign-key/cosign.pub"
 	testGSA       = "e2e-test-ar-reader"
 )
-
-var authorized bool
-var authMutex sync.Mutex
 
 // getAnnotations extracts annotations from the raw JSON data.
 func getAnnotations(raw []byte) (map[string]string, error) {

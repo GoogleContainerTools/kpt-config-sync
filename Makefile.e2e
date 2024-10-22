@@ -20,8 +20,6 @@ KIND_NUM_CLUSTERS ?= 15
 E2E_CREATE_CLUSTERS ?= "true"
 E2E_DESTROY_CLUSTERS ?= "true"
 
-COSIGN_PASSWORD = ""
-
 # Runs nomos vet locally for example repos.
 # Requires kubeconfig set up properly with Nomos cluster.
 # This is now a duplicate of cli.bats from the e2e tests framework,

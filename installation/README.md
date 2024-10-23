@@ -33,7 +33,7 @@ rather than the default registry, the following command can be used to replace
 the image URLs for all deployments:
 
 ```shell
-kustomize build . | sed -e "s|gcr.io/config-management-release/|[*REGISTRY*]/|g" > config-sync-install.yaml
+kustomize build . | sed -e "s|CONFIG_SYNC_REGISTRY/|[*REGISTRY*]/|g" > config-sync-install.yaml
 ```
 
 ### Apply the manifest to the cluster

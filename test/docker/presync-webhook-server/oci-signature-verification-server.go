@@ -22,16 +22,12 @@ import (
 	"net/http"
 	"regexp"
 
-	"cloud.google.com/go/compute/metadata"
-	credentials "cloud.google.com/go/iam/credentials/apiv1"
-	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1/google"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/sigstore/cosign/v2/pkg/cosign"
 	ociremote "github.com/sigstore/cosign/v2/pkg/oci/remote"
 	"github.com/sigstore/cosign/v2/pkg/signature"
-	"google.golang.org/api/option"
-	credentialspb "google.golang.org/genproto/googleapis/iam/credentials/v1"
 	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
@@ -40,7 +36,6 @@ import (
 const (
 	imageToSync   = "configsync.gke.io/image-to-sync"
 	publicKeyPath = "/cosign-key/cosign.pub"
-	testGSA       = "e2e-test-ar-reader"
 )
 
 // getAnnotations extracts annotations from the raw JSON data.
@@ -59,59 +54,6 @@ func getAnnotations(raw []byte) (map[string]string, error) {
 	return nil, fmt.Errorf("no annotations found")
 }
 
-func getProjectID() (string, error) {
-	metadataClient := metadata.NewClient(nil)
-	projectID, err := metadataClient.ProjectID()
-	if err != nil {
-		return "", fmt.Errorf("Failed to get project ID from metadata server: %v", err)
-	}
-	return projectID, nil
-}
-
-type GoogleAuthKeychain struct {
-	accessToken string
-}
-
-func (gk *GoogleAuthKeychain) Resolve(target authn.Resource) (authn.Authenticator, error) {
-	return authn.FromConfig(authn.AuthConfig{
-		Username: "oauth2accesstoken",
-		Password: gk.accessToken,
-	}), nil
-}
-
-// Function to acquire OAuth2 access token programmatically
-func getGoogleAccessToken(ctx context.Context) (string, error) {
-	client, err := credentials.NewIamCredentialsClient(ctx, option.WithScopes("https://www.googleapis.com/auth/cloud-platform"))
-	if err != nil {
-		return "", fmt.Errorf("failed to create IAM credentials client: %v", err)
-	}
-	defer client.Close()
-
-	projecID, err := getProjectID()
-	if err != nil {
-		klog.Error(err)
-	}
-	req := &credentialspb.GenerateAccessTokenRequest{
-		Name:  fmt.Sprintf("projects/-/serviceAccounts/%s@%s.iam.gserviceaccount.com", testGSA, projecID),
-		Scope: []string{"https://www.googleapis.com/auth/cloud-platform"},
-	}
-
-	resp, err := client.GenerateAccessToken(ctx, req)
-	if err != nil {
-		return "", fmt.Errorf("failed to generate access token: %v", err)
-	}
-	return resp.AccessToken, nil
-}
-
-func getAuthenticatedKeychain(ctx context.Context) (authn.Keychain, error) {
-	accessToken, err := getGoogleAccessToken(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get Google access token: %v", err)
-	}
-
-	return &GoogleAuthKeychain{accessToken: accessToken}, nil
-}
-
 func verifyImageSignature(image string) error {
 	if image == "" {
 		return nil
@@ -127,13 +69,13 @@ func verifyImageSignature(image string) error {
 		return fmt.Errorf("error loading public key: %v", err)
 	}
 
-	keychain, err := getAuthenticatedKeychain(ctx)
+	googleAuth, err := google.NewEnvAuthenticator(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get authenticated keychain: %v", err)
+		return err
 	}
 
 	opts := &cosign.CheckOpts{
-		RegistryClientOpts: []ociremote.Option{ociremote.WithRemoteOptions(remote.WithAuthFromKeychain(keychain))},
+		RegistryClientOpts: []ociremote.Option{ociremote.WithRemoteOptions(remote.WithAuth(googleAuth))},
 		SigVerifier:        pubKey,
 		IgnoreTlog:         true,
 	}

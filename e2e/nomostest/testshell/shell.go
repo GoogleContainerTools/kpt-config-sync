@@ -16,6 +16,7 @@ package testshell
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
@@ -46,6 +47,33 @@ func (tc *TestShell) ExecWithDebug(name string, args ...string) ([]byte, error) 
 	if err != nil {
 		if !tc.Logger.IsDebugEnabled() {
 			tc.Logger.Infof("%s %s", name, strings.Join(args, " "))
+		}
+		tc.Logger.Info(string(out))
+		return out, err
+	}
+	return out, nil
+}
+
+// ExecWithDebugEnv is similar to ExecWithDebug but allows passing additional
+// environment variables for the command execution.
+func (tc *TestShell) ExecWithDebugEnv(name string, envVars map[string]string, args ...string) ([]byte, error) {
+	tc.Logger.Debugf("%s %s %s", name, envVars, strings.Join(args, " "))
+
+	origEnv := tc.Env
+	newEnv := tc.env()
+	for k, v := range envVars {
+		newEnv = append(newEnv, fmt.Sprintf("%s=%s", k, v))
+	}
+	tc.Env = newEnv
+	cmd := tc.Command(name, args...)
+
+	// Restore original environment after execution
+	defer func() { tc.Env = origEnv }()
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		if !tc.Logger.IsDebugEnabled() {
+			tc.Logger.Infof("%s %s %s", name, envVars, strings.Join(args, " "))
 		}
 		tc.Logger.Info(string(out))
 		return out, err

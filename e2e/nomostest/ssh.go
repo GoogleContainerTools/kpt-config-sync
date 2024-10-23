@@ -71,6 +71,9 @@ const (
 	// RegistrySyncSource is the name of the registry-server sync source. Used
 	// by both the oci and helm source types.
 	RegistrySyncSource SyncSource = "registry-server"
+
+	cosignPassword       = "test"
+	cosignPasswordEnvVar = "COSIGN_PASSWORD"
 )
 
 func sshDir(nt *NT) string {
@@ -334,11 +337,21 @@ func generateCosignKeyPair(nt *NT) error {
 		return fmt.Errorf("creating cosign key pair directory: %w", err)
 	}
 
+	err := os.Setenv(cosignPasswordEnvVar, cosignPassword)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		err := os.Unsetenv(cosignPasswordEnvVar)
+		if err != nil {
+			nt.T.Errorf("Failed to unset COSIGN_PASSWORD: %v", err)
+		}
+	}()
 	nt.T.Log("Generating Cosign key pair...")
 	cmd := exec.Command("cosign", "generate-key-pair")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	err := cmd.Run()
+	err = cmd.Run()
 	if err != nil {
 		return fmt.Errorf("error running cosign command: %v", err)
 	}

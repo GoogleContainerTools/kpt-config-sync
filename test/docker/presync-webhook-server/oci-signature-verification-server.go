@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"regexp"
 
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/google"
@@ -59,10 +58,6 @@ func verifyImageSignature(image string) error {
 		return nil
 	}
 
-	if !isValidImageURL(image) {
-		return fmt.Errorf("invalid image URL format: %s", image)
-	}
-
 	ctx := context.Background()
 	pubKey, err := signature.LoadPublicKey(ctx, publicKeyPath)
 	if err != nil {
@@ -91,18 +86,6 @@ func verifyImageSignature(image string) error {
 
 	klog.Infof("Image %s verified successfully", image)
 	return nil
-}
-
-func isValidImageURL(image string) bool {
-	// Regular expression to match valid image URL format
-	// This regex allows for:
-	// - Optional "oci://" prefix for Helm charts
-	// - Optional registry domain (e.g., gcr.io, docker.io)
-	// - Repository name
-	// - Optional tag or SHA256 digest
-	regex := `^(oci://)?((([a-zA-Z0-9-]+\.)*[a-zA-Z0-9-]+(\.[a-zA-Z]+)+)/)?[a-zA-Z0-9-]+(/[a-zA-Z0-9-]+)*(:([a-zA-Z0-9-_.]+))?(@sha256:[a-fA-F0-9]{64})?$`
-	match, _ := regexp.MatchString(regex, image)
-	return match
 }
 
 func handleWebhook(w http.ResponseWriter, r *http.Request) {

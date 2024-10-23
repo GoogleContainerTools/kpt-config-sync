@@ -212,6 +212,9 @@ package-kustomize-bundle:
 		-e "s|CONFIG_SYNC_MANIFEST|./manifests/config-sync-manifest.yaml|g" \
 		-e "s|ADMISSION_WEBHOOK_MANIFEST|./manifests/admission-webhook.yaml|g" \
 		$(OUTPUT_DIR)/tmp/kustomization/kustomization.yaml
+	sed -i \
+		-e "s|CONFIG_SYNC_REGISTRY|$(REGISTRY)|g" \
+		$(OUTPUT_DIR)/tmp/kustomization/README.md
 	cd $(OUTPUT_DIR)/tmp/kustomization && tar -czvf $(OSS_MANIFEST_STAGING_DIR)/kustomization.tar.gz .
 	rm -rf $(OUTPUT_DIR)/tmp/kustomization
 

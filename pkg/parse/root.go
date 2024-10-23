@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/elliotchance/orderedmap/v2"
 	"github.com/google/go-cmp/cmp"
@@ -268,63 +269,43 @@ func (p *root) setSourceAnnotations(ctx context.Context, commit string) error {
 		return status.APIServerError(err, "failed to get RootSync for parser")
 	}
 
-	var patchOperations []map[string]interface{}
+	patch := map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"annotations": map[string]interface{}{},
+		},
+	}
 
 	annotations := rs.GetAnnotations()
 	if annotations == nil {
-		patchOperations = append(patchOperations, map[string]interface{}{
-			"op":    "add",
-			"path":  "/metadata/annotations",
-			"value": map[string]string{},
-		})
 		annotations = make(map[string]string)
 	}
 
-	if _, exists := annotations[metadata.SourceCommitAnnotationKey]; exists {
-		patchOperations = append(patchOperations, map[string]interface{}{
-			"op":    "replace",
-			"path":  fmt.Sprintf("/metadata/annotations/%s", escapeJSONPointer(metadata.SourceCommitAnnotationKey)),
-			"value": commit,
-		})
+	var imageToSync string
+
+	// Check if the source type is OCI or Helm with oci:// URL
+	if p.Options.SourceType == configsync.OciSource ||
+		(p.Options.SourceType == configsync.HelmSource && strings.HasPrefix(p.Options.SourceRepo, "oci://")) {
+		imageToSync = fmt.Sprintf("%s@sha256:%s", p.Options.SourceRepo, commit)
+	}
+
+	// If imageToSync is set (non-empty), either add or update the annotation
+	if imageToSync != "" {
+		patch["metadata"].(map[string]interface{})["annotations"].(map[string]interface{})[metadata.ImageToSyncAnnotationKey] = imageToSync
 	} else {
-		patchOperations = append(patchOperations, map[string]interface{}{
-			"op":    "add",
-			"path":  fmt.Sprintf("/metadata/annotations/%s", escapeJSONPointer(metadata.SourceCommitAnnotationKey)),
-			"value": commit,
-		})
-	}
-
-	// Update the source-url annotation based on the source type
-	var newSourceURL string
-	if p.Options.SourceType == configsync.OciSource || p.Options.SourceType == configsync.HelmSource {
-		newSourceURL = p.Options.SourceRepo
-	}
-
-	currentImageURL := rs.GetAnnotations()[metadata.SourceURLAnnotationKey]
-	if newSourceURL != currentImageURL {
-		if newSourceURL == "" {
-			patchOperations = append(patchOperations, map[string]interface{}{
-				"op":   "remove",
-				"path": fmt.Sprintf("/metadata/annotations/%s", metadata.SourceURLAnnotationKey),
-			})
-		} else {
-			patchOperations = append(patchOperations, map[string]interface{}{
-				"op":    "replace",
-				"path":  fmt.Sprintf("/metadata/annotations/%s", metadata.SourceURLAnnotationKey),
-				"value": newSourceURL,
-			})
+		// If imageToSync is empty, remove the annotation
+		if _, exists := annotations[metadata.ImageToSyncAnnotationKey]; exists {
+			patch["metadata"].(map[string]interface{})["annotations"].(map[string]interface{})[metadata.ImageToSyncAnnotationKey] = nil
 		}
 	}
 
-	if len(patchOperations) == 0 {
+	if len(patch["metadata"].(map[string]interface{})["annotations"].(map[string]interface{})) == 0 {
 		return nil
 	}
-	patchData, err := json.Marshal(patchOperations)
+	patchData, err := json.Marshal(patch)
 	if err != nil {
 		return fmt.Errorf("failed to marshal patch operations: %v", err)
 	}
-
-	return p.Client.Patch(ctx, rs, client.RawPatch(types.JSONPatchType, patchData), client.FieldOwner(configsync.FieldManager))
+	return p.Client.Patch(ctx, rs, client.RawPatch(types.MergePatchType, patchData), client.FieldOwner(configsync.FieldManager))
 }
 
 func (p *root) setRequiresRendering(ctx context.Context, renderingRequired bool) error {

@@ -87,14 +87,18 @@ func TestAddPreSyncAnnotationRepoSync(t *testing.T) {
 		nt.T.Fatalf("Failed to sign first test image %s", err)
 	}
 
-	nt.T.Log("Checking no signature error still exists for second image.")
-	nt.Must(nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSyncID.Name, namespaceRepo,
-		testwatcher.WatchPredicates(testpredicates.RepoSyncHasSourceError(status.SourceErrorCode, "no signatures found"))))
-
+	nt.T.Log("Check that verification is up-to-date with floating tag")
 	imageURL1, err := image1.RemoteAddressWithDigest()
 	if err != nil {
 		nt.T.Fatal("Failed to get second image remote URL %s", err)
 	}
+	nt.T.Logf("Checking no signature error exists for second image with digest %s", image1.Digest)
+	nt.Must(
+		nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSyncID.Name, namespaceRepo,
+			testwatcher.WatchPredicates(testpredicates.RepoSyncHasSourceError(status.SourceErrorCode, "no signatures found"))),
+		nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSyncID.Name, namespaceRepo,
+			testwatcher.WatchPredicates(testpredicates.RepoSyncHasSourceError(status.SourceErrorCode, image1.Digest))))
+
 	nt.T.Logf("Signing second test image %s", imageURL1)
 	_, err = nt.Shell.ExecWithDebug("cosign", "sign", imageURL1, "--key", nomostest.CosignPrivateKeyPath(nt), "--yes")
 	if err != nil {
@@ -120,7 +124,7 @@ func TestAddPreSyncAnnotationRepoSync(t *testing.T) {
 
 	err = nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSyncID.Name, repoSyncID.Namespace,
 		testwatcher.WatchPredicates(
-			testpredicates.MissingAnnotation(metadata.SourceURLAnnotationKey),
+			testpredicates.MissingAnnotation(metadata.ImageToSyncAnnotationKey),
 		))
 	if err != nil {
 		nt.T.Fatalf("Source annotations still exist when RepoSync is syncing from Git %v", err)
@@ -178,20 +182,23 @@ func TestAddPreSyncAnnotationRootSync(t *testing.T) {
 		nt.T.Fatalf("Failed to sign first test image %s", err)
 	}
 
-	nt.T.Log("Checking no signature error still exists for second image.")
-	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, configsync.ControllerNamespace,
-		testwatcher.WatchPredicates(testpredicates.RootSyncHasSourceError(status.SourceErrorCode, "no signatures found"))))
-
+	nt.T.Log("Check that verification is up-to-date with floating tag")
 	imageURL1, err := image1.RemoteAddressWithDigest()
 	if err != nil {
 		nt.T.Fatal("Failed to get second image remote URL %s", err)
 	}
+	nt.T.Logf("Checking no signature error exists for second image with digest %s", image1.Digest)
+	nt.Must(
+		nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, configsync.ControllerNamespace,
+			testwatcher.WatchPredicates(testpredicates.RootSyncHasSourceError(status.SourceErrorCode, "no signatures found"))),
+		nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, configsync.ControllerNamespace,
+			testwatcher.WatchPredicates(testpredicates.RootSyncHasSourceError(status.SourceErrorCode, image1.Digest))))
+
 	nt.T.Logf("Signing second test image %s", imageURL1)
 	_, err = nt.Shell.ExecWithDebug("cosign", "sign", imageURL1, "--key", nomostest.CosignPrivateKeyPath(nt), "--yes")
 	if err != nil {
 		nt.T.Fatalf("Failed to sign second test image %s", err)
 	}
-
 	nt.T.Log("Update source expectation for watch")
 	_ = nt.RootSyncObjectOCI(rootSyncKey.Name, image.OCIImageID().WithoutDigest(), "", image1.Digest)
 	nt.Must(nt.WatchForAllSyncs())
@@ -212,7 +219,7 @@ func TestAddPreSyncAnnotationRootSync(t *testing.T) {
 
 	err = nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, rootSyncID.Namespace,
 		testwatcher.WatchPredicates(
-			testpredicates.MissingAnnotation(metadata.SourceURLAnnotationKey),
+			testpredicates.MissingAnnotation(metadata.ImageToSyncAnnotationKey),
 		))
 	if err != nil {
 		nt.T.Fatalf("Source annotations still exist when RootSync is syncing from Git %v", err)
@@ -234,26 +241,16 @@ func checkRootSyncPreSyncAnnotations(image *registryproviders.OCIImage) testpred
 		syncingCondition := rootsync.GetCondition(rs.Status.Conditions, v1beta1.RootSyncSyncing)
 		syncingCommit := syncingCondition.Commit
 		syncingImage := rs.Spec.Oci.Image
-		commitAnnotation, ok := o.GetAnnotations()[metadata.SourceCommitAnnotationKey]
+		imageToSyncAnnotation, ok := o.GetAnnotations()[metadata.ImageToSyncAnnotationKey]
 		if !ok {
-			return fmt.Errorf("object %q does not have annotation %q", o.GetName(), metadata.SourceCommitAnnotationKey)
+			return fmt.Errorf("object %q does not have annotation %q", o.GetName(), metadata.ImageToSyncAnnotationKey)
 		}
-		repoAnnotation, ok := o.GetAnnotations()[metadata.SourceURLAnnotationKey]
-		if !ok {
-			return fmt.Errorf("object %q does not have annotation %q", o.GetName(), metadata.SourceURLAnnotationKey)
-		}
-		if syncingCommit != commitAnnotation || syncingCommit != image.OCIImageID().DigestWithoutPrefix() {
-			return fmt.Errorf("object %s has commit annotation %s, but is being synced with commit %s",
-				o.GetName(),
-				commitAnnotation,
+		remoteAddr := image.OCIImageID().Address()
+		if imageToSyncAnnotation != fmt.Sprintf("%s@sha256:%s", syncingImage, syncingCommit) || imageToSyncAnnotation != remoteAddr {
+			return fmt.Errorf("expecting to have OCI image %s, but got image-to-sync annotation %s, syncing commit %s, syncing image %s",
+				remoteAddr,
+				imageToSyncAnnotation,
 				syncingCommit,
-			)
-		}
-		if syncingImage != repoAnnotation {
-			return fmt.Errorf("object %s not synced to expected source url %s. Source URL annotation: %s, synced image url: %s",
-				o.GetName(),
-				image.OCIImageID().Address(),
-				repoAnnotation,
 				syncingImage,
 			)
 		}
@@ -273,26 +270,16 @@ func checkRepoSyncPreSyncAnnotations(image *registryproviders.OCIImage) testpred
 		syncingCondition := reposync.GetCondition(rs.Status.Conditions, v1beta1.RepoSyncSyncing)
 		syncingCommit := syncingCondition.Commit
 		syncingImage := rs.Spec.Oci.Image
-		commitAnnotation, ok := o.GetAnnotations()[metadata.SourceCommitAnnotationKey]
+		imageToSyncAnnotation, ok := o.GetAnnotations()[metadata.ImageToSyncAnnotationKey]
 		if !ok {
-			return fmt.Errorf("object %q does not have annotation %q", o.GetName(), metadata.SourceCommitAnnotationKey)
+			return fmt.Errorf("object %q does not have annotation %q", o.GetName(), metadata.ImageToSyncAnnotationKey)
 		}
-		repoAnnotation, ok := o.GetAnnotations()[metadata.SourceURLAnnotationKey]
-		if !ok {
-			return fmt.Errorf("object %q does not have annotation %q", o.GetName(), metadata.SourceURLAnnotationKey)
-		}
-		if syncingCommit != commitAnnotation || syncingCommit != image.OCIImageID().DigestWithoutPrefix() {
-			return fmt.Errorf("object %s has commit annotation %s, but is being synced with commit %s",
-				o.GetName(),
-				commitAnnotation,
+		remoteAddr := image.OCIImageID().Address()
+		if imageToSyncAnnotation != fmt.Sprintf("%s@sha256:%s", syncingImage, syncingCommit) || imageToSyncAnnotation != remoteAddr {
+			return fmt.Errorf("expecting to have OCI image %s, but got image-to-sync annotation %s, syncing commit %s, syncing image %s",
+				remoteAddr,
+				imageToSyncAnnotation,
 				syncingCommit,
-			)
-		}
-		if syncingImage != repoAnnotation {
-			return fmt.Errorf("object %s not synced to expected source url %s. Source URL annotation: %s, synced image url: %s",
-				o.GetName(),
-				image.OCIImageID().Address(),
-				repoAnnotation,
 				syncingImage,
 			)
 		}

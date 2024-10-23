@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
+	"regexp"
 
 	"cloud.google.com/go/compute/metadata"
 	credentials "cloud.google.com/go/iam/credentials/apiv1"
@@ -38,8 +38,7 @@ import (
 )
 
 const (
-	sourceURL     = "configsync.gke.io/source-url"
-	sourceCommit  = "configsync.gke.io/source-commit"
+	imageToSync   = "configsync.gke.io/image-to-sync"
 	publicKeyPath = "/cosign-key/cosign.pub"
 	testGSA       = "e2e-test-ar-reader"
 )
@@ -113,10 +112,15 @@ func getAuthenticatedKeychain(ctx context.Context) (authn.Keychain, error) {
 	return &GoogleAuthKeychain{accessToken: accessToken}, nil
 }
 
-func verifyImageSignature(image, commit string) error {
-	if image == "" || commit == "" {
+func verifyImageSignature(image string) error {
+	if image == "" {
 		return nil
 	}
+
+	if !isValidImageURL(image) {
+		return fmt.Errorf("invalid image URL format: %s", image)
+	}
+
 	ctx := context.Background()
 	pubKey, err := signature.LoadPublicKey(ctx, publicKeyPath)
 	if err != nil {
@@ -134,55 +138,29 @@ func verifyImageSignature(image, commit string) error {
 		IgnoreTlog:         true,
 	}
 
-	imageWithDigest, err := replaceTagWithDigest(image, commit)
-	if err != nil {
-		return fmt.Errorf("failed to replace tag with digest: %v", err)
-	}
-	ref, err := name.ParseReference(imageWithDigest)
+	ref, err := name.ParseReference(image)
 	if err != nil {
 		return fmt.Errorf("failed to parse image reference: %v", err)
 	}
 	_, _, err = cosign.VerifyImageSignatures(ctx, ref, opts)
 	if err != nil {
-		return fmt.Errorf("image verification failed: %v", err)
+		return fmt.Errorf("image verification failed for %s: %v", image, err)
 	}
 
-	klog.Infof("Image %s verified successfully", imageWithDigest)
+	klog.Infof("Image %s verified successfully", image)
 	return nil
 }
 
-// replaceTagWithDigest replaces the tag in an image URL with the given digest SHA.
-func replaceTagWithDigest(imageURL, commitSHA string) (string, error) {
-	parts := strings.Split(imageURL, "@sha256:")
-
-	var baseURL string
-	var existingDigest string
-
-	if len(parts) > 2 {
-		return "", fmt.Errorf("invalid image URL format: multiple `@sha256:` found, %s", imageURL)
-	} else if len(parts) == 2 {
-		baseURL = parts[0]
-		existingDigest = parts[1]
-	} else {
-		baseURL = imageURL
-	}
-
-	tagParts := strings.Split(baseURL, ":")
-	if len(tagParts) > 2 {
-		return "", fmt.Errorf("invalid image URL format: multiple colons in base URL %s", imageURL)
-	}
-	baseURLWithoutTag := tagParts[0]
-
-	// Verify if there's an existing digest
-	if existingDigest != "" {
-		if existingDigest == commitSHA {
-			klog.Infof("Existing digest matches commitSHA: %s", imageURL)
-			return imageURL, nil
-		}
-		return "", fmt.Errorf("existing digest (%s) does not match commitSHA (%s)", existingDigest, commitSHA)
-	}
-
-	return fmt.Sprintf("%s@sha256:%s", baseURLWithoutTag, commitSHA), nil
+func isValidImageURL(image string) bool {
+	// Regular expression to match valid image URL format
+	// This regex allows for:
+	// - Optional "oci://" prefix for Helm charts
+	// - Optional registry domain (e.g., gcr.io, docker.io)
+	// - Repository name
+	// - Optional tag or SHA256 digest
+	regex := `^(oci://)?((([a-zA-Z0-9-]+\.)*[a-zA-Z0-9-]+(\.[a-zA-Z]+)+)/)?[a-zA-Z0-9-]+(/[a-zA-Z0-9-]+)*(:([a-zA-Z0-9-_.]+))?(@sha256:[a-fA-F0-9]{64})?$`
+	match, _ := regexp.MatchString(regex, image)
+	return match
 }
 
 func handleWebhook(w http.ResponseWriter, r *http.Request) {
@@ -214,21 +192,19 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 		UID: admissionReview.Request.UID,
 	}
 
-	if newAnnotations[sourceURL] != oldAnnotations[sourceURL] ||
-		newAnnotations[sourceCommit] != oldAnnotations[sourceCommit] {
-		klog.Infof("Detected pre-sync annotation changes")
-		if err := verifyImageSignature(newAnnotations[sourceURL], newAnnotations[sourceCommit]); err != nil {
-			klog.Errorf("Image validation failed: %v", err)
+	if newAnnotations[imageToSync] != oldAnnotations[imageToSync] {
+		klog.Infof("Annotation image-to-sync changed from %s to %s", oldAnnotations[imageToSync], newAnnotations[imageToSync])
+		if err := verifyImageSignature(newAnnotations[imageToSync]); err != nil {
+			klog.Errorf("Image verification failed: %v", err)
 			response.Allowed = false
 			response.Result = &metav1.Status{
-				Message: fmt.Sprintf("Image validation failed: %v", err),
+				Message: fmt.Sprintf("Image verification failed: %v", err),
 			}
 		} else {
-			klog.Infof("Image validation successful for %s", newAnnotations[sourceURL])
+			klog.Infof("Image verification successful for %s", newAnnotations[imageToSync])
 			response.Allowed = true
 		}
 	} else {
-		klog.Infof("No annotation changes detected")
 		response.Allowed = true
 	}
 

@@ -16,7 +16,7 @@ kind: Kustomization
 
 resources:
 - CONFIG_SYNC_MANIFEST
-# [WEBHOOK] - To install admission-webhook, uncomment the following line
+# [WEBHOOK] - To enable drift prevention, uncomment the following line. This enables an admission webhook that rejects conflicting changes from being pushed to live clusters.
 #- ADMISSION_WEBHOOK_MANIFEST
 
 patches:

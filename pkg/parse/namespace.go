@@ -16,13 +16,16 @@ package parse
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/google/go-cmp/cmp"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -172,6 +175,51 @@ func (p *namespace) setSourceStatusWithRetries(ctx context.Context, newStatus *S
 		return status.APIServerError(err, "failed to update RepoSync source status from Parser")
 	}
 	return nil
+}
+
+func (p *namespace) setSourceAnnotations(ctx context.Context, commit string) error {
+	rs := &v1beta1.RepoSync{}
+	if err := p.Client.Get(ctx, reposync.ObjectKey(p.Scope, p.SyncName), rs); err != nil {
+		return status.APIServerError(err, "failed to get RepoSync for parser")
+	}
+
+	patch := map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"annotations": map[string]interface{}{},
+		},
+	}
+
+	annotations := rs.GetAnnotations()
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+
+	var imageToSync string
+
+	// Check if the source type is OCI or Helm with oci:// URL
+	if p.Options.SourceType == configsync.OciSource ||
+		(p.Options.SourceType == configsync.HelmSource && strings.HasPrefix(p.Options.SourceRepo, "oci://")) {
+		imageToSync = fmt.Sprintf("%s@sha256:%s", p.Options.SourceRepo, commit)
+	}
+
+	// If imageToSync is set (non-empty), either add or update the annotation
+	if imageToSync != "" {
+		patch["metadata"].(map[string]interface{})["annotations"].(map[string]interface{})[metadata.ImageToSyncAnnotationKey] = imageToSync
+	} else {
+		// If imageToSync is empty, remove the annotation
+		if _, exists := annotations[metadata.ImageToSyncAnnotationKey]; exists {
+			patch["metadata"].(map[string]interface{})["annotations"].(map[string]interface{})[metadata.ImageToSyncAnnotationKey] = nil
+		}
+	}
+
+	if len(patch["metadata"].(map[string]interface{})["annotations"].(map[string]interface{})) == 0 {
+		return nil
+	}
+	patchData, err := json.Marshal(patch)
+	if err != nil {
+		return fmt.Errorf("failed to marshal patch operations: %v", err)
+	}
+	return p.Client.Patch(ctx, rs, client.RawPatch(types.MergePatchType, patchData), client.FieldOwner(configsync.FieldManager))
 }
 
 func (p *namespace) setRequiresRendering(ctx context.Context, renderingRequired bool) error {

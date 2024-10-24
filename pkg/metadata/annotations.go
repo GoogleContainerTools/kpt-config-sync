@@ -144,6 +144,12 @@ const (
 	// reconciler-manager reads it. If set to true, the reconciler-manager will
 	// create the reconciler with the Namespace controller in the reconciler container.
 	DynamicNSSelectorEnabledAnnotationKey = configsync.ConfigSyncPrefix + "dynamic-ns-selector-enabled"
+
+	// ImageToSyncAnnotationKey is the annotation key used to store the full image reference
+	// (including the digest) for OCI and Helm (with oci:// URL) sources.
+	// This annotation is set by Config Sync on the RootSync/RepoSync object
+	// to indicate the exact image that should be synced.
+	ImageToSyncAnnotationKey = configsync.ConfigSyncPrefix + "image-to-sync"
 )
 
 // Lifecycle annotations

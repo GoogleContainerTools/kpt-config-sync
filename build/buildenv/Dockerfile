@@ -80,7 +80,8 @@ RUN apt-get update \
   git \
   musl-dev \
   shellcheck \
-  wget
+  wget \
+  openssl
 
 # Starting from go 1.10, build and test results are cached, which speeds up
 # following runs.

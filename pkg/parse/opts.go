@@ -95,6 +95,7 @@ type Parser interface {
 	K8sClient() client.Client
 	// setRequiresRendering sets the requires-rendering annotation on the RSync
 	setRequiresRendering(ctx context.Context, renderingRequired bool) error
+	setSourceAnnotations(ctx context.Context, commit string) error
 }
 
 func (o *Options) k8sClient() client.Client {

@@ -136,7 +136,7 @@ func ValidateStandardMetricsForRootSync(nt *NT, summary testmetrics.Summary) err
 	id := core.RootSyncID(summary.Sync.Name)
 	source, found := nt.SyncSources[id]
 	if !found {
-		return fmt.Errorf("SyncSource not found for %s: %s", id.Kind, id.ObjectKey)
+		return fmt.Errorf("Server not found for %s: %s", id.Kind, id.ObjectKey)
 	}
 	commit, err := source.Commit()
 	if err != nil {
@@ -155,7 +155,7 @@ func ValidateStandardMetricsForRepoSync(nt *NT, summary testmetrics.Summary) err
 	id := core.RepoSyncID(summary.Sync.Name, summary.Sync.Namespace)
 	source, found := nt.SyncSources[id]
 	if !found {
-		return fmt.Errorf("SyncSource not found for %s: %s", id.Kind, id.ObjectKey)
+		return fmt.Errorf("Server not found for %s: %s", id.Kind, id.ObjectKey)
 	}
 	commit, err := source.Commit()
 	if err != nil {

@@ -129,7 +129,7 @@ type NT struct {
 	DefaultReconcileTimeout *time.Duration
 
 	// SyncSources tracks the RootSyncs & RepoSyncs used by the current test.
-	// Each one is mapped to a SyncSource or nil, if no source is configured.
+	// Each one is mapped to a Server or nil, if no source is configured.
 	// The list of IDs is used for iterating over test RSyncs.
 	// The ID group and kind must always be either RootSync of RepoSync.
 	SyncSources syncsource.Set
@@ -519,7 +519,6 @@ func (nt *NT) testLogs(previousPodLog bool) {
 	nt.PodLogs(configmanagement.ControllerNamespace, reconcilermanager.ManagerName, reconcilermanager.ManagerName, previousPodLog)
 	nt.PodLogs(configmanagement.ControllerNamespace, configuration.ShortName, configuration.ShortName, previousPodLog)
 	nt.PodLogs(configmanagement.RGControllerNamespace, configmanagement.RGControllerName, "manager", previousPodLog)
-	nt.PodLogs(testOCISignatureVerificationNamespace, testOCISignatureVerificationServerName, "", previousPodLog)
 	for id := range nt.SyncSources {
 		var reconcilerName string
 		switch id.Kind {

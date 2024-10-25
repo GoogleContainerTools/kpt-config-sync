@@ -21,7 +21,7 @@ import (
 	"kpt.dev/configsync/pkg/core"
 )
 
-// SetExpectedSyncSource creates, updates, or replaces the SyncSource for the
+// SetExpectedSyncSource creates, updates, or replaces the Server for the
 // specified RootSync or RepoSync.
 func SetExpectedSyncSource(nt *NT, syncID core.ID, source syncsource.SyncSource) {
 	oldSource, exists := nt.SyncSources[syncID]
@@ -39,7 +39,7 @@ func SetExpectedSyncSource(nt *NT, syncID core.ID, source syncsource.SyncSource)
 }
 
 // UpdateExpectedSyncSource executes the provided function on an existing
-// SyncSource in the SyncSources, allowing updating multiple fields.
+// Server in the SyncSources, allowing updating multiple fields.
 func UpdateExpectedSyncSource[T syncsource.SyncSource](nt *NT, syncID core.ID, mutateFn func(T)) {
 	nt.T.Helper()
 	source, exists := nt.SyncSources[syncID]
@@ -56,7 +56,7 @@ func UpdateExpectedSyncSource[T syncsource.SyncSource](nt *NT, syncID core.ID, m
 	}
 }
 
-// SetExpectedSyncPath updates the SyncSource for the specified RootSync or
+// SetExpectedSyncPath updates the Server for the specified RootSync or
 // RepoSync with the provided Git dir, OCI dir.
 // Updates both the Directory & ExpectedDirectory.
 func SetExpectedSyncPath(nt *NT, syncID core.ID, syncPath string) {
@@ -79,7 +79,7 @@ func SetExpectedSyncPath(nt *NT, syncID core.ID, syncPath string) {
 	}
 }
 
-// SetExpectedGitCommit updates the SyncSource for the specified RootSync or
+// SetExpectedGitCommit updates the Server for the specified RootSync or
 // RepoSync with the provided Git commit, without changing the git reference of
 // the source being pulled.
 func SetExpectedGitCommit(nt *NT, syncID core.ID, expectedCommit string) {
@@ -89,7 +89,7 @@ func SetExpectedGitCommit(nt *NT, syncID core.ID, expectedCommit string) {
 	})
 }
 
-// SetExpectedOCIImageDigest updates the SyncSource for the specified RootSync
+// SetExpectedOCIImageDigest updates the Server for the specified RootSync
 // or RepoSync with the provided OCI image digest, without changing the ID of
 // the image being pulled.
 func SetExpectedOCIImageDigest(nt *NT, syncID core.ID, expectedImageDigest string) {

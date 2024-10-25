@@ -18,7 +18,7 @@ FROM golang:1.23 as builder
 WORKDIR /app
 COPY . .
 
-RUN go mod init presync-webhook-server || true && go mod tidy
+RUN go mod tidy
 
 ENV GOPATH=/go
 ENV PATH "/go/bin:/usr/local/go/bin:$PATH"
@@ -26,18 +26,11 @@ ENV PATH "/go/bin:/usr/local/go/bin:$PATH"
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o webhook-server oci-signature-verification-server.go
 
 # Final stage - runtime image
-FROM debian:bullseye-slim
+FROM gcr.io/distroless/static:latest
 
 WORKDIR /
 
-# Install minimal necessary packages
-RUN apt-get update && apt-get install -y --no-install-recommends \
-  ca-certificates \
-  && rm -rf /var/lib/apt/lists/*
-
 # Copy the built binary from the builder stage
 COPY --from=builder /app/webhook-server /webhook-server
-
-RUN chmod +x /webhook-server
 
 CMD ["/webhook-server"]

@@ -16,7 +16,6 @@ package parse
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -265,47 +264,30 @@ func setSourceStatusFields(source *v1beta1.SourceStatus, newStatus *SourceStatus
 
 func (p *root) setSourceAnnotations(ctx context.Context, commit string) error {
 	rs := &v1beta1.RootSync{}
-	if err := p.Client.Get(ctx, rootsync.ObjectKey(p.SyncName), rs); err != nil {
-		return status.APIServerError(err, "failed to get RootSync for parser")
-	}
+	rs.Namespace = configsync.ControllerNamespace
+	rs.Name = p.SyncName
 
-	patch := map[string]interface{}{
-		"metadata": map[string]interface{}{
-			"annotations": map[string]interface{}{},
-		},
-	}
-
-	annotations := rs.GetAnnotations()
-	if annotations == nil {
-		annotations = make(map[string]string)
-	}
-
-	var imageToSync string
-
-	// Check if the source type is OCI or Helm with oci:// URL
+	var patch string
 	if p.Options.SourceType == configsync.OciSource ||
 		(p.Options.SourceType == configsync.HelmSource && strings.HasPrefix(p.Options.SourceRepo, "oci://")) {
-		imageToSync = fmt.Sprintf("%s@sha256:%s", p.Options.SourceRepo, commit)
-	}
-
-	// If imageToSync is set (non-empty), either add or update the annotation
-	if imageToSync != "" {
-		patch["metadata"].(map[string]interface{})["annotations"].(map[string]interface{})[metadata.ImageToSyncAnnotationKey] = imageToSync
+		patch = fmt.Sprintf(`{"metadata":{"annotations":{"%s":"%s"}}}`,
+			metadata.ImageToSyncAnnotationKey,
+			fmt.Sprintf("%s@sha256:%s", p.Options.SourceRepo, commit),
+		)
 	} else {
-		// If imageToSync is empty, remove the annotation
-		if _, exists := annotations[metadata.ImageToSyncAnnotationKey]; exists {
-			patch["metadata"].(map[string]interface{})["annotations"].(map[string]interface{})[metadata.ImageToSyncAnnotationKey] = nil
-		}
+		patch = fmt.Sprintf(`{"metadata":{"annotations":{"%s":null}}}`,
+			metadata.ImageToSyncAnnotationKey)
 	}
 
-	if len(patch["metadata"].(map[string]interface{})["annotations"].(map[string]interface{})) == 0 {
-		return nil
-	}
-	patchData, err := json.Marshal(patch)
+	err := p.Client.Patch(ctx, rs,
+		client.RawPatch(types.MergePatchType, []byte(patch)),
+		client.FieldOwner(configsync.FieldManager))
+
 	if err != nil {
-		return fmt.Errorf("failed to marshal patch operations: %v", err)
+		return fmt.Errorf("failed to patch RootSync annotations: %w\nPatch content: %s", err, patch)
 	}
-	return p.Client.Patch(ctx, rs, client.RawPatch(types.MergePatchType, patchData), client.FieldOwner(configsync.FieldManager))
+
+	return nil
 }
 
 func (p *root) setRequiresRendering(ctx context.Context, renderingRequired bool) error {

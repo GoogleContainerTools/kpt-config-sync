@@ -233,7 +233,7 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	// TODO: validate sync-generation label
 }
 
-// resetExpectedGitSync creates, updates, or replaces the SyncSource for the
+// resetExpectedGitSync creates, updates, or replaces the Server for the
 // specified RootSync or RepoSync with a new or reset Git repository.
 func resetExpectedGitSync(nt *nomostest.NT, syncID core.ID) {
 	if nt.GitProvider.Type() == e2e.Local {

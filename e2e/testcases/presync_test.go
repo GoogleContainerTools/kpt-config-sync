@@ -55,6 +55,9 @@ func TestAddPreSyncAnnotationRepoSync(t *testing.T) {
 		if err := nomostest.TeardownOCISignatureVerification(nt); err != nil {
 			nt.T.Error(err)
 		}
+		if t.Failed() {
+			nt.PodLogs(nomostest.OCISignatureVerificationNamespace, nomostest.OCISignatureVerificationServerName, "", false)
+		}
 	})
 	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 	repoSyncKey := repoSyncID.ObjectKey
@@ -152,6 +155,9 @@ func TestAddPreSyncAnnotationRootSync(t *testing.T) {
 	nt.T.Cleanup(func() {
 		if err := nomostest.TeardownOCISignatureVerification(nt); err != nil {
 			nt.T.Error(err)
+		}
+		if t.Failed() {
+			nt.PodLogs(nomostest.OCISignatureVerificationNamespace, nomostest.OCISignatureVerificationServerName, "", false)
 		}
 	})
 	gitSource := nt.SyncSources[rootSyncID]

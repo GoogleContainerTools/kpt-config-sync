@@ -307,7 +307,7 @@ func TestOciSyncWithDigest(t *testing.T) {
 // and permission to push new image to `config-sync-test-public` in the Container Registry.
 // The test uses the current credentials (gcloud auth) when running on the GKE clusters to push new images.
 func TestDigestUpdate(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.SyncSource, ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured), ntopts.RequireGKE(t))
+	nt := nomostest.New(t, nomostesting.Server, ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured), ntopts.RequireGKE(t))
 
 	rs := fake.RootSyncObjectV1Beta1(configsync.RootSyncName)
 

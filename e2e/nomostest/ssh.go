@@ -38,10 +38,10 @@ import (
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 )
 
-// SyncSource represents a type of sync source. This typically maps to a type of
-// server which hosts a source of truth for syncing. This does not necessarily
-// map 1:1 with SourceType, for example both helm and oci use registry-server.
-type SyncSource string
+// Server represents a test server type, such as registry-server, git-server, or oci-image-verification-server.
+// The first two represent sync sources, but they don't necessarily map 1:1 to Config Sync sources.
+// For example, registry-server handles both OCI and Helm sources.
+type Server string
 
 const (
 	// RootAuthSecretName is the name of the Auth secret required by the
@@ -60,18 +60,20 @@ const (
 	// the public key used by the pre-sync webhook server to verify OCI images.
 	cosignSecretName = "cosign-key"
 
-	// OCISignatureVerificationSecretName is the name of the Secret
-	// that stores the TLS certificates for the pre-sync webhook server.
-	OCISignatureVerificationSecretName = "oci-image-verification-key"
-
 	// GitSyncSource is the name of the git-server sync source. Used by the git
 	// source type.
-	GitSyncSource SyncSource = "git-server"
+	GitSyncSource Server = "git-server"
 
 	// RegistrySyncSource is the name of the registry-server sync source. Used
 	// by both the oci and helm source types.
-	RegistrySyncSource SyncSource = "registry-server"
+	RegistrySyncSource Server = "registry-server"
 
+	// ImageVerificationServer is the name of the test OCI image verification server.
+	// Used for verifying OCI image signatures.
+	ImageVerificationServer Server = "image-verification"
+
+	// Cosign requires a password for key generation and image signing.
+	// For testing purposes, a simple password is used.
 	cosignPassword       = "test"
 	cosignPasswordEnvVar = "COSIGN_PASSWORD"
 )
@@ -80,7 +82,7 @@ func sshDir(nt *NT) string {
 	return filepath.Join(nt.TmpDir, "ssh")
 }
 
-func sslDir(nt *NT, syncSource SyncSource) string {
+func sslDir(nt *NT, syncSource Server) string {
 	return filepath.Join(nt.TmpDir, string(syncSource), "ssl")
 }
 
@@ -97,18 +99,6 @@ func cosignPublicKeyPath(nt *NT) string {
 	return filepath.Join(cosignDir(nt), "cosign.pub")
 }
 
-func tlsDir(nt *NT) string {
-	return filepath.Join(nt.TmpDir, "tls")
-}
-
-func tlsKeyPath(nt *NT) string {
-	return filepath.Join(tlsDir(nt), "tls.key")
-}
-
-func tlsCertPath(nt *NT) string {
-	return filepath.Join(tlsDir(nt), "tls.crt")
-}
-
 func privateKeyPath(nt *NT) string {
 	return filepath.Join(sshDir(nt), "id_rsa.nomos")
 }
@@ -117,15 +107,15 @@ func publicKeyPath(nt *NT) string {
 	return filepath.Join(sshDir(nt), "id_rsa.nomos.pub")
 }
 
-func caCertPath(nt *NT, syncSource SyncSource) string {
+func caCertPath(nt *NT, syncSource Server) string {
 	return filepath.Join(sslDir(nt, syncSource), "ca_cert.pem")
 }
 
-func certPath(nt *NT, syncSource SyncSource) string {
+func certPath(nt *NT, syncSource Server) string {
 	return filepath.Join(sslDir(nt, syncSource), "cert.pem")
 }
 
-func certPrivateKeyPath(nt *NT, syncSource SyncSource) string {
+func certPrivateKeyPath(nt *NT, syncSource Server) string {
 	return filepath.Join(sslDir(nt, syncSource), "key.pem")
 }
 
@@ -192,7 +182,7 @@ func writePEMToFile(path, pemType string, data []byte) error {
 	return nil
 }
 
-func createCAWithCerts(nt *NT, syncSource SyncSource, domains []string) error {
+func createCAWithCerts(nt *NT, syncSource Server, domains []string) error {
 	if err := os.MkdirAll(sslDir(nt, syncSource), fileMode); err != nil {
 		return fmt.Errorf("creating ssl directory: %w", err)
 	}
@@ -291,14 +281,14 @@ func generateSSHKeys(nt *NT) (string, error) {
 
 // PublicCertSecretName is the name of the Secret which contains a CA cert used
 // for HTTPS handshakes of the provided sync source
-func PublicCertSecretName(sourceType SyncSource) string {
+func PublicCertSecretName(sourceType Server) string {
 	return fmt.Sprintf("%s-cert-public", sourceType)
 }
 
 // privateCertSecretName is the name of the Secret which contains the private
 // certificate and key used by in-cluster sync sources for HTTPS handshakes.
 // Example usages: git-server, registry-server
-func privateCertSecretName(sourceType SyncSource) string {
+func privateCertSecretName(sourceType Server) string {
 	return fmt.Sprintf("%s-cert-private", sourceType)
 }
 
@@ -308,7 +298,7 @@ func privateCertSecretName(sourceType SyncSource) string {
 // expose the inner logic to outside consumers. So instead of trying to do it
 // ourselves, we're shelling out to kubectl to ensure we create a valid set of
 // secrets.
-func generateSSLKeys(nt *NT, syncSource SyncSource, namespace string, domains []string) (string, error) {
+func generateSSLKeys(nt *NT, syncSource Server, namespace string, domains []string) (string, error) {
 	if err := createCAWithCerts(nt, syncSource, domains); err != nil {
 		return "", err
 	}
@@ -337,99 +327,19 @@ func generateCosignKeyPair(nt *NT) error {
 		return fmt.Errorf("creating cosign key pair directory: %w", err)
 	}
 
-	err := os.Setenv(cosignPasswordEnvVar, cosignPassword)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		err := os.Unsetenv(cosignPasswordEnvVar)
-		if err != nil {
-			nt.T.Errorf("Failed to unset COSIGN_PASSWORD: %v", err)
-		}
-	}()
 	nt.T.Log("Generating Cosign key pair...")
 	cmd := exec.Command("cosign", "generate-key-pair")
+	cmd.Env = os.Environ()
+	cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", cosignPasswordEnvVar, cosignPassword))
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	err = cmd.Run()
+	cmd.Dir = cosignDir(nt)
+	err := cmd.Run()
 	if err != nil {
 		return fmt.Errorf("error running cosign command: %v", err)
 	}
 
-	nt.T.Log("Cosign key pair generated.")
-
-	err = moveFile("cosign.key", CosignPrivateKeyPath(nt))
-	if err != nil {
-		return fmt.Errorf("failed to move cosign.key: %v", err)
-	}
-
-	err = moveFile("cosign.pub", cosignPublicKeyPath(nt))
-	if err != nil {
-		return fmt.Errorf("failed to move cosign.key: %v", err)
-	}
-
-	nt.T.Logf("Moved Cosign keys to %s\n", cosignDir(nt))
-	return nil
-}
-
-func moveFile(src, dest string) error {
-	err := os.MkdirAll(filepath.Dir(dest), fileMode)
-	if err != nil {
-		return fmt.Errorf("failed to create directory: %v", err)
-	}
-
-	err = os.Rename(src, dest)
-	if err != nil {
-		return fmt.Errorf("failed to move file from %s to %s: %v", src, dest, err)
-	}
-	return nil
-}
-
-// createKubernetesSecret creates a Kubernetes secret with the given name, namespace, type, and optional extra arguments.
-func createKubernetesSecret(nt *NT, secretName, namespace, secretType string, args ...string) error {
-	nt.T.Logf("Creating Kubernetes secret: %s\n", secretName)
-
-	baseArgs := []string{"create", "secret", secretType, secretName}
-	baseArgs = append(baseArgs, args...)
-	baseArgs = append(baseArgs, "-n", namespace)
-	_, err := nt.Shell.Kubectl(baseArgs...)
-	if err != nil {
-		return err
-	}
-
-	nt.T.Logf("Secret %s created.\n", secretName)
-	return nil
-}
-
-// generateTLSKeyPair generates a TLS key pair using OpenSSL and saves the
-// certificate and key to files.
-func generateTLSKeyPair(nt *NT) error {
-	if err := os.MkdirAll(tlsDir(nt), fileMode); err != nil {
-		return fmt.Errorf("creating tls directory: %w", err)
-	}
-
-	nt.T.Log("Generating TLS key pair...")
-	cmd := exec.Command("openssl", "req", "-nodes", "-x509", "-sha256", "-newkey", "rsa:4096",
-		"-keyout", tlsKeyPath(nt), "-out", tlsCertPath(nt), "-days", "365",
-		"-subj", "/CN=oci-signature-verification-server.oci-image-verification.svc",
-		"-addext", "subjectAltName = DNS:oci-signature-verification-server,DNS:oci-signature-verification-server.oci-image-verification,DNS:oci-signature-verification-server.oci-image-verification.svc")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	err := cmd.Run()
-	if err != nil {
-		return fmt.Errorf("error generating TLS key pair with OpenSSL: %v", err)
-	}
-
-	if _, err := os.Stat(tlsCertPath(nt)); os.IsNotExist(err) {
-		return fmt.Errorf("tls.crt file was not generated")
-	}
-	if _, err := os.Stat(tlsKeyPath(nt)); os.IsNotExist(err) {
-		return fmt.Errorf("tls.key file was not generated")
-	}
-
-	nt.T.Log("TLS key pair generated.")
-
+	nt.T.Log("Cosign key pair generated at %s", cosignDir(nt))
 	return nil
 }
 

@@ -35,14 +35,20 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-const testOCISignatureVerificationNamespace = "oci-image-verification"
-const testOCISignatureVerificationServerName = "oci-signature-verification-server"
+// OCISignatureVerificationNamespace is the namespace where the OCI signature verification components are deployed.
+const OCISignatureVerificationNamespace = "oci-image-verification"
 
+// OCISignatureVerificationServerName is the name of the OCI signature verification server deployment and service.
+const OCISignatureVerificationServerName = "oci-signature-verification-server"
+
+// testOCISignatureVerificationSAName is the name of the service account used by the OCI signature verification server.
 const testOCISignatureVerificationSAName = "oci-signature-verification-sa"
 
+// testImageValidationWebhook is the name of the validating webhook for image verification.
 const testImageValidationWebhook = "image-verification-webhook"
 
-const testOCISignatureVerificationServerImage = testing.TestInfraArtifactRepositoryAddress + "/oci-signature-verification-server:v1.0.0-b04d8cac"
+// testOCISignatureVerificationServerImage is the container image used for the OCI signature verification server.
+const testOCISignatureVerificationServerImage = testing.TestInfraArtifactRepositoryAddress + "/oci-signature-verification-server:v1.0.0-634b8e84"
 
 // SetupOCISignatureVerification sets up the OCI signature verification environment, including the namespace, service account,
 // OCI signature verification server, and validating webhook configuration.
@@ -60,7 +66,7 @@ func SetupOCISignatureVerification(nt *NT) error {
 	}
 
 	if err := installOCISignatureVerificationServer(nt); err != nil {
-		nt.describeNotRunningTestPods(testOCISignatureVerificationNamespace)
+		nt.describeNotRunningTestPods(OCISignatureVerificationNamespace)
 		return fmt.Errorf("waiting for git-server Deployment to become available: %w", err)
 	}
 	if err := testOCISignatureVerificationValidatingWebhookConfiguration(nt); err != nil {
@@ -82,9 +88,9 @@ func TeardownOCISignatureVerification(nt *NT) error {
 			nt.T.Logf("Error deleting %T %s/%s: %v", o, o.GetNamespace(), o.GetName(), err)
 		}
 	}
-	secrets := []string{cosignSecretName, OCISignatureVerificationSecretName}
+	secrets := []string{cosignSecretName, privateCertSecretName(ImageVerificationServer)}
 	for _, secretName := range secrets {
-		if err := nt.KubeClient.Delete(k8sobjects.SecretObject(secretName, core.Namespace(testOCISignatureVerificationNamespace))); err != nil && !apierrors.IsNotFound(err) {
+		if err := nt.KubeClient.Delete(k8sobjects.SecretObject(secretName, core.Namespace(OCISignatureVerificationNamespace))); err != nil && !apierrors.IsNotFound(err) {
 			nt.T.Logf("Error deleting Secret %s: %v", secretName, err)
 		}
 	}
@@ -93,17 +99,6 @@ func TeardownOCISignatureVerification(nt *NT) error {
 	}
 	if err := nt.KubeClient.Delete(testOCISignatureVerificationNS()); err != nil && !apierrors.IsNotFound(err) {
 		nt.T.Logf("Error deleting Namespace: %v", err)
-	}
-	filesToDelete := []string{
-		cosignPublicKeyPath(nt),
-		CosignPrivateKeyPath(nt),
-		tlsCertPath(nt),
-		tlsKeyPath(nt),
-	}
-	for _, file := range filesToDelete {
-		if err := os.Remove(file); err != nil && !os.IsNotExist(err) {
-			nt.T.Logf("Error deleting file %s: %v", file, err)
-		}
 	}
 
 	nt.T.Log("OCI signature verification environment teardown complete")
@@ -117,17 +112,16 @@ func auth(nt *NT) error {
 		return err
 	}
 
-	err = createKubernetesSecret(nt, cosignSecretName, testOCISignatureVerificationNamespace, "generic", "--from-file", cosignPublicKeyPath(nt))
+	err = createSecret(nt, OCISignatureVerificationNamespace, cosignSecretName, fmt.Sprintf("cosign.pub=%s", cosignPublicKeyPath(nt)))
 	if err != nil {
 		return err
 	}
 
-	err = generateTLSKeyPair(nt)
-	if err != nil {
-		return err
+	serverDomains := []string{
+		fmt.Sprintf("%s.%s", OCISignatureVerificationServerName, OCISignatureVerificationNamespace),
+		fmt.Sprintf("%s.%s.svc", OCISignatureVerificationServerName, OCISignatureVerificationNamespace),
 	}
-
-	err = createKubernetesSecret(nt, OCISignatureVerificationSecretName, testOCISignatureVerificationNamespace, "tls", fmt.Sprintf("--cert=%s", tlsCertPath(nt)), fmt.Sprintf("--key=%s", tlsKeyPath(nt)))
+	_, err = generateSSLKeys(nt, ImageVerificationServer, OCISignatureVerificationNamespace, serverDomains)
 	if err != nil {
 		return err
 	}
@@ -147,7 +141,7 @@ func installOCISignatureVerificationServer(nt *NT) error {
 		}
 	}
 
-	return nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), testOCISignatureVerificationServerName, testOCISignatureVerificationNamespace)
+	return nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), OCISignatureVerificationServerName, OCISignatureVerificationNamespace)
 }
 
 func testOCISignatureVerificationServer() []client.Object {
@@ -159,39 +153,39 @@ func testOCISignatureVerificationServer() []client.Object {
 }
 
 func testOCISignatureVerificationNS() *corev1.Namespace {
-	return k8sobjects.NamespaceObject(testOCISignatureVerificationNamespace)
+	return k8sobjects.NamespaceObject(OCISignatureVerificationNamespace)
 }
 
 func testOCISignatureVerificationSA() *corev1.ServiceAccount {
 	return k8sobjects.ServiceAccountObject(testOCISignatureVerificationSAName,
-		core.Namespace(testOCISignatureVerificationNamespace),
+		core.Namespace(OCISignatureVerificationNamespace),
 		core.Annotation(controllers.GCPSAAnnotationKey, fmt.Sprintf("%s@%s.iam.gserviceaccount.com",
 			registryproviders.ArtifactRegistryReaderName, *e2e.GCPProject)))
 }
 
 func testOCISignatureVerificationService() *corev1.Service {
 	service := k8sobjects.ServiceObject(
-		core.Name(testOCISignatureVerificationServerName),
-		core.Namespace(testOCISignatureVerificationNamespace),
+		core.Name(OCISignatureVerificationServerName),
+		core.Namespace(OCISignatureVerificationNamespace),
 	)
 	service.Spec.Ports = []corev1.ServicePort{{Name: "port", Port: 443}}
-	service.Spec.Selector = map[string]string{"app": testOCISignatureVerificationServerName}
+	service.Spec.Selector = map[string]string{"app": OCISignatureVerificationServerName}
 	return service
 }
 
 func testOCISignatureVerificationDeployment() *appsv1.Deployment {
-	deployment := k8sobjects.DeploymentObject(core.Name(testOCISignatureVerificationServerName),
-		core.Namespace(testOCISignatureVerificationNamespace),
-		core.Labels(map[string]string{"app": testOCISignatureVerificationServerName}),
+	deployment := k8sobjects.DeploymentObject(core.Name(OCISignatureVerificationServerName),
+		core.Namespace(OCISignatureVerificationNamespace),
+		core.Labels(map[string]string{"app": OCISignatureVerificationServerName}),
 	)
 
 	deployment.Spec = appsv1.DeploymentSpec{
 		Selector: &v1.LabelSelector{
-			MatchLabels: map[string]string{"app": testOCISignatureVerificationServerName},
+			MatchLabels: map[string]string{"app": OCISignatureVerificationServerName},
 		},
 		Template: corev1.PodTemplateSpec{
 			ObjectMeta: v1.ObjectMeta{
-				Labels: map[string]string{"app": testOCISignatureVerificationServerName},
+				Labels: map[string]string{"app": OCISignatureVerificationServerName},
 				Annotations: map[string]string{
 					"safeToEvictAnnotation": "false",
 				},
@@ -202,7 +196,7 @@ func testOCISignatureVerificationDeployment() *appsv1.Deployment {
 					{
 						Name: "ca-certs",
 						VolumeSource: corev1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{SecretName: OCISignatureVerificationSecretName},
+							Secret: &corev1.SecretVolumeSource{SecretName: privateCertSecretName(ImageVerificationServer)},
 						},
 					},
 					{
@@ -253,7 +247,7 @@ func testOCISignatureVerificationDeployment() *appsv1.Deployment {
 }
 
 func testOCISignatureVerificationValidatingWebhookConfiguration(nt *NT) error {
-	caBundle, err := getCABundle(tlsCertPath(nt))
+	caBundle, err := getCABundle(certPath(nt, ImageVerificationServer))
 	if err != nil {
 		return fmt.Errorf("getting CA Bundle: %v", err)
 	}
@@ -265,8 +259,8 @@ func testOCISignatureVerificationValidatingWebhookConfiguration(nt *NT) error {
 			Name: "imageverification.webhook.com",
 			ClientConfig: admissionv1.WebhookClientConfig{
 				Service: &admissionv1.ServiceReference{
-					Name:      testOCISignatureVerificationServerName,
-					Namespace: testOCISignatureVerificationNamespace,
+					Name:      OCISignatureVerificationServerName,
+					Namespace: OCISignatureVerificationNamespace,
 					Path:      ptr.To("/validate"),
 					Port:      ptr.To(int32(443)),
 				},
@@ -295,8 +289,8 @@ func testOCISignatureVerificationValidatingWebhookConfiguration(nt *NT) error {
 	return nt.Watcher.WatchForCurrentStatus(kinds.ValidatingWebhookConfiguration(), testImageValidationWebhook, "")
 }
 
-func getCABundle(tlsKeyPath string) ([]byte, error) {
-	fileContent, err := os.ReadFile(tlsKeyPath)
+func getCABundle(certPath string) ([]byte, error) {
+	fileContent, err := os.ReadFile(certPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %v", err)
 	}

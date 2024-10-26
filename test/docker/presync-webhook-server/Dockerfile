@@ -13,19 +13,18 @@
 # limitations under the License.
 
 # Build stage
-FROM golang:1.23 as builder
+ARG GOLANG_IMAGE
+
+# Build all Config Sync go binaries
+FROM ${GOLANG_IMAGE} as builder
 
 WORKDIR /app
 COPY . .
 
-RUN go mod tidy
-
-ENV GOPATH=/go
-ENV PATH "/go/bin:/usr/local/go/bin:$PATH"
-
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o webhook-server oci-signature-verification-server.go
 
 # Final stage - runtime image
+# Need root permission to bind to a priviledged port, 443
 FROM gcr.io/distroless/static:latest
 
 WORKDIR /

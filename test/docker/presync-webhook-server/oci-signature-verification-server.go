@@ -29,7 +29,7 @@ import (
 	"github.com/sigstore/cosign/v2/pkg/signature"
 	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/klog/v2"
+	"k8s.io/klog"
 )
 
 const (

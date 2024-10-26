@@ -456,7 +456,7 @@ func setupTestCase(nt *NT, opts *ntopts.New) {
 		// case *syncsource.OCISyncSource:
 		// TODO: setup OCI & Helm RootSyncs
 		default:
-			nt.T.Fatalf("Invalid Server source for %v: %T", id, source)
+			nt.T.Fatalf("Invalid SyncSource source for %v: %T", id, source)
 		}
 	}
 	// set up port forward if using in-cluster git server

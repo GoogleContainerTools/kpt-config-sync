@@ -281,6 +281,7 @@ E2E_TEST_IMAGE_OCI_SIGNATURE_VERIFICATION_SERVER := $(TEST_INFRA_REGISTRY)/oci-s
 build-oci-signature-verification-server:
 	@echo "+++ Building $(E2E_TEST_IMAGE_OCI_SIGNATURE_VERIFICATION_SERVER)"
 	docker buildx build \
+		--build-arg GOLANG_IMAGE=$(GOLANG_IMAGE) \
 		-t $(E2E_TEST_IMAGE_OCI_SIGNATURE_VERIFICATION_SERVER) \
 		test/docker/presync-webhook-server/
 

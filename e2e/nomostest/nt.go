@@ -129,7 +129,7 @@ type NT struct {
 	DefaultReconcileTimeout *time.Duration
 
 	// SyncSources tracks the RootSyncs & RepoSyncs used by the current test.
-	// Each one is mapped to a Server or nil, if no source is configured.
+	// Each one is mapped to a SyncSource or nil, if no source is configured.
 	// The list of IDs is used for iterating over test RSyncs.
 	// The ID group and kind must always be either RootSync of RepoSync.
 	SyncSources syncsource.Set

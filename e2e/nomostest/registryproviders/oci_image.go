@@ -258,11 +258,3 @@ func (id OCIImageID) WithoutTag() OCIImageID {
 		Digest:     id.Digest,
 	}
 }
-
-// DigestWithoutPrefix returns the image digest without the sha256 prefix
-func (id OCIImageID) DigestWithoutPrefix() string {
-	if strings.HasPrefix(id.Digest, "sha256:") {
-		return strings.TrimPrefix(id.Digest, "sha256:")
-	}
-	return id.Digest
-}

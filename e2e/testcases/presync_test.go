@@ -89,7 +89,7 @@ func TestAddPreSyncAnnotationRepoSync(t *testing.T) {
 		nt.T.Fatal("Failed to get first image remote URL %s", err)
 	}
 	nt.T.Logf("Signing first test image %s", imageURL)
-	_, err = nt.Shell.ExecWithDebugEnv("cosign", cosignPassword, "sign", imageURL, "--key", nomostest.CosignPrivateKeyPath(nt), "--yes")
+	_, err = nt.OCIClient.Shell.ExecWithDebugEnv("cosign", cosignPassword, "sign", imageURL, "--key", nomostest.CosignPrivateKeyPath(nt), "--yes")
 	if err != nil {
 		nt.T.Fatalf("Failed to sign first test image %s", err)
 	}
@@ -107,7 +107,7 @@ func TestAddPreSyncAnnotationRepoSync(t *testing.T) {
 			testwatcher.WatchPredicates(testpredicates.RepoSyncHasSourceError(status.SourceErrorCode, image1.Digest))))
 
 	nt.T.Logf("Signing second test image %s", imageURL1)
-	_, err = nt.Shell.ExecWithDebugEnv("cosign", cosignPassword, "sign", imageURL1, "--key", nomostest.CosignPrivateKeyPath(nt), "--yes")
+	_, err = nt.OCIClient.Shell.ExecWithDebugEnv("cosign", cosignPassword, "sign", imageURL1, "--key", nomostest.CosignPrivateKeyPath(nt), "--yes")
 	if err != nil {
 		nt.T.Fatalf("Failed to sign second test image %s", err)
 	}
@@ -187,7 +187,7 @@ func TestAddPreSyncAnnotationRootSync(t *testing.T) {
 		nt.T.Fatal("Failed to get first image remote URL %s", err)
 	}
 	nt.T.Logf("Signing first test image %s", imageURL)
-	_, err = nt.Shell.ExecWithDebugEnv("cosign", cosignPassword, "sign", imageURL, "--key", nomostest.CosignPrivateKeyPath(nt), "--yes")
+	_, err = nt.OCIClient.Shell.ExecWithDebugEnv("cosign", cosignPassword, "sign", imageURL, "--key", nomostest.CosignPrivateKeyPath(nt), "--yes")
 	if err != nil {
 		nt.T.Fatalf("Failed to sign first test image %s", err)
 	}
@@ -205,7 +205,7 @@ func TestAddPreSyncAnnotationRootSync(t *testing.T) {
 			testwatcher.WatchPredicates(testpredicates.RootSyncHasSourceError(status.SourceErrorCode, image1.Digest))))
 
 	nt.T.Logf("Signing second test image %s", imageURL1)
-	_, err = nt.Shell.ExecWithDebugEnv("cosign", cosignPassword, "sign", imageURL1, "--key", nomostest.CosignPrivateKeyPath(nt), "--yes")
+	_, err = nt.OCIClient.Shell.ExecWithDebugEnv("cosign", cosignPassword, "sign", imageURL1, "--key", nomostest.CosignPrivateKeyPath(nt), "--yes")
 	if err != nil {
 		nt.T.Fatalf("Failed to sign second test image %s", err)
 	}

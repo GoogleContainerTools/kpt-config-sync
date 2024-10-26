@@ -76,6 +76,11 @@ const (
 	// For testing purposes, a simple password is used.
 	cosignPassword       = "test"
 	cosignPasswordEnvVar = "COSIGN_PASSWORD"
+
+	sslDirName         = "ssl"
+	caCertFile         = "ca_cert.pem"
+	certFile           = "cert.pem"
+	certPrivateKeyFile = "key.pem"
 )
 
 func sshDir(nt *NT) string {
@@ -83,7 +88,7 @@ func sshDir(nt *NT) string {
 }
 
 func sslDir(nt *NT, syncSource Server) string {
-	return filepath.Join(nt.TmpDir, string(syncSource), "ssl")
+	return filepath.Join(nt.TmpDir, string(syncSource), sslDirName)
 }
 
 func cosignDir(nt *NT) string {
@@ -108,15 +113,15 @@ func publicKeyPath(nt *NT) string {
 }
 
 func caCertPath(nt *NT, syncSource Server) string {
-	return filepath.Join(sslDir(nt, syncSource), "ca_cert.pem")
+	return filepath.Join(sslDir(nt, syncSource), caCertFile)
 }
 
 func certPath(nt *NT, syncSource Server) string {
-	return filepath.Join(sslDir(nt, syncSource), "cert.pem")
+	return filepath.Join(sslDir(nt, syncSource), certFile)
 }
 
 func certPrivateKeyPath(nt *NT, syncSource Server) string {
-	return filepath.Join(sslDir(nt, syncSource), "key.pem")
+	return filepath.Join(sslDir(nt, syncSource), certPrivateKeyFile)
 }
 
 // GetKnownHosts will generate and format the key to be used for

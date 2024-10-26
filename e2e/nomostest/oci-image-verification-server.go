@@ -17,6 +17,7 @@ package nomostest
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -31,6 +32,7 @@ import (
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
+	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -53,6 +55,14 @@ const testOCISignatureVerificationServerImage = testing.TestInfraArtifactReposit
 // SetupOCISignatureVerification sets up the OCI signature verification environment, including the namespace, service account,
 // OCI signature verification server, and validating webhook configuration.
 func SetupOCISignatureVerification(nt *NT) error {
+	nt.T.Cleanup(func() {
+		if err := TeardownOCISignatureVerification(nt); err != nil {
+			nt.T.Error(err)
+		}
+		if nt.T.Failed() {
+			nt.PodLogs(OCISignatureVerificationNamespace, OCISignatureVerificationServerName, "", false)
+		}
+	})
 	nt.T.Logf("creating OCI signature verification namespace and service account")
 	if err := nt.KubeClient.Create(testOCISignatureVerificationNS()); err != nil {
 		return err
@@ -123,6 +133,16 @@ func auth(nt *NT) error {
 	}
 	_, err = generateSSLKeys(nt, ImageVerificationServer, OCISignatureVerificationNamespace, serverDomains)
 	if err != nil {
+		return err
+	}
+
+	// Create secret for the public ca-cert in the oci-image-verification namespace
+	// for the oci-signature-verification webhook server to verify certificate.
+	sharedTmpDir := filepath.Join(os.TempDir(), NomosE2E, nt.ClusterName)
+	sharedTestRegistrySSLDir := filepath.Join(sharedTmpDir, string(RegistrySyncSource), sslDirName)
+	testRegistryCACertPath := filepath.Join(sharedTestRegistrySSLDir, caCertFile)
+	if err := createSecret(nt, OCISignatureVerificationNamespace, PublicCertSecretName(RegistrySyncSource),
+		fmt.Sprintf("cert=%s", testRegistryCACertPath)); err != nil {
 		return err
 	}
 
@@ -205,6 +225,12 @@ func testOCISignatureVerificationDeployment() *appsv1.Deployment {
 							Secret: &corev1.SecretVolumeSource{SecretName: cosignSecretName},
 						},
 					},
+					{
+						Name: "test-registry-ca-certs",
+						VolumeSource: corev1.VolumeSource{
+							Secret: &corev1.SecretVolumeSource{SecretName: PublicCertSecretName(RegistrySyncSource)},
+						},
+					},
 				},
 				Containers: []corev1.Container{
 					{
@@ -217,6 +243,10 @@ func testOCISignatureVerificationDeployment() *appsv1.Deployment {
 						VolumeMounts: []corev1.VolumeMount{
 							{Name: "ca-certs", MountPath: "/tls"},
 							{Name: "cosign-key", MountPath: "/cosign-key"},
+							{Name: "test-registry-ca-certs", MountPath: "/etc/ssl/ca-certs"},
+						},
+						Env: []corev1.EnvVar{
+							{Name: reconcilermanager.OciCACert, Value: "/etc/ssl/ca-certs/cert"},
 						},
 						ImagePullPolicy: corev1.PullAlways,
 						LivenessProbe: &corev1.Probe{

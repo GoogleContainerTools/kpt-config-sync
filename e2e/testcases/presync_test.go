@@ -51,14 +51,6 @@ func TestAddPreSyncAnnotationRepoSync(t *testing.T) {
 	if err := nomostest.SetupOCISignatureVerification(nt); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.T.Cleanup(func() {
-		if err := nomostest.TeardownOCISignatureVerification(nt); err != nil {
-			nt.T.Error(err)
-		}
-		if t.Failed() {
-			nt.PodLogs(nomostest.OCISignatureVerificationNamespace, nomostest.OCISignatureVerificationServerName, "", false)
-		}
-	})
 	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 	repoSyncKey := repoSyncID.ObjectKey
 	gitSource := nt.SyncSources[repoSyncID]
@@ -84,21 +76,11 @@ func TestAddPreSyncAnnotationRepoSync(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	imageURL, err := image.RemoteAddressWithDigest()
-	if err != nil {
-		nt.T.Fatal("Failed to get first image remote URL %s", err)
-	}
-	nt.T.Logf("Signing first test image %s", imageURL)
-	_, err = nt.OCIClient.Shell.ExecWithDebugEnv("cosign", cosignPassword, "sign", imageURL, "--key", nomostest.CosignPrivateKeyPath(nt), "--yes")
-	if err != nil {
+	if err = signImage(nt, image); err != nil {
 		nt.T.Fatalf("Failed to sign first test image %s", err)
 	}
 
 	nt.T.Log("Check that verification is up-to-date with floating tag")
-	imageURL1, err := image1.RemoteAddressWithDigest()
-	if err != nil {
-		nt.T.Fatal("Failed to get second image remote URL %s", err)
-	}
 	nt.T.Logf("Checking no signature error exists for second image with digest %s", image1.Digest)
 	nt.Must(
 		nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSyncID.Name, namespaceRepo,
@@ -106,9 +88,7 @@ func TestAddPreSyncAnnotationRepoSync(t *testing.T) {
 		nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSyncID.Name, namespaceRepo,
 			testwatcher.WatchPredicates(testpredicates.RepoSyncHasSourceError(status.SourceErrorCode, image1.Digest))))
 
-	nt.T.Logf("Signing second test image %s", imageURL1)
-	_, err = nt.OCIClient.Shell.ExecWithDebugEnv("cosign", cosignPassword, "sign", imageURL1, "--key", nomostest.CosignPrivateKeyPath(nt), "--yes")
-	if err != nil {
+	if err = signImage(nt, image1); err != nil {
 		nt.T.Fatalf("Failed to sign second test image %s", err)
 	}
 	nt.T.Log("Update source expectation for watch")
@@ -136,9 +116,6 @@ func TestAddPreSyncAnnotationRepoSync(t *testing.T) {
 	if err != nil {
 		nt.T.Fatalf("Source annotations still exist when RepoSync is syncing from Git %v", err)
 	}
-	if err := nomostest.TeardownOCISignatureVerification(nt); err != nil {
-		nt.T.Fatal(err)
-	}
 }
 
 func TestAddPreSyncAnnotationRootSync(t *testing.T) {
@@ -152,14 +129,7 @@ func TestAddPreSyncAnnotationRootSync(t *testing.T) {
 	if err := nomostest.SetupOCISignatureVerification(nt); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.T.Cleanup(func() {
-		if err := nomostest.TeardownOCISignatureVerification(nt); err != nil {
-			nt.T.Error(err)
-		}
-		if t.Failed() {
-			nt.PodLogs(nomostest.OCISignatureVerificationNamespace, nomostest.OCISignatureVerificationServerName, "", false)
-		}
-	})
+
 	gitSource := nt.SyncSources[rootSyncID]
 
 	nt.T.Log("Create first OCI image with latest tag.")
@@ -182,21 +152,11 @@ func TestAddPreSyncAnnotationRootSync(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	imageURL, err := image.RemoteAddressWithDigest()
-	if err != nil {
-		nt.T.Fatal("Failed to get first image remote URL %s", err)
-	}
-	nt.T.Logf("Signing first test image %s", imageURL)
-	_, err = nt.OCIClient.Shell.ExecWithDebugEnv("cosign", cosignPassword, "sign", imageURL, "--key", nomostest.CosignPrivateKeyPath(nt), "--yes")
-	if err != nil {
+	if err = signImage(nt, image); err != nil {
 		nt.T.Fatalf("Failed to sign first test image %s", err)
 	}
 
 	nt.T.Log("Check that verification is up-to-date with floating tag")
-	imageURL1, err := image1.RemoteAddressWithDigest()
-	if err != nil {
-		nt.T.Fatal("Failed to get second image remote URL %s", err)
-	}
 	nt.T.Logf("Checking no signature error exists for second image with digest %s", image1.Digest)
 	nt.Must(
 		nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, configsync.ControllerNamespace,
@@ -204,9 +164,7 @@ func TestAddPreSyncAnnotationRootSync(t *testing.T) {
 		nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, configsync.ControllerNamespace,
 			testwatcher.WatchPredicates(testpredicates.RootSyncHasSourceError(status.SourceErrorCode, image1.Digest))))
 
-	nt.T.Logf("Signing second test image %s", imageURL1)
-	_, err = nt.OCIClient.Shell.ExecWithDebugEnv("cosign", cosignPassword, "sign", imageURL1, "--key", nomostest.CosignPrivateKeyPath(nt), "--yes")
-	if err != nil {
+	if err = signImage(nt, image1); err != nil {
 		nt.T.Fatalf("Failed to sign second test image %s", err)
 	}
 	nt.T.Log("Update source expectation for watch")
@@ -233,9 +191,6 @@ func TestAddPreSyncAnnotationRootSync(t *testing.T) {
 		))
 	if err != nil {
 		nt.T.Fatalf("Source annotations still exist when RootSync is syncing from Git %v", err)
-	}
-	if err := nomostest.TeardownOCISignatureVerification(nt); err != nil {
-		nt.T.Fatal(err)
 	}
 }
 
@@ -295,4 +250,16 @@ func checkRepoSyncPreSyncAnnotations(image *registryproviders.OCIImage) testpred
 		}
 		return nil
 	}
+}
+
+func signImage(nt *nomostest.NT, image *registryproviders.OCIImage) error {
+	imageURL, err := image.LocalAddressWithDigest()
+	if err != nil {
+		return fmt.Errorf("getting image remote URL %s", err)
+	}
+
+	nt.T.Logf("Signing test image %s", imageURL)
+	_, err = nt.OCIClient.Shell.ExecWithDebugEnv("cosign", cosignPassword, "sign",
+		imageURL, "--key", nomostest.CosignPrivateKeyPath(nt), "--yes")
+	return err
 }

@@ -25,9 +25,6 @@ type Event struct {
 type EventType string
 
 const (
-	// FullSyncEventType is the EventType for a sync from disk,
-	// including reading and parsing resource objects from the shared volume.
-	FullSyncEventType EventType = "FullSyncEvent"
 	// SyncEventType is the EventType for a sync from the source cache,
 	// only parsing objects from the shared volume if there's a new commit.
 	SyncEventType EventType = "SyncEvent"

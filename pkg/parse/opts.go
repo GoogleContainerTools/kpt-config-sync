@@ -59,7 +59,7 @@ type Options struct {
 	// available on the cluster.
 	DiscoveryClient discovery.ServerResourcer
 
-	// Converter uses the DiscoveryInterface to encode the declared fields of
+	// Converter uses the DiscoveryClient to encode the declared fields of
 	// objects in Git.
 	Converter *declared.ValueConverter
 
@@ -80,6 +80,11 @@ type ReconcilerOptions struct {
 
 	// Updater syncs the source from the parsed cache to the cluster.
 	*Updater
+
+	// FullSyncPeriod is the max time between full reconciliations.
+	// When elapsed, the next reconcile attempt will reset the source cache,
+	// triggering full reconciliation.
+	FullSyncPeriod time.Duration
 
 	// StatusUpdatePeriod is how long the Parser waits between updates of the
 	// sync status, to account for management conflict errors from the Remediator.

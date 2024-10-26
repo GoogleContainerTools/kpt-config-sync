@@ -54,27 +54,6 @@ func TestFunnel_Start(t *testing.T) {
 			},
 		},
 		{
-			name: "ResyncEvents From SyncWithReimportPeriod",
-			builder: &PublishingGroupBuilder{
-				FullSyncPeriod: time.Second,
-			},
-			stepSize: time.Second,
-			expectedEvents: []eventResult{
-				{
-					Event:  Event{Type: FullSyncEventType},
-					Result: Result{},
-				},
-				{
-					Event:  Event{Type: FullSyncEventType},
-					Result: Result{},
-				},
-				{
-					Event:  Event{Type: FullSyncEventType},
-					Result: Result{},
-				},
-			},
-		},
-		{
 			name: "StatusEvents From StatusUpdatePeriod",
 			builder: &PublishingGroupBuilder{
 				StatusUpdatePeriod: time.Second,
@@ -316,7 +295,6 @@ func TestFunnel_Start(t *testing.T) {
 			name: "SyncEvents, StatusUpdateEventType, FullSyncEvents",
 			builder: &PublishingGroupBuilder{
 				SyncPeriod:         700 * time.Millisecond,
-				FullSyncPeriod:     4000 * time.Millisecond,
 				StatusUpdatePeriod: 300 * time.Millisecond,
 			},
 			// Explicit steps to avoid race conditions that make validation difficult.
@@ -333,31 +311,6 @@ func TestFunnel_Start(t *testing.T) {
 				2400 * time.Millisecond,
 				2700 * time.Millisecond,
 				2800 * time.Millisecond,
-				3100 * time.Millisecond,
-				3400 * time.Millisecond,
-				3500 * time.Millisecond,
-				3800 * time.Millisecond,
-				4000 * time.Millisecond,
-				4300 * time.Millisecond,
-				4600 * time.Millisecond,
-				4700 * time.Millisecond,
-				5000 * time.Millisecond,
-				5300 * time.Millisecond,
-				5400 * time.Millisecond,
-				5700 * time.Millisecond,
-				6000 * time.Millisecond,
-				6100 * time.Millisecond,
-				6400 * time.Millisecond,
-				6700 * time.Millisecond,
-				6800 * time.Millisecond,
-				7100 * time.Millisecond,
-				7400 * time.Millisecond,
-				7500 * time.Millisecond,
-				7800 * time.Millisecond,
-				8000 * time.Millisecond,
-				8300 * time.Millisecond,
-				8600 * time.Millisecond,
-				8700 * time.Millisecond,
 			},
 			expectedEvents: []eventResult{
 				{
@@ -412,124 +365,6 @@ func TestFunnel_Start(t *testing.T) {
 				},
 				{
 					Event: Event{Type: SyncEventType}, // 2800ms
-					Result: Result{
-						RunAttempted: true,
-					},
-				},
-				{
-					Event:  Event{Type: StatusUpdateEventType}, // 3100ms
-					Result: Result{},
-				},
-				{
-					Event:  Event{Type: StatusUpdateEventType}, // 3400ms
-					Result: Result{},
-				},
-				{
-					Event: Event{Type: SyncEventType}, // 3500ms
-					Result: Result{
-						RunAttempted: true,
-					},
-				},
-				{
-					Event:  Event{Type: StatusUpdateEventType}, // 3800ms
-					Result: Result{},
-				},
-				{
-					Event: Event{Type: FullSyncEventType}, // 4000ms
-					Result: Result{
-						RunAttempted: true,
-					},
-				},
-				{
-					Event:  Event{Type: StatusUpdateEventType}, // 4300ms
-					Result: Result{},
-				},
-				{
-					Event:  Event{Type: StatusUpdateEventType}, // 4600ms
-					Result: Result{},
-				},
-				{
-					Event: Event{Type: SyncEventType}, // 4700ms
-					Result: Result{
-						RunAttempted: true,
-					},
-				},
-				{
-					Event:  Event{Type: StatusUpdateEventType}, // 5000ms
-					Result: Result{},
-				},
-				{
-					Event:  Event{Type: StatusUpdateEventType}, // 5300ms
-					Result: Result{},
-				},
-				{
-					Event: Event{Type: SyncEventType}, // 5400ms
-					Result: Result{
-						RunAttempted: true,
-					},
-				},
-				{
-					Event:  Event{Type: StatusUpdateEventType}, // 5700ms
-					Result: Result{},
-				},
-				{
-					Event:  Event{Type: StatusUpdateEventType}, // 6000ms
-					Result: Result{},
-				},
-				{
-					Event: Event{Type: SyncEventType}, // 6100ms
-					Result: Result{
-						RunAttempted: true,
-					},
-				},
-				{
-					Event:  Event{Type: StatusUpdateEventType}, // 6400ms
-					Result: Result{},
-				},
-				{
-					Event:  Event{Type: StatusUpdateEventType}, // 6700ms
-					Result: Result{},
-				},
-				{
-					Event: Event{Type: SyncEventType}, // 6800ms
-					Result: Result{
-						RunAttempted: true,
-					},
-				},
-				{
-					Event:  Event{Type: StatusUpdateEventType}, // 7100ms
-					Result: Result{},
-				},
-				{
-					Event:  Event{Type: StatusUpdateEventType}, // 7400ms
-					Result: Result{},
-				},
-				{
-					Event: Event{Type: SyncEventType}, // 7500ms
-					Result: Result{
-						RunAttempted: true,
-					},
-				},
-				{
-					Event:  Event{Type: StatusUpdateEventType}, // 7800ms
-					Result: Result{},
-				},
-				{
-					Event: Event{Type: FullSyncEventType}, // 8000ms
-					Result: Result{
-						RunAttempted: true,
-					},
-				},
-				{
-					Event:  Event{Type: StatusUpdateEventType}, // 8300ms
-					Result: Result{},
-				},
-				{
-					Event:  Event{Type: StatusUpdateEventType}, // 8600ms
-					Result: Result{},
-				},
-				{
-					Event: Event{Type: SyncEventType}, // 8700ms
 					Result: Result{
 						RunAttempted: true,
 					},

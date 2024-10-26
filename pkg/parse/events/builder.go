@@ -31,9 +31,6 @@ type PublishingGroupBuilder struct {
 	// SyncPeriod is the period of time between checking the filesystem
 	// for publisher updates to sync.
 	SyncPeriod time.Duration
-	// FullSyncPeriod is the period of time between full syncs from disk
-	// (even without a new commit).
-	FullSyncPeriod time.Duration
 	// StatusUpdatePeriod is how long the Parser waits between updates of the
 	// sync status, to account for management conflict errors from the Remediator.
 	StatusUpdatePeriod time.Duration
@@ -50,9 +47,6 @@ func (t *PublishingGroupBuilder) Build() []Publisher {
 	var publishers []Publisher
 	if t.SyncPeriod > 0 {
 		publishers = append(publishers, NewResetOnRunAttemptPublisher(SyncEventType, t.Clock, t.SyncPeriod))
-	}
-	if t.FullSyncPeriod > 0 {
-		publishers = append(publishers, NewTimeDelayPublisher(FullSyncEventType, t.Clock, t.FullSyncPeriod))
 	}
 	if t.NamespaceControllerPeriod > 0 {
 		publishers = append(publishers, NewTimeDelayPublisher(NamespaceSyncEventType, t.Clock, t.NamespaceControllerPeriod))

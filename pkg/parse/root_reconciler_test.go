@@ -722,6 +722,7 @@ func TestRootReconciler_ParseAndUpdate(t *testing.T) {
 					Applier:        fakeApplier,
 					SyncErrorCache: state.syncErrorCache,
 				},
+				FullSyncPeriod:     configsync.DefaultReconcilerFullSyncPeriod,
 				StatusUpdatePeriod: configsync.DefaultReconcilerSyncStatusUpdatePeriod,
 				RenderingEnabled:   false,
 			}
@@ -968,6 +969,7 @@ func TestRootReconciler_Parse_DeclaredFields(t *testing.T) {
 					Applier:        fakeApplier,
 					SyncErrorCache: state.syncErrorCache,
 				},
+				FullSyncPeriod:     configsync.DefaultReconcilerFullSyncPeriod,
 				StatusUpdatePeriod: configsync.DefaultReconcilerSyncStatusUpdatePeriod,
 				RenderingEnabled:   false,
 			}
@@ -1254,6 +1256,7 @@ func TestRootReconciler_Parse_Discovery(t *testing.T) {
 					Applier:        fakeApplier,
 					SyncErrorCache: state.syncErrorCache,
 				},
+				FullSyncPeriod:     configsync.DefaultReconcilerFullSyncPeriod,
 				StatusUpdatePeriod: configsync.DefaultReconcilerSyncStatusUpdatePeriod,
 				RenderingEnabled:   false,
 			}
@@ -1364,6 +1367,7 @@ func TestRootReconciler_Parse_SourceErrorMetricValidation(t *testing.T) {
 					Applier:        fakeApplier,
 					SyncErrorCache: state.syncErrorCache,
 				},
+				FullSyncPeriod:     configsync.DefaultReconcilerFullSyncPeriod,
 				StatusUpdatePeriod: configsync.DefaultReconcilerSyncStatusUpdatePeriod,
 				RenderingEnabled:   false,
 			}
@@ -1476,6 +1480,7 @@ func TestRootReconciler_Update_ApplierErrorMetricValidation(t *testing.T) {
 					Applier:        fakeApplier,
 					SyncErrorCache: state.syncErrorCache,
 				},
+				FullSyncPeriod:     configsync.DefaultReconcilerFullSyncPeriod,
 				StatusUpdatePeriod: configsync.DefaultReconcilerSyncStatusUpdatePeriod,
 				RenderingEnabled:   false,
 			}

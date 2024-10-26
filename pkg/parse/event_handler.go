@@ -65,21 +65,7 @@ func (s *EventHandler) Handle(event events.Event) events.Result {
 
 	var runResult ReconcileResult
 	switch event.Type {
-	case events.FullSyncEventType:
-		// FullSync = Read* + Render* + Parse + Update
-		//
-		// * Read & Render will only happen if there's a new commit, new source
-		//   spec change, or a previous error invalidated the cache.
-		//   Otherwise full-sync starts from re-parsing the objects from disk.
-		runResult = runFn(ctx, triggerFullSync)
-
 	case events.SyncEventType:
-		// Sync = Read* + Render* + Parse* + Update
-		//
-		// * Read, Render, and Parse will only happen if there's a new commit,
-		//   new source spec change, or a previous error invalidated the cache.
-		//   Otherwise sync skips directly to the Update stage, using the
-		//   previously parsed in-memory object cache.
 		runResult = runFn(ctx, triggerSync)
 
 	case events.StatusUpdateEventType:

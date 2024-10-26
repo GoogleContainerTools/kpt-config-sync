@@ -50,7 +50,7 @@ const testOCISignatureVerificationSAName = "oci-signature-verification-sa"
 const testImageValidationWebhook = "image-verification-webhook"
 
 // testOCISignatureVerificationServerImage is the container image used for the OCI signature verification server.
-const testOCISignatureVerificationServerImage = testing.TestInfraArtifactRepositoryAddress + "/oci-signature-verification-server:v1.0.0-634b8e84"
+const testOCISignatureVerificationServerImage = testing.TestInfraArtifactRepositoryAddress + "/oci-signature-verification-server:v1.0.0-2bbd249c5"
 
 // SetupOCISignatureVerification sets up the OCI signature verification environment, including the namespace, service account,
 // OCI signature verification server, and validating webhook configuration.
@@ -188,7 +188,7 @@ func testOCISignatureVerificationService() *corev1.Service {
 		core.Name(OCISignatureVerificationServerName),
 		core.Namespace(OCISignatureVerificationNamespace),
 	)
-	service.Spec.Ports = []corev1.ServicePort{{Name: "port", Port: 443}}
+	service.Spec.Ports = []corev1.ServicePort{{Name: "port", Port: 8443}}
 	service.Spec.Selector = map[string]string{"app": OCISignatureVerificationServerName}
 	return service
 }
@@ -238,7 +238,7 @@ func testOCISignatureVerificationDeployment() *appsv1.Deployment {
 						Image:   testOCISignatureVerificationServerImage,
 						Command: []string{"/webhook-server"},
 						Ports: []corev1.ContainerPort{
-							{ContainerPort: 443},
+							{ContainerPort: 8443},
 						},
 						VolumeMounts: []corev1.VolumeMount{
 							{Name: "ca-certs", MountPath: "/tls"},
@@ -252,7 +252,7 @@ func testOCISignatureVerificationDeployment() *appsv1.Deployment {
 						LivenessProbe: &corev1.Probe{
 							ProbeHandler: corev1.ProbeHandler{
 								TCPSocket: &corev1.TCPSocketAction{
-									Port: intstr.FromInt32(443),
+									Port: intstr.FromInt32(8443),
 								},
 							},
 							FailureThreshold: 6,
@@ -260,7 +260,7 @@ func testOCISignatureVerificationDeployment() *appsv1.Deployment {
 						ReadinessProbe: &corev1.Probe{
 							ProbeHandler: corev1.ProbeHandler{
 								TCPSocket: &corev1.TCPSocketAction{
-									Port: intstr.FromInt32(443),
+									Port: intstr.FromInt32(8443),
 								},
 							},
 							FailureThreshold: 2,
@@ -292,7 +292,7 @@ func testOCISignatureVerificationValidatingWebhookConfiguration(nt *NT) error {
 					Name:      OCISignatureVerificationServerName,
 					Namespace: OCISignatureVerificationNamespace,
 					Path:      ptr.To("/validate"),
-					Port:      ptr.To(int32(443)),
+					Port:      ptr.To(int32(8443)),
 				},
 				CABundle: caBundle,
 			},

@@ -24,8 +24,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o webhook-server oci-signature-verification-server.go
 
 # Final stage - runtime image
-# Need root permission to bind to a priviledged port, 443
-FROM gcr.io/distroless/static:latest
+FROM gcr.io/distroless/static:nonroot
 
 WORKDIR /
 

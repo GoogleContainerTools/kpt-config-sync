@@ -61,41 +61,56 @@ const (
 	symLink = "rev"
 )
 
-func newParser(t *testing.T, clock clock.Clock, fakeClient client.Client, fs FileSource, renderingEnabled bool) Parser {
-	parser := &root{}
+func newRootReconciler(t *testing.T, clock clock.Clock, fakeClient client.Client, fs FileSource, renderingEnabled bool) *reconciler {
 	converter, err := openapitest.ValueConverterForTest()
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	parser.RootOptions = &RootOptions{
+	state := &ReconcilerState{
+		syncErrorCache: NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
+	}
+	opts := &Options{
+		Clock:             clock,
+		ConfigParser:      filesystem.NewParser(&reader.File{}),
+		SyncName:          rootSyncName,
+		Scope:             declared.RootScope,
+		ReconcilerName:    rootReconcilerName,
+		Client:            fakeClient,
+		DiscoveryClient:   syncerFake.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
+		Converter:         converter,
+		Files:             Files{FileSource: fs},
+		DeclaredResources: &declared.Resources{},
+	}
+	rootOpts := &RootOptions{
+		Options:      opts,
 		SourceFormat: configsync.SourceFormatUnstructured,
 	}
-	parser.Options = &Options{
-		Clock:              clock,
-		Parser:             filesystem.NewParser(&reader.File{}),
-		StatusUpdatePeriod: configsync.DefaultReconcilerSyncStatusUpdatePeriod,
-		SyncName:           rootSyncName,
-		ReconcilerName:     rootReconcilerName,
-		Client:             fakeClient,
-		DiscoveryInterface: syncerFake.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
-		Converter:          converter,
-		Files:              Files{FileSource: fs},
-		Updater: Updater{
-			Scope:      declared.RootScope,
-			Resources:  &declared.Resources{},
+	recOpts := &ReconcilerOptions{
+		Options: opts,
+		Updater: &Updater{
+			Scope:      opts.Scope,
+			Resources:  opts.DeclaredResources,
 			Remediator: &remediatorfake.Remediator{},
 			Applier: &applierfake.Applier{
 				ApplyOutputs: []applierfake.ApplierOutputs{
 					{}, // One Apply call, no errors
 				},
 			},
-			SyncErrorCache: NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
+			SyncErrorCache: state.syncErrorCache,
 		},
-		RenderingEnabled: renderingEnabled,
+		StatusUpdatePeriod: configsync.DefaultReconcilerSyncStatusUpdatePeriod,
+		RenderingEnabled:   renderingEnabled,
 	}
-
-	return parser
+	return &reconciler{
+		options: recOpts,
+		syncStatusClient: &rootSyncStatusClient{
+			options: opts,
+		},
+		parser: &rootSyncParser{
+			options: rootOpts,
+		},
+		reconcilerState: state,
+	}
 }
 
 func createRootDir(rootDir, commit string) error {
@@ -752,13 +767,12 @@ func TestRun(t *testing.T) {
 				SourceBranch: fileSource.SourceBranch,
 			}
 			fakeClient := syncerFake.NewClient(t, core.Scheme, k8sobjects.RootSyncObjectV1Beta1(rootSyncName))
-			parser := newParser(t, fakeClock, fakeClient, fs, tc.renderingEnabled)
-			state := &reconcilerState{}
+			reconciler := newRootReconciler(t, fakeClock, fakeClient, fs, tc.renderingEnabled)
 			t.Logf("start running test at %v", time.Now())
-			result := DefaultRunFunc(context.Background(), parser, triggerReimport, state)
+			result := DefaultRunFunc(context.Background(), reconciler, triggerReimport)
 
 			assert.Equal(t, tc.expectedSourceChanged, result.SourceChanged)
-			assert.Equal(t, tc.needRetry, state.cache.needToRetry)
+			assert.Equal(t, tc.needRetry, reconciler.ReconcilerState().cache.needToRetry)
 
 			rs := &v1beta1.RootSync{}
 			err = fakeClient.Get(context.Background(), rootsync.ObjectKey(rootSyncName), rs)

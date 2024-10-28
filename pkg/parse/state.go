@@ -19,7 +19,20 @@ import (
 	"kpt.dev/configsync/pkg/status"
 )
 
-type reconcilerState struct {
+// ReconcilerState is the current state of the Reconciler, including progress
+// indicators and in-memory cache for each of the reconciler stages:
+// - Fetch
+// - Read
+// - Render/Hydrate
+// - Parse/Validate
+// - Update
+//
+// ReconcilerState also includes a cache of the RSync spec and status
+// (ReconcilerStatus).
+//
+// TODO: break up cacheForCommit into phase-based caches
+// TODO: move sourceState into ReconcilerState so the RSync spec and status are next to each other
+type ReconcilerState struct {
 	// lastApplied keeps the state for the last successful-applied syncDir.
 	lastApplied string
 
@@ -28,9 +41,11 @@ type reconcilerState struct {
 
 	// cache tracks the progress made by the reconciler for a source commit.
 	cache cacheForCommit
+
+	syncErrorCache *SyncErrorCache
 }
 
-func (s *reconcilerState) checkpoint() {
+func (s *ReconcilerState) checkpoint() {
 	applied := s.cache.source.syncDir.OSPath()
 	if applied == s.lastApplied {
 		return
@@ -42,7 +57,7 @@ func (s *reconcilerState) checkpoint() {
 
 // reset sets the reconciler to retry in the next second because the rendering
 // status is not available
-func (s *reconcilerState) reset() {
+func (s *ReconcilerState) reset() {
 	klog.Infof("Resetting reconciler checkpoint because the rendering status is not available yet")
 	s.resetCache()
 	s.lastApplied = ""
@@ -51,7 +66,7 @@ func (s *reconcilerState) reset() {
 
 // invalidate logs the errors, clears the state tracking information.
 // invalidate does not clean up the `s.cache`.
-func (s *reconcilerState) invalidate(errs status.MultiError) {
+func (s *ReconcilerState) invalidate(errs status.MultiError) {
 	klog.Errorf("Invalidating reconciler checkpoint: %v", status.FormatSingleLine(errs))
 	// Invalidate state on error since this could be the result of switching
 	// branches or some other operation where inverting the operation would
@@ -63,7 +78,7 @@ func (s *reconcilerState) invalidate(errs status.MultiError) {
 // resetCache resets the whole cache.
 //
 // resetCache is called when a new source commit is detected.
-func (s *reconcilerState) resetCache() {
+func (s *ReconcilerState) resetCache() {
 	s.cache = cacheForCommit{}
 }
 
@@ -74,10 +89,16 @@ func (s *reconcilerState) resetCache() {
 // resetPartialCache is called when:
 //   - a force-resync happens, or
 //   - one of the watchers noticed a management conflict.
-func (s *reconcilerState) resetPartialCache() {
+func (s *ReconcilerState) resetPartialCache() {
 	source := s.cache.source
 	needToRetry := s.cache.needToRetry
 	s.cache = cacheForCommit{}
 	s.cache.source = source
 	s.cache.needToRetry = needToRetry
+}
+
+// SyncErrors returns all the sync errors, including remediator errors,
+// validation errors, applier errors, and watch update errors.
+func (s *ReconcilerState) SyncErrors() status.MultiError {
+	return s.syncErrorCache.Errors()
 }

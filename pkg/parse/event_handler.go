@@ -27,18 +27,16 @@ import (
 // triggers the RunFunc when appropriate.
 type EventHandler struct {
 	Context           context.Context
-	Parser            Parser
-	ReconcilerState   *reconcilerState
+	Reconciler        Reconciler
 	NSControllerState *namespacecontroller.State
 	Run               RunFunc
 }
 
 // NewEventHandler builds an EventHandler
-func NewEventHandler(ctx context.Context, parser Parser, nsControllerState *namespacecontroller.State, runFn RunFunc) *EventHandler {
+func NewEventHandler(ctx context.Context, r Reconciler, nsControllerState *namespacecontroller.State, runFn RunFunc) *EventHandler {
 	return &EventHandler{
 		Context:           ctx,
-		Parser:            parser,
-		ReconcilerState:   &reconcilerState{},
+		Reconciler:        r,
 		NSControllerState: nsControllerState,
 		Run:               runFn,
 	}
@@ -54,13 +52,14 @@ func NewEventHandler(ctx context.Context, parser Parser, nsControllerState *name
 //   - Reconciler requested a retry due to error
 //   - Remediator requested a watch update
 func (s *EventHandler) Handle(event events.Event) events.Result {
-	opts := s.Parser.options()
+	opts := s.Reconciler.Options()
+	state := s.Reconciler.ReconcilerState()
 
 	var eventResult events.Result
 	// Wrap the RunFunc to set Result.RunAttempted.
 	// This delays status update and sync events.
-	runFn := func(ctx context.Context, p Parser, trigger string, state *reconcilerState) RunResult {
-		result := s.Run(ctx, p, trigger, state)
+	runFn := func(ctx context.Context, r Reconciler, trigger string) RunResult {
+		result := s.Run(ctx, r, trigger)
 		eventResult.RunAttempted = true
 		return result
 	}
@@ -76,14 +75,14 @@ func (s *EventHandler) Handle(event events.Event) events.Result {
 		// Reset the cache partially to make sure all the steps of a parse-apply-watch loop will run.
 		// The cached sourceState will not be reset to avoid reading all the source files unnecessarily.
 		// The cached needToRetry will not be reset to avoid resetting the backoff retries.
-		s.ReconcilerState.resetPartialCache()
-		runResult = runFn(s.Context, s.Parser, triggerResync, s.ReconcilerState)
+		state.resetPartialCache()
+		runResult = runFn(s.Context, s.Reconciler, triggerResync)
 
 	case events.SyncEventType:
 		// Re-import declared resources from the filesystem (from *-sync).
 		// If the reconciler is in the process of reconciling a given commit, the re-import won't
 		// happen until the ongoing reconciliation is done.
-		runResult = runFn(s.Context, s.Parser, triggerReimport, s.ReconcilerState)
+		runResult = runFn(s.Context, s.Reconciler, triggerReimport)
 
 	case events.StatusEventType:
 		// Publish the sync status periodically to update remediator errors.
@@ -91,8 +90,15 @@ func (s *EventHandler) Handle(event events.Event) events.Result {
 		// This implies that this reconciler has successfully parsed, rendered, validated, and synced.
 		if opts.Remediating() {
 			klog.V(3).Info("Updating sync status (periodic while not syncing)")
-			// Don't update the sync spec or commit.
-			if err := setSyncStatus(s.Context, s.Parser, s.ReconcilerState, s.ReconcilerState.status.SyncStatus.Spec, false, s.ReconcilerState.status.SyncStatus.Commit, s.Parser.SyncErrors()); err != nil {
+			// Don't update the sync spec or commit, just the errors and status.
+			syncStatus := &SyncStatus{
+				Spec:       state.status.SyncStatus.Spec,
+				Syncing:    false,
+				Commit:     state.status.SyncStatus.Commit,
+				Errs:       s.Reconciler.ReconcilerState().SyncErrors(),
+				LastUpdate: nowMeta(opts),
+			}
+			if err := s.Reconciler.SetSyncStatus(s.Context, syncStatus); err != nil {
 				if errors.Is(err, context.Canceled) {
 					klog.Infof("Sync status update skipped: %v", err)
 				} else {
@@ -113,8 +119,8 @@ func (s *EventHandler) Handle(event events.Event) events.Result {
 		// Reset the cache partially to make sure all the steps of a parse-apply-watch loop will run.
 		// The cached sourceState will not be reset to avoid reading all the source files unnecessarily.
 		// The cached needToRetry will not be reset to avoid resetting the backoff retries.
-		s.ReconcilerState.resetPartialCache()
-		runResult = runFn(s.Context, s.Parser, namespaceEvent, s.ReconcilerState)
+		state.resetPartialCache()
+		runResult = runFn(s.Context, s.Reconciler, namespaceEvent)
 
 	case events.RetrySyncEventType:
 		// Retry if there was an error, conflict, or any watches need to be updated.
@@ -123,9 +129,9 @@ func (s *EventHandler) Handle(event events.Event) events.Result {
 			// Reset the cache partially to make sure all the steps of a parse-apply-watch loop will run.
 			// The cached sourceState will not be reset to avoid reading all the source files unnecessarily.
 			// The cached needToRetry will not be reset to avoid resetting the backoff retries.
-			s.ReconcilerState.resetPartialCache()
+			state.resetPartialCache()
 			trigger = triggerManagementConflict
-		} else if s.ReconcilerState.cache.needToRetry {
+		} else if state.cache.needToRetry {
 			trigger = triggerRetry
 		} else if opts.needToUpdateWatch() {
 			trigger = triggerWatchUpdate
@@ -138,7 +144,7 @@ func (s *EventHandler) Handle(event events.Event) events.Result {
 		// retryTimer will be reset to `Options.RetryPeriod`, and state.backoff is reset to `defaultBackoff()`.
 		// In this case, `run` will try to sync the configs from the new commit instead of the old commit
 		// being retried.
-		runResult = runFn(s.Context, s.Parser, trigger, s.ReconcilerState)
+		runResult = runFn(s.Context, s.Reconciler, trigger)
 
 	default:
 		klog.Fatalf("Invalid event received: %#v", event)

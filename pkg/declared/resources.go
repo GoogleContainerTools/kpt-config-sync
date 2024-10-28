@@ -19,12 +19,15 @@ import (
 	"sync"
 
 	"github.com/elliotchance/orderedmap/v2"
+	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog/v2"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/syncer/reconcile"
+	"kpt.dev/configsync/pkg/util/clusterconfig"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"kpt.dev/configsync/pkg/core"
@@ -149,4 +152,22 @@ func (r *Resources) DeclaredGVKs() (map[schema.GroupVersionKind]struct{}, string
 		gvkSet[pair.Value.GroupVersionKind()] = struct{}{}
 	}
 	return gvkSet, r.commit
+}
+
+// DeclaredCRDs returns the list of CRDs declared in the source.
+func (r *Resources) DeclaredCRDs() ([]*v1beta1.CustomResourceDefinition, status.MultiError) {
+	// DeclaredUnstructureds handles the mutex, so this method doesn't need to lock.
+	var crds []*v1beta1.CustomResourceDefinition
+	declaredObjs, _ := r.DeclaredUnstructureds()
+	for _, obj := range declaredObjs {
+		if obj.GroupVersionKind().GroupKind() != kinds.CustomResourceDefinition() {
+			continue
+		}
+		crd, err := clusterconfig.AsCRD(obj)
+		if err != nil {
+			return nil, err
+		}
+		crds = append(crds, crd)
+	}
+	return crds, nil
 }

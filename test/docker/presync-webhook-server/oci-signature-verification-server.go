@@ -111,7 +111,7 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 		UID: admissionReview.Request.UID,
 	}
 
-	oldAnnotation, err := getAnnotationByKey(admissionReview.Request.OldObject.Raw, imageToSync)
+	oldImage, err := getAnnotationByKey(admissionReview.Request.OldObject.Raw, imageToSync)
 	if err != nil {
 		klog.Errorf("Failed to extract old annotations: %v", err)
 		response.Result = &metav1.Status{
@@ -121,7 +121,7 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newAnnotation, err := getAnnotationByKey(admissionReview.Request.Object.Raw, imageToSync)
+	newImage, err := getAnnotationByKey(admissionReview.Request.Object.Raw, imageToSync)
 	if err != nil {
 		klog.Errorf("Failed to extract new annotations: %v", err)
 		response.Result = &metav1.Status{
@@ -131,16 +131,16 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if newAnnotation != oldAnnotation {
-		klog.Infof("Annotation %s changed from %s to %s", imageToSync, oldAnnotation, newAnnotation)
-		if err := verifyImageSignature(r.Context(), newAnnotation); err != nil {
+	if newImage != oldImage {
+		klog.Infof("Annotation %s changed from %s to %s", imageToSync, oldImage, newImage)
+		if err := verifyImageSignature(r.Context(), newImage); err != nil {
 			klog.Errorf("Image verification failed: %v", err)
 			response.Allowed = false
 			response.Result = &metav1.Status{
 				Message: fmt.Sprintf("Image verification failed: %v", err),
 			}
 		} else {
-			klog.Infof("Image verification successful for %s", newAnnotation)
+			klog.Infof("Image verification successful for %s", newImage)
 			response.Allowed = true
 		}
 	} else {

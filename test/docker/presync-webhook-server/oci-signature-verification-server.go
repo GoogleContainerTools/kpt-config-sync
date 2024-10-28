@@ -50,15 +50,15 @@ func getAnnotations(raw []byte) (map[string]string, error) {
 		}
 		return annotationsMap, nil
 	}
-	return nil, fmt.Errorf("no annotations found")
+	klog.Infof("no annotations found in the objects %s", metadata["name"])
+	return nil, nil
 }
 
-func verifyImageSignature(image string) error {
+func verifyImageSignature(ctx context.Context, image string) error {
 	if image == "" {
 		return nil
 	}
 
-	ctx := context.Background()
 	pubKey, err := signature.LoadPublicKey(ctx, publicKeyPath)
 	if err != nil {
 		return fmt.Errorf("error loading public key: %v", err)
@@ -119,7 +119,7 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 
 	if newAnnotations[imageToSync] != oldAnnotations[imageToSync] {
 		klog.Infof("Annotation image-to-sync changed from %s to %s", oldAnnotations[imageToSync], newAnnotations[imageToSync])
-		if err := verifyImageSignature(newAnnotations[imageToSync]); err != nil {
+		if err := verifyImageSignature(r.Context(), newAnnotations[imageToSync]); err != nil {
 			klog.Errorf("Image verification failed: %v", err)
 			response.Allowed = false
 			response.Result = &metav1.Status{
@@ -135,7 +135,7 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 
 	admissionReview.Response = response
 	if err := json.NewEncoder(w).Encode(admissionReview); err != nil {
-		klog.Infof("Failed to encode admission response: %v", err)
+		klog.Errorf("Failed to encode admission response: %v", err)
 	}
 }
 

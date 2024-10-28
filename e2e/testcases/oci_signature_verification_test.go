@@ -26,15 +26,11 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
-	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
-	"kpt.dev/configsync/pkg/reposync"
-	"kpt.dev/configsync/pkg/rootsync"
 	"kpt.dev/configsync/pkg/status"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var cosignPassword = map[string]string{
@@ -96,7 +92,7 @@ func TestAddPreSyncAnnotationRepoSync(t *testing.T) {
 	nt.Must(nt.WatchForAllSyncs())
 	err = nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSyncID.Name, repoSyncID.Namespace,
 		testwatcher.WatchPredicates(
-			checkRepoSyncPreSyncAnnotations(image1),
+			testpredicates.HasAnnotation(metadata.ImageToSyncAnnotationKey, image1.OCIImageID().Address()),
 		))
 	if err != nil {
 		nt.T.Fatalf("Source annotation not updated for RepoSync %v", err)
@@ -173,8 +169,7 @@ func TestAddPreSyncAnnotationRootSync(t *testing.T) {
 	nt.T.Log("Check RootSync is synced to second image and annotations are updated.")
 	err = nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, rootSyncID.Namespace,
 		testwatcher.WatchPredicates(
-			checkRootSyncPreSyncAnnotations(image1),
-		))
+			testpredicates.HasAnnotation(metadata.ImageToSyncAnnotationKey, image1.OCIImageID().Address())))
 	if err != nil {
 		nt.T.Fatalf("Source annotation not updated for RootSync %v", err)
 	}
@@ -191,64 +186,6 @@ func TestAddPreSyncAnnotationRootSync(t *testing.T) {
 		))
 	if err != nil {
 		nt.T.Fatalf("Source annotations still exist when RootSync is syncing from Git %v", err)
-	}
-}
-
-func checkRootSyncPreSyncAnnotations(image *registryproviders.OCIImage) testpredicates.Predicate {
-	return func(o client.Object) error {
-		if o == nil {
-			return testpredicates.ErrObjectNotFound
-		}
-		rs, ok := o.(*v1beta1.RootSync)
-		if !ok {
-			return testpredicates.WrongTypeErr(o, &v1beta1.RootSync{})
-		}
-		syncingCondition := rootsync.GetCondition(rs.Status.Conditions, v1beta1.RootSyncSyncing)
-		syncingCommit := syncingCondition.Commit
-		syncingImage := rs.Spec.Oci.Image
-		imageToSyncAnnotation, ok := o.GetAnnotations()[metadata.ImageToSyncAnnotationKey]
-		if !ok {
-			return fmt.Errorf("object %q does not have annotation %q", o.GetName(), metadata.ImageToSyncAnnotationKey)
-		}
-		remoteAddr := image.OCIImageID().Address()
-		if imageToSyncAnnotation != fmt.Sprintf("%s@sha256:%s", syncingImage, syncingCommit) || imageToSyncAnnotation != remoteAddr {
-			return fmt.Errorf("expecting to have OCI image %s, but got image-to-sync annotation %s, syncing commit %s, syncing image %s",
-				remoteAddr,
-				imageToSyncAnnotation,
-				syncingCommit,
-				syncingImage,
-			)
-		}
-		return nil
-	}
-}
-
-func checkRepoSyncPreSyncAnnotations(image *registryproviders.OCIImage) testpredicates.Predicate {
-	return func(o client.Object) error {
-		if o == nil {
-			return testpredicates.ErrObjectNotFound
-		}
-		rs, ok := o.(*v1beta1.RepoSync)
-		if !ok {
-			return testpredicates.WrongTypeErr(o, &v1beta1.RepoSync{})
-		}
-		syncingCondition := reposync.GetCondition(rs.Status.Conditions, v1beta1.RepoSyncSyncing)
-		syncingCommit := syncingCondition.Commit
-		syncingImage := rs.Spec.Oci.Image
-		imageToSyncAnnotation, ok := o.GetAnnotations()[metadata.ImageToSyncAnnotationKey]
-		if !ok {
-			return fmt.Errorf("object %q does not have annotation %q", o.GetName(), metadata.ImageToSyncAnnotationKey)
-		}
-		remoteAddr := image.OCIImageID().Address()
-		if imageToSyncAnnotation != fmt.Sprintf("%s@sha256:%s", syncingImage, syncingCommit) || imageToSyncAnnotation != remoteAddr {
-			return fmt.Errorf("expecting to have OCI image %s, but got image-to-sync annotation %s, syncing commit %s, syncing image %s",
-				remoteAddr,
-				imageToSyncAnnotation,
-				syncingCommit,
-				syncingImage,
-			)
-		}
-		return nil
 	}
 }
 

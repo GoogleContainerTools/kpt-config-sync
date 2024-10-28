@@ -16,6 +16,7 @@ package testshell
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
@@ -37,20 +38,35 @@ type TestShell struct {
 	Logger *testlogger.TestLogger
 }
 
-// ExecWithDebug is a convenience method for invoking a subprocess with the
-// KUBECONFIG environment variable and debug logging.
-func (tc *TestShell) ExecWithDebug(name string, args ...string) ([]byte, error) {
-	tc.Logger.Debugf("%s %s", name, strings.Join(args, " "))
-	cmd := tc.Command(name, args...)
+func (tc *TestShell) execCommandWithDebug(cmd *exec.Cmd) ([]byte, error) {
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		if !tc.Logger.IsDebugEnabled() {
-			tc.Logger.Infof("%s %s", name, strings.Join(args, " "))
+			tc.Logger.Infof("%s %s", cmd.Path, strings.Join(cmd.Args, " "))
 		}
 		tc.Logger.Info(string(out))
 		return out, err
 	}
 	return out, nil
+}
+
+// ExecWithDebug is a convenience method for invoking a subprocess with the
+// KUBECONFIG environment variable and debug logging.
+func (tc *TestShell) ExecWithDebug(name string, args ...string) ([]byte, error) {
+	tc.Logger.Debugf("%s %s", name, strings.Join(args, " "))
+	return tc.execCommandWithDebug(tc.Command(name, args...))
+}
+
+// ExecWithDebugEnv is similar to ExecWithDebug but allows passing additional
+// environment variables for the command execution.
+func (tc *TestShell) ExecWithDebugEnv(name string, envVars map[string]string, args ...string) ([]byte, error) {
+	tc.Logger.Debugf("%s %s %s", name, envVars, strings.Join(args, " "))
+	cmd := tc.Command(name, args...)
+	cmd.Env = tc.env()
+	for k, v := range envVars {
+		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
+	}
+	return tc.execCommandWithDebug(cmd)
 }
 
 // Command is a convenience method for invoking a subprocess with the

@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/elliotchance/orderedmap/v2"
 	"github.com/google/go-cmp/cmp"
@@ -259,6 +260,34 @@ func setSourceStatusFields(source *v1beta1.SourceStatus, newStatus *SourceStatus
 	source.Errors = cse[0 : len(cse)/denominator]
 	source.ErrorSummary = errorSummary
 	source.LastUpdate = newStatus.LastUpdate
+}
+
+func (p *root) setSourceAnnotations(ctx context.Context, commit string) error {
+	rs := &v1beta1.RootSync{}
+	rs.Namespace = configsync.ControllerNamespace
+	rs.Name = p.SyncName
+
+	var patch string
+	if p.Options.SourceType == configsync.OciSource ||
+		(p.Options.SourceType == configsync.HelmSource && strings.HasPrefix(p.Options.SourceRepo, "oci://")) {
+		patch = fmt.Sprintf(`{"metadata":{"annotations":{"%s":"%s"}}}`,
+			metadata.ImageToSyncAnnotationKey,
+			fmt.Sprintf("%s@sha256:%s", p.Options.SourceRepo, commit),
+		)
+	} else {
+		patch = fmt.Sprintf(`{"metadata":{"annotations":{"%s":null}}}`,
+			metadata.ImageToSyncAnnotationKey)
+	}
+
+	err := p.Client.Patch(ctx, rs,
+		client.RawPatch(types.MergePatchType, []byte(patch)),
+		client.FieldOwner(configsync.FieldManager))
+
+	if err != nil {
+		return fmt.Errorf("failed to patch RootSync annotations: %w\nPatch content: %s", err, patch)
+	}
+
+	return nil
 }
 
 func (p *root) setRequiresRendering(ctx context.Context, renderingRequired bool) error {

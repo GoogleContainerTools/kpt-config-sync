@@ -25,6 +25,7 @@ import (
 	"math/big"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -37,10 +38,10 @@ import (
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 )
 
-// SyncSource represents a type of sync source. This typically maps to a type of
-// server which hosts a source of truth for syncing. This does not necessarily
-// map 1:1 with SourceType, for example both helm and oci use registry-server.
-type SyncSource string
+// Server represents a test server type, such as registry-server, git-server, or oci-image-verification-server.
+// The first two represent sync sources, but they don't necessarily map 1:1 to Config Sync sources.
+// For example, registry-server handles both OCI and Helm sources.
+type Server string
 
 const (
 	// RootAuthSecretName is the name of the Auth secret required by the
@@ -55,21 +56,52 @@ const (
 	// git-server to authenticate clients.
 	gitServerSecretName = "ssh-pub"
 
+	// cosignSecretName is the name of the Secret that stores
+	// the public key used by the pre-sync webhook server to verify OCI images.
+	cosignSecretName = "cosign-key"
+
 	// GitSyncSource is the name of the git-server sync source. Used by the git
 	// source type.
-	GitSyncSource SyncSource = "git-server"
+	GitSyncSource Server = "git-server"
 
 	// RegistrySyncSource is the name of the registry-server sync source. Used
 	// by both the oci and helm source types.
-	RegistrySyncSource SyncSource = "registry-server"
+	RegistrySyncSource Server = "registry-server"
+
+	// ImageVerificationServer is the name of the test OCI image verification server.
+	// Used for verifying OCI image signatures.
+	ImageVerificationServer Server = "image-verification"
+
+	// Cosign requires a password for key generation and image signing.
+	// For testing purposes, a simple password is used.
+	cosignPassword       = "test"
+	cosignPasswordEnvVar = "COSIGN_PASSWORD"
+
+	sslDirName         = "ssl"
+	caCertFile         = "ca_cert.pem"
+	certFile           = "cert.pem"
+	certPrivateKeyFile = "key.pem"
 )
 
 func sshDir(nt *NT) string {
 	return filepath.Join(nt.TmpDir, "ssh")
 }
 
-func sslDir(nt *NT, syncSource SyncSource) string {
-	return filepath.Join(nt.TmpDir, string(syncSource), "ssl")
+func sslDir(nt *NT, syncSource Server) string {
+	return filepath.Join(nt.TmpDir, string(syncSource), sslDirName)
+}
+
+func cosignDir(nt *NT) string {
+	return filepath.Join(nt.TmpDir, "cosign")
+}
+
+// CosignPrivateKeyPath returns the private key for signing image
+func CosignPrivateKeyPath(nt *NT) string {
+	return filepath.Join(cosignDir(nt), "cosign.key")
+}
+
+func cosignPublicKeyPath(nt *NT) string {
+	return filepath.Join(cosignDir(nt), "cosign.pub")
 }
 
 func privateKeyPath(nt *NT) string {
@@ -80,16 +112,16 @@ func publicKeyPath(nt *NT) string {
 	return filepath.Join(sshDir(nt), "id_rsa.nomos.pub")
 }
 
-func caCertPath(nt *NT, syncSource SyncSource) string {
-	return filepath.Join(sslDir(nt, syncSource), "ca_cert.pem")
+func caCertPath(nt *NT, syncSource Server) string {
+	return filepath.Join(sslDir(nt, syncSource), caCertFile)
 }
 
-func certPath(nt *NT, syncSource SyncSource) string {
-	return filepath.Join(sslDir(nt, syncSource), "cert.pem")
+func certPath(nt *NT, syncSource Server) string {
+	return filepath.Join(sslDir(nt, syncSource), certFile)
 }
 
-func certPrivateKeyPath(nt *NT, syncSource SyncSource) string {
-	return filepath.Join(sslDir(nt, syncSource), "key.pem")
+func certPrivateKeyPath(nt *NT, syncSource Server) string {
+	return filepath.Join(sslDir(nt, syncSource), certPrivateKeyFile)
 }
 
 // GetKnownHosts will generate and format the key to be used for
@@ -155,7 +187,7 @@ func writePEMToFile(path, pemType string, data []byte) error {
 	return nil
 }
 
-func createCAWithCerts(nt *NT, syncSource SyncSource, domains []string) error {
+func createCAWithCerts(nt *NT, syncSource Server, domains []string) error {
 	if err := os.MkdirAll(sslDir(nt, syncSource), fileMode); err != nil {
 		return fmt.Errorf("creating ssl directory: %w", err)
 	}
@@ -254,14 +286,14 @@ func generateSSHKeys(nt *NT) (string, error) {
 
 // PublicCertSecretName is the name of the Secret which contains a CA cert used
 // for HTTPS handshakes of the provided sync source
-func PublicCertSecretName(sourceType SyncSource) string {
+func PublicCertSecretName(sourceType Server) string {
 	return fmt.Sprintf("%s-cert-public", sourceType)
 }
 
 // privateCertSecretName is the name of the Secret which contains the private
 // certificate and key used by in-cluster sync sources for HTTPS handshakes.
 // Example usages: git-server, registry-server
-func privateCertSecretName(sourceType SyncSource) string {
+func privateCertSecretName(sourceType Server) string {
 	return fmt.Sprintf("%s-cert-private", sourceType)
 }
 
@@ -271,7 +303,7 @@ func privateCertSecretName(sourceType SyncSource) string {
 // expose the inner logic to outside consumers. So instead of trying to do it
 // ourselves, we're shelling out to kubectl to ensure we create a valid set of
 // secrets.
-func generateSSLKeys(nt *NT, syncSource SyncSource, namespace string, domains []string) (string, error) {
+func generateSSLKeys(nt *NT, syncSource Server, namespace string, domains []string) (string, error) {
 	if err := createCAWithCerts(nt, syncSource, domains); err != nil {
 		return "", err
 	}
@@ -290,6 +322,30 @@ func generateSSLKeys(nt *NT, syncSource SyncSource, namespace string, domains []
 	}
 
 	return caCertPath(nt, syncSource), nil
+}
+
+// generateCosignKeyPair generates a Cosign key pair using the `cosign` command
+// and moves the generated keys to the specified directory. The two files will
+// be named as cosign.key and cosign.pub. Subject to change based on Cosign.
+func generateCosignKeyPair(nt *NT) error {
+	if err := os.MkdirAll(cosignDir(nt), fileMode); err != nil {
+		return fmt.Errorf("creating cosign key pair directory: %w", err)
+	}
+
+	nt.T.Log("Generating Cosign key pair...")
+	cmd := exec.Command("cosign", "generate-key-pair")
+	cmd.Env = os.Environ()
+	cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", cosignPasswordEnvVar, cosignPassword))
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Dir = cosignDir(nt)
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("error running cosign command: %v", err)
+	}
+
+	nt.T.Log("Cosign key pair generated at %s", cosignDir(nt))
+	return nil
 }
 
 // downloadSSHKey downloads the private SSH key from Cloud Secret Manager.

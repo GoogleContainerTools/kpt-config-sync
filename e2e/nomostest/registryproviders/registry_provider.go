@@ -68,6 +68,9 @@ type OCIRegistryProvider interface {
 	// registry or image details.
 	RepositoryPath() string
 
+	// ImageLocalAddress returns the local address of the image in the registry.
+	ImageLocalAddress(imageName string) (string, error)
+
 	// ImageRemoteAddress returns the address of the image in the registry.
 	// For pulling with RSync's `.spec.oci.image`
 	ImageRemoteAddress(imageName string) string

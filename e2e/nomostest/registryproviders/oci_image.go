@@ -166,6 +166,16 @@ func (o *OCIImage) RemoteAddressWithDigest() (string, error) {
 	return fmt.Sprintf("%s@%s", o.Provider.ImageRemoteAddress(o.Name), o.Digest), nil
 }
 
+// LocalAddressWithDigest returns the local image address with digest.
+// For accessing the image locally, for example, signing the image.
+func (o *OCIImage) LocalAddressWithDigest() (string, error) {
+	localAddress, err := o.Provider.ImageLocalAddress(o.Name)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s@%s", localAddress, o.Digest), nil
+}
+
 // Delete the image from the remote registry using the provided registry endpoint.
 func (o *OCIImage) Delete() error {
 	// How to delete images varies by provider, so delegate deletion to the provider.

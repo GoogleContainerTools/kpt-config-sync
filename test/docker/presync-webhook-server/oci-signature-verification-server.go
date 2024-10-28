@@ -103,18 +103,26 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	response := &admissionv1.AdmissionResponse{
+		UID: admissionReview.Request.UID,
+	}
+
 	oldAnnotations, err := getAnnotations(admissionReview.Request.OldObject.Raw)
 	if err != nil {
 		klog.Errorf("Failed to extract old annotations: %v", err)
+		response.Result = &metav1.Status{
+			Message: fmt.Sprintf("Failed to extract old annotations: %v", err),
+		}
+		response.Allowed = false
 	}
 
 	newAnnotations, err := getAnnotations(admissionReview.Request.Object.Raw)
 	if err != nil {
 		klog.Errorf("Failed to extract new annotations: %v", err)
-	}
-
-	response := &admissionv1.AdmissionResponse{
-		UID: admissionReview.Request.UID,
+		response.Result = &metav1.Status{
+			Message: fmt.Sprintf("Failed to extract new annotations: %v", err),
+		}
+		response.Allowed = false
 	}
 
 	if newAnnotations[imageToSync] != oldAnnotations[imageToSync] {

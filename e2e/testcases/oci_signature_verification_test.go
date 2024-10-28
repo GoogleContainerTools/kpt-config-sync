@@ -86,7 +86,7 @@ func TestAddPreSyncAnnotationRepoSync(t *testing.T) {
 		nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSyncID.Name, namespaceRepo,
 			testwatcher.WatchPredicates(
 				testpredicates.RepoSyncHasSourceError(status.SourceErrorCode, "no signatures found"),
-				testpredicates.RepoSyncHasSourceError(status.SourceErrorCode, image1.Digest))),
+				testpredicates.RepoSyncHasSourceError(status.SourceErrorCode, image1.Digest))))
 
 	if err = signImage(nt, image1); err != nil {
 		nt.T.Fatalf("Failed to sign second test image %s", err)
@@ -162,7 +162,7 @@ func TestAddPreSyncAnnotationRootSync(t *testing.T) {
 		nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, configsync.ControllerNamespace,
 			testwatcher.WatchPredicates(
 				testpredicates.RootSyncHasSourceError(status.SourceErrorCode, "no signatures found"),
-				testpredicates.RootSyncHasSourceError(status.SourceErrorCode, image1.Digest))),
+				testpredicates.RootSyncHasSourceError(status.SourceErrorCode, image1.Digest))))
 
 	if err = signImage(nt, image1); err != nil {
 		nt.T.Fatalf("Failed to sign second test image %s", err)

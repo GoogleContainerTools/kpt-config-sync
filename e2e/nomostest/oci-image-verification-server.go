@@ -50,7 +50,7 @@ const testOCISignatureVerificationSAName = "oci-signature-verification-sa"
 const testImageValidationWebhook = "image-verification-webhook"
 
 // testOCISignatureVerificationServerImage is the container image used for the OCI signature verification server.
-const testOCISignatureVerificationServerImage = testing.TestInfraArtifactRepositoryAddress + "/oci-signature-verification-server:v1.0.0-9b00d631"
+const testOCISignatureVerificationServerImage = testing.TestInfraArtifactRepositoryAddress + "/oci-signature-verification-server:v1.0.0-cb75482d"
 
 // SetupOCISignatureVerification sets up the OCI signature verification environment, including the namespace, service account,
 // OCI signature verification server, and validating webhook configuration.

@@ -37,21 +37,25 @@ const (
 	publicKeyPath = "/cosign-key/cosign.pub"
 )
 
-// getAnnotations extracts annotations from the raw JSON data.
-func getAnnotations(raw []byte) (map[string]string, error) {
+// getAnnotationByKey extracts a specific annotation by key from the raw JSON data.
+func getAnnotationByKey(raw []byte, key string) (string, error) {
 	var metadata map[string]interface{}
 	if err := json.Unmarshal(raw, &metadata); err != nil {
-		return nil, err
+		return "", err
 	}
-	if annotations, ok := metadata["metadata"].(map[string]interface{})["annotations"].(map[string]interface{}); ok {
-		annotationsMap := make(map[string]string)
-		for k, v := range annotations {
-			annotationsMap[k] = fmt.Sprintf("%v", v)
-		}
-		return annotationsMap, nil
+
+	annotations, ok := metadata["metadata"].(map[string]interface{})["annotations"].(map[string]interface{})
+	if !ok {
+		klog.Infof("No annotations found in the object")
+		return "", nil
 	}
-	klog.Infof("no annotations found in the objects %s", metadata["name"])
-	return nil, nil
+
+	if value, found := annotations[key]; found {
+		return fmt.Sprintf("%v", value), nil
+	}
+
+	klog.Infof("Annotation %s not found in the object", key)
+	return "", nil
 }
 
 func verifyImageSignature(ctx context.Context, image string) error {
@@ -107,34 +111,36 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 		UID: admissionReview.Request.UID,
 	}
 
-	oldAnnotations, err := getAnnotations(admissionReview.Request.OldObject.Raw)
+	oldAnnotation, err := getAnnotationByKey(admissionReview.Request.OldObject.Raw, imageToSync)
 	if err != nil {
 		klog.Errorf("Failed to extract old annotations: %v", err)
 		response.Result = &metav1.Status{
 			Message: fmt.Sprintf("Failed to extract old annotations: %v", err),
 		}
 		response.Allowed = false
+		return
 	}
 
-	newAnnotations, err := getAnnotations(admissionReview.Request.Object.Raw)
+	newAnnotation, err := getAnnotationByKey(admissionReview.Request.Object.Raw, imageToSync)
 	if err != nil {
 		klog.Errorf("Failed to extract new annotations: %v", err)
 		response.Result = &metav1.Status{
 			Message: fmt.Sprintf("Failed to extract new annotations: %v", err),
 		}
 		response.Allowed = false
+		return
 	}
 
-	if newAnnotations[imageToSync] != oldAnnotations[imageToSync] {
-		klog.Infof("Annotation image-to-sync changed from %s to %s", oldAnnotations[imageToSync], newAnnotations[imageToSync])
-		if err := verifyImageSignature(r.Context(), newAnnotations[imageToSync]); err != nil {
+	if newAnnotation != oldAnnotation {
+		klog.Infof("Annotation %s changed from %s to %s", imageToSync, oldAnnotation, newAnnotation)
+		if err := verifyImageSignature(r.Context(), newAnnotation); err != nil {
 			klog.Errorf("Image verification failed: %v", err)
 			response.Allowed = false
 			response.Result = &metav1.Status{
 				Message: fmt.Sprintf("Image verification failed: %v", err),
 			}
 		} else {
-			klog.Infof("Image verification successful for %s", newAnnotations[imageToSync])
+			klog.Infof("Image verification successful for %s", newAnnotation)
 			response.Allowed = true
 		}
 	} else {
@@ -149,6 +155,7 @@ func handleWebhook(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	http.HandleFunc("/validate", handleWebhook)
+	// Use 8443 as a non-privileged port to avoid root privilege to bind to the port
 	klog.Info("Starting webhook server on port 8443...")
 	klog.Fatal(http.ListenAndServeTLS(":8443", "/tls/server.crt", "/tls/server.key", nil))
 }

@@ -136,14 +136,17 @@ func auth(nt *NT) error {
 		return err
 	}
 
-	// Create secret for the public ca-cert in the oci-image-verification namespace
-	// for the oci-signature-verification webhook server to verify certificate.
-	sharedTmpDir := filepath.Join(os.TempDir(), NomosE2E, nt.ClusterName)
-	sharedTestRegistrySSLDir := filepath.Join(sharedTmpDir, string(RegistrySyncSource), sslDirName)
-	testRegistryCACertPath := filepath.Join(sharedTestRegistrySSLDir, caCertFile)
-	if err := createSecret(nt, OCISignatureVerificationNamespace, PublicCertSecretName(RegistrySyncSource),
-		fmt.Sprintf("cert=%s", testRegistryCACertPath)); err != nil {
-		return err
+	// When OCI provider is set to local, create secret for the public ca-cert in
+	// the oci-image-verification namespace for the oci-signature-verification
+	// webhook server to verify certificate.
+	if *e2e.OCIProvider == e2e.Local {
+		sharedTmpDir := filepath.Join(os.TempDir(), NomosE2E, nt.ClusterName)
+		sharedTestRegistrySSLDir := filepath.Join(sharedTmpDir, string(RegistrySyncSource), sslDirName)
+		testRegistryCACertPath := filepath.Join(sharedTestRegistrySSLDir, caCertFile)
+		if err := createSecret(nt, OCISignatureVerificationNamespace, PublicCertSecretName(RegistrySyncSource),
+			fmt.Sprintf("cert=%s", testRegistryCACertPath)); err != nil {
+			return err
+		}
 	}
 
 	return nil

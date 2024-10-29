@@ -24,17 +24,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/utils/clock"
-	"kpt.dev/configsync/pkg/api/configsync"
-	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/core/k8sobjects"
-	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/hydrate"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	ft "kpt.dev/configsync/pkg/importer/filesystem/filesystemtest"
-	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
-	syncertest "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 )
 
 var originCommit = "1234567890abcde"
@@ -106,27 +99,12 @@ func TestReadConfigFiles(t *testing.T) {
 				files:   nil,
 			}
 
-			parser := &root{
-				Options: &Options{
-					Clock:              clock.RealClock{}, // TODO: Test with fake clock
-					SyncName:           rootSyncName,
-					ReconcilerName:     rootReconcilerName,
-					Client:             syncertest.NewClient(t, core.Scheme, k8sobjects.RootSyncObjectV1Beta1(rootSyncName)),
-					DiscoveryInterface: syncertest.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
-					Updater: Updater{
-						Scope:     declared.RootScope,
-						Resources: &declared.Resources{},
-					},
-				},
-				RootOptions: &RootOptions{
-					SourceFormat: configsync.SourceFormatUnstructured,
-				},
-			}
+			files := &Files{}
 
 			// set the necessary FileSource of parser
-			parser.SourceDir = symDir
+			files.SourceDir = symDir
 
-			err = parser.readConfigFiles(srcState)
+			err = files.readConfigFiles(srcState)
 			assert.Equal(t, tc.wantedErr, err)
 		})
 	}
@@ -267,16 +245,11 @@ func TestReadHydratedDirWithRetry(t *testing.T) {
 				commit: originCommit,
 			}
 
-			parser := &root{
-				Options: &Options{
-					Clock: clock.RealClock{}, // TODO: Test with fake clock
-					Files: Files{
-						FileSource: FileSource{
-							HydratedRoot: hydratedRoot,
-							HydratedLink: symLink,
-							SyncDir:      cmpath.RelativeOS(tc.syncDir),
-						},
-					},
+			files := Files{
+				FileSource: FileSource{
+					HydratedRoot: hydratedRoot,
+					HydratedLink: symLink,
+					SyncDir:      cmpath.RelativeOS(tc.syncDir),
 				},
 			}
 
@@ -286,8 +259,8 @@ func TestReadHydratedDirWithRetry(t *testing.T) {
 			}
 
 			t.Logf("start calling readHydratedDirWithRetry at %v", time.Now())
-			hydrationState, hydrationErr := parser.readHydratedDirWithRetry(backoff,
-				cmpath.Absolute(hydratedRoot), parser.ReconcilerName, srcState)
+			hydrationState, hydrationErr := files.readHydratedDirWithRetry(backoff,
+				cmpath.Absolute(hydratedRoot), "unused", srcState)
 
 			if tc.expectedErrMsg == "" {
 				assert.Nil(t, hydrationErr)

@@ -19,18 +19,15 @@ import (
 	"sync"
 	"time"
 
-	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/filesystem"
-	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/remediator"
 	"kpt.dev/configsync/pkg/remediator/conflict"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/util/clusterconfig"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -39,7 +36,7 @@ type Updater struct {
 	// Scope defines the scope of the reconciler, either root or namespaced.
 	Scope declared.Scope
 	// Resources is a set of resources declared in the source of truth.
-	*declared.Resources
+	Resources *declared.Resources
 	// Remediator is the interface Remediator implements that accepts a new set of
 	// declared configuration.
 	Remediator remediator.Interface
@@ -73,24 +70,6 @@ func (u *Updater) ManagementConflicts() []status.ManagementConflictError {
 // Remediating returns true if the Remediator is remediating.
 func (u *Updater) Remediating() bool {
 	return u.Remediator.Remediating()
-}
-
-// declaredCRDs returns the list of CRDs which are present in the updater's
-// declared resources.
-func (u *Updater) declaredCRDs() ([]*v1beta1.CustomResourceDefinition, status.MultiError) {
-	var crds []*v1beta1.CustomResourceDefinition
-	declaredObjs, _ := u.Resources.DeclaredUnstructureds()
-	for _, obj := range declaredObjs {
-		if obj.GroupVersionKind().GroupKind() != kinds.CustomResourceDefinition() {
-			continue
-		}
-		crd, err := clusterconfig.AsCRD(obj)
-		if err != nil {
-			return nil, err
-		}
-		crds = append(crds, crd)
-	}
-	return crds, nil
 }
 
 // Update does the following:

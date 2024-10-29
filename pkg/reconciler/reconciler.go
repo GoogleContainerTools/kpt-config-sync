@@ -233,7 +233,7 @@ func Run(opts Options) {
 	}
 
 	// Configure the Parser.
-	var parser parse.Parser
+	var reconciler parse.Reconciler
 	fs := parse.FileSource{
 		SourceDir:    opts.SourceRoot,
 		RepoRoot:     opts.RepoRoot,
@@ -247,24 +247,17 @@ func Run(opts Options) {
 	}
 
 	parseOpts := &parse.Options{
-		Clock:              clock.RealClock{},
-		Parser:             filesystem.NewParser(&reader.File{}),
-		ClusterName:        opts.ClusterName,
-		Client:             cl,
-		ReconcilerName:     opts.ReconcilerName,
-		SyncName:           opts.SyncName,
-		StatusUpdatePeriod: opts.StatusUpdatePeriod,
-		DiscoveryInterface: discoveryClient,
-		RenderingEnabled:   opts.RenderingEnabled,
-		Files:              parse.Files{FileSource: fs},
-		WebhookEnabled:     opts.WebhookEnabled,
-		Updater: parse.Updater{
-			Scope:          opts.ReconcilerScope,
-			Resources:      decls,
-			Applier:        supervisor,
-			Remediator:     rem,
-			SyncErrorCache: parse.NewSyncErrorCache(conflictHandler, fightHandler),
-		},
+		Clock:             clock.RealClock{},
+		ConfigParser:      filesystem.NewParser(&reader.File{}),
+		ClusterName:       opts.ClusterName,
+		Client:            cl,
+		ReconcilerName:    opts.ReconcilerName,
+		SyncName:          opts.SyncName,
+		Scope:             opts.ReconcilerScope,
+		DiscoveryClient:   discoveryClient,
+		Files:             parse.Files{FileSource: fs},
+		WebhookEnabled:    opts.WebhookEnabled,
+		DeclaredResources: decls,
 	}
 	// Only instantiate the converter when the webhook is enabled because the
 	// instantiation pulls fresh schemas from the openapi discovery endpoint.
@@ -286,9 +279,23 @@ func Run(opts Options) {
 		RetryBackoff: util.BackoffWithDurationAndStepLimit(0, 12),
 	}
 
+	reconcilerOpts := &parse.ReconcilerOptions{
+		Options: parseOpts,
+		Updater: &parse.Updater{
+			Scope:          opts.ReconcilerScope,
+			Resources:      decls,
+			Applier:        supervisor,
+			Remediator:     rem,
+			SyncErrorCache: parse.NewSyncErrorCache(conflictHandler, fightHandler),
+		},
+		StatusUpdatePeriod: opts.StatusUpdatePeriod,
+		RenderingEnabled:   opts.RenderingEnabled,
+	}
+
 	var nsControllerState *namespacecontroller.State
 	if opts.ReconcilerScope == declared.RootScope {
-		rootOpts := &parse.RootOptions{
+		rootParseOpts := &parse.RootOptions{
+			Options:                  parseOpts,
 			SourceFormat:             opts.SourceFormat,
 			NamespaceStrategy:        opts.NamespaceStrategy,
 			DynamicNSSelectorEnabled: opts.DynamicNSSelectorEnabled,
@@ -298,14 +305,14 @@ func Run(opts Options) {
 			// enabled on RootSyncs.
 			// RepoSync can't manage NamespaceSelectors.
 			nsControllerState = namespacecontroller.NewState()
-			rootOpts.NSControllerState = nsControllerState
+			rootParseOpts.NSControllerState = nsControllerState
 			// Enable namespace events (every second)
 			// TODO: Trigger namespace events with a buffered channel from the NamespaceController
 			pgBuilder.NamespaceControllerPeriod = time.Second
 		}
-		parser = parse.NewRootRunner(parseOpts, rootOpts)
+		reconciler = parse.NewRootRunner(reconcilerOpts, rootParseOpts)
 	} else {
-		parser = parse.NewNamespaceRunner(parseOpts)
+		reconciler = parse.NewNamespaceRunner(reconcilerOpts, parseOpts)
 	}
 
 	// Start listening to signals
@@ -414,7 +421,7 @@ func Run(opts Options) {
 	funnel := &events.Funnel{
 		Publishers: pgBuilder.Build(),
 		// Wrap the parser with an event handler that triggers the RunFunc, as needed.
-		Subscriber: parse.NewEventHandler(ctx, parser, nsControllerState, parse.DefaultRunFunc),
+		Subscriber: parse.NewEventHandler(ctx, reconciler, nsControllerState, parse.DefaultRunFunc),
 	}
 	doneChForParser := funnel.Start(ctx)
 

@@ -19,48 +19,31 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 
-	"github.com/elliotchance/orderedmap/v2"
 	"github.com/google/go-cmp/cmp"
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/declared"
-	"kpt.dev/configsync/pkg/diff"
-	"kpt.dev/configsync/pkg/importer/analyzer/ast"
-	"kpt.dev/configsync/pkg/importer/filesystem"
-	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
-	"kpt.dev/configsync/pkg/importer/reader"
-	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/reconciler/namespacecontroller"
 	"kpt.dev/configsync/pkg/rootsync"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/util/compare"
-	"kpt.dev/configsync/pkg/util/discovery"
-	"kpt.dev/configsync/pkg/validate"
-	"sigs.k8s.io/cli-utils/pkg/common"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// NewRootRunner creates a new runnable parser for parsing a Root repository.
-func NewRootRunner(opts *Options, rootOpts *RootOptions) Parser {
-	return &root{
-		Options:     opts,
-		RootOptions: rootOpts,
-	}
-}
-
 // RootOptions includes options specific to RootSync objects.
 type RootOptions struct {
+	// Extend parse.Options
+	*Options
+
 	// SourceFormat defines the structure of the Root repository. Only the Root
 	// repository may be SourceFormatHierarchy; all others are implicitly
 	// SourceFormatUnstructured.
@@ -85,96 +68,27 @@ type RootOptions struct {
 	NSControllerState *namespacecontroller.State
 }
 
-type root struct {
-	*Options
-	*RootOptions
+type rootSyncStatusClient struct {
+	options *Options
+	// mux prevents status update conflicts.
+	mux sync.Mutex
 }
 
-var _ Parser = &root{}
-
-func (p *root) options() *Options {
-	return p.Options
-}
-
-// parseSource implements the Parser interface
-func (p *root) parseSource(ctx context.Context, state *sourceState) ([]ast.FileObject, status.MultiError) {
-	wantFiles := state.files
-	if p.SourceFormat == configsync.SourceFormatHierarchy {
-		// We're using hierarchical mode for the root repository, so ignore files
-		// outside of the allowed directories.
-		wantFiles = filesystem.FilterHierarchyFiles(state.syncDir, wantFiles)
-	}
-
-	filePaths := reader.FilePaths{
-		RootDir:   state.syncDir,
-		PolicyDir: p.SyncDir,
-		Files:     wantFiles,
-	}
-
-	crds, err := p.declaredCRDs()
-	if err != nil {
-		return nil, err
-	}
-	builder := discovery.ScoperBuilder(p.DiscoveryInterface)
-
-	klog.Infof("Parsing files from source dir: %s", state.syncDir.OSPath())
-	objs, err := p.Parser.Parse(filePaths)
-	if err != nil {
-		return nil, err
-	}
-
-	options := validate.Options{
-		ClusterName:  p.ClusterName,
-		SyncName:     p.SyncName,
-		PolicyDir:    p.SyncDir,
-		PreviousCRDs: crds,
-		BuildScoper:  builder,
-		Converter:    p.Converter,
-		// Enable API call so NamespaceSelector can talk to k8s-api-server.
-		AllowAPICall:             true,
-		DynamicNSSelectorEnabled: p.DynamicNSSelectorEnabled,
-		NSControllerState:        p.NSControllerState,
-		WebhookEnabled:           p.WebhookEnabled,
-		FieldManager:             configsync.FieldManager,
-	}
-	options = OptionsForScope(options, p.Scope)
-
-	if p.SourceFormat == configsync.SourceFormatUnstructured {
-		if p.NamespaceStrategy == configsync.NamespaceStrategyImplicit {
-			options.Visitors = append(options.Visitors, p.addImplicitNamespaces)
-		}
-		objs, err = validate.Unstructured(ctx, p.Client, objs, options)
-	} else {
-		objs, err = validate.Hierarchical(objs, options)
-	}
-
-	if status.HasBlockingErrors(err) {
-		return nil, err
-	}
-
-	// Duplicated with namespace.go.
-	e := addAnnotationsAndLabels(objs, declared.RootScope, p.SyncName, p.sourceContext(), state.commit)
-	if e != nil {
-		err = status.Append(err, status.InternalErrorf("unable to add annotations and labels: %v", e))
-		return nil, err
-	}
-	return objs, err
-}
-
-// setSourceStatus implements the Parser interface
-func (p *root) setSourceStatus(ctx context.Context, newStatus *SourceStatus) error {
+// SetSourceStatus implements the Parser interface
+func (p *rootSyncStatusClient) SetSourceStatus(ctx context.Context, newStatus *SourceStatus) error {
 	p.mux.Lock()
 	defer p.mux.Unlock()
 	return p.setSourceStatusWithRetries(ctx, newStatus, defaultDenominator)
 }
 
-func (p *root) setSourceStatusWithRetries(ctx context.Context, newStatus *SourceStatus, denominator int) error {
+func (p *rootSyncStatusClient) setSourceStatusWithRetries(ctx context.Context, newStatus *SourceStatus, denominator int) error {
 	if denominator <= 0 {
 		return fmt.Errorf("The denominator must be a positive number")
 	}
+	opts := p.options
 
 	var rs v1beta1.RootSync
-	if err := p.Client.Get(ctx, rootsync.ObjectKey(p.SyncName), &rs); err != nil {
+	if err := opts.Client.Get(ctx, rootsync.ObjectKey(opts.SyncName), &rs); err != nil {
 		return status.APIServerError(err, "failed to get RootSync for parser")
 	}
 
@@ -208,7 +122,7 @@ func (p *root) setSourceStatusWithRetries(ctx context.Context, newStatus *Source
 			cmp.Diff(currentRS.Status, rs.Status))
 	}
 
-	if err := p.Client.Status().Update(ctx, &rs, client.FieldOwner(configsync.FieldManager)); err != nil {
+	if err := opts.Client.Status().Update(ctx, &rs, client.FieldOwner(configsync.FieldManager)); err != nil {
 		// If the update failure was caused by the size of the RootSync object, we would truncate the errors and retry.
 		if isRequestTooLargeError(err) {
 			klog.Infof("Failed to update RootSync source status (total error count: %d, denominator: %d): %s.", rs.Status.Source.ErrorSummary.TotalCount, denominator, err)
@@ -262,24 +176,25 @@ func setSourceStatusFields(source *v1beta1.SourceStatus, newStatus *SourceStatus
 	source.LastUpdate = newStatus.LastUpdate
 }
 
-func (p *root) setSourceAnnotations(ctx context.Context, commit string) error {
+func (p *rootSyncStatusClient) SetSourceAnnotations(ctx context.Context, commit string) error {
+	opts := p.options
 	rs := &v1beta1.RootSync{}
 	rs.Namespace = configsync.ControllerNamespace
-	rs.Name = p.SyncName
+	rs.Name = opts.SyncName
 
 	var patch string
-	if p.Options.SourceType == configsync.OciSource ||
-		(p.Options.SourceType == configsync.HelmSource && strings.HasPrefix(p.Options.SourceRepo, "oci://")) {
+	if opts.SourceType == configsync.OciSource ||
+		(opts.SourceType == configsync.HelmSource && strings.HasPrefix(opts.SourceRepo, "oci://")) {
 		patch = fmt.Sprintf(`{"metadata":{"annotations":{"%s":"%s"}}}`,
 			metadata.ImageToSyncAnnotationKey,
-			fmt.Sprintf("%s@sha256:%s", p.Options.SourceRepo, commit),
+			fmt.Sprintf("%s@sha256:%s", opts.SourceRepo, commit),
 		)
 	} else {
 		patch = fmt.Sprintf(`{"metadata":{"annotations":{"%s":null}}}`,
 			metadata.ImageToSyncAnnotationKey)
 	}
 
-	err := p.Client.Patch(ctx, rs,
+	err := opts.Client.Patch(ctx, rs,
 		client.RawPatch(types.MergePatchType, []byte(patch)),
 		client.FieldOwner(configsync.FieldManager))
 
@@ -290,9 +205,10 @@ func (p *root) setSourceAnnotations(ctx context.Context, commit string) error {
 	return nil
 }
 
-func (p *root) setRequiresRendering(ctx context.Context, renderingRequired bool) error {
+func (p *rootSyncStatusClient) SetRequiresRendering(ctx context.Context, renderingRequired bool) error {
+	opts := p.options
 	rs := &v1beta1.RootSync{}
-	if err := p.Client.Get(ctx, rootsync.ObjectKey(p.SyncName), rs); err != nil {
+	if err := opts.Client.Get(ctx, rootsync.ObjectKey(opts.SyncName), rs); err != nil {
 		return status.APIServerError(err, "failed to get RootSync for parser")
 	}
 	newVal := strconv.FormatBool(renderingRequired)
@@ -302,11 +218,11 @@ func (p *root) setRequiresRendering(ctx context.Context, renderingRequired bool)
 	}
 	existing := rs.DeepCopy()
 	core.SetAnnotation(rs, metadata.RequiresRenderingAnnotationKey, newVal)
-	return p.Client.Patch(ctx, rs, client.MergeFrom(existing), client.FieldOwner(configsync.FieldManager))
+	return opts.Client.Patch(ctx, rs, client.MergeFrom(existing), client.FieldOwner(configsync.FieldManager))
 }
 
-// setRenderingStatus implements the Parser interface
-func (p *root) setRenderingStatus(ctx context.Context, oldStatus, newStatus *RenderingStatus) error {
+// SetRenderingStatus implements the Parser interface
+func (p *rootSyncStatusClient) SetRenderingStatus(ctx context.Context, oldStatus, newStatus *RenderingStatus) error {
 	if oldStatus.Equals(newStatus) {
 		return nil
 	}
@@ -316,13 +232,14 @@ func (p *root) setRenderingStatus(ctx context.Context, oldStatus, newStatus *Ren
 	return p.setRenderingStatusWithRetries(ctx, newStatus, defaultDenominator)
 }
 
-func (p *root) setRenderingStatusWithRetries(ctx context.Context, newStatus *RenderingStatus, denominator int) error {
+func (p *rootSyncStatusClient) setRenderingStatusWithRetries(ctx context.Context, newStatus *RenderingStatus, denominator int) error {
 	if denominator <= 0 {
 		return fmt.Errorf("The denominator must be a positive number")
 	}
+	opts := p.options
 
 	var rs v1beta1.RootSync
-	if err := p.Client.Get(ctx, rootsync.ObjectKey(p.SyncName), &rs); err != nil {
+	if err := opts.Client.Get(ctx, rootsync.ObjectKey(opts.SyncName), &rs); err != nil {
 		return status.APIServerError(err, "failed to get RootSync for parser")
 	}
 
@@ -356,7 +273,7 @@ func (p *root) setRenderingStatusWithRetries(ctx context.Context, newStatus *Ren
 			cmp.Diff(currentRS.Status, rs.Status))
 	}
 
-	if err := p.Client.Status().Update(ctx, &rs, client.FieldOwner(configsync.FieldManager)); err != nil {
+	if err := opts.Client.Status().Update(ctx, &rs, client.FieldOwner(configsync.FieldManager)); err != nil {
 		// If the update failure was caused by the size of the RootSync object, we would truncate the errors and retry.
 		if isRequestTooLargeError(err) {
 			klog.Infof("Failed to update RootSync rendering status (total error count: %d, denominator: %d): %s.", rs.Status.Rendering.ErrorSummary.TotalCount, denominator, err)
@@ -411,9 +328,10 @@ func setRenderingStatusFields(rendering *v1beta1.RenderingStatus, newStatus *Ren
 }
 
 // ReconcilerStatusFromCluster gets the RootSync sync status from the cluster.
-func (p *root) ReconcilerStatusFromCluster(ctx context.Context) (*ReconcilerStatus, error) {
+func (p *rootSyncStatusClient) ReconcilerStatusFromCluster(ctx context.Context) (*ReconcilerStatus, error) {
+	opts := p.options
 	rs := &v1beta1.RootSync{}
-	if err := p.Client.Get(ctx, rootsync.ObjectKey(p.SyncName), rs); err != nil {
+	if err := opts.Client.Get(ctx, rootsync.ObjectKey(opts.SyncName), rs); err != nil {
 		if apierrors.IsNotFound(err) || meta.IsNoMatchError(err) {
 			return nil, nil
 		}
@@ -432,7 +350,7 @@ func (p *root) ReconcilerStatusFromCluster(ctx context.Context) (*ReconcilerStat
 		}
 	}
 
-	return reconcilerStatusFromRSyncStatus(rs.Status.Status, p.options().SourceType, syncing, syncingConditionLastUpdate), nil
+	return reconcilerStatusFromRSyncStatus(rs.Status.Status, opts.SourceType, syncing, syncingConditionLastUpdate), nil
 }
 
 func reconcilerStatusFromRSyncStatus(rsyncStatus v1beta1.Status, sourceType configsync.SourceType, syncing bool, syncingConditionLastUpdate metav1.Time) *ReconcilerStatus {
@@ -543,19 +461,20 @@ func reconcilerStatusFromRSyncStatus(rsyncStatus v1beta1.Status, sourceType conf
 // SetSyncStatus implements the Parser interface
 // SetSyncStatus sets the RootSync sync status.
 // `errs` includes the errors encountered during the apply step;
-func (p *root) SetSyncStatus(ctx context.Context, newStatus *SyncStatus) error {
+func (p *rootSyncStatusClient) SetSyncStatus(ctx context.Context, newStatus *SyncStatus) error {
 	p.mux.Lock()
 	defer p.mux.Unlock()
 	return p.setSyncStatusWithRetries(ctx, newStatus, defaultDenominator)
 }
 
-func (p *root) setSyncStatusWithRetries(ctx context.Context, newStatus *SyncStatus, denominator int) error {
+func (p *rootSyncStatusClient) setSyncStatusWithRetries(ctx context.Context, newStatus *SyncStatus, denominator int) error {
 	if denominator <= 0 {
 		return fmt.Errorf("The denominator must be a positive number")
 	}
+	opts := p.options
 
 	rs := &v1beta1.RootSync{}
-	if err := p.Client.Get(ctx, rootsync.ObjectKey(p.SyncName), rs); err != nil {
+	if err := opts.Client.Get(ctx, rootsync.ObjectKey(opts.SyncName), rs); err != nil {
 		return status.APIServerError(err, "failed to get RootSync")
 	}
 
@@ -604,7 +523,7 @@ func (p *root) setSyncStatusWithRetries(ctx context.Context, newStatus *SyncStat
 			cmp.Diff(currentRS.Status, rs.Status))
 	}
 
-	if err := p.Client.Status().Update(ctx, rs, client.FieldOwner(configsync.FieldManager)); err != nil {
+	if err := opts.Client.Status().Update(ctx, rs, client.FieldOwner(configsync.FieldManager)); err != nil {
 		// If the update failure was caused by the size of the RootSync object, we would truncate the errors and retry.
 		if isRequestTooLargeError(err) {
 			klog.Infof("Failed to update RootSync sync status (total error count: %d, denominator: %d): %s.", rs.Status.Sync.ErrorSummary.TotalCount, denominator, err)
@@ -667,84 +586,6 @@ func summarizeErrorsForCommit(sourceStatus v1beta1.SourceStatus, renderingStatus
 		}
 	}
 	return errorSources, errorSummary
-}
-
-// addImplicitNamespaces hydrates the given FileObjects by injecting implicit
-// namespaces into the list before returning it. Implicit namespaces are those
-// that are declared by an object's metadata namespace field but are not present
-// in the list. The implicit namespace is only added if it doesn't exist.
-func (p *root) addImplicitNamespaces(objs []ast.FileObject) ([]ast.FileObject, status.MultiError) {
-	var errs status.MultiError
-	// namespaces will track the set of Namespaces we expect to exist, and those
-	// which actually do.
-	namespaces := orderedmap.NewOrderedMap[string, bool]()
-
-	for _, o := range objs {
-		if o.GetObjectKind().GroupVersionKind().GroupKind() == kinds.Namespace().GroupKind() {
-			namespaces.Set(o.GetName(), true)
-		} else if o.GetNamespace() != "" {
-			if _, found := namespaces.Get(o.GetNamespace()); !found {
-				// If unset, this ensures the key exists and is false.
-				// Otherwise it has no impact.
-				namespaces.Set(o.GetNamespace(), false)
-			}
-		}
-	}
-
-	for e := namespaces.Front(); e != nil; e = e.Next() {
-		ns, isDeclared := e.Key, e.Value
-		// Do not treat config-management-system as an implicit namespace for multi-sync support.
-		// Otherwise, the namespace will become a managed resource, and will cause conflict among multiple RootSyncs.
-		if isDeclared || ns == configsync.ControllerNamespace {
-			continue
-		}
-		existingNs := &corev1.Namespace{}
-		err := p.Client.Get(context.Background(), types.NamespacedName{Name: ns}, existingNs)
-		if err != nil && !apierrors.IsNotFound(err) {
-			errs = status.Append(errs, fmt.Errorf("unable to check the existence of the implicit namespace %q: %w", ns, err))
-			continue
-		}
-
-		existingNs.SetGroupVersionKind(kinds.Namespace())
-		// If the namespace already exists and not self-managed, do not add it as an implicit namespace.
-		// This is to avoid conflicts caused by multiple Root reconcilers managing the same implicit namespace.
-		if err == nil && !diff.IsManager(p.Scope, p.SyncName, existingNs) {
-			continue
-		}
-
-		// Add the implicit namespace if it doesn't exist, or if it is managed by itself.
-		// If it is a self-managed namespace, still add it to the object list. Otherwise,
-		// it will be pruned because it is no longer in the inventory list.
-		u := &unstructured.Unstructured{}
-		u.SetGroupVersionKind(kinds.Namespace())
-		u.SetName(ns)
-		// We do NOT want to delete theses implicit Namespaces when the resources
-		// inside them are removed from the repo. We don't know when it is safe to remove
-		// the implicit namespaces. An implicit namespace may already exist in the
-		// cluster. Deleting it will cause other unmanaged resources in that namespace
-		// being deleted.
-		//
-		// Adding the LifecycleDeleteAnnotation is to prevent the applier from deleting
-		// the implicit namespace when the namespaced config is removed from the repo.
-		// Note that if the user later declares the
-		// Namespace without this annotation, the annotation is removed as expected.
-		u.SetAnnotations(map[string]string{common.LifecycleDeleteAnnotation: common.PreventDeletion})
-		objs = append(objs, ast.NewFileObject(u, cmpath.RelativeOS("")))
-	}
-
-	return objs, errs
-}
-
-// SyncErrors returns all the sync errors, including remediator errors,
-// validation errors, applier errors, and watch update errors.
-// SyncErrors implements the Parser interface
-func (p *root) SyncErrors() status.MultiError {
-	return p.SyncErrorCache.Errors()
-}
-
-// K8sClient implements the Parser interface
-func (p *root) K8sClient() client.Client {
-	return p.Client
 }
 
 // prependRootSyncRemediatorStatus adds the conflict error detected by the remediator to the front of the sync errors.

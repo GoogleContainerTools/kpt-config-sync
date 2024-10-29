@@ -59,6 +59,7 @@ COPY --from=gcloud-install /usr/bin/kubectl /usr/bin/kubectl
 COPY --from=builder /usr/local/go /usr/local/go
 COPY --from=builder /go /go
 COPY --from=builder /go/bin/go-junit-report /go/bin/go-junit-report
+COPY --from=builder /go/bin/cosign /go/bin/cosign
 ENV PATH /go/bin:/usr/local/go/bin:/opt/gcloud/google-cloud-sdk/bin:$PATH
 
 ENTRYPOINT ["/usr/bin/bash"]

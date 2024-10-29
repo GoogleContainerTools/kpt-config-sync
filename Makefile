@@ -83,6 +83,9 @@ HELM_VERSION := v3.15.3-gke.0
 HELM := $(BIN_DIR)/helm
 HELM_STAGING_DIR := $(OUTPUT_DIR)/third_party/helm
 
+COSIGN_VERSION := v2.4.1
+COSIGN := $(BIN_DIR)/cosign
+
 GIT_SYNC_VERSION := v4.2.4-gke.8__linux_amd64
 GIT_SYNC_IMAGE_NAME := gcr.io/config-management-release/git-sync:$(GIT_SYNC_VERSION)
 
@@ -424,6 +427,16 @@ clean-golangci-lint:
 		OUTPUT_DIR="$(OUTPUT_DIR)" \
 		STAGING_DIR="$(KUSTOMIZE_STAGING_DIR)" \
 		./scripts/install-kustomize.sh
+
+.PHONY: clean-cosign
+clean-cosign:
+	@rm -rf $(COSIGN)
+
+.PHONY: install-cosign
+install-cosign: "$(COSIGN)"
+
+"$(COSIGN)": buildenv-dirs
+	GOPATH="$(GO_DIR)" CGO_ENABLED=0 go install github.com/sigstore/cosign/v2/cmd/cosign@$(COSIGN_VERSION)
 
 .PHONY: install-kustomize
 # install kustomize (user-friendly target alias)

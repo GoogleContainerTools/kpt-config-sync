@@ -35,9 +35,6 @@ ENV CGO_ENABLED=0
 # Get go-junit-report
 RUN go install github.com/jstemmer/go-junit-report/v2@v2.0.0
 
-# Install Cosign for signing test images
-RUN go install github.com/sigstore/cosign/v2/cmd/cosign@v2.4.1
-
 # Build e2e image
 FROM ${DOCKER_CLI_IMAGE} as gke-e2e
 
@@ -59,7 +56,6 @@ COPY --from=gcloud-install /usr/bin/kubectl /usr/bin/kubectl
 COPY --from=builder /usr/local/go /usr/local/go
 COPY --from=builder /go /go
 COPY --from=builder /go/bin/go-junit-report /go/bin/go-junit-report
-COPY --from=builder /go/bin/cosign /go/bin/cosign
 ENV PATH /go/bin:/usr/local/go/bin:/opt/gcloud/google-cloud-sdk/bin:$PATH
 
 ENTRYPOINT ["/usr/bin/bash"]

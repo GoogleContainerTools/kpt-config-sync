@@ -102,3 +102,10 @@ resource "google_project_iam_member" "ns-reconciler-wi-sa-iam" {
   member  = "serviceAccount:${data.google_project.project.project_id}.svc.id.goog[config-management-system/ns-reconciler-test-ns]"
   project = data.google_project.project.id
 }
+
+# Grant artifact registry reader permissions to the oci-image-verification-sa KSA with GKE workload identity.
+resource "google_service_account_iam_member" "oci_image_verification_gke_binding" {
+  service_account_id = module.e2e-gar-reader-sa.gcp_sa_id
+  role               = "roles/iam.workloadIdentityUser"
+  member             = "serviceAccount:${data.google_project.project.project_id}.svc.id.goog[oci-image-verification/oci-signature-verification-sa]"
+}

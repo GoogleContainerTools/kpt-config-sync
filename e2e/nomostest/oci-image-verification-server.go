@@ -197,6 +197,39 @@ func testOCISignatureVerificationService() *corev1.Service {
 }
 
 func testOCISignatureVerificationDeployment() *appsv1.Deployment {
+	volumes := []corev1.Volume{
+		{
+			Name: "ca-certs",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{SecretName: privateCertSecretName(ImageVerificationServer)},
+			},
+		},
+		{
+			Name: "cosign-key",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{SecretName: cosignSecretName},
+			},
+		},
+	}
+
+	volumeMounts := []corev1.VolumeMount{
+		{Name: "ca-certs", MountPath: "/tls"},
+		{Name: "cosign-key", MountPath: "/cosign-key"},
+	}
+
+	if *e2e.OCIProvider == e2e.Local {
+		volumes = append(volumes, corev1.Volume{
+			Name: "test-registry-ca-certs",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{SecretName: PublicCertSecretName(RegistrySyncSource)},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      "test-registry-ca-certs",
+			MountPath: "/etc/ssl/ca-certs",
+		})
+	}
+
 	deployment := k8sobjects.DeploymentObject(core.Name(OCISignatureVerificationServerName),
 		core.Namespace(OCISignatureVerificationNamespace),
 		core.Labels(map[string]string{"app": OCISignatureVerificationServerName}),
@@ -215,26 +248,7 @@ func testOCISignatureVerificationDeployment() *appsv1.Deployment {
 			},
 			Spec: corev1.PodSpec{
 				ServiceAccountName: testOCISignatureVerificationSAName,
-				Volumes: []corev1.Volume{
-					{
-						Name: "ca-certs",
-						VolumeSource: corev1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{SecretName: privateCertSecretName(ImageVerificationServer)},
-						},
-					},
-					{
-						Name: "cosign-key",
-						VolumeSource: corev1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{SecretName: cosignSecretName},
-						},
-					},
-					{
-						Name: "test-registry-ca-certs",
-						VolumeSource: corev1.VolumeSource{
-							Secret: &corev1.SecretVolumeSource{SecretName: PublicCertSecretName(RegistrySyncSource)},
-						},
-					},
-				},
+				Volumes:            volumes,
 				Containers: []corev1.Container{
 					{
 						Name:    "webhook-server",
@@ -243,11 +257,7 @@ func testOCISignatureVerificationDeployment() *appsv1.Deployment {
 						Ports: []corev1.ContainerPort{
 							{ContainerPort: 8443},
 						},
-						VolumeMounts: []corev1.VolumeMount{
-							{Name: "ca-certs", MountPath: "/tls"},
-							{Name: "cosign-key", MountPath: "/cosign-key"},
-							{Name: "test-registry-ca-certs", MountPath: "/etc/ssl/ca-certs"},
-						},
+						VolumeMounts: volumeMounts,
 						Env: []corev1.EnvVar{
 							{Name: reconcilermanager.OciCACert, Value: "/etc/ssl/ca-certs/cert"},
 						},

@@ -9,6 +9,11 @@ development.
 
 Follow the instructions to [install the Terraform CLI].
 
+Authenticate using gcloud credentials:
+```shell
+gcloud auth application-default login
+```
+
 # Dev Environments
 
 This configuration is designed to be configurable for an arbitrary GCP project

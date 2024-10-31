@@ -128,12 +128,16 @@ func TestFunnel_Start(t *testing.T) {
 			stepSize: time.Second,
 			expectedEvents: []eventResult{
 				{
-					Event:  Event{Type: RetrySyncEventType},
-					Result: Result{},
+					Event: Event{Type: RetrySyncEventType},
+					Result: Result{
+						RunAttempted: true,
+					},
 				},
 				{
-					Event:  Event{Type: RetrySyncEventType},
-					Result: Result{},
+					Event: Event{Type: RetrySyncEventType},
+					Result: Result{
+						RunAttempted: true,
+					},
 				},
 				{
 					Event:  Event{Type: RetrySyncEventType},
@@ -158,16 +162,22 @@ func TestFunnel_Start(t *testing.T) {
 			},
 			expectedEvents: []eventResult{
 				{
-					Event:  Event{Type: RetrySyncEventType}, // 1s
-					Result: Result{},
+					Event: Event{Type: RetrySyncEventType}, // 1s
+					Result: Result{
+						RunAttempted: true,
+					},
 				},
 				{
-					Event:  Event{Type: RetrySyncEventType}, // 3s
-					Result: Result{},
+					Event: Event{Type: RetrySyncEventType}, // 3s
+					Result: Result{
+						RunAttempted: true,
+					},
 				},
 				{
-					Event:  Event{Type: RetrySyncEventType}, // 7s
-					Result: Result{},
+					Event: Event{Type: RetrySyncEventType}, // 7s
+					Result: Result{
+						RunAttempted: true,
+					},
 				},
 				// No more retry events until another event sets ResetRetryBackoff=true
 			},
@@ -184,32 +194,39 @@ func TestFunnel_Start(t *testing.T) {
 			},
 			steps: []time.Duration{
 				time.Second,
-				3 * time.Second, //+2
-				7 * time.Second, //+4
-				10 * time.Second,
-				11 * time.Second, //+1
+				3 * time.Second,  //+2
+				7 * time.Second,  //+4
+				17 * time.Second, //+10
+				18 * time.Second, //+1
 			},
 			expectedEvents: []eventResult{
 				{
-					Event:  Event{Type: RetrySyncEventType}, // 1s
-					Result: Result{},
-				},
-				{
-					Event:  Event{Type: RetrySyncEventType}, // 3s
-					Result: Result{},
-				},
-				{
-					Event:  Event{Type: RetrySyncEventType}, // 7s
-					Result: Result{},
-				},
-				{
-					Event: Event{Type: SyncEventType}, // 10s
+					Event: Event{Type: RetrySyncEventType}, // 1s
 					Result: Result{
+						RunAttempted: true,
+					},
+				},
+				{
+					Event: Event{Type: RetrySyncEventType}, // 3s
+					Result: Result{
+						RunAttempted: true,
+					},
+				},
+				{
+					Event: Event{Type: RetrySyncEventType}, // 7s
+					Result: Result{
+						RunAttempted: true,
+					},
+				},
+				{
+					Event: Event{Type: SyncEventType}, // 17s
+					Result: Result{
+						RunAttempted:      true,
 						ResetRetryBackoff: true,
 					},
 				},
 				{
-					Event:  Event{Type: RetrySyncEventType}, // 11s
+					Event:  Event{Type: RetrySyncEventType}, // 18s
 					Result: Result{},
 				},
 			},

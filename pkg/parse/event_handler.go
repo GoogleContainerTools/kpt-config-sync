@@ -136,7 +136,7 @@ func (s *EventHandler) Handle(event events.Event) events.Result {
 		} else if opts.needToUpdateWatch() {
 			trigger = triggerWatchUpdate
 		} else {
-			// No RunFunc call
+			klog.Info("Skipping retry attempt: not needed")
 			break
 		}
 

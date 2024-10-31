@@ -127,6 +127,7 @@ type RetrySyncPublisher struct {
 	Backoff   wait.Backoff
 
 	currentBackoff wait.Backoff
+	nextDelay      time.Duration
 	retryLimit     int
 	timer          clock.Timer
 }
@@ -154,27 +155,29 @@ func (s *RetrySyncPublisher) Start(ctx context.Context) reflect.Value {
 // called and an empty Result is returned.
 func (s *RetrySyncPublisher) Publish(subscriber Subscriber) Result {
 	if s.currentBackoff.Steps == 0 {
-		klog.Infof("Retry limit (%v) has been reached", s.retryLimit)
+		klog.Infof("Retry limit has been reached (%v)", s.retryLimit)
 		// Don't reset retryTimer if retry limit has been reached.
 		return Result{}
 	}
 
-	retryDuration := s.currentBackoff.Step()
+	s.nextDelay = s.currentBackoff.Step()
 	retries := s.retryLimit - s.currentBackoff.Steps
-	klog.Infof("a retry is triggered (retries: %v/%v)", retries, s.retryLimit)
+	klog.V(3).Infof("Sending retry event (step: %v/%v)", retries, s.retryLimit)
 
-	result := subscriber.Handle(Event{Type: s.EventType})
-
-	// Schedule next event
-	s.timer.Reset(retryDuration)
-	return result
+	return subscriber.Handle(Event{Type: s.EventType})
 }
 
 // HandleResult resets the backoff timer if ResetRetryBackoff is true.
 func (s *RetrySyncPublisher) HandleResult(result Result) {
 	if result.ResetRetryBackoff {
 		s.currentBackoff = util.CopyBackoff(s.Backoff)
+		klog.V(3).Infof("Resetting retry backoff (%v)", s.currentBackoff.Duration)
 		s.timer.Reset(s.currentBackoff.Duration)
+	} else if result.RunAttempted && s.currentBackoff.Steps > 0 {
+		klog.V(3).Infof("Run attempted, delaying next retry event (%v)", s.nextDelay)
+		s.timer.Reset(s.nextDelay)
+	} else if result.RunAttempted {
+		klog.V(3).Info("Run attempted, but retries exhausted")
 	}
 }
 
@@ -201,6 +204,7 @@ type ResetOnRunAttemptPublisher struct {
 func (s *ResetOnRunAttemptPublisher) HandleResult(result Result) {
 	s.TimeDelayPublisher.HandleResult(result)
 	if result.RunAttempted {
+		klog.V(3).Infof("Run attempted, delaying next sync event (%v)", s.Period)
 		s.timer.Reset(s.Period)
 	}
 }

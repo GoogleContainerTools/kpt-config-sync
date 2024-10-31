@@ -78,6 +78,7 @@ type RunFunc func(ctx context.Context, r Reconciler, trigger string) RunResult
 
 // DefaultRunFunc is the default implementation for RunOpts.RunFunc.
 func DefaultRunFunc(ctx context.Context, r Reconciler, trigger string) RunResult {
+	klog.Infof("Starting sync attempt (trigger: %s)", trigger)
 	opts := r.Options()
 	result := RunResult{}
 	state := r.ReconcilerState()

@@ -77,11 +77,11 @@ type Options struct {
 	SyncName string
 	// ReconcilerName is the name of the Reconciler Deployment.
 	ReconcilerName string
-	// ResyncPeriod is the period of time between forced re-sync from source (even
-	// without a new commit).
-	ResyncPeriod time.Duration
-	// PollingPeriod is the period of time between checking the filesystem for
-	// source updates to sync.
+	// FullSyncPeriod is the period of time between forced re-sync from source
+	// (even without a new commit).
+	FullSyncPeriod time.Duration
+	// PollingPeriod is the period of time between checking the partial sync
+	// attempts that check the filesystem for source updates to sync.
 	PollingPeriod time.Duration
 	// RetryPeriod is the period of time between checking the filesystem for
 	// source updates to sync, after an error.
@@ -270,10 +270,14 @@ func Run(opts Options) {
 
 	// Use the builder to build a set of event publishers for parser.Run.
 	pgBuilder := &events.PublishingGroupBuilder{
-		Clock:                  parseOpts.Clock,
-		SyncPeriod:             opts.PollingPeriod,
-		SyncWithReimportPeriod: opts.ResyncPeriod,
-		StatusUpdatePeriod:     opts.StatusUpdatePeriod,
+		Clock: parseOpts.Clock,
+		// From the user's perspective, the polling period is how often the
+		// filesystem is checked for source changes, but a sync attempt includes
+		// a lot of other checks as well. So we call it a sync event/attempt,
+		// not a polling event/attempt.
+		SyncPeriod:         opts.PollingPeriod,
+		FullSyncPeriod:     opts.FullSyncPeriod,
+		StatusUpdatePeriod: opts.StatusUpdatePeriod,
 		// TODO: Shouldn't this use opts.RetryPeriod as the initial duration?
 		// Limit to 12 retries, with no max retry duration.
 		RetryBackoff: util.BackoffWithDurationAndStepLimit(0, 12),

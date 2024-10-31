@@ -72,7 +72,7 @@ var (
 	fightDetectionThreshold = flag.Float64(
 		"fight-detection-threshold", 5.0,
 		"The rate of updates per minute to an API Resource at which the Syncer logs warnings about too many updates to the resource.")
-	resyncPeriod = flag.Duration("resync-period", configsync.DefaultReconcilerResyncPeriod,
+	fullSyncPeriod = flag.Duration("full-sync-period", configsync.DefaultReconcilerFullSyncPeriod,
 		"Period of time between forced re-syncs from source (even without a new commit).")
 	workers = flag.Int("workers", 1,
 		"Number of concurrent remediator workers to run at once.")
@@ -178,7 +178,7 @@ func main() {
 		FightDetectionThreshold:  *fightDetectionThreshold,
 		NumWorkers:               *workers,
 		ReconcilerScope:          scope,
-		ResyncPeriod:             *resyncPeriod,
+		FullSyncPeriod:           *fullSyncPeriod,
 		PollingPeriod:            *pollingPeriod,
 		RetryPeriod:              configsync.DefaultReconcilerRetryPeriod,
 		StatusUpdatePeriod:       configsync.DefaultReconcilerSyncStatusUpdatePeriod,

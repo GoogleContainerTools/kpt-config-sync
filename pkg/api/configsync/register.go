@@ -67,9 +67,9 @@ const (
 	// filesystem for source updates to sync.
 	DefaultReconcilerPollingPeriod = 15 * time.Second
 
-	// DefaultReconcilerResyncPeriod is the time delay between forced re-syncs
+	// DefaultReconcilerFullSyncPeriod is the time delay between forced re-syncs
 	// from source (even without a new commit).
-	DefaultReconcilerResyncPeriod = time.Hour
+	DefaultReconcilerFullSyncPeriod = time.Hour
 
 	// DefaultReconcilerRetryPeriod is the time delay between polling the
 	// filesystem for source updates to sync, when the previous attempt errored.

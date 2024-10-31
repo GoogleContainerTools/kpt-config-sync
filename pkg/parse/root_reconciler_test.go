@@ -735,7 +735,7 @@ func TestRootReconciler_ParseAndUpdate(t *testing.T) {
 				},
 				reconcilerState: state,
 			}
-			if err := reconciler.ParseAndUpdate(context.Background(), triggerReimport); err != nil {
+			if err := reconciler.ParseAndUpdate(context.Background(), triggerSync); err != nil {
 				t.Fatal(err)
 			}
 
@@ -977,7 +977,7 @@ func TestRootReconciler_DeclaredFields(t *testing.T) {
 				},
 				reconcilerState: state,
 			}
-			if err := reconciler.ParseAndUpdate(context.Background(), triggerReimport); err != nil {
+			if err := reconciler.ParseAndUpdate(context.Background(), triggerSync); err != nil {
 				t.Fatal(err)
 			}
 
@@ -1261,7 +1261,7 @@ func TestRootReconciler_Parse_Discovery(t *testing.T) {
 				},
 				reconcilerState: state,
 			}
-			err := reconciler.ParseAndUpdate(context.Background(), triggerReimport)
+			err := reconciler.ParseAndUpdate(context.Background(), triggerSync)
 			testerrors.AssertEqual(t, tc.expectedError, err, "expected error to match")
 
 			// After parsing, the objects set is processed and modified.
@@ -1368,7 +1368,7 @@ func TestRootReconciler_SourceReconcilerErrorsMetricValidation(t *testing.T) {
 				},
 				reconcilerState: state,
 			}
-			err := reconciler.ParseAndUpdate(context.Background(), triggerReimport)
+			err := reconciler.ParseAndUpdate(context.Background(), triggerSync)
 			testerrors.AssertEqual(t, tc.expectedError, err, "expected error to match")
 
 			if diff := m.ValidateMetrics(metrics.ReconcilerErrorsView, tc.expectedMetrics); diff != "" {
@@ -1477,7 +1477,7 @@ func TestRootReconciler_SourceAndSyncReconcilerErrorsMetricValidation(t *testing
 				},
 				reconcilerState: state,
 			}
-			err := reconciler.ParseAndUpdate(context.Background(), triggerReimport)
+			err := reconciler.ParseAndUpdate(context.Background(), triggerSync)
 			testerrors.AssertEqual(t, tc.expectedError, err, "expected error to match")
 
 			if diff := m.ValidateMetrics(metrics.ReconcilerErrorsView, tc.expectedMetrics); diff != "" {

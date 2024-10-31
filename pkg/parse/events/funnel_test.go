@@ -56,20 +56,20 @@ func TestFunnel_Start(t *testing.T) {
 		{
 			name: "ResyncEvents From SyncWithReimportPeriod",
 			builder: &PublishingGroupBuilder{
-				SyncWithReimportPeriod: time.Second,
+				FullSyncPeriod: time.Second,
 			},
 			stepSize: time.Second,
 			expectedEvents: []eventResult{
 				{
-					Event:  Event{Type: SyncWithReimportEventType},
+					Event:  Event{Type: FullSyncEventType},
 					Result: Result{},
 				},
 				{
-					Event:  Event{Type: SyncWithReimportEventType},
+					Event:  Event{Type: FullSyncEventType},
 					Result: Result{},
 				},
 				{
-					Event:  Event{Type: SyncWithReimportEventType},
+					Event:  Event{Type: FullSyncEventType},
 					Result: Result{},
 				},
 			},
@@ -82,15 +82,15 @@ func TestFunnel_Start(t *testing.T) {
 			stepSize: time.Second,
 			expectedEvents: []eventResult{
 				{
-					Event:  Event{Type: StatusEventType},
+					Event:  Event{Type: StatusUpdateEventType},
 					Result: Result{},
 				},
 				{
-					Event:  Event{Type: StatusEventType},
+					Event:  Event{Type: StatusUpdateEventType},
 					Result: Result{},
 				},
 				{
-					Event:  Event{Type: StatusEventType},
+					Event:  Event{Type: StatusUpdateEventType},
 					Result: Result{},
 				},
 			},
@@ -103,15 +103,15 @@ func TestFunnel_Start(t *testing.T) {
 			stepSize: time.Second,
 			expectedEvents: []eventResult{
 				{
-					Event:  Event{Type: NamespaceResyncEventType},
+					Event:  Event{Type: NamespaceSyncEventType},
 					Result: Result{},
 				},
 				{
-					Event:  Event{Type: NamespaceResyncEventType},
+					Event:  Event{Type: NamespaceSyncEventType},
 					Result: Result{},
 				},
 				{
-					Event:  Event{Type: NamespaceResyncEventType},
+					Event:  Event{Type: NamespaceSyncEventType},
 					Result: Result{},
 				},
 			},
@@ -215,11 +215,11 @@ func TestFunnel_Start(t *testing.T) {
 			},
 		},
 		{
-			name: "SyncEvents, StatusEventType, ResyncEvents",
+			name: "SyncEvents, StatusUpdateEventType, FullSyncEvents",
 			builder: &PublishingGroupBuilder{
-				SyncPeriod:             700 * time.Millisecond,
-				SyncWithReimportPeriod: 4000 * time.Millisecond,
-				StatusUpdatePeriod:     300 * time.Millisecond,
+				SyncPeriod:         700 * time.Millisecond,
+				FullSyncPeriod:     4000 * time.Millisecond,
+				StatusUpdatePeriod: 300 * time.Millisecond,
 			},
 			// Explicit steps to avoid race conditions that make validation difficult.
 			steps: []time.Duration{
@@ -263,11 +263,11 @@ func TestFunnel_Start(t *testing.T) {
 			},
 			expectedEvents: []eventResult{
 				{
-					Event:  Event{Type: StatusEventType}, // 300ms
+					Event:  Event{Type: StatusUpdateEventType}, // 300ms
 					Result: Result{},
 				},
 				{
-					Event:  Event{Type: StatusEventType}, // 600ms
+					Event:  Event{Type: StatusUpdateEventType}, // 600ms
 					Result: Result{},
 				},
 				{
@@ -277,11 +277,11 @@ func TestFunnel_Start(t *testing.T) {
 					},
 				},
 				{
-					Event:  Event{Type: StatusEventType}, // 1000ms
+					Event:  Event{Type: StatusUpdateEventType}, // 1000ms
 					Result: Result{},
 				},
 				{
-					Event:  Event{Type: StatusEventType}, // 1300ms
+					Event:  Event{Type: StatusUpdateEventType}, // 1300ms
 					Result: Result{},
 				},
 				{
@@ -291,11 +291,11 @@ func TestFunnel_Start(t *testing.T) {
 					},
 				},
 				{
-					Event:  Event{Type: StatusEventType}, // 1700ms
+					Event:  Event{Type: StatusUpdateEventType}, // 1700ms
 					Result: Result{},
 				},
 				{
-					Event:  Event{Type: StatusEventType}, // 2000ms
+					Event:  Event{Type: StatusUpdateEventType}, // 2000ms
 					Result: Result{},
 				},
 				{
@@ -305,11 +305,11 @@ func TestFunnel_Start(t *testing.T) {
 					},
 				},
 				{
-					Event:  Event{Type: StatusEventType}, // 2400ms
+					Event:  Event{Type: StatusUpdateEventType}, // 2400ms
 					Result: Result{},
 				},
 				{
-					Event:  Event{Type: StatusEventType}, // 2700ms
+					Event:  Event{Type: StatusUpdateEventType}, // 2700ms
 					Result: Result{},
 				},
 				{
@@ -319,11 +319,11 @@ func TestFunnel_Start(t *testing.T) {
 					},
 				},
 				{
-					Event:  Event{Type: StatusEventType}, // 3100ms
+					Event:  Event{Type: StatusUpdateEventType}, // 3100ms
 					Result: Result{},
 				},
 				{
-					Event:  Event{Type: StatusEventType}, // 3400ms
+					Event:  Event{Type: StatusUpdateEventType}, // 3400ms
 					Result: Result{},
 				},
 				{
@@ -333,21 +333,21 @@ func TestFunnel_Start(t *testing.T) {
 					},
 				},
 				{
-					Event:  Event{Type: StatusEventType}, // 3800ms
+					Event:  Event{Type: StatusUpdateEventType}, // 3800ms
 					Result: Result{},
 				},
 				{
-					Event: Event{Type: SyncWithReimportEventType}, // 4000ms
+					Event: Event{Type: FullSyncEventType}, // 4000ms
 					Result: Result{
 						RunAttempted: true,
 					},
 				},
 				{
-					Event:  Event{Type: StatusEventType}, // 4300ms
+					Event:  Event{Type: StatusUpdateEventType}, // 4300ms
 					Result: Result{},
 				},
 				{
-					Event:  Event{Type: StatusEventType}, // 4600ms
+					Event:  Event{Type: StatusUpdateEventType}, // 4600ms
 					Result: Result{},
 				},
 				{
@@ -357,11 +357,11 @@ func TestFunnel_Start(t *testing.T) {
 					},
 				},
 				{
-					Event:  Event{Type: StatusEventType}, // 5000ms
+					Event:  Event{Type: StatusUpdateEventType}, // 5000ms
 					Result: Result{},
 				},
 				{
-					Event:  Event{Type: StatusEventType}, // 5300ms
+					Event:  Event{Type: StatusUpdateEventType}, // 5300ms
 					Result: Result{},
 				},
 				{
@@ -371,11 +371,11 @@ func TestFunnel_Start(t *testing.T) {
 					},
 				},
 				{
-					Event:  Event{Type: StatusEventType}, // 5700ms
+					Event:  Event{Type: StatusUpdateEventType}, // 5700ms
 					Result: Result{},
 				},
 				{
-					Event:  Event{Type: StatusEventType}, // 6000ms
+					Event:  Event{Type: StatusUpdateEventType}, // 6000ms
 					Result: Result{},
 				},
 				{
@@ -385,11 +385,11 @@ func TestFunnel_Start(t *testing.T) {
 					},
 				},
 				{
-					Event:  Event{Type: StatusEventType}, // 6400ms
+					Event:  Event{Type: StatusUpdateEventType}, // 6400ms
 					Result: Result{},
 				},
 				{
-					Event:  Event{Type: StatusEventType}, // 6700ms
+					Event:  Event{Type: StatusUpdateEventType}, // 6700ms
 					Result: Result{},
 				},
 				{
@@ -399,11 +399,11 @@ func TestFunnel_Start(t *testing.T) {
 					},
 				},
 				{
-					Event:  Event{Type: StatusEventType}, // 7100ms
+					Event:  Event{Type: StatusUpdateEventType}, // 7100ms
 					Result: Result{},
 				},
 				{
-					Event:  Event{Type: StatusEventType}, // 7400ms
+					Event:  Event{Type: StatusUpdateEventType}, // 7400ms
 					Result: Result{},
 				},
 				{
@@ -413,21 +413,21 @@ func TestFunnel_Start(t *testing.T) {
 					},
 				},
 				{
-					Event:  Event{Type: StatusEventType}, // 7800ms
+					Event:  Event{Type: StatusUpdateEventType}, // 7800ms
 					Result: Result{},
 				},
 				{
-					Event: Event{Type: SyncWithReimportEventType}, // 8000ms
+					Event: Event{Type: FullSyncEventType}, // 8000ms
 					Result: Result{
 						RunAttempted: true,
 					},
 				},
 				{
-					Event:  Event{Type: StatusEventType}, // 8300ms
+					Event:  Event{Type: StatusUpdateEventType}, // 8300ms
 					Result: Result{},
 				},
 				{
-					Event:  Event{Type: StatusEventType}, // 8600ms
+					Event:  Event{Type: StatusUpdateEventType}, // 8600ms
 					Result: Result{},
 				},
 				{

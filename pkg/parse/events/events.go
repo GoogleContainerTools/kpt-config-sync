@@ -25,17 +25,17 @@ type Event struct {
 type EventType string
 
 const (
-	// SyncWithReimportEventType is the EventType for a sync from disk,
+	// FullSyncEventType is the EventType for a sync from disk,
 	// including reading and parsing resource objects from the shared volume.
-	SyncWithReimportEventType EventType = "SyncWithReimportEvent"
+	FullSyncEventType EventType = "FullSyncEvent"
 	// SyncEventType is the EventType for a sync from the source cache,
 	// only parsing objects from the shared volume if there's a new commit.
 	SyncEventType EventType = "SyncEvent"
-	// StatusEventType is the EventType for a periodic RSync status update.
-	StatusEventType EventType = "StatusEvent"
-	// NamespaceResyncEventType is the EventType for a sync triggered by an
+	// StatusUpdateEventType is the EventType for a periodic RSync status update.
+	StatusUpdateEventType EventType = "StatusUpdateEvent"
+	// NamespaceSyncEventType is the EventType for a sync triggered by an
 	// update to a selected namespace.
-	NamespaceResyncEventType EventType = "NamespaceResyncEvent"
+	NamespaceSyncEventType EventType = "NamespaceSyncEvent"
 	// RetrySyncEventType is the EventType for a sync triggered by an error
 	// during a previous sync attempt.
 	RetrySyncEventType EventType = "RetrySyncEvent"

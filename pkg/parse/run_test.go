@@ -769,7 +769,7 @@ func TestRun(t *testing.T) {
 			fakeClient := syncerFake.NewClient(t, core.Scheme, k8sobjects.RootSyncObjectV1Beta1(rootSyncName))
 			reconciler := newRootReconciler(t, fakeClock, fakeClient, fs, tc.renderingEnabled)
 			t.Logf("start running test at %v", time.Now())
-			result := DefaultRunFunc(context.Background(), reconciler, triggerReimport)
+			result := DefaultRunFunc(context.Background(), reconciler, triggerSync)
 
 			assert.Equal(t, tc.expectedSourceChanged, result.SourceChanged)
 			assert.Equal(t, tc.needRetry, reconciler.ReconcilerState().cache.needToRetry)

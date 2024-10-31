@@ -48,11 +48,11 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
-	"kpt.dev/configsync/pkg/remediator/conflict"
 	remediatorfake "kpt.dev/configsync/pkg/remediator/fake"
 	"kpt.dev/configsync/pkg/rootsync"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/syncer/reconcile/fight"
+	"kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	syncertest "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/openapitest"
 	"kpt.dev/configsync/pkg/testing/testerrors"
@@ -694,7 +694,7 @@ func TestRootReconciler_ParseAndUpdate(t *testing.T) {
 						files:   files,
 					},
 				},
-				syncErrorCache: NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
+				syncErrorCache: NewSyncErrorCache(fake.NewConflictHandler(), fight.NewHandler()),
 			}
 			opts := &Options{
 				Clock:             fakeClock,
@@ -936,7 +936,7 @@ func TestRootReconciler_DeclaredFields(t *testing.T) {
 				cache: cacheForCommit{
 					source: &sourceState{},
 				},
-				syncErrorCache: NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
+				syncErrorCache: NewSyncErrorCache(fake.NewConflictHandler(), fight.NewHandler()),
 			}
 			opts := &Options{
 				Clock:             clock.RealClock{}, // TODO: Test with fake clock
@@ -1221,7 +1221,7 @@ func TestRootReconciler_Parse_Discovery(t *testing.T) {
 				cache: cacheForCommit{
 					source: &sourceState{},
 				},
-				syncErrorCache: NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
+				syncErrorCache: NewSyncErrorCache(fake.NewConflictHandler(), fight.NewHandler()),
 			}
 			opts := &Options{
 				Clock:             clock.RealClock{}, // TODO: Test with fake clock
@@ -1330,7 +1330,7 @@ func TestRootReconciler_SourceReconcilerErrorsMetricValidation(t *testing.T) {
 				cache: cacheForCommit{
 					source: &sourceState{},
 				},
-				syncErrorCache: NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
+				syncErrorCache: NewSyncErrorCache(fake.NewConflictHandler(), fight.NewHandler()),
 			}
 			opts := &Options{
 				Clock:             clock.RealClock{}, // TODO: Test with fake clock
@@ -1439,7 +1439,7 @@ func TestRootReconciler_SourceAndSyncReconcilerErrorsMetricValidation(t *testing
 				cache: cacheForCommit{
 					source: &sourceState{},
 				},
-				syncErrorCache: NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
+				syncErrorCache: NewSyncErrorCache(fake.NewConflictHandler(), fight.NewHandler()),
 			}
 			opts := &Options{
 				Clock:             clock.RealClock{}, // TODO: Test with fake clock

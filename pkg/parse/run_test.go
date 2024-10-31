@@ -50,6 +50,7 @@ import (
 	"kpt.dev/configsync/pkg/rootsync"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/syncer/reconcile/fight"
+	"kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/openapitest"
 	"kpt.dev/configsync/pkg/util"
@@ -61,13 +62,13 @@ const (
 	symLink = "rev"
 )
 
-func newRootReconciler(t *testing.T, clock clock.Clock, fakeClient client.Client, fs FileSource, renderingEnabled bool) *reconciler {
+func newRootReconciler(t *testing.T, clock clock.Clock, fakeClient client.Client, conflictHandler conflict.Handler, fs FileSource, renderingEnabled bool) *reconciler {
 	converter, err := openapitest.ValueConverterForTest()
 	if err != nil {
 		t.Fatal(err)
 	}
 	state := &ReconcilerState{
-		syncErrorCache: NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
+		syncErrorCache: NewSyncErrorCache(conflictHandler, fight.NewHandler()),
 	}
 	opts := &Options{
 		Clock:             clock,
@@ -767,7 +768,7 @@ func TestRun(t *testing.T) {
 				SourceBranch: fileSource.SourceBranch,
 			}
 			fakeClient := syncerFake.NewClient(t, core.Scheme, k8sobjects.RootSyncObjectV1Beta1(rootSyncName))
-			reconciler := newRootReconciler(t, fakeClock, fakeClient, fs, tc.renderingEnabled)
+			reconciler := newRootReconciler(t, fakeClock, fakeClient, fake.NewConflictHandler(), fs, tc.renderingEnabled)
 			t.Logf("start running test at %v", time.Now())
 			result := DefaultRunFunc(context.Background(), reconciler, triggerReimport)
 

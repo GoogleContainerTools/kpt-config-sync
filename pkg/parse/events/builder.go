@@ -43,6 +43,9 @@ type PublishingGroupBuilder struct {
 	NamespaceControllerPeriod time.Duration
 	// RetryBackoff is how long the Parser waits between retries, after an error.
 	RetryBackoff wait.Backoff
+
+	WatchUpdateCh <-chan bool
+	ConflictCh    <-chan bool
 }
 
 // Build a list of Publishers based on the PublishingGroupBuilder config.
@@ -62,6 +65,14 @@ func (t *PublishingGroupBuilder) Build() []Publisher {
 	}
 	if t.StatusUpdatePeriod > 0 {
 		publishers = append(publishers, NewResetOnRunAttemptPublisher(StatusEventType, t.Clock, t.StatusUpdatePeriod))
+	}
+	if t.WatchUpdateCh != nil {
+		// TODO: new event type?
+		publishers = append(publishers, NewDedupingChannelPublisher(SyncEventType, t.WatchUpdateCh))
+	}
+	if t.ConflictCh != nil {
+		// TODO: new event type?
+		publishers = append(publishers, NewDedupingChannelPublisher(SyncEventType, t.ConflictCh))
 	}
 	return publishers
 }

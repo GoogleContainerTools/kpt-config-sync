@@ -162,7 +162,7 @@ func (s *RetrySyncPublisher) Publish(subscriber Subscriber) Result {
 
 	s.nextDelay = s.currentBackoff.Step()
 	retries := s.retryLimit - s.currentBackoff.Steps
-	klog.V(3).Infof("Sending retry event (step: %v/%v)", retries, s.retryLimit)
+	klog.Infof("Sending retry event (step: %v/%v)", retries, s.retryLimit)
 
 	return subscriber.Handle(Event{Type: s.EventType})
 }
@@ -208,3 +208,78 @@ func (s *ResetOnRunAttemptPublisher) HandleResult(result Result) {
 		s.timer.Reset(s.Period)
 	}
 }
+
+// NewDedupingChannelPublisher constructs an ChannelDrivenPublisher that
+// enqueues a new specified event any time the input channel receives an event.
+func NewDedupingChannelPublisher(eventType EventType, inCh <-chan bool) *ChannelDrivenPublisher {
+	return &ChannelDrivenPublisher{
+		EventType: eventType,
+		InCh:      inCh,
+	}
+}
+
+// ChannelDrivenPublisher sends events whenever the input channel receives an
+// event, de-duping input events if the output event is still pending.
+type ChannelDrivenPublisher struct {
+	EventType EventType
+	InCh      <-chan bool
+}
+
+// Type of events produced by this publisher.
+func (s *ChannelDrivenPublisher) Type() EventType {
+	return s.EventType
+}
+
+// Start the timer and return the event channel.
+func (s *ChannelDrivenPublisher) Start(ctx context.Context) reflect.Value {
+	outCh := make(chan struct{})
+	go proxyWithDedupe(ctx, s.InCh, outCh)
+	return reflect.ValueOf(outCh)
+}
+
+// proxyWithDedupe watches the inCh and sends any received events to the outCh.
+// Input events are consumed immediately until the next output event is consumed.
+// This allows the event producer to avoid being blocked while waiting for the
+// event consumer. However, it also means that the input event being consumed is
+// not a signal that it was actually handled, and it may never be handled, if
+// the context or input channel closes first.
+func proxyWithDedupe(ctx context.Context, inCh <-chan bool, outCh chan<- struct{}) {
+	defer close(outCh)
+	pending := false
+	for {
+		// We could use select reflect.Select here, to avoid duplication,
+		// but this approach is a little easier to read.
+		if pending {
+			select {
+			case <-ctx.Done():
+				return
+			case needed, open := <-inCh:
+				if !open {
+					return
+				}
+				pending = needed
+			case outCh <- struct{}{}:
+				// Output event consumed
+				pending = false
+			}
+		} else {
+			select {
+			case <-ctx.Done():
+				return
+			case _, open := <-inCh:
+				if !open {
+					return
+				}
+				pending = true
+			}
+		}
+	}
+}
+
+// Publish calls the HandleFunc with a new event.
+func (s *ChannelDrivenPublisher) Publish(subscriber Subscriber) Result {
+	return subscriber.Handle(Event{Type: s.EventType})
+}
+
+// HandleResult is a no-op.
+func (s *ChannelDrivenPublisher) HandleResult(_ Result) {}

@@ -77,9 +77,6 @@ type Interface interface {
 	Pause()
 	// Resume the Remediator by starting the workers.
 	Resume()
-	// NeedsUpdate returns true if the Remediator needs its watches to be updated
-	// (typically due to some asynchronous error that occurred).
-	NeedsUpdate() bool
 	// AddWatches starts server-side watches based upon the given map of GVKs
 	// which should be watched.
 	AddWatches(context.Context, map[schema.GroupVersionKind]struct{}, string) status.MultiError
@@ -106,6 +103,7 @@ func New(
 	crdController *controllers.CRDController,
 	decls *declared.Resources,
 	numWorkers int,
+	watchUpdateCh chan<- bool,
 ) (*Remediator, error) {
 	q := queue.New(scope.String())
 	workers := make([]*reconcile.Worker, numWorkers)
@@ -120,7 +118,7 @@ func New(
 		conflictHandler: conflictHandler,
 	}
 
-	watchMgr, err := watch.NewManager(scope, syncName, q, decls, watcherFactory, mapper, conflictHandler, crdController)
+	watchMgr, err := watch.NewManager(scope, syncName, q, decls, watcherFactory, mapper, conflictHandler, crdController, watchUpdateCh)
 	if err != nil {
 		return nil, fmt.Errorf("creating watch manager: %w", err)
 	}
@@ -223,11 +221,6 @@ func (r *Remediator) Resume() {
 	klog.V(1).Info("Remediator resuming...")
 	r.startWorkers()
 	klog.V(3).Info("Remediator resumed")
-}
-
-// NeedsUpdate implements Interface.
-func (r *Remediator) NeedsUpdate() bool {
-	return r.watchMgr.NeedsUpdate()
 }
 
 // AddWatches implements Interface.

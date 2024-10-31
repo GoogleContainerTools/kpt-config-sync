@@ -48,9 +48,8 @@ func TestRemediator_Reconcile(t *testing.T) {
 		name string
 		// version is Version (from GVK) of the object to try to remediate.
 		version string
-		// conflictHandler is the initial state of the conflict handler.
-		// Nil defaults to conflict.NewHandler().
-		conflictHandler conflict.Handler
+		// conflicts is the initial state of the conflict handler.
+		conflicts []status.ManagementConflictError
 		// declared is the state of the object as returned by the Parser.
 		declared client.Object
 		// existingConflict is true if the conflict handler has previously seen
@@ -278,16 +277,16 @@ func TestRemediator_Reconcile(t *testing.T) {
 		{
 			name: "management conflict resolved",
 			// Setup pre-existing conflict error
-			conflictHandler: func() conflict.Handler {
-				h := conflict.NewHandler()
+			conflicts: func() []status.ManagementConflictError {
 				obj := k8sobjects.ClusterRoleBinding(syncertest.ManagementEnabled,
 					core.Annotation(metadata.ResourceManagerKey, declared.ResourceManager(declared.RootScope, "other-root-sync")),
 					core.Label("selected-label", "unexpected-value"),
 					core.Label("unselected-label", "unexpected-value"),
 					core.UID("1"), core.ResourceVersion("2"), core.Generation(1))
-				h.AddConflictError(core.IDOf(obj), status.ManagementConflictErrorWrap(obj,
-					declared.ResourceManager(declared.RootScope, configsync.RootSyncName)))
-				return h
+				return []status.ManagementConflictError{
+					status.ManagementConflictErrorWrap(obj,
+						declared.ResourceManager(declared.RootScope, configsync.RootSyncName)),
+				}
 			}(),
 			declared: k8sobjects.ClusterRoleBinding(syncertest.ManagementEnabled,
 				core.Annotation(metadata.ResourceManagerKey, declared.ResourceManager(declared.RootScope, configsync.RootSyncName)),
@@ -322,12 +321,23 @@ func TestRemediator_Reconcile(t *testing.T) {
 			// Simulate the Parser having already parsed the resource and recorded it.
 			d := makeDeclared(t, "unused", tc.declared)
 
-			if tc.conflictHandler == nil {
-				tc.conflictHandler = conflict.NewHandler()
+			// Consume & ignore conflict events.
+			// Existence of any expected conflicts is tested later with HasConflictError.
+			conflictCh := make(chan bool)
+			defer close(conflictCh)
+			go func() {
+				//nolint:revive // empty-block: consume until closed
+				for range conflictCh {
+				}
+			}()
+			conflictHandler := conflict.NewHandler(conflictCh)
+
+			for _, conflictErr := range tc.conflicts {
+				conflictHandler.AddConflictError(conflictErr.ObjectID(), conflictErr)
 			}
 
 			r := newReconciler(declared.RootScope, configsync.RootSyncName, c.Applier(configsync.FieldManager), d,
-				tc.conflictHandler, testingfake.NewFightHandler())
+				conflictHandler, testingfake.NewFightHandler())
 
 			// Get the triggering object for the reconcile event.
 			var obj client.Object
@@ -344,7 +354,7 @@ func TestRemediator_Reconcile(t *testing.T) {
 			testerrors.AssertEqual(t, tc.wantError, err)
 
 			if tc.declared != nil {
-				assert.Equal(t, tc.wantConflict, tc.conflictHandler.HasConflictError(core.IDOf(tc.declared)))
+				assert.Equal(t, tc.wantConflict, conflictHandler.HasConflictError(core.IDOf(tc.declared)))
 			}
 
 			if tc.want == nil {

@@ -82,8 +82,7 @@ func DefaultRunFunc(ctx context.Context, r Reconciler, trigger string) RunResult
 	opts := r.Options()
 	result := RunResult{}
 	state := r.ReconcilerState()
-	// Initialize status
-	// TODO: Populate status from RSync status
+	// Initialize status cache from current RSync status
 	if state.status == nil {
 		reconcilerStatus, err := r.SyncStatusClient().ReconcilerStatusFromCluster(ctx)
 		if err != nil {
@@ -92,6 +91,14 @@ func DefaultRunFunc(ctx context.Context, r Reconciler, trigger string) RunResult
 		}
 		state.status = reconcilerStatus
 	}
+	if opts.HasManagementConflict() || trigger == triggerReimport || trigger == namespaceEvent {
+		// Clear the in-memory parsed object cache to force re-parsing source files.
+		// Preserve sourceState to avoid re-reading/listing the source files,
+		// unless a new commit or source change is detected.
+		// Preserve needToRetry to avoid resetting the retry backoff.
+		state.resetPartialCache()
+	}
+
 	var syncDir cmpath.Absolute
 	gs := &SourceStatus{}
 	// pull the source commit and directory with retries within 5 minutes.

@@ -16,6 +16,7 @@ package reconcile
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -60,15 +61,17 @@ func (w *Worker) Run(ctx context.Context) {
 		for {
 			if err := w.processNextObject(ctx); err != nil {
 				if err == queue.ErrShutdown {
-					klog.Infof("Worker stopping: %v", err)
+					klog.Infof("Remediator worker stopping: %v", err)
 					cancel()
 					return
 				}
-				if err == context.Canceled || err == context.DeadlineExceeded {
-					klog.Infof("Worker stopping: %v", err)
+				if errors.Is(err, context.Canceled) || isContextCancelledStatusError(err) {
+					// Worker is cancelled when remediator is paused or stopped.
+					// So use a higher log level to avoid spamming the log.
+					klog.V(3).Infof("Remediator worker stopping: %v", err)
 					return
 				}
-				klog.Errorf("Worker error (retry scheduled): %v", err)
+				klog.Errorf("Remediator worker error (retry scheduled): %v", err)
 				return
 			}
 		}
@@ -174,4 +177,22 @@ func (w *Worker) getObject(ctx context.Context, obj client.Object) (client.Objec
 		return uObj, status.APIServerError(err, "failed to get updated object for worker cache", obj)
 	}
 	return uObj, nil
+}
+
+// isContextCancelledStatusError returns true if the error is a status.Error and
+// the cause is or wraps context.Canceled.
+//
+// This is required because the status.Error.Is method only checks the error
+// code, and status.Error doesn't implement Unwrap, so errors.Is can't
+// recursively check wrapped causes.
+//
+// This explicitly does not test for context timeout, because that's used for
+// http client timeout, which we want to log as an error, and we don't currently
+// have any timeout on the parent context.
+func isContextCancelledStatusError(err error) bool {
+	var statusErr status.Error
+	if errors.As(err, &statusErr) {
+		return errors.Is(statusErr.Cause(), context.Canceled)
+	}
+	return false
 }

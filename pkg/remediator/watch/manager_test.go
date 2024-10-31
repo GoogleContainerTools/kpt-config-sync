@@ -245,9 +245,16 @@ func TestManager_AddWatches(t *testing.T) {
 				return fakeMapper, nil
 			}
 			mapper := utilwatch.NewReplaceOnResetRESTMapper(fakeMapper, newMapperFn)
+			watchUpdateCh := make(chan bool)
+			defer close(watchUpdateCh)
+			go func() {
+				//nolint:revive // empty-block: consume until closed
+				for range watchUpdateCh {
+				}
+			}()
 			m, err := NewManager(":test", "rs", nil, &declared.Resources{},
 				watcherFactory, mapper, fake.NewConflictHandler(),
-				&controllers.CRDController{})
+				&controllers.CRDController{}, watchUpdateCh)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -426,9 +433,16 @@ func TestManager_UpdateWatches(t *testing.T) {
 				return fakeMapper, nil
 			}
 			mapper := utilwatch.NewReplaceOnResetRESTMapper(fakeMapper, newMapperFn)
+			watchUpdateCh := make(chan bool)
+			defer close(watchUpdateCh)
+			go func() {
+				//nolint:revive // empty-block: consume until closed
+				for range watchUpdateCh {
+				}
+			}()
 			m, err := NewManager(":test", "rs", nil, &declared.Resources{},
 				watcherFactory, mapper, fake.NewConflictHandler(),
-				&controllers.CRDController{})
+				&controllers.CRDController{}, watchUpdateCh)
 			if err != nil {
 				t.Fatal(err)
 			}

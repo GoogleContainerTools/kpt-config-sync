@@ -224,10 +224,19 @@ func Run(opts Options) {
 	}
 	watcherFactory := watch.WatcherFactoryFromListerWatcherFactory(lwFactory.ListerWatcher)
 	crdController := &controllers.CRDController{}
-	conflictHandler := conflict.NewHandler()
 	fightHandler := fight.NewHandler()
 
-	rem, err := remediator.New(opts.ReconcilerScope, opts.SyncName, watcherFactory, mapper, baseApplier, conflictHandler, fightHandler, crdController, decls, opts.NumWorkers)
+	// Conflict handler uses conflictCh to send events to the sync event publisher.
+	// This allows new conflicts to trigger sync events and cancel any pending
+	// sync requests when conflicts are resolved.
+	conflictCh := make(chan bool)
+	conflictHandler := conflict.NewHandler(conflictCh)
+
+	// Remediator uses watchUpdateCh to send events to the sync event publisher.
+	// This allows new watch errors to trigger sync events and cancel any
+	// pending sync requests when watches are updated.
+	watchUpdateCh := make(chan bool)
+	rem, err := remediator.New(opts.ReconcilerScope, opts.SyncName, watcherFactory, mapper, baseApplier, conflictHandler, fightHandler, crdController, decls, opts.NumWorkers, watchUpdateCh)
 	if err != nil {
 		klog.Fatalf("Instantiating Remediator: %v", err)
 	}
@@ -276,7 +285,9 @@ func Run(opts Options) {
 		StatusUpdatePeriod:     opts.StatusUpdatePeriod,
 		// TODO: Shouldn't this use opts.RetryPeriod as the initial duration?
 		// Limit to 12 retries, with no max retry duration.
-		RetryBackoff: util.BackoffWithDurationAndStepLimit(0, 12),
+		RetryBackoff:  util.BackoffWithDurationAndStepLimit(0, 12),
+		WatchUpdateCh: watchUpdateCh,
+		ConflictCh:    conflictCh,
 	}
 
 	reconcilerOpts := &parse.ReconcilerOptions{

@@ -67,22 +67,21 @@ func (s *EventHandler) Handle(event events.Event) events.Result {
 	var runResult RunResult
 	switch event.Type {
 	case events.SyncWithReimportEventType:
-		// Re-apply even if no changes have been detected.
-		// This case should be checked first since it resets the cache.
-		// If the reconciler is in the process of reconciling a given commit, the resync won't
-		// happen until the ongoing reconciliation is done.
-		klog.Infof("It is time for a force-resync")
-		// Reset the cache partially to make sure all the steps of a parse-apply-watch loop will run.
-		// The cached sourceState will not be reset to avoid reading all the source files unnecessarily.
-		// The cached needToRetry will not be reset to avoid resetting the backoff retries.
-		state.resetPartialCache()
-		runResult = runFn(s.Context, s.Reconciler, triggerResync)
+		// Reimport = Read* + Render* + Parse + Update
+		//
+		// * Read & Render will only happen if there's a new commit, new source
+		//   spec change, or a previous error invalidated the cache.
+		//   Otherwise re-import starts from re-parsing the objects from disk.
+		runResult = runFn(s.Context, s.Reconciler, triggerReimport)
 
 	case events.SyncEventType:
-		// Re-import declared resources from the filesystem (from *-sync).
-		// If the reconciler is in the process of reconciling a given commit, the re-import won't
-		// happen until the ongoing reconciliation is done.
-		runResult = runFn(s.Context, s.Reconciler, triggerReimport)
+		// Resync = Read* + Render* + Parse* + Update
+		//
+		// * Read, Render, and Parse will only happen if there's a new commit,
+		//   new source spec change, or a previous error invalidated the cache.
+		//   Otherwise re-sync skips directly to the Update stage, using the
+		//   previously parsed in-memory object cache.
+		runResult = runFn(s.Context, s.Reconciler, triggerResync)
 
 	case events.StatusEventType:
 		// Publish the sync status periodically to update remediator errors.
@@ -108,43 +107,20 @@ func (s *EventHandler) Handle(event events.Event) events.Result {
 		}
 
 	case events.NamespaceResyncEventType:
-		// If the namespace controller indicates that an update is needed,
-		// attempt to re-sync.
+		// Reimport & Resync if the namespace controller detected a change.
 		if !s.NSControllerState.ScheduleSync() {
 			// No RunFunc call
 			break
 		}
-
-		klog.Infof("A new sync is triggered by a Namespace event")
-		// Reset the cache partially to make sure all the steps of a parse-apply-watch loop will run.
-		// The cached sourceState will not be reset to avoid reading all the source files unnecessarily.
-		// The cached needToRetry will not be reset to avoid resetting the backoff retries.
-		state.resetPartialCache()
 		runResult = runFn(s.Context, s.Reconciler, namespaceEvent)
 
 	case events.RetrySyncEventType:
-		// Retry if there was an error, conflict, or any watches need to be updated.
-		var trigger string
-		if opts.HasManagementConflict() {
-			// Reset the cache partially to make sure all the steps of a parse-apply-watch loop will run.
-			// The cached sourceState will not be reset to avoid reading all the source files unnecessarily.
-			// The cached needToRetry will not be reset to avoid resetting the backoff retries.
-			state.resetPartialCache()
-			trigger = triggerManagementConflict
-		} else if state.cache.needToRetry {
-			trigger = triggerRetry
-		} else if opts.needToUpdateWatch() {
-			trigger = triggerWatchUpdate
-		} else {
+		// Resync if there was an error.
+		if !state.cache.needToRetry {
 			klog.Info("Skipping retry attempt: not needed")
 			break
 		}
-
-		// During the execution of `run`, if a new commit is detected,
-		// retryTimer will be reset to `Options.RetryPeriod`, and state.backoff is reset to `defaultBackoff()`.
-		// In this case, `run` will try to sync the configs from the new commit instead of the old commit
-		// being retried.
-		runResult = runFn(s.Context, s.Reconciler, trigger)
+		runResult = runFn(s.Context, s.Reconciler, triggerRetry)
 
 	default:
 		klog.Fatalf("Invalid event received: %#v", event)

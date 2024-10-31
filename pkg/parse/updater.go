@@ -51,10 +51,6 @@ type Updater struct {
 	updateMux sync.RWMutex
 }
 
-func (u *Updater) needToUpdateWatch() bool {
-	return u.Remediator.NeedsUpdate()
-}
-
 // HasManagementConflict returns true when conflict errors have been encountered
 // by the Applier or Remediator for at least one currently managed object.
 func (u *Updater) HasManagementConflict() bool {

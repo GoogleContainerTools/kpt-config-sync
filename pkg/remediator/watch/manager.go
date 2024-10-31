@@ -72,8 +72,8 @@ type Manager struct {
 	watching bool
 	// watcherMap maps GVKs to their associated watchers
 	watcherMap map[schema.GroupVersionKind]Runnable
-	// needsUpdate indicates if the Manager's watches need to be updated.
-	needsUpdate bool
+	// watchUpdateCh is a channel that enqueues or cancels pending sync attempts
+	watchUpdateCh chan<- bool
 }
 
 // NewManager starts a new watch manager
@@ -86,6 +86,7 @@ func NewManager(
 	mapper utilwatch.ResettableRESTMapper,
 	ch conflict.Handler,
 	crdController *controllers.CRDController,
+	watchUpdateCh chan<- bool,
 ) (*Manager, error) {
 
 	// Only watch & remediate objects applied by this reconciler
@@ -104,6 +105,7 @@ func NewManager(
 		queue:           q,
 		conflictHandler: ch,
 		crdController:   crdController,
+		watchUpdateCh:   watchUpdateCh,
 	}, nil
 }
 
@@ -112,13 +114,6 @@ func (m *Manager) Watching() bool {
 	m.mux.RLock()
 	defer m.mux.RUnlock()
 	return m.watching
-}
-
-// NeedsUpdate returns true if the Manager's watches need to be updated. This function is threadsafe.
-func (m *Manager) NeedsUpdate() bool {
-	m.mux.RLock()
-	defer m.mux.RUnlock()
-	return m.needsUpdate
 }
 
 // AddWatches accepts a map of GVKs that should be watched and takes the
@@ -193,7 +188,8 @@ func (m *Manager) UpdateWatches(ctx context.Context, gvkMap map[schema.GroupVers
 
 	klog.V(3).Infof("UpdateWatches(%v)", maps.Keys(gvkMap))
 
-	m.needsUpdate = false
+	// Cancel any pending sync attempts due to watch updates
+	m.watchUpdateCh <- false
 
 	var startedWatches, stoppedWatches uint64
 	// Stop obsolete watchers.
@@ -297,7 +293,8 @@ func (m *Manager) runWatcher(ctx context.Context, r Runnable, gvk schema.GroupVe
 		}
 		m.mux.Lock()
 		delete(m.watcherMap, gvk)
-		m.needsUpdate = true
+		// enqueue sync attempt to update watches
+		m.watchUpdateCh <- true
 		m.mux.Unlock()
 	}
 }

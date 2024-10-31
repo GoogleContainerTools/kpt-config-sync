@@ -57,6 +57,7 @@ func Record(ctx context.Context, handler Handler, err status.ManagementConflictE
 
 // handler implements Handler.
 type handler struct {
+	conflictCh chan<- bool
 	// mux guards the conflictErrs
 	mux sync.RWMutex
 	// conflictErrs tracks all the conflict errors (KNV1060) the remediator encounters,
@@ -67,8 +68,9 @@ type handler struct {
 var _ Handler = &handler{}
 
 // NewHandler instantiates a conflict handler
-func NewHandler() Handler {
+func NewHandler(conflictCh chan<- bool) Handler {
 	return &handler{
+		conflictCh:   conflictCh,
 		conflictErrs: orderedmap.NewOrderedMap[core.ID, status.ManagementConflictError](),
 	}
 }
@@ -88,7 +90,11 @@ func (h *handler) AddConflictError(id core.ID, newErr status.ManagementConflictE
 		}
 	}
 
-	h.conflictErrs.Set(id, newErr)
+	added := h.conflictErrs.Set(id, newErr)
+	if added {
+		// Enqueue conflict resolution
+		h.conflictCh <- true
+	}
 }
 
 // HasConflictError returns true when there is a conflict for the specified object ID.
@@ -104,8 +110,14 @@ func (h *handler) RemoveConflictError(id core.ID) {
 	h.mux.Lock()
 	defer h.mux.Unlock()
 
+	removed := false
 	if h.conflictErrs.Delete(id) {
 		klog.Infof("Conflict error resolved for %s", id)
+		removed = true
+	}
+	if removed && h.conflictErrs.Len() == 0 {
+		// Cancel conflict resolution
+		h.conflictCh <- false
 	}
 }
 
@@ -113,10 +125,16 @@ func (h *handler) ClearConflictErrorsWithKind(gk schema.GroupKind) {
 	h.mux.Lock()
 	defer h.mux.Unlock()
 
+	removed := false
 	for pair := h.conflictErrs.Front(); pair != nil; pair = pair.Next() {
 		if pair.Key.GroupKind == gk {
 			h.conflictErrs.Delete(pair.Key)
+			removed = true
 		}
+	}
+	if removed && h.conflictErrs.Len() == 0 {
+		// Cancel conflict resolution
+		h.conflictCh <- false
 	}
 }
 

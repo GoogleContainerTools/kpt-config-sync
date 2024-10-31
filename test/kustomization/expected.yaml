@@ -5786,7 +5786,7 @@ data:
                 - ALL
             imagePullPolicy: IfNotPresent
           - name: git-sync
-            image: gcr.io/config-management-release/git-sync:v4.2.4-gke.8__linux_amd64
+            image: gcr.io/config-management-release/git-sync:placeholder
             args: ["--root=/repo/source", "--link=rev", "--max-failures=30", "--error-file=error.json"]
             volumeMounts:
             - name: repo
@@ -5846,7 +5846,7 @@ data:
                 - ALL
               runAsUser: 65533
           - name: otel-agent
-            image: gcr.io/config-management-release/otelcontribcol:v0.103.0-gke.4
+            image: gcr.io/config-management-release/otelcontribcol:placeholder
             command:
             - /otelcontribcol
             args:
@@ -6106,7 +6106,7 @@ spec:
         - --feature-gates=-pkg.translator.prometheus.NormalizeName
         command:
         - /otelcontribcol
-        image: gcr.io/config-management-release/otelcontribcol:v0.103.0-gke.4
+        image: gcr.io/config-management-release/otelcontribcol:placeholder
         name: otel-collector
         ports:
         - containerPort: 55678
@@ -6318,7 +6318,7 @@ spec:
               fieldPath: metadata.labels['configsync.gke.io/deployment-name']
         - name: OTEL_RESOURCE_ATTRIBUTES
           value: k8s.pod.name=$(KUBE_POD_NAME),k8s.pod.namespace=$(KUBE_POD_NAMESPACE),k8s.pod.uid=$(KUBE_POD_UID),k8s.pod.ip=$(KUBE_POD_IP),k8s.node.name=$(KUBE_NODE_NAME),k8s.deployment.name=$(KUBE_DEPLOYMENT_NAME)
-        image: gcr.io/config-management-release/otelcontribcol:v0.103.0-gke.4
+        image: gcr.io/config-management-release/otelcontribcol:placeholder
         name: otel-agent
         ports:
         - containerPort: 55678
@@ -6441,7 +6441,7 @@ spec:
               fieldPath: metadata.labels['configsync.gke.io/deployment-name']
         - name: OTEL_RESOURCE_ATTRIBUTES
           value: k8s.pod.name=$(KUBE_POD_NAME),k8s.pod.namespace=$(KUBE_POD_NAMESPACE),k8s.pod.uid=$(KUBE_POD_UID),k8s.pod.ip=$(KUBE_POD_IP),k8s.node.name=$(KUBE_NODE_NAME),k8s.deployment.name=$(KUBE_DEPLOYMENT_NAME)
-        image: gcr.io/config-management-release/otelcontribcol:v0.103.0-gke.4
+        image: gcr.io/config-management-release/otelcontribcol:placeholder
         name: otel-agent
         ports:
         - containerPort: 55678

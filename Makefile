@@ -317,7 +317,12 @@ test-unit: buildenv-dirs "$(KUSTOMIZE)"
 # small unit test to verify the behavior of an example kustomization for manual install
 .PHONY: test-kustomization
 test-kustomization:
-	$(MAKE) build-manifests STAGING_DIR=$(OUTPUT_DIR)/testing REGISTRY=gcr.io/cs-test IMAGE_TAG=placeholder
+	$(MAKE) build-manifests \
+		STAGING_DIR=$(OUTPUT_DIR)/testing \
+		REGISTRY=gcr.io/cs-test \
+		IMAGE_TAG=placeholder \
+		GIT_SYNC_VERSION=placeholder \
+		OTELCONTRIBCOL_VERSION=placeholder
 	@./scripts/test-kustomization.sh
 
 # Runs unit tests and linter.

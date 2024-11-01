@@ -127,6 +127,7 @@ type RetrySyncPublisher struct {
 	Backoff   wait.Backoff
 
 	currentBackoff wait.Backoff
+	period         time.Duration
 	retryLimit     int
 	timer          clock.Timer
 }
@@ -159,22 +160,25 @@ func (s *RetrySyncPublisher) Publish(subscriber Subscriber) Result {
 		return Result{}
 	}
 
-	retryDuration := s.currentBackoff.Step()
+	s.period = s.currentBackoff.Step()
 	retries := s.retryLimit - s.currentBackoff.Steps
-	klog.Infof("a retry is triggered (retries: %v/%v)", retries, s.retryLimit)
+	klog.V(3).Infof("Sending retry event (step: %v/%v)", retries, s.retryLimit)
 
-	result := subscriber.Handle(Event{Type: s.EventType})
-
-	// Schedule next event
-	s.timer.Reset(retryDuration)
-	return result
+	return subscriber.Handle(Event{Type: s.EventType})
 }
 
 // HandleResult resets the backoff timer if ResetRetryBackoff is true.
 func (s *RetrySyncPublisher) HandleResult(result Result) {
 	if result.ResetRetryBackoff {
+		// Event consumer should log this, so it can include the reason.
 		s.currentBackoff = util.CopyBackoff(s.Backoff)
-		s.timer.Reset(s.currentBackoff.Duration)
+		s.period = s.currentBackoff.Duration
+		s.timer.Reset(s.period)
+	} else if result.RunAttempted && s.currentBackoff.Steps > 0 {
+		klog.V(3).Infof("Sync attempt failed; delaying next retry event (%v)", s.period)
+		s.timer.Reset(s.period)
+	} else if result.RunAttempted {
+		klog.V(3).Infof("Sync attempt failed, but retries exhausted (%d)", s.retryLimit)
 	}
 }
 

@@ -35,13 +35,21 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// Now, this is a story all about how
+// This code got flipped-turned upside down
+// And I'd like to take a minute
+// Just sit right there
+// I'll tell you how I changed all the trigger variable names without changing their string values...
+//
+// It turns out, the trigger string values are used as a ParserDuration metric label.
+// So we changed the variable names to make sense, without breaking customer metrics.
 const (
-	triggerResync             = "resync"
-	triggerReimport           = "reimport"
+	triggerFullSync           = "resync"
+	triggerSync               = "reimport"
 	triggerRetry              = "retry"
 	triggerManagementConflict = "managementConflict"
 	triggerWatchUpdate        = "watchUpdate"
-	namespaceEvent            = "namespaceEvent"
+	triggerNamespaceUpdate    = "namespaceEvent"
 )
 
 const (
@@ -78,6 +86,7 @@ type RunFunc func(ctx context.Context, r Reconciler, trigger string) RunResult
 
 // DefaultRunFunc is the default implementation for RunOpts.RunFunc.
 func DefaultRunFunc(ctx context.Context, r Reconciler, trigger string) RunResult {
+	klog.Infof("Starting sync attempt (trigger: %s)", trigger)
 	opts := r.Options()
 	result := RunResult{}
 	state := r.ReconcilerState()
@@ -91,6 +100,16 @@ func DefaultRunFunc(ctx context.Context, r Reconciler, trigger string) RunResult
 		}
 		state.status = reconcilerStatus
 	}
+
+	switch trigger {
+	case triggerFullSync, triggerManagementConflict, triggerNamespaceUpdate:
+		// Clear the in-memory parsed object cache to force re-parsing source files.
+		// Preserve sourceState to avoid re-reading/listing the source files,
+		// unless a new commit or source change is detected.
+		// Preserve needToRetry to avoid resetting the retry backoff.
+		state.resetPartialCache()
+	}
+
 	var syncDir cmpath.Absolute
 	gs := &SourceStatus{}
 	// pull the source commit and directory with retries within 5 minutes.
@@ -207,7 +226,7 @@ func DefaultRunFunc(ctx context.Context, r Reconciler, trigger string) RunResult
 	// there is no new source changes. The reasons are:
 	//   * If a former parse-apply-watch sequence for syncDir succeeded, there is no need to run the sequence again;
 	//   * If all the former parse-apply-watch sequences for syncDir failed, the next retry will call the sequence.
-	if trigger == triggerReimport && oldSyncDir == newSyncDir {
+	if trigger == triggerSync && oldSyncDir == newSyncDir {
 		return result
 	}
 

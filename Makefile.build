@@ -201,6 +201,8 @@ config-sync-manifest-local: docker-registry config-sync-manifest
 # Kustomize bundle
 ###################################
 
+KUSTOMIZATION_TARBALL ?= config-sync.tar.gz
+
 # Packages the kustomization file into a tarball alongside the built config sync
 # manifests. Assumes the Config Sync manifests are already built in the output dir.
 .PHONY: package-kustomize-bundle
@@ -215,7 +217,7 @@ package-kustomize-bundle:
 	sed -i \
 		-e "s|CONFIG_SYNC_REGISTRY|$(REGISTRY)|g" \
 		$(OUTPUT_DIR)/tmp/kustomization/README.md
-	cd $(OUTPUT_DIR)/tmp/kustomization && tar -czvf $(OSS_MANIFEST_STAGING_DIR)/kustomization.tar.gz .
+	cd $(OUTPUT_DIR)/tmp/kustomization && tar -czvf $(OSS_MANIFEST_STAGING_DIR)/$(KUSTOMIZATION_TARBALL) .
 	rm -rf $(OUTPUT_DIR)/tmp/kustomization
 
 ###################################

@@ -173,7 +173,7 @@ func TestFunnel_Start(t *testing.T) {
 			},
 		},
 		{
-			name: "RetryEvents From RetryBackoff with ResetRetryBackoff",
+			name: "RetryEvents and SyncEvents with RetryBackoff shorter than SyncPeriod",
 			builder: &PublishingGroupBuilder{
 				RetryBackoff: wait.Backoff{
 					Duration: time.Second,
@@ -183,11 +183,77 @@ func TestFunnel_Start(t *testing.T) {
 				SyncPeriod: 10 * time.Second,
 			},
 			steps: []time.Duration{
+				time.Second,      // 0+1
+				3 * time.Second,  // 1+2
+				7 * time.Second,  // 3+4
+				10 * time.Second, // 0+10
+				20 * time.Second, // 10+10
+				21 * time.Second, // 20+1
+				23 * time.Second, // 21+2
+				27 * time.Second, // 23+4
+			},
+			expectedEvents: []eventResult{
+				{
+					Event:  Event{Type: RetrySyncEventType}, // 1s
+					Result: Result{},
+				},
+				{
+					Event:  Event{Type: RetrySyncEventType}, // 3s
+					Result: Result{},
+				},
+				{
+					Event:  Event{Type: RetrySyncEventType}, // 7s
+					Result: Result{},
+				},
+				// No more retry events until another event sets ResetRetryBackoff=true
+				{
+					Event: Event{Type: SyncEventType}, // 10s
+					Result: Result{
+						ResetRetryBackoff: false,
+					},
+				},
+				{
+					Event: Event{Type: SyncEventType}, // 20s
+					Result: Result{
+						ResetRetryBackoff: true,
+					},
+				},
+				{
+					Event:  Event{Type: RetrySyncEventType}, // 21s
+					Result: Result{},
+				},
+				{
+					Event:  Event{Type: RetrySyncEventType}, // 23s
+					Result: Result{},
+				},
+				{
+					Event:  Event{Type: RetrySyncEventType}, // 27s
+					Result: Result{},
+				},
+				// No more retry events until another event sets ResetRetryBackoff=true
+			},
+		},
+		{
+			name: "RetryEvents and SyncEvents with RetryBackoff longer than SyncPeriod",
+			builder: &PublishingGroupBuilder{
+				RetryBackoff: wait.Backoff{
+					Duration: time.Second,
+					Factor:   2, // double the delay each time
+					Steps:    5, // more steps makes the max backoff longer than SyncPeriod
+				},
+				SyncPeriod: 20 * time.Second,
+			},
+			steps: []time.Duration{
 				time.Second,
-				3 * time.Second, //+2
-				7 * time.Second, //+4
-				10 * time.Second,
-				11 * time.Second, //+1
+				3 * time.Second,  // 1+2
+				7 * time.Second,  // 3+4
+				15 * time.Second, // 7+8
+				20 * time.Second, // 0+20
+				31 * time.Second, // 15+16
+				40 * time.Second, // 20+20
+				60 * time.Second, // 40+20
+				80 * time.Second, // 60+20
+				81 * time.Second, // 80+1
 			},
 			expectedEvents: []eventResult{
 				{
@@ -203,15 +269,47 @@ func TestFunnel_Start(t *testing.T) {
 					Result: Result{},
 				},
 				{
-					Event: Event{Type: SyncEventType}, // 10s
+					Event:  Event{Type: RetrySyncEventType}, // 15s
+					Result: Result{},
+				},
+				{
+					Event: Event{Type: SyncEventType}, // 20s
 					Result: Result{
-						ResetRetryBackoff: true,
+						RunAttempted:      true,
+						ResetRetryBackoff: false, // No source changes, ParseAndUpdate skipped
 					},
 				},
 				{
-					Event:  Event{Type: RetrySyncEventType}, // 11s
+					Event:  Event{Type: RetrySyncEventType}, // 31s
 					Result: Result{},
 				},
+				// No more retry events until another event sets ResetRetryBackoff=true
+				{
+					Event: Event{Type: SyncEventType}, // 40s
+					Result: Result{
+						RunAttempted:      true,
+						ResetRetryBackoff: false, // No source changes, ParseAndUpdate skipped
+					},
+				},
+				{
+					Event: Event{Type: SyncEventType}, // 60s
+					Result: Result{
+						RunAttempted:      true,
+						ResetRetryBackoff: false, // No source changes, ParseAndUpdate skipped
+					},
+				},
+				{
+					Event: Event{Type: SyncEventType}, // 80s
+					Result: Result{
+						RunAttempted:      true,
+						ResetRetryBackoff: true, // Source changes detected, ParseAndUpdate succeeded
+					},
+				},
+				{
+					Event:  Event{Type: RetrySyncEventType}, // 81s
+					Result: Result{},
+				},
+				// more backoff until max steps...
 			},
 		},
 		{

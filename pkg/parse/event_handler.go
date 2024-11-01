@@ -124,7 +124,9 @@ func (s *EventHandler) Handle(event events.Event) events.Result {
 		} else if opts.needToUpdateWatch() {
 			trigger = triggerWatchUpdate
 		} else {
-			// No RunFunc call
+			// Skip RunFunc and reset the backoff to keep checking for conflicts & watch updates.
+			klog.V(3).Info("Sync retry skipped; resetting retry backoff")
+			eventResult.ResetRetryBackoff = true
 			break
 		}
 
@@ -139,7 +141,11 @@ func (s *EventHandler) Handle(event events.Event) events.Result {
 	}
 
 	// If the run succeeded or source changed, reset the retry backoff.
-	if runResult.Success || runResult.SourceChanged {
+	if runResult.Success {
+		klog.V(3).Info("Sync attempt succeeded; resetting retry backoff")
+		eventResult.ResetRetryBackoff = true
+	} else if runResult.SourceChanged {
+		klog.V(3).Info("Source change detected; resetting retry backoff")
 		eventResult.ResetRetryBackoff = true
 	}
 	return eventResult

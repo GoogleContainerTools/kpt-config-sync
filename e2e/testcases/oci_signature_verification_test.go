@@ -63,7 +63,7 @@ func TestAddPreSyncAnnotationRepoSync(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(repoSyncID.Namespace, repoSyncID.Name), repoSyncOCI))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Set the RepoSync to sync from OCI"))
 	nt.Must(nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSyncID.Name, namespaceRepo,
-		testwatcher.WatchPredicates(testpredicates.RepoSyncHasSourceError(status.SourceErrorCode, "no signatures found"))))
+		testwatcher.WatchPredicates(testpredicates.RepoSyncHasSourceError(status.APIServerErrorCode, "no signatures found"))))
 
 	nt.T.Log("Create second image with latest tag.")
 	bookstoreSA := k8sobjects.ServiceAccountObject("bookstore-sa")
@@ -81,8 +81,8 @@ func TestAddPreSyncAnnotationRepoSync(t *testing.T) {
 	nt.Must(
 		nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSyncID.Name, namespaceRepo,
 			testwatcher.WatchPredicates(
-				testpredicates.RepoSyncHasSourceError(status.SourceErrorCode, "no signatures found"),
-				testpredicates.RepoSyncHasSourceError(status.SourceErrorCode, image1.Digest))))
+				testpredicates.RepoSyncHasSourceError(status.APIServerErrorCode, "no signatures found"),
+				testpredicates.RepoSyncHasSourceError(status.APIServerErrorCode, image1.Digest))))
 
 	if err = signImage(nt, image1); err != nil {
 		nt.T.Fatalf("Failed to sign second test image %s", err)
@@ -139,7 +139,7 @@ func TestAddPreSyncAnnotationRootSync(t *testing.T) {
 	rootSyncOCI := nt.RootSyncObjectOCI(rootSyncKey.Name, image.OCIImageID().WithoutDigest(), "", image.Digest)
 	nt.Must(nt.KubeClient.Apply(rootSyncOCI))
 	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, configsync.ControllerNamespace,
-		testwatcher.WatchPredicates(testpredicates.RootSyncHasSourceError(status.SourceErrorCode, "no signatures found"))))
+		testwatcher.WatchPredicates(testpredicates.RootSyncHasSourceError(status.APIServerErrorCode, "no signatures found"))))
 
 	nt.T.Log("Create second image with latest tag.")
 	bookstoreSA := k8sobjects.ServiceAccountObject("bookstore-sa")
@@ -157,8 +157,8 @@ func TestAddPreSyncAnnotationRootSync(t *testing.T) {
 	nt.Must(
 		nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, configsync.ControllerNamespace,
 			testwatcher.WatchPredicates(
-				testpredicates.RootSyncHasSourceError(status.SourceErrorCode, "no signatures found"),
-				testpredicates.RootSyncHasSourceError(status.SourceErrorCode, image1.Digest))))
+				testpredicates.RootSyncHasSourceError(status.APIServerErrorCode, "no signatures found"),
+				testpredicates.RootSyncHasSourceError(status.APIServerErrorCode, image1.Digest))))
 
 	if err = signImage(nt, image1); err != nil {
 		nt.T.Fatalf("Failed to sign second test image %s", err)

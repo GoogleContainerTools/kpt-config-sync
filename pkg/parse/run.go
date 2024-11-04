@@ -93,9 +93,9 @@ func DefaultRunFunc(ctx context.Context, r Reconciler, trigger string) RunResult
 	// Initialize status
 	// TODO: Populate status from RSync status
 	if state.status == nil {
-		reconcilerStatus, err := r.SyncStatusClient().ReconcilerStatusFromCluster(ctx)
+		reconcilerStatus, err := r.SyncStatusClient().GetReconcilerStatus(ctx)
 		if err != nil {
-			state.invalidate(status.Append(nil, err))
+			state.invalidate(err)
 			return result
 		}
 		state.status = reconcilerStatus
@@ -119,9 +119,8 @@ func DefaultRunFunc(ctx context.Context, r Reconciler, trigger string) RunResult
 	// If updating the object fails, it's likely due to a signature verification error
 	// from the webhook. In this case, add the error as a source error.
 	if gs.Errs == nil {
-		err := r.SyncStatusClient().SetSourceAnnotations(ctx, gs.Commit)
-		if err != nil {
-			gs.Errs = status.Append(gs.Errs, status.SourceError.Wrap(err).Build())
+		if err := r.SyncStatusClient().SetImageToSyncAnnotation(ctx, gs.Commit); err != nil {
+			gs.Errs = status.Append(gs.Errs, err)
 		}
 	}
 
@@ -177,8 +176,7 @@ func DefaultRunFunc(ctx context.Context, r Reconciler, trigger string) RunResult
 				state.status.RenderingStatus = rs
 				state.status.SyncingConditionLastUpdate = rs.LastUpdate
 			} else {
-				var m status.MultiError
-				state.invalidate(status.Append(m, setRenderingStatusErr))
+				state.invalidate(setRenderingStatusErr)
 			}
 			return result
 		}
@@ -252,9 +250,8 @@ func (r *reconciler) Read(ctx context.Context, trigger string, sourceState *sour
 	if opts.RenderingEnabled != hydrationStatus.RequiresRendering {
 		// the reconciler is misconfigured. set the annotation so that the reconciler-manager
 		// will recreate this reconciler with the correct configuration.
-		if err := r.SyncStatusClient().SetRequiresRendering(ctx, hydrationStatus.RequiresRendering); err != nil {
-			hydrationStatus.Errs = status.Append(hydrationStatus.Errs,
-				status.InternalHydrationError(err, "error setting %s annotation", metadata.RequiresRenderingAnnotationKey))
+		if err := r.SyncStatusClient().SetRequiresRenderingAnnotation(ctx, hydrationStatus.RequiresRendering); err != nil {
+			hydrationStatus.Errs = status.Append(hydrationStatus.Errs, err)
 		}
 	}
 	hydrationStatus.LastUpdate = nowMeta(opts)

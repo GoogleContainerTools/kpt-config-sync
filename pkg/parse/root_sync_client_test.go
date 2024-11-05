@@ -569,8 +569,8 @@ For more information, see https://g.co/cloud/acm-errors#knv1060`
 				[]status.ManagementConflictError{conflictAB}, defaultDenominator)
 			require.NoError(t, err)
 			var updatedRootSync v1beta1.RootSync
-			err = fakeClient.Get(ctx, rootsync.ObjectKey(rootSyncName), &updatedRootSync)
-			require.NoError(t, err)
+			statuserr := fakeClient.Get(ctx, rootsync.ObjectKey(rootSyncName), &updatedRootSync)
+			require.NoError(t, statuserr)
 			testutil.AssertEqual(t, tc.expectedErrors, updatedRootSync.Status.Sync.Errors)
 		})
 	}

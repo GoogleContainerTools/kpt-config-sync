@@ -161,7 +161,7 @@ func (u *Updater) update(ctx context.Context, cache *cacheForCommit) status.Mult
 
 func (u *Updater) declare(ctx context.Context, objs []client.Object, commit string) ([]client.Object, status.MultiError) {
 	klog.V(1).Info("Declared resources updating...")
-	objs, err := u.Resources.Update(ctx, objs, commit)
+	objs, err := u.Resources.UpdateDeclared(ctx, objs, commit)
 	u.SyncErrorCache.SetValidationErrs(err)
 	if err != nil {
 		klog.Warningf("Failed to validate declared resources: %v", err)

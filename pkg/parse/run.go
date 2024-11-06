@@ -92,8 +92,8 @@ func DefaultRunFunc(ctx context.Context, r Reconciler, trigger string) RunResult
 	opts := r.Options()
 	result := RunResult{}
 	state := r.ReconcilerState()
-	// Initialize status
-	// TODO: Populate status from RSync status
+
+	// Initialize ReconcilerStatus from RSync status
 	if state.status == nil {
 		reconcilerStatus, err := r.SyncStatusClient().GetReconcilerStatus(ctx)
 		if err != nil {
@@ -109,10 +109,70 @@ func DefaultRunFunc(ctx context.Context, r Reconciler, trigger string) RunResult
 		state.RecordFullSyncStart()
 	}
 
+	newSourceStatus, syncPath, errs := r.Fetch(ctx)
+	if errs != nil {
+		state.RecordFailure(opts.Clock, errs)
+		return result
+	}
+
+	if opts.RenderingEnabled {
+		if errs := r.Render(ctx, newSourceStatus); errs != nil {
+			state.RecordFailure(opts.Clock, errs)
+			return result
+		}
+	}
+
+	// Init cached source
+	if state.cache.source == nil {
+		state.cache.source = &sourceState{}
+	}
+
+	// rendering is done, starts to read the source or hydrated configs.
+	oldSyncPath := state.cache.source.syncPath
+	if errs := r.Read(ctx, trigger, newSourceStatus, syncPath); errs != nil {
+		state.RecordFailure(opts.Clock, errs)
+		return result
+	}
+
+	newSyncPath := state.cache.source.syncPath
+
+	if newSyncPath != oldSyncPath {
+		// If the commit, branch, or sync dir changed and read succeeded,
+		// trigger retries to start again, if stopped.
+		result.SourceChanged = true
+	}
+
+	// Skip parse-apply-watch if the trigger is `triggerSync` (aka "reimport")
+	// and there are no new source changes. The reasons are:
+	//   * If a former parse-apply-watch sequence for syncPath succeeded, there is no need to run the sequence again;
+	//   * If all the former parse-apply-watch sequences for syncPath failed, the next retry will call the sequence.
+	if trigger == triggerSync && oldSyncPath == newSyncPath {
+		return result
+	}
+
+	if errs := r.ParseAndUpdate(ctx, trigger); errs != nil {
+		state.RecordFailure(opts.Clock, errs)
+		return result
+	}
+
+	// Only checkpoint the state after *everything* succeeded, including status update.
+	state.RecordSyncSuccess(opts.Clock)
+	result.Success = true
+	return result
+}
+
+// Fetch waits for the *-sync sidecars to fetch the source manifests to the
+// shared source volume.
+// Updates the RSync status (source status and syncing condition).
+func (r *reconciler) Fetch(ctx context.Context) (*SourceStatus, cmpath.Absolute, status.MultiError) {
+	opts := r.Options()
+	state := r.ReconcilerState()
 	var syncPath cmpath.Absolute
 	newSourceStatus := &SourceStatus{}
+
 	// pull the source commit and directory with retries within 5 minutes.
-	newSourceStatus.Commit, syncPath, newSourceStatus.Errs = hydrate.SourceCommitAndSyncPathWithRetry(util.SourceRetryBackoff, opts.SourceType, opts.SourceDir, opts.SyncDir, opts.ReconcilerName)
+	newSourceStatus.Commit, syncPath, newSourceStatus.Errs = hydrate.SourceCommitAndSyncPathWithRetry(
+		util.SourceRetryBackoff, opts.SourceType, opts.SourceDir, opts.SyncDir, opts.ReconcilerName)
 
 	// Add pre-sync annotations to the object.
 	// If updating the object fails, it's likely due to a signature verification error
@@ -131,68 +191,21 @@ func DefaultRunFunc(ctx context.Context, r Reconciler, trigger string) RunResult
 	// TODO: Decouple fetch & parse stages to use different status fields
 	if newSourceStatus.Errs != nil || state.status.SourceStatus == nil || newSourceStatus.Commit != state.status.SourceStatus.Commit {
 		newSourceStatus.LastUpdate = nowMeta(opts.Clock)
-		// Only update the source status if it changed
 		if state.status.needToSetSourceStatus(newSourceStatus) {
 			klog.V(3).Info("Updating source status (after fetch)")
 			if statusErr := r.SyncStatusClient().SetSourceStatus(ctx, newSourceStatus); statusErr != nil {
-				state.RecordFailure(opts.Clock, status.Append(newSourceStatus.Errs, statusErr))
-				return result
+				return newSourceStatus, syncPath, status.Append(newSourceStatus.Errs, statusErr)
 			}
 			state.status.SourceStatus = newSourceStatus
 		}
 		// If there were fetch errors, stop, log them, and retry later
 		if newSourceStatus.Errs != nil {
-			state.RecordFailure(opts.Clock, newSourceStatus.Errs)
-			return result
+			return newSourceStatus, syncPath, newSourceStatus.Errs
 		}
 	}
 
-	// set the rendering status by checking the done file.
-	if opts.RenderingEnabled {
-		if errs := r.Render(ctx, newSourceStatus); errs != nil {
-			state.RecordFailure(opts.Clock, errs)
-			return result
-		}
-	}
-
-	// Init cached source
-	if state.cache.source == nil {
-		state.cache.source = &sourceState{}
-	}
-
-	// rendering is done, starts to read the source or hydrated configs.
-	oldSyncPath := state.cache.source.syncPath
-	// `read` is called no matter what the trigger is.
-	if errs := r.Read(ctx, trigger, newSourceStatus, syncPath); errs != nil {
-		state.RecordFailure(opts.Clock, errs)
-		return result
-	}
-
-	newSyncPath := state.cache.source.syncPath
-
-	if newSyncPath != oldSyncPath {
-		// If the commit changed and parsing succeeded, trigger retries to start again, if stopped.
-		result.SourceChanged = true
-	}
-
-	// The parse-apply-watch sequence will be skipped if the trigger type is `triggerReimport` and
-	// there is no new source changes. The reasons are:
-	//   * If a former parse-apply-watch sequence for syncPath succeeded, there is no need to run the sequence again;
-	//   * If all the former parse-apply-watch sequences for syncPath failed, the next retry will call the sequence.
-	if trigger == triggerSync && oldSyncPath == newSyncPath {
-		return result
-	}
-
-	errs := r.ParseAndUpdate(ctx, trigger)
-	if errs != nil {
-		state.RecordFailure(opts.Clock, errs)
-		return result
-	}
-
-	// Only checkpoint the state after *everything* succeeded, including status update.
-	state.RecordSyncSuccess(opts.Clock)
-	result.Success = true
-	return result
+	// Fetch successful
+	return newSourceStatus, syncPath, nil
 }
 
 // Render waits for the hydration-controller sidecar to render the source
@@ -237,6 +250,8 @@ func (r *reconciler) Render(ctx context.Context, sourceStatus *SourceStatus) sta
 		// but still trigger retry with backoff.
 		return status.TransientError(errors.New(RenderingInProgress))
 	}
+
+	// Render successful
 	return nil
 }
 
@@ -287,7 +302,7 @@ func (r *reconciler) Read(ctx context.Context, trigger string, sourceStatus *Sou
 		return newSourceStatus.Errs
 	}
 
-	// Read succeeded
+	// Read successful
 	return nil
 }
 

@@ -331,7 +331,7 @@ func TestFilteredWatcher(t *testing.T) {
 			} else {
 				ctx, cancel = context.WithCancel(ctx)
 			}
-			if _, err := dr.Update(ctx, tc.declared, "unused"); err != nil {
+			if _, err := dr.UpdateDeclared(ctx, tc.declared, "unused"); err != nil {
 				t.Fatalf("unexpected error %v", err)
 			}
 

@@ -23,34 +23,114 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog/v2"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/syncer/reconcile"
 	"kpt.dev/configsync/pkg/util/clusterconfig"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	"kpt.dev/configsync/pkg/core"
 )
 
 // Resources is a threadsafe container for a set of resources declared in a Git
 // repo.
 type Resources struct {
 	mutex sync.RWMutex
-	// objectMap is a map of object IDs to the unstructured format of those
+	// declaredObjectsMap is a map of object IDs to the unstructured format of those
 	// objects. Note that the pointer to this map is threadsafe but the map itself
 	// is not threadsafe. This map should never be returned from a function
 	// directly. The map should never be written to once it has been assigned to
 	// this reference; it should be treated as read-only from then on.
-	objectMap *orderedmap.OrderedMap[core.ID, *unstructured.Unstructured]
+	declaredObjectsMap *orderedmap.OrderedMap[core.ID, *unstructured.Unstructured]
+
+	// mutationIgnoreObjectsMap is a map of object IDs to the Object of objects
+	// with the ignore mutation annotation
+	mutationIgnoreObjectsMap *orderedmap.OrderedMap[core.ID, client.Object]
+
 	// commit of the source in which the resources were declared
 	commit string
 	// previousCommit is the preceding commit to the commit
 	previousCommit string
 }
 
-// Update performs an atomic update on the resource declaration set.
-func (r *Resources) Update(ctx context.Context, objects []client.Object, commit string) ([]client.Object, status.Error) {
+// UpdateIgnored performs an atomic update on the resource ignore mutation set.
+func (r *Resources) UpdateIgnored(objs ...client.Object) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	if r.mutationIgnoreObjectsMap == nil {
+		r.mutationIgnoreObjectsMap = orderedmap.NewOrderedMap[core.ID, client.Object]()
+	}
+
+	for _, o := range objs {
+		r.mutationIgnoreObjectsMap.Set(core.IDOf(o), o)
+	}
+
+}
+
+// GetIgnored returns a copy of a declared object that has the ignore mutation annotation
+func (r *Resources) GetIgnored(id core.ID) (client.Object, bool) {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+	if r.mutationIgnoreObjectsMap == nil || r.mutationIgnoreObjectsMap.Len() == 0 {
+		return nil, false
+	}
+
+	o, found := r.mutationIgnoreObjectsMap.Get(id)
+
+	if found {
+		oCopy := o.DeepCopyObject().(client.Object)
+		return oCopy, found
+	}
+
+	return o, found
+}
+
+// IgnoredObjects returns a slice with a copy of all ignore-mutation objects in the ignoredObjsMap
+func (r *Resources) IgnoredObjects() []client.Object {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+	if r.mutationIgnoreObjectsMap == nil || r.mutationIgnoreObjectsMap.Len() == 0 {
+		return nil
+	}
+
+	var objects []client.Object
+	for pair := r.mutationIgnoreObjectsMap.Front(); pair != nil; pair = pair.Next() {
+		objects = append(objects, pair.Value.DeepCopyObject().(client.Object))
+	}
+	return objects
+}
+
+// GetIgnoredObjsCache returns a copy of the ignoredObjsMap
+func (r *Resources) GetIgnoredObjsCache() *orderedmap.OrderedMap[core.ID, client.Object] {
+	//TODO: add test to verify empty map isn't passed to ignore
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	cacheCopy := orderedmap.NewOrderedMap[core.ID, client.Object]()
+
+	if r.mutationIgnoreObjectsMap == nil {
+		return cacheCopy
+	}
+
+	for pair := r.mutationIgnoreObjectsMap.Front(); pair != nil; pair = pair.Next() {
+		cacheCopy.Set(pair.Key, pair.Value.DeepCopyObject().(client.Object))
+	}
+
+	return cacheCopy
+}
+
+// DeleteIgnored deletes an ignore-mutation object from the ignored cache
+func (r *Resources) DeleteIgnored(id core.ID) bool {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+	if r.mutationIgnoreObjectsMap == nil || r.mutationIgnoreObjectsMap.Len() == 0 {
+		return false
+	}
+
+	return r.mutationIgnoreObjectsMap.Delete(id)
+}
+
+// UpdateDeclared performs an atomic update on the resource declaration set.
+func (r *Resources) UpdateDeclared(ctx context.Context, objects []client.Object, commit string) ([]client.Object, status.Error) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 	// First build up the new map using a local pointer/reference.
@@ -84,24 +164,24 @@ func (r *Resources) Update(ctx context.Context, objects []client.Object, commit 
 		metrics.RecordDeclaredResources(ctx, r.previousCommit, 0)
 	}
 
-	if err := deletesAllNamespaces(r.objectMap, newSet); err != nil {
+	if err := deletesAllNamespaces(r.declaredObjectsMap, newSet); err != nil {
 		return nil, err
 	}
 
 	r.previousCommit = commit
-	r.objectMap = newSet
+	r.declaredObjectsMap = newSet
 	r.commit = commit
 	return newObjects, nil
 }
 
-// Get returns a copy of the resource declaration as read from Git
-func (r *Resources) Get(id core.ID) (*unstructured.Unstructured, string, bool) {
+// GetDeclared returns a copy of the resource declaration as read from Git
+func (r *Resources) GetDeclared(id core.ID) (*unstructured.Unstructured, string, bool) {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
-	if r.objectMap == nil || r.objectMap.Len() == 0 {
+	if r.declaredObjectsMap == nil || r.declaredObjectsMap.Len() == 0 {
 		return nil, r.commit, false
 	}
-	u, found := r.objectMap.Get(id)
+	u, found := r.declaredObjectsMap.Get(id)
 	// We return a copy of the Unstructured, as
 	// 1) client.Client methods mutate the objects passed into them.
 	// 2) We don't want to persist any changes made to an object we retrieved
@@ -114,11 +194,11 @@ func (r *Resources) Get(id core.ID) (*unstructured.Unstructured, string, bool) {
 func (r *Resources) DeclaredUnstructureds() ([]*unstructured.Unstructured, string) {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
-	if r.objectMap == nil || r.objectMap.Len() == 0 {
+	if r.declaredObjectsMap == nil || r.declaredObjectsMap.Len() == 0 {
 		return nil, r.commit
 	}
 	var objects []*unstructured.Unstructured
-	for pair := r.objectMap.Front(); pair != nil; pair = pair.Next() {
+	for pair := r.declaredObjectsMap.Front(); pair != nil; pair = pair.Next() {
 		objects = append(objects, pair.Value)
 	}
 	return objects, r.commit
@@ -129,11 +209,11 @@ func (r *Resources) DeclaredUnstructureds() ([]*unstructured.Unstructured, strin
 func (r *Resources) DeclaredObjects() ([]client.Object, string) {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
-	if r.objectMap == nil || r.objectMap.Len() == 0 {
+	if r.declaredObjectsMap == nil || r.declaredObjectsMap.Len() == 0 {
 		return nil, r.commit
 	}
 	var objects []client.Object
-	for pair := r.objectMap.Front(); pair != nil; pair = pair.Next() {
+	for pair := r.declaredObjectsMap.Front(); pair != nil; pair = pair.Next() {
 		objects = append(objects, pair.Value)
 	}
 	return objects, r.commit
@@ -144,11 +224,11 @@ func (r *Resources) DeclaredObjects() ([]client.Object, string) {
 func (r *Resources) DeclaredGVKs() (map[schema.GroupVersionKind]struct{}, string) {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
-	if r.objectMap == nil || r.objectMap.Len() == 0 {
+	if r.declaredObjectsMap == nil || r.declaredObjectsMap.Len() == 0 {
 		return nil, r.commit
 	}
 	gvkSet := make(map[schema.GroupVersionKind]struct{})
-	for pair := r.objectMap.Front(); pair != nil; pair = pair.Next() {
+	for pair := r.declaredObjectsMap.Front(); pair != nil; pair = pair.Next() {
 		gvkSet[pair.Value.GroupVersionKind()] = struct{}{}
 	}
 	return gvkSet, r.commit

@@ -459,7 +459,7 @@ func (w *filteredWatcher) shouldProcess(object client.Object) bool {
 		return true
 	}
 
-	decl, commit, found := w.resources.Get(id)
+	decl, commit, found := w.resources.GetDeclared(id)
 	if !found {
 		// The resource is neither declared nor managed by the same reconciler, so don't manage it.
 		return false

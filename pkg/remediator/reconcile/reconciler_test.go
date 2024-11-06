@@ -533,7 +533,7 @@ func TestRemediator_Reconcile_Metrics(t *testing.T) {
 func makeDeclared(t *testing.T, commit string, objs ...client.Object) *declared.Resources {
 	t.Helper()
 	d := &declared.Resources{}
-	if _, err := d.Update(context.Background(), objs, commit); err != nil {
+	if _, err := d.UpdateDeclared(context.Background(), objs, commit); err != nil {
 		// Test precondition; fail early.
 		t.Fatal(err)
 	}

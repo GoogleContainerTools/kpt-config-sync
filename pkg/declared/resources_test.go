@@ -20,40 +20,47 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
+	"kpt.dev/configsync/pkg/kinds"
+	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/syncer/reconcile"
+	"kpt.dev/configsync/pkg/syncer/syncertest"
 	"kpt.dev/configsync/pkg/testing/testmetrics"
+	"sigs.k8s.io/cli-utils/pkg/testutil"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var (
-	obj1 = k8sobjects.CustomResourceDefinitionV1Beta1Object()
-	obj2 = k8sobjects.ResourceQuotaObject()
+	obj1       = k8sobjects.CustomResourceDefinitionV1Beta1Object()
+	obj2       = k8sobjects.ResourceQuotaObject()
+	ignoredObj = createIgnoredObj()
 
 	testSet = []client.Object{obj1, obj2}
 	nilSet  = []client.Object{nil}
 )
 
-func TestUpdate(t *testing.T) {
+func TestUpdateDeclared(t *testing.T) {
 	dr := Resources{}
 	objects := testSet
 	commit := "1"
 	expectedIDs := getIDs(objects)
 
-	newObjects, err := dr.Update(context.Background(), objects, commit)
+	newObjects, err := dr.UpdateDeclared(context.Background(), objects, commit)
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)
 	}
 
 	for _, id := range expectedIDs {
-		if _, ok := dr.objectMap.Get(id); !ok {
+		if _, ok := dr.declaredObjectsMap.Get(id); !ok {
 			t.Errorf("ID %v not found in the declared resource", id)
 		}
 	}
@@ -76,7 +83,7 @@ func TestMutateImpossible(t *testing.T) {
 	o2.SetResourceVersion(wantResourceVersion)
 
 	expectedCommit := "example"
-	_, err := dr.Update(context.Background(), []client.Object{o1, o2}, expectedCommit)
+	_, err := dr.UpdateDeclared(context.Background(), []client.Object{o1, o2}, expectedCommit)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +92,7 @@ func TestMutateImpossible(t *testing.T) {
 	o1.SetResourceVersion("version 1++")
 	o2.SetResourceVersion("version 1++")
 
-	got1, commit, found := dr.Get(core.IDOf(o1))
+	got1, commit, found := dr.GetDeclared(core.IDOf(o1))
 	require.Equal(t, expectedCommit, commit)
 	if !found {
 		t.Fatalf("got dr.Get = %v, %t, want dr.Get = obj, true", got1, found)
@@ -93,7 +100,7 @@ func TestMutateImpossible(t *testing.T) {
 	if diff := cmp.Diff(wantResourceVersion, got1.GetResourceVersion()); diff != "" {
 		t.Error(diff)
 	}
-	got2, commit, found := dr.Get(core.IDOf(o2))
+	got2, commit, found := dr.GetDeclared(core.IDOf(o2))
 	require.Equal(t, expectedCommit, commit)
 	if !found {
 		t.Fatalf("got dr.Get = %v, %t, want dr.Get = obj, true", got2, found)
@@ -106,7 +113,7 @@ func TestMutateImpossible(t *testing.T) {
 	got1.SetResourceVersion("version 2")
 	got2.SetResourceVersion("version 2")
 
-	got3, commit, found := dr.Get(core.IDOf(o1))
+	got3, commit, found := dr.GetDeclared(core.IDOf(o1))
 	require.Equal(t, expectedCommit, commit)
 	if !found {
 		t.Fatalf("got dr.Get = %v, %t, want dr.Get = obj, true", got3, found)
@@ -114,7 +121,7 @@ func TestMutateImpossible(t *testing.T) {
 	if diff := cmp.Diff(wantResourceVersion, got3.GetResourceVersion()); diff != "" {
 		t.Error(diff)
 	}
-	got4, commit, found := dr.Get(core.IDOf(o2))
+	got4, commit, found := dr.GetDeclared(core.IDOf(o2))
 	require.Equal(t, expectedCommit, commit)
 	if !found {
 		t.Fatalf("got dr.Get = %v, %t, want dr.Get = obj, true", got4, found)
@@ -136,13 +143,12 @@ func asUnstructured(t *testing.T, o client.Object) *unstructured.Unstructured {
 func TestDeclarations(t *testing.T) {
 	dr := Resources{}
 	expectedCommit := "example"
-	objects, err := dr.Update(context.Background(), testSet, expectedCommit)
+	objects, err := dr.UpdateDeclared(context.Background(), testSet, expectedCommit)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	got, commit := dr.DeclaredUnstructureds()
-	require.Equal(t, expectedCommit, commit)
+	got := dr.DeclaredUnstructureds()
 
 	// Sort got decls to ensure determinism.
 	sort.Slice(got, func(i, j int) bool {
@@ -167,15 +173,15 @@ func TestDeclarations(t *testing.T) {
 	}
 }
 
-func TestGet(t *testing.T) {
+func TestGetDeclared(t *testing.T) {
 	dr := Resources{}
 	expectedCommit := "example"
-	_, err := dr.Update(context.Background(), testSet, expectedCommit)
+	_, err := dr.UpdateDeclared(context.Background(), testSet, expectedCommit)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	actual, commit, found := dr.Get(core.IDOf(obj1))
+	actual, commit, found := dr.GetDeclared(core.IDOf(obj1))
 	require.Equal(t, expectedCommit, commit)
 	if !found {
 		t.Fatal("got not found, want found")
@@ -188,7 +194,7 @@ func TestGet(t *testing.T) {
 func TestGVKSet(t *testing.T) {
 	dr := Resources{}
 	expectedCommit := "example"
-	_, err := dr.Update(context.Background(), testSet, expectedCommit)
+	_, err := dr.UpdateDeclared(context.Background(), testSet, expectedCommit)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +213,7 @@ func TestGVKSet(t *testing.T) {
 func TestResources_InternalErrorMetricValidation(t *testing.T) {
 	m := testmetrics.RegisterMetrics(metrics.InternalErrorsView)
 	dr := Resources{}
-	if _, err := dr.Update(context.Background(), nilSet, "unused"); err != nil {
+	if _, err := dr.UpdateDeclared(context.Background(), nilSet, "unused"); err != nil {
 		t.Fatal(err)
 	}
 	wantMetrics := []*view.Row{
@@ -229,4 +235,91 @@ func getIDs(objects []client.Object) []core.ID {
 		IDs = append(IDs, core.IDOf(obj))
 	}
 	return IDs
+}
+
+func TestGetIgnored(t *testing.T) {
+	id := core.IDOf(ignoredObj)
+	dr := Resources{}
+
+	o, found := dr.GetIgnored(id)
+	assert.Nil(t, o)
+	assert.False(t, found)
+
+	dr.UpdateIgnored(ignoredObj)
+	o, found = dr.GetIgnored(id)
+
+	assert.True(t, found)
+	testutil.AssertEqual(t, ignoredObj, o)
+}
+
+func TestUpdateIgnored(t *testing.T) {
+	dr := Resources{}
+	id := core.IDOf(ignoredObj)
+
+	dr.UpdateIgnored(ignoredObj)
+	o, found := dr.GetIgnored(id)
+	assert.True(t, found)
+
+	o.SetName("new-name")
+	assert.NotEqual(t, "new-name", obj1.Name)
+}
+
+func TestIgnoredObjects(t *testing.T) {
+	dr := Resources{}
+
+	ignored := dr.IgnoredObjects()
+	assert.Nil(t, ignored)
+
+	dr.UpdateIgnored(ignoredObj)
+	ignored = dr.IgnoredObjects()
+	assert.Contains(t, ignored, ignoredObj)
+}
+
+func TestIgnoredObjsCache(t *testing.T) {
+	dr := Resources{}
+	id := core.IDOf(ignoredObj)
+
+	cache := dr.GetIgnoredObjsCache()
+
+	assert.NotNil(t, cache)
+
+	dr.UpdateIgnored(ignoredObj)
+
+	_, found := cache.Get(id)
+	assert.False(t, found, "object was found in the supposed cache copy")
+
+	cache = dr.GetIgnoredObjsCache()
+	foundObj, _ := cache.Get(id)
+
+	testutil.AssertEqual(t, ignoredObj, foundObj)
+
+	foundObj.SetName("foo")
+
+	testutil.AssertNotEqual(t, ignoredObj, foundObj, "objects should not be equal if found is a copy")
+
+}
+
+func TestDeleteIgnored(t *testing.T) {
+	id := core.IDOf(ignoredObj)
+	dr := Resources{}
+	deleted := dr.DeleteIgnored(id)
+	ignored := dr.IgnoredObjects()
+
+	assert.False(t, deleted)
+	assert.NotContains(t, ignored, ignoredObj)
+
+	dr.UpdateIgnored(ignoredObj)
+	deleted = dr.DeleteIgnored(id)
+	assert.True(t, deleted)
+	assert.NotContains(t, ignored, ignoredObj)
+}
+
+func createIgnoredObj() *unstructured.Unstructured {
+	o := k8sobjects.NamespaceObject("test-ns", syncertest.IgnoreMutationAnnotation) //&corev1.Namespace{TypeMeta: k8sobjects.ToTypeMeta(kinds.Namespace())}
+	o.SetManagedFields([]metav1.ManagedFieldsEntry{{Manager: "foo"}})
+	core.SetAnnotation(o, metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation)
+
+	u, _ := kinds.ToUnstructured(o, core.Scheme)
+	return u
+
 }

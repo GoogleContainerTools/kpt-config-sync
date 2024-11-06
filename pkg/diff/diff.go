@@ -17,6 +17,8 @@
 package diff
 
 import (
+	"reflect"
+
 	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/klog/v2"
@@ -57,6 +59,9 @@ const (
 	// ManagementConflict represents the case where Declared and Actual both exist,
 	// but the Actual one is managed by a Reconciler that supersedes this one.
 	ManagementConflict = Operation("management-conflict")
+
+	//UpdateCSMetadata indicates that only the CS metadata of the resource should be updated
+	UpdateCSMetadata = Operation("update-cs-metadata")
 )
 
 // Diff is resource where Declared and Actual do not match.
@@ -121,35 +126,34 @@ func (d Diff) updateType(scope declared.Scope, syncName string) Operation {
 	// nomos vet error. Note that as-is, it is valid to declare something owned by
 	// another object, possible causing (and being surfaced as) a resource fight.
 	canManage := CanManage(scope, syncName, d.Actual, admissionv1.Update)
+	ignoreMutation := d.Actual.GetAnnotations()[metadata.LifecycleMutationAnnotation] == metadata.IgnoreMutation
+
+	if d.sameCSMetadata() {
+		// canManage must be true when CS metadata is the same between
+		// declared and actual, so no need to check canManage
+
+		if differ.ManagementDisabled(d.Declared) {
+			return Abandon
+		}
+
+		if ignoreMutation {
+			return NoOp // ignore mutation
+		}
+
+		return Update
+	}
+
 	switch {
 	case differ.ManagementEnabled(d.Declared) && canManage:
-		if d.Actual.GetAnnotations()[metadata.LifecycleMutationAnnotation] == metadata.IgnoreMutation &&
-			d.Declared.GetAnnotations()[metadata.LifecycleMutationAnnotation] == metadata.IgnoreMutation {
-			// The declared and actual object both have the lifecycle mutation
-			// annotation set to ignore, so we should take no action as the user does
-			// not want us to make changes to the object.
-			//
-			// If the annotation is on the actual object but not the one declared in
-			// the repository, the update, which uses SSA, would not remove the annotation
-			// from the actual object. However, Config Sync would not respect the annotation
-			// on the actual object since the annotation is not declared in the git repository.
-			//
-			// If the annotation is on the declared object but not the actual one
-			// on the cluster, we need to add it to the one in the cluster.
-			return NoOp
+		if ignoreMutation {
+			return UpdateCSMetadata
 		}
 		return Update
 	case differ.ManagementEnabled(d.Declared) && !canManage:
 		// This reconciler can't manage this object but is erroneously being told to.
 		return ManagementConflict
 	case differ.ManagementDisabled(d.Declared) && canManage:
-		if metadata.HasConfigSyncMetadata(d.Actual) {
-			manager := d.Actual.GetAnnotations()[metadata.ResourceManagerKey]
-			if manager == "" || manager == declared.ResourceManager(scope, syncName) {
-				return Abandon
-			}
-		}
-		return NoOp
+		return Abandon
 	case differ.ManagementDisabled(d.Declared) && !canManage:
 		// Management is disabled and the object isn't owned by this reconciler, so
 		// there's nothing to do.
@@ -258,4 +262,12 @@ func (d *Diff) GetName() string {
 	}
 	// No object is being considered.
 	return ""
+}
+
+func (d *Diff) sameCSMetadata() bool {
+	// Compare CSmetadata
+	dCSAnnotations, dCSLabels := metadata.GetConfigSyncMetadata(d.Declared)
+	aCSAnnotations, aCSLabels := metadata.GetConfigSyncMetadata(d.Actual)
+
+	return reflect.DeepEqual(dCSAnnotations, aCSAnnotations) && reflect.DeepEqual(dCSLabels, aCSLabels)
 }

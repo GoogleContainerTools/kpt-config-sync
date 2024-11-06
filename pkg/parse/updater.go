@@ -22,6 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/applier"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/metrics"
@@ -115,6 +116,7 @@ func (u *Updater) update(ctx context.Context, cache *cacheForCommit) status.Mult
 		if err != nil {
 			return err
 		}
+
 		// Only mark the declared resources as updated if there were no (non-blocking) parse errors.
 		// This ensures the update will be retried until parsing fully succeeds.
 		if cache.parserErrs == nil {
@@ -124,8 +126,10 @@ func (u *Updater) update(ctx context.Context, cache *cacheForCommit) status.Mult
 
 	// Apply the declared resources
 	if !cache.applied {
-		declaredObjs, _ := u.Resources.DeclaredObjects()
-		if err := u.apply(ctx, declaredObjs, cache.source.commit); err != nil {
+		declaredObjs := u.Resources.DeclaredObjects()
+		klog.Infof("%v objects that were declared: %v", len(declaredObjs), core.GKNNs(declaredObjs))
+
+		if err := u.apply(ctx, cache.source.commit); err != nil {
 			return err
 		}
 		// Only mark the commit as applied if there were no (non-blocking) parse errors.
@@ -161,7 +165,7 @@ func (u *Updater) update(ctx context.Context, cache *cacheForCommit) status.Mult
 
 func (u *Updater) declare(ctx context.Context, objs []client.Object, commit string) ([]client.Object, status.MultiError) {
 	klog.V(1).Info("Declared resources updating...")
-	objs, err := u.Resources.Update(ctx, objs, commit)
+	objs, err := u.Resources.UpdateDeclared(ctx, objs, commit)
 	u.SyncErrorCache.SetValidationErrs(err)
 	if err != nil {
 		klog.Warningf("Failed to validate declared resources: %v", err)
@@ -171,7 +175,7 @@ func (u *Updater) declare(ctx context.Context, objs []client.Object, commit stri
 	return objs, nil
 }
 
-func (u *Updater) apply(ctx context.Context, objs []client.Object, commit string) status.MultiError {
+func (u *Updater) apply(ctx context.Context, commit string) status.MultiError {
 	// Collect errors into a MultiError
 	var err status.MultiError
 	eventHandler := func(event applier.Event) {
@@ -191,7 +195,7 @@ func (u *Updater) apply(ctx context.Context, objs []client.Object, commit string
 	klog.Info("Applier starting...")
 	start := time.Now()
 	u.SyncErrorCache.ResetApplyErrors()
-	objStatusMap, syncStats := u.Applier.Apply(ctx, eventHandler, objs)
+	objStatusMap, syncStats := u.Applier.Apply(ctx, eventHandler, u.Resources)
 	if !syncStats.Empty() {
 		klog.Infof("Applier made new progress: %s", syncStats.String())
 		objStatusMap.Log(klog.V(0))

@@ -18,6 +18,7 @@ import (
 	"context"
 	"time"
 
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
@@ -76,7 +77,7 @@ func newReconciler(
 func (r *reconciler) Remediate(ctx context.Context, id core.ID, obj client.Object) status.Error {
 	start := time.Now()
 
-	declU, commit, found := r.declared.Get(id)
+	declU, commit, found := r.declared.GetDeclared(id)
 	// Yes, this if block is necessary because Go is pedantic about nil interfaces.
 	// 1) var decl client.Object = declU results in a panic.
 	// 2) Using declU as a client.Object results in a panic.
@@ -168,6 +169,29 @@ func (r *reconciler) remediate(ctx context.Context, id core.ID, objDiff diff.Dif
 		}
 		klog.V(3).Infof("Remediator abandoning object %v", id)
 		return r.applier.RemoveNomosMeta(ctx, actual, metrics.RemediatorController)
+	case diff.UpdateCSMetadata:
+
+		actual, err := objDiff.UnstructuredActual()
+		if err != nil {
+			return err
+		}
+
+		uObj := &unstructured.Unstructured{}
+
+		uObj.SetGroupVersionKind(objDiff.Declared.GetObjectKind().GroupVersionKind())
+		uObj.SetName(objDiff.Declared.GetName())
+		csAnnotations, csLabels := metadata.GetConfigSyncMetadata(objDiff.Declared)
+
+		uObj.SetAnnotations(objDiff.Actual.GetAnnotations())
+		uObj.SetLabels(objDiff.Actual.GetLabels())
+		metadata.RemoveConfigSyncMetadata(uObj)
+		core.RemoveAnnotations(uObj, metadata.LifecycleMutationAnnotation)
+		core.AddAnnotations(uObj, csAnnotations)
+		core.AddLabels(uObj, csLabels)
+
+		klog.V(3).Infof("Remediator updating Config Sync metadata of object: %v", id)
+
+		return r.applier.Update(ctx, uObj, actual)
 	default:
 		// e.g. differ.DeleteNsConfig, which shouldn't be possible to get to any way.
 		metrics.RecordInternalError(ctx, "remediator")

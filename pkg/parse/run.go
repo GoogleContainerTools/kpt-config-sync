@@ -278,7 +278,7 @@ func (r *reconciler) Read(ctx context.Context, trigger string, sourceState *sour
 	var setSourceStatusErr error
 	if state.status.needToSetSourceStatus(sourceStatus) {
 		klog.V(3).Info("Updating source status (after parse)")
-		setSourceStatusErr := r.SyncStatusClient().SetSourceStatus(ctx, sourceStatus)
+		setSourceStatusErr = r.SyncStatusClient().SetSourceStatus(ctx, sourceStatus)
 		if setSourceStatusErr == nil {
 			state.status.SourceStatus = sourceStatus
 			state.status.SyncingConditionLastUpdate = sourceStatus.LastUpdate

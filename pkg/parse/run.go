@@ -244,7 +244,7 @@ func (r *reconciler) Render(ctx context.Context, sourceStatus *SourceStatus) sta
 		state.status.SyncingConditionLastUpdate = newRenderStatus.LastUpdate
 		// Reset cache to ensure the next sync attempt waits for rendering
 		// TODO: is this necessary? Has anything updated the cache before this?
-		state.resetCache()
+		// state.resetCache()
 		// Transient error will be logged as info, instead of error,
 		// but still trigger retry with backoff.
 		return status.TransientError(errors.New(RenderingInProgress))

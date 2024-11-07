@@ -96,7 +96,7 @@ func (h *Hydrator) Run(ctx context.Context) {
 					klog.Errorf("failed to complete the rendering execution for commit %q: %v",
 						srcCommit, err)
 				}
-			} else if DoneCommit(h.DonePath.OSPath()) != srcCommit {
+			} else if doneCommit(h.DonePath.OSPath()) != srcCommit {
 				// If the commit has been processed before, regardless of success or failure,
 				// skip the hydration to avoid repeated execution.
 				// The rehydrate ticker will retry on the failed commit.
@@ -260,22 +260,32 @@ func (h *Hydrator) complete(commit string, hydrationErr HydrationError) error {
 	return nil
 }
 
-// DoneCommit extracts the commit hash from the done file if exists.
+// doneCommit extracts the commit hash from the done file if exists.
 // It returns the commit hash if exists, otherwise, returns an empty string.
 // If it fails to extract the commit hash for various errors, we only log a warning,
 // and wait for the next hydration loop to retry the hydration.
-func DoneCommit(donePath string) string {
-	if _, err := os.Stat(donePath); err == nil {
-		commit, err := os.ReadFile(donePath)
-		if err != nil {
-			klog.Warningf("unable to read the done file %s: %v", donePath, err)
-			return ""
-		}
-		return string(commit)
-	} else if !os.IsNotExist(err) {
+func doneCommit(donePath string) string {
+	commit, err := RenderedCommit(donePath)
+	if err != nil {
+		klog.Warningf("unable to read the done file %s: %v", donePath, err)
+	} else if commit == "" {
 		klog.Warningf("unable to check the status of the done file %s: %v", donePath, err)
 	}
-	return ""
+	return commit
+}
+
+// RenderedCommit extracts the commit hash from the done file if exists.
+// Returns empty string with nil error if the done file does not exist.
+func RenderedCommit(donePath string) (string, error) {
+	commit, err := os.ReadFile(donePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// Rendering in-progress
+			return "", nil
+		}
+		return "", fmt.Errorf("reading rendering done file: %s", donePath)
+	}
+	return string(commit), nil
 }
 
 // exportError writes the error content to the error file.

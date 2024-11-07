@@ -24,3 +24,19 @@ var transientErrorBuilder = NewErrorBuilder(TransientErrorCode)
 func TransientError(err error) Error {
 	return transientErrorBuilder.Wrap(err).Build()
 }
+
+// AllTransientErrors returns true if the MultiError is non-nil, non-empty, and
+// contains only TransientErrors.
+func AllTransientErrors(multiErr MultiError) bool {
+	if multiErr == nil {
+		return false
+	}
+	errs := multiErr.Errors()
+	for _, err := range errs {
+		if err.Code() != TransientErrorCode {
+			return false
+		}
+	}
+	// MultiError shouldn't be empty, but check just in case
+	return len(errs) > 0
+}

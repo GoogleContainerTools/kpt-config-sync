@@ -16,6 +16,7 @@ package parse
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -154,43 +155,10 @@ func DefaultRunFunc(ctx context.Context, r Reconciler, trigger string) RunResult
 		}
 	}
 
-	rs := &RenderingStatus{
-		Spec:   gs.Spec,
-		Commit: gs.Commit,
-	}
-	if state.status.RenderingStatus != nil {
-		rs.RequiresRendering = state.status.RenderingStatus.RequiresRendering
-	}
-
 	// set the rendering status by checking the done file.
 	if opts.RenderingEnabled {
-		doneFilePath := opts.RepoRoot.Join(cmpath.RelativeSlash(hydrate.DoneFile)).OSPath()
-		_, err := os.Stat(doneFilePath)
-		if os.IsNotExist(err) || (err == nil && hydrate.DoneCommit(doneFilePath) != gs.Commit) {
-			rs.Message = RenderingInProgress
-			rs.LastUpdate = nowMeta(opts)
-			klog.V(3).Info("Updating rendering status (before parse)")
-			setRenderingStatusErr := r.SyncStatusClient().SetRenderingStatus(ctx, state.status.RenderingStatus, rs)
-			if setRenderingStatusErr == nil {
-				state.reset()
-				state.status.RenderingStatus = rs
-				state.status.SyncingConditionLastUpdate = rs.LastUpdate
-			} else {
-				state.invalidate(setRenderingStatusErr)
-			}
-			return result
-		}
-		if err != nil {
-			rs.Message = RenderingFailed
-			rs.LastUpdate = nowMeta(opts)
-			rs.Errs = status.InternalHydrationError(err, "unable to read the done file: %s", doneFilePath)
-			klog.V(3).Info("Updating rendering status (before parse)")
-			setRenderingStatusErr := r.SyncStatusClient().SetRenderingStatus(ctx, state.status.RenderingStatus, rs)
-			if setRenderingStatusErr == nil {
-				state.status.RenderingStatus = rs
-				state.status.SyncingConditionLastUpdate = rs.LastUpdate
-			}
-			state.invalidate(status.Append(rs.Errs, setRenderingStatusErr))
+		if errs := r.Render(ctx, gs); errs != nil {
+			state.invalidate(errs)
 			return result
 		}
 	}
@@ -203,12 +171,7 @@ func DefaultRunFunc(ctx context.Context, r Reconciler, trigger string) RunResult
 	// rendering is done, starts to read the source or hydrated configs.
 	oldSyncDir := state.cache.source.syncDir
 	// `read` is called no matter what the trigger is.
-	ps := &sourceState{
-		spec:    gs.Spec,
-		commit:  gs.Commit,
-		syncDir: syncDir,
-	}
-	if errs := r.Read(ctx, trigger, ps); errs != nil {
+	if errs := r.Read(ctx, trigger, gs, syncDir); errs != nil {
 		state.invalidate(errs)
 		return result
 	}
@@ -240,12 +203,66 @@ func DefaultRunFunc(ctx context.Context, r Reconciler, trigger string) RunResult
 	return result
 }
 
+// Render waits for the hydration-controller sidecar to render the source
+// manifests on the shared source volume.
+// Updates the RSync status (rendering status and syncing condition).
+func (r *reconciler) Render(ctx context.Context, sourceStatus *SourceStatus) status.MultiError {
+	opts := r.Options()
+	state := r.ReconcilerState()
+	newRenderStatus := &RenderingStatus{
+		Spec:   sourceStatus.Spec,
+		Commit: sourceStatus.Commit,
+	}
+	if state.status.RenderingStatus != nil {
+		newRenderStatus.RequiresRendering = state.status.RenderingStatus.RequiresRendering
+	}
+	// Check the done file, created by the hydration-controller.
+	// It should contain the last rendered commit.
+	// RenderedCommit returns the empty string if the done file doesn't exist yet.
+	doneFilePath := opts.RepoRoot.Join(cmpath.RelativeSlash(hydrate.DoneFile)).OSPath()
+	renderedCommit, err := hydrate.RenderedCommit(doneFilePath)
+	if err != nil {
+		newRenderStatus.Message = RenderingFailed
+		newRenderStatus.LastUpdate = nowMeta(opts)
+		newRenderStatus.Errs = status.InternalHydrationError(err, RenderingFailed)
+		klog.V(3).Info("Updating rendering status (before parse)")
+		if statusErr := r.SyncStatusClient().SetRenderingStatus(ctx, state.status.RenderingStatus, newRenderStatus); statusErr != nil {
+			return status.Append(newRenderStatus.Errs, statusErr)
+		}
+		state.status.RenderingStatus = newRenderStatus
+		state.status.SyncingConditionLastUpdate = newRenderStatus.LastUpdate
+		return newRenderStatus.Errs
+	}
+	if renderedCommit == "" || renderedCommit != sourceStatus.Commit {
+		newRenderStatus.Message = RenderingInProgress
+		newRenderStatus.LastUpdate = nowMeta(opts)
+		klog.V(3).Info("Updating rendering status (before parse)")
+		if statusErr := r.SyncStatusClient().SetRenderingStatus(ctx, state.status.RenderingStatus, newRenderStatus); statusErr != nil {
+			return statusErr
+		}
+		state.status.RenderingStatus = newRenderStatus
+		state.status.SyncingConditionLastUpdate = newRenderStatus.LastUpdate
+		// Reset cache to ensure the next sync attempt waits for rendering
+		// TODO: is this necessary? Has anything updated the cache before this?
+		state.resetCache()
+		// Transient error will be logged as info, instead of error,
+		// but still trigger retry with backoff.
+		return status.TransientError(errors.New(RenderingInProgress))
+	}
+	return nil
+}
+
 // Read source manifests from the shared source volume.
 // Waits for rendering, if enabled.
 // Updates the RSync status (source, rendering, and syncing condition).
-func (r *reconciler) Read(ctx context.Context, trigger string, sourceState *sourceState) status.MultiError {
+func (r *reconciler) Read(ctx context.Context, trigger string, sourceStatus *SourceStatus, syncDir cmpath.Absolute) status.MultiError {
 	opts := r.Options()
 	state := r.ReconcilerState()
+	sourceState := &sourceState{
+		spec:    sourceStatus.Spec,
+		commit:  sourceStatus.Commit,
+		syncDir: syncDir,
+	}
 	hydrationStatus, sourceStatus := r.readFromSource(ctx, trigger, sourceState)
 	if opts.RenderingEnabled != hydrationStatus.RequiresRendering {
 		// the reconciler is misconfigured. set the annotation so that the reconciler-manager

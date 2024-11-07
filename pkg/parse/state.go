@@ -55,19 +55,14 @@ func (s *ReconcilerState) checkpoint() {
 	s.cache.needToRetry = false
 }
 
-// reset sets the reconciler to retry in the next second because the rendering
-// status is not available
-func (s *ReconcilerState) reset() {
-	klog.Infof("Resetting reconciler checkpoint because the rendering status is not available yet")
-	s.resetCache()
-	s.lastApplied = ""
-	s.cache.needToRetry = true
-}
-
 // invalidate logs the errors, clears the state tracking information.
 // invalidate does not clean up the `s.cache`.
 func (s *ReconcilerState) invalidate(errs status.MultiError) {
-	klog.Errorf("Invalidating reconciler checkpoint: %v", status.FormatSingleLine(errs))
+	if status.AllTransientErrors(errs) {
+		klog.Infof("Reconciler checkpoint invalidated: %v", status.FormatSingleLine(errs))
+	} else {
+		klog.Errorf("Reconciler checkpoint invalidated: %v", status.FormatSingleLine(errs))
+	}
 	// Invalidate state on error since this could be the result of switching
 	// branches or some other operation where inverting the operation would
 	// result in repeating a previous state that was checkpointed.

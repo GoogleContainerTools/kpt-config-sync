@@ -17,6 +17,7 @@ package parse
 import (
 	"context"
 
+	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/status"
 )
 
@@ -32,12 +33,19 @@ type Reconciler interface {
 	// ReconcilerState returns the current state of the parser/reconciler.
 	ReconcilerState() *ReconcilerState
 
+	// Render waits for the hydration-controller sidecar to render the source
+	// manifests on the shared source volume.
+	// Updates the RSync status (rendering status and syncing condition).
+	//
+	// Render is exposed for use by DefaultRunFunc.
+	Render(context.Context, *SourceStatus) status.MultiError
+
 	// Read source manifests from the shared source volume.
 	// Waits for rendering, if enabled.
 	// Updates the RSync status (source, rendering, and syncing condition).
 	//
 	// Read is exposed for use by DefaultRunFunc.
-	Read(ctx context.Context, trigger string, sourceState *sourceState) status.MultiError
+	Read(ctx context.Context, trigger string, sourceStatus *SourceStatus, syncDir cmpath.Absolute) status.MultiError
 
 	// ParseAndUpdate parses objects from the source manifests, validates them,
 	// and then syncs them to the cluster with the Updater.

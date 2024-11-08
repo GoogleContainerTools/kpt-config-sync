@@ -248,8 +248,11 @@ func TestGetIgnored(t *testing.T) {
 	dr.UpdateIgnored(ignoredObj)
 	o, found = dr.GetIgnored(id)
 
+	expectedO := o.DeepCopyObject().(client.Object)
+	expectedO, _ = reconcile.AsUnstructuredSanitized(expectedO)
+
 	assert.True(t, found)
-	testutil.AssertEqual(t, ignoredObj, o)
+	testutil.AssertEqual(t, expectedO, o)
 }
 
 func TestUpdateIgnored(t *testing.T) {
@@ -291,7 +294,12 @@ func TestIgnoredObjsCache(t *testing.T) {
 	cache = dr.GetIgnoredObjsCache()
 	foundObj, _ := cache.Get(id)
 
-	testutil.AssertEqual(t, ignoredObj, foundObj)
+	cachedIgnoredObj := ignoredObj.DeepCopy()
+	unstructured.RemoveNestedField(cachedIgnoredObj.Object, "metadata", "creationTimestamp")
+	unstructured.RemoveNestedField(cachedIgnoredObj.Object, "status")
+	unstructured.RemoveNestedField(cachedIgnoredObj.Object, "metadata", "managedFields")
+
+	testutil.AssertEqual(t, cachedIgnoredObj, foundObj)
 
 	foundObj.SetName("foo")
 

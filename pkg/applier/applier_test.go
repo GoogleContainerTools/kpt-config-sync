@@ -431,7 +431,7 @@ func TestApplyMutationIgnoredObjects(t *testing.T) {
 					)),
 			},
 			declaredObjs: []client.Object{
-				newNamespaceObj(
+				k8sobjects.Unstructured(kinds.Namespace(),
 					core.Name("umanaged-ns"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.ApplySetPartOfLabel, applySetID),
@@ -463,12 +463,13 @@ func TestApplyMutationIgnoredObjects(t *testing.T) {
 					core.Label("foo", "bar"))),
 			},
 			expectedItemsInIgnoreCache: []client.Object{
-				createServerObject(k8sobjects.NamespaceObject("umanaged-ns",
-					syncertest.ManagementDisabled,
-					core.Label("foo", "bar"),
-					core.Generation(1),
-					core.UID("1"),
-					core.ResourceVersion("1"))),
+				asUnstructuredSanitizedObj(
+					createServerObject(k8sobjects.NamespaceObject("umanaged-ns",
+						syncertest.ManagementDisabled,
+						core.Label("foo", "bar"),
+						core.Generation(1),
+						core.UID("1"),
+						core.ResourceVersion("1")))),
 			},
 		},
 		{
@@ -479,8 +480,7 @@ func TestApplyMutationIgnoredObjects(t *testing.T) {
 					core.Label("foo", "bar"))),
 			},
 			declaredObjs: []client.Object{
-				k8sobjects.NamespaceObject("managed-ns",
-					syncertest.ManagementEnabled,
+				newNamespaceObj(core.Name("managed-ns"), syncertest.ManagementEnabled,
 					syncertest.IgnoreMutationAnnotation),
 			},
 			expectedObjsToApply: object.UnstructuredSet{
@@ -493,7 +493,7 @@ func TestApplyMutationIgnoredObjects(t *testing.T) {
 					core.Label("foo", "bar"))),
 			},
 			expectedItemsInIgnoreCache: []client.Object{
-				createServerObject(k8sobjects.NamespaceObject("managed-ns",
+				asUnstructuredSanitizedObj(createServerObject((k8sobjects.NamespaceObject("managed-ns",
 					syncertest.ManagementDisabled,
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label("foo", "bar"),
@@ -501,7 +501,7 @@ func TestApplyMutationIgnoredObjects(t *testing.T) {
 					core.Annotation(metadata.ResourceIDKey, "_namespace_managed-ns"),
 					core.Generation(1),
 					core.UID("1"),
-					core.ResourceVersion("1")))},
+					core.ResourceVersion("1")))))},
 		},
 		{
 			name: "managed and mutation-ignored object was previously deleted",
@@ -964,6 +964,13 @@ func asUnstructuredSanitizedObj(o client.Object) *unstructured.Unstructured {
 	uObj, _ := reconcile.AsUnstructuredSanitized(o)
 
 	return uObj
+}
+
+func asUnstructured(o client.Object) *unstructured.Unstructured {
+	uObj, _ := reconcile.AsUnstructuredSanitized(o)
+
+	return uObj
+
 }
 
 // createServerObject produces the expected output of the object stored on the (fake) server

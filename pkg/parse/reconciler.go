@@ -45,7 +45,7 @@ type Reconciler interface {
 	// Updates the RSync status (source, rendering, and syncing condition).
 	//
 	// Read is exposed for use by DefaultRunFunc.
-	Read(ctx context.Context, trigger string, sourceStatus *SourceStatus, syncDir cmpath.Absolute) status.MultiError
+	Read(ctx context.Context, trigger string, sourceStatus *SourceStatus, syncPath cmpath.Absolute) status.MultiError
 
 	// ParseAndUpdate parses objects from the source manifests, validates them,
 	// and then syncs them to the cluster with the Updater.

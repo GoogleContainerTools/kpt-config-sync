@@ -111,10 +111,10 @@ func DefaultRunFunc(ctx context.Context, r Reconciler, trigger string) RunResult
 		state.resetPartialCache()
 	}
 
-	var syncDir cmpath.Absolute
+	var syncPath cmpath.Absolute
 	gs := &SourceStatus{}
 	// pull the source commit and directory with retries within 5 minutes.
-	gs.Commit, syncDir, gs.Errs = hydrate.SourceCommitAndDirWithRetry(util.SourceRetryBackoff, opts.SourceType, opts.SourceDir, opts.SyncDir, opts.ReconcilerName)
+	gs.Commit, syncPath, gs.Errs = hydrate.SourceCommitAndSyncPathWithRetry(util.SourceRetryBackoff, opts.SourceType, opts.SourceDir, opts.SyncDir, opts.ReconcilerName)
 
 	// Add pre-sync annotations to the object.
 	// If updating the object fails, it's likely due to a signature verification error
@@ -169,25 +169,25 @@ func DefaultRunFunc(ctx context.Context, r Reconciler, trigger string) RunResult
 	}
 
 	// rendering is done, starts to read the source or hydrated configs.
-	oldSyncDir := state.cache.source.syncDir
+	oldSyncPath := state.cache.source.syncPath
 	// `read` is called no matter what the trigger is.
-	if errs := r.Read(ctx, trigger, gs, syncDir); errs != nil {
+	if errs := r.Read(ctx, trigger, gs, syncPath); errs != nil {
 		state.invalidate(errs)
 		return result
 	}
 
-	newSyncDir := state.cache.source.syncDir
+	newSyncPath := state.cache.source.syncPath
 
-	if newSyncDir != oldSyncDir {
+	if newSyncPath != oldSyncPath {
 		// If the commit changed and parsing succeeded, trigger retries to start again, if stopped.
 		result.SourceChanged = true
 	}
 
 	// The parse-apply-watch sequence will be skipped if the trigger type is `triggerReimport` and
 	// there is no new source changes. The reasons are:
-	//   * If a former parse-apply-watch sequence for syncDir succeeded, there is no need to run the sequence again;
-	//   * If all the former parse-apply-watch sequences for syncDir failed, the next retry will call the sequence.
-	if trigger == triggerSync && oldSyncDir == newSyncDir {
+	//   * If a former parse-apply-watch sequence for syncPath succeeded, there is no need to run the sequence again;
+	//   * If all the former parse-apply-watch sequences for syncPath failed, the next retry will call the sequence.
+	if trigger == triggerSync && oldSyncPath == newSyncPath {
 		return result
 	}
 
@@ -255,13 +255,13 @@ func (r *reconciler) Render(ctx context.Context, sourceStatus *SourceStatus) sta
 // Read source manifests from the shared source volume.
 // Waits for rendering, if enabled.
 // Updates the RSync status (source, rendering, and syncing condition).
-func (r *reconciler) Read(ctx context.Context, trigger string, sourceStatus *SourceStatus, syncDir cmpath.Absolute) status.MultiError {
+func (r *reconciler) Read(ctx context.Context, trigger string, sourceStatus *SourceStatus, syncPath cmpath.Absolute) status.MultiError {
 	opts := r.Options()
 	state := r.ReconcilerState()
 	sourceState := &sourceState{
-		spec:    sourceStatus.Spec,
-		commit:  sourceStatus.Commit,
-		syncDir: syncDir,
+		spec:     sourceStatus.Spec,
+		commit:   sourceStatus.Commit,
+		syncPath: syncPath,
 	}
 	hydrationStatus, sourceStatus := r.readFromSource(ctx, trigger, sourceState)
 	if opts.RenderingEnabled != hydrationStatus.RequiresRendering {
@@ -326,7 +326,7 @@ func (r *reconciler) parseHydrationState(srcState *sourceState, hydrationStatus 
 	var hydrationErr hydrate.HydrationError
 	if _, err := os.Stat(absHydratedRoot.OSPath()); err == nil {
 		// pull the hydrated commit and directory with retries within 1 minute.
-		srcState, hydrationErr = opts.readHydratedDirWithRetry(util.HydratedRetryBackoff, absHydratedRoot, opts.ReconcilerName, srcState)
+		srcState, hydrationErr = opts.readHydratedPathWithRetry(util.HydratedRetryBackoff, absHydratedRoot, opts.ReconcilerName, srcState)
 		if hydrationErr != nil {
 			hydrationStatus.Message = RenderingFailed
 			hydrationStatus.Errs = status.HydrationError(hydrationErr.Code(), hydrationErr)
@@ -371,11 +371,13 @@ func (r *reconciler) readFromSource(ctx context.Context, trigger string, srcStat
 		return hydrationStatus, srcStatus
 	}
 
-	if srcState.syncDir == recState.cache.source.syncDir {
+	if srcState.syncPath == recState.cache.source.syncPath {
+		klog.V(4).Infof("Reconciler skipping listing source files; sync path unchanged: %s", srcState.syncPath.OSPath())
 		return hydrationStatus, srcStatus
 	}
+	klog.Infof("Reconciler listing source files from new sync path: %s", srcState.syncPath.OSPath())
 
-	// Read all the files under srcState.syncDir
+	// Read all the files under srcState.syncPath
 	srcStatus.Errs = opts.readConfigFiles(srcState)
 
 	if !opts.RenderingEnabled {
@@ -392,7 +394,6 @@ func (r *reconciler) readFromSource(ctx context.Context, trigger string, srcStat
 		}
 	}
 
-	klog.Infof("New source changes (%s) detected, reset the cache", srcState.syncDir.OSPath())
 	// Reset the cache to make sure all the steps of a parse-apply-watch loop will run.
 	recState.resetCache()
 	if srcStatus.Errs == nil {

@@ -445,6 +445,11 @@ func (w *filteredWatcher) handle(ctx context.Context, event watch.Event) (string
 			core.IDOf(object), object.GetGeneration())
 	}
 
+	// Update drifted objects in the Resources ignored cache
+	if _, found := w.resources.GetIgnored(core.IDOf(object)); found {
+		w.resources.UpdateIgnored(object)
+		klog.Infof("Updating object '%v' in the ignore mutation cache", core.GKNN(object))
+	}
 	w.queue.Add(object)
 	return object.GetResourceVersion(), false, nil
 }

@@ -36,6 +36,7 @@ func AsUnstructured(o client.Object) (*unstructured.Unstructured, status.Error) 
 // fields:
 // - metadata.creationTimestamp
 // - status
+// - metadata.managedFields
 //
 // These fields must not be set in the source, so we can safely drop them from
 // the current live manifest, because we won't ever need to be reverted.
@@ -56,5 +57,6 @@ func AsUnstructuredSanitized(o client.Object) (*unstructured.Unstructured, statu
 
 	unstructured.RemoveNestedField(u.Object, "metadata", "creationTimestamp")
 	unstructured.RemoveNestedField(u.Object, "status")
+	unstructured.RemoveNestedField(u.Object, "metadata", "managedFields")
 	return u, nil
 }

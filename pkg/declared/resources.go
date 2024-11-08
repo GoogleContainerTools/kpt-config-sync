@@ -197,32 +197,31 @@ func (r *Resources) GetDeclared(id core.ID) (*unstructured.Unstructured, string,
 
 // DeclaredUnstructureds returns all resource objects declared in the source,
 // along with the source commit.
-func (r *Resources) DeclaredUnstructureds() ([]*unstructured.Unstructured, string) {
+func (r *Resources) DeclaredUnstructureds() []*unstructured.Unstructured {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 	if r.declaredObjectsMap == nil || r.declaredObjectsMap.Len() == 0 {
-		return nil, r.commit
+		return nil
 	}
 	var objects []*unstructured.Unstructured
 	for pair := r.declaredObjectsMap.Front(); pair != nil; pair = pair.Next() {
 		objects = append(objects, pair.Value)
 	}
-	return objects, r.commit
+	return objects
 }
 
-// DeclaredObjects returns all resource objects declared in the source, along
-// with the source commit.
-func (r *Resources) DeclaredObjects() ([]client.Object, string) {
+// DeclaredObjects returns all resource objects declared in the source
+func (r *Resources) DeclaredObjects() []client.Object {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
 	if r.declaredObjectsMap == nil || r.declaredObjectsMap.Len() == 0 {
-		return nil, r.commit
+		return nil
 	}
 	var objects []client.Object
 	for pair := r.declaredObjectsMap.Front(); pair != nil; pair = pair.Next() {
 		objects = append(objects, pair.Value)
 	}
-	return objects, r.commit
+	return objects
 }
 
 // DeclaredGVKs returns the set of all GroupVersionKind found in the source,
@@ -244,7 +243,7 @@ func (r *Resources) DeclaredGVKs() (map[schema.GroupVersionKind]struct{}, string
 func (r *Resources) DeclaredCRDs() ([]*v1beta1.CustomResourceDefinition, status.MultiError) {
 	// DeclaredUnstructureds handles the mutex, so this method doesn't need to lock.
 	var crds []*v1beta1.CustomResourceDefinition
-	declaredObjs, _ := r.DeclaredUnstructureds()
+	declaredObjs := r.DeclaredUnstructureds()
 	for _, obj := range declaredObjs {
 		if obj.GroupVersionKind().GroupKind() != kinds.CustomResourceDefinition() {
 			continue

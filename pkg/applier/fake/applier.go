@@ -50,7 +50,7 @@ type ApplierOutputs struct {
 
 // Apply fakes applier.Applier.Apply()
 func (a *Applier) Apply(_ context.Context, eventHandler func(applier.Event), resources *declared.Resources) (applier.ObjectStatusMap, *stats.SyncStats) {
-	objects, _ := resources.DeclaredObjects()
+	objects := resources.DeclaredObjects()
 
 	a.ApplyInputs = append(a.ApplyInputs, ApplierInputs{
 		Objects: objects,

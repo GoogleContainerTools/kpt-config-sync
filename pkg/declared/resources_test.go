@@ -148,8 +148,7 @@ func TestDeclarations(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, commit := dr.DeclaredUnstructureds()
-	require.Equal(t, expectedCommit, commit)
+	got := dr.DeclaredUnstructureds()
 
 	// Sort got decls to ensure determinism.
 	sort.Slice(got, func(i, j int) bool {

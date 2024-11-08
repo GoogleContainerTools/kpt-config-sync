@@ -517,7 +517,7 @@ func (s *supervisor) applyInner(ctx context.Context, eventHandler func(Event), d
 
 	syncStats := stats.NewSyncStats()
 	objStatusMap := make(ObjectStatusMap)
-	objs, _ := declaredResources.DeclaredObjects()
+	objs := declaredResources.DeclaredObjects()
 
 	if err := s.cacheIgnoreMutationObjects(ctx, declaredResources); err != nil {
 		sendErrorEvent(err, eventHandler)
@@ -864,7 +864,7 @@ func (s *supervisor) abandonObject(ctx context.Context, obj client.Object) error
 // cacheIgnoreMutationObjects gets the current cluster state of any declared objects with the ignore mutation annotation and puts it in the Resources ignore objects cache
 // Returns any errors that occur
 func (s *supervisor) cacheIgnoreMutationObjects(ctx context.Context, declaredResources *declared.Resources) error {
-	declaredObjs, _ := declaredResources.DeclaredObjects()
+	declaredObjs := declaredResources.DeclaredObjects()
 
 	for _, obj := range declaredObjs {
 		if obj.GetAnnotations()[metadata.LifecycleMutationAnnotation] == metadata.IgnoreMutation {

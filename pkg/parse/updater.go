@@ -126,7 +126,7 @@ func (u *Updater) update(ctx context.Context, cache *cacheForCommit) status.Mult
 
 	// Apply the declared resources
 	if !cache.applied {
-		declaredObjs, _ := u.Resources.DeclaredObjects()
+		declaredObjs := u.Resources.DeclaredObjects()
 		klog.Infof("%v objects that were declared: %v", len(declaredObjs), core.GKNNs(declaredObjs))
 
 		if err := u.apply(ctx, cache.source.commit); err != nil {

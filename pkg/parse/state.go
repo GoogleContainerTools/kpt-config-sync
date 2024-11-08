@@ -33,8 +33,8 @@ import (
 // TODO: break up cacheForCommit into phase-based caches
 // TODO: move sourceState into ReconcilerState so the RSync spec and status are next to each other
 type ReconcilerState struct {
-	// lastApplied keeps the state for the last successful-applied syncDir.
-	lastApplied string
+	// checkpointedSyncPath is the last checkpointed syncPath.
+	checkpointedSyncPath string
 
 	// status contains fields that map to RSync status fields.
 	status *ReconcilerStatus
@@ -46,12 +46,12 @@ type ReconcilerState struct {
 }
 
 func (s *ReconcilerState) checkpoint() {
-	applied := s.cache.source.syncDir.OSPath()
-	if applied == s.lastApplied {
+	applied := s.cache.source.syncPath.OSPath()
+	if applied == s.checkpointedSyncPath {
 		return
 	}
 	klog.Infof("Reconciler checkpoint updated to %s", applied)
-	s.lastApplied = applied
+	s.checkpointedSyncPath = applied
 	s.cache.needToRetry = false
 }
 
@@ -66,7 +66,7 @@ func (s *ReconcilerState) invalidate(errs status.MultiError) {
 	// Invalidate state on error since this could be the result of switching
 	// branches or some other operation where inverting the operation would
 	// result in repeating a previous state that was checkpointed.
-	s.lastApplied = ""
+	s.checkpointedSyncPath = ""
 	s.cache.needToRetry = true
 }
 

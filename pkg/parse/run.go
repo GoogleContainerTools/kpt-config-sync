@@ -23,6 +23,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/clock"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
@@ -96,7 +97,7 @@ func DefaultRunFunc(ctx context.Context, r Reconciler, trigger string) RunResult
 	if state.status == nil {
 		reconcilerStatus, err := r.SyncStatusClient().GetReconcilerStatus(ctx)
 		if err != nil {
-			state.invalidate(err)
+			state.RecordFailure(opts.Clock, err)
 			return result
 		}
 		state.status = reconcilerStatus
@@ -104,11 +105,8 @@ func DefaultRunFunc(ctx context.Context, r Reconciler, trigger string) RunResult
 
 	switch trigger {
 	case triggerFullSync, triggerManagementConflict, triggerNamespaceUpdate:
-		// Clear the in-memory parsed object cache to force re-parsing source files.
-		// Preserve sourceState to avoid re-reading/listing the source files,
-		// unless a new commit or source change is detected.
-		// Preserve needToRetry to avoid resetting the retry backoff.
-		state.resetPartialCache()
+		// Force parsing and updating, but skip fetch, render, and read unless required.
+		state.RecordFullSyncStart()
 	}
 
 	var syncPath cmpath.Absolute
@@ -132,7 +130,7 @@ func DefaultRunFunc(ctx context.Context, r Reconciler, trigger string) RunResult
 	// Otherwise, parsing errors may be overwritten.
 	// TODO: Decouple fetch & parse stages to use different status fields
 	if gs.Errs != nil || state.status.SourceStatus == nil || gs.Commit != state.status.SourceStatus.Commit {
-		gs.LastUpdate = nowMeta(opts)
+		gs.LastUpdate = nowMeta(opts.Clock)
 		var setSourceStatusErr error
 		// Only update the source status if it changed
 		if state.status.needToSetSourceStatus(gs) {
@@ -141,7 +139,7 @@ func DefaultRunFunc(ctx context.Context, r Reconciler, trigger string) RunResult
 			// If there were errors publishing the source status, stop, log them, and retry later
 			if setSourceStatusErr != nil {
 				// If there were fetch errors, log those too
-				state.invalidate(status.Append(gs.Errs, setSourceStatusErr))
+				state.RecordFailure(opts.Clock, status.Append(gs.Errs, setSourceStatusErr))
 				return result
 			}
 			// Cache the latest source status in memory
@@ -150,7 +148,7 @@ func DefaultRunFunc(ctx context.Context, r Reconciler, trigger string) RunResult
 		}
 		// If there were fetch errors, stop, log them, and retry later
 		if gs.Errs != nil {
-			state.invalidate(gs.Errs)
+			state.RecordFailure(opts.Clock, gs.Errs)
 			return result
 		}
 	}
@@ -158,7 +156,7 @@ func DefaultRunFunc(ctx context.Context, r Reconciler, trigger string) RunResult
 	// set the rendering status by checking the done file.
 	if opts.RenderingEnabled {
 		if errs := r.Render(ctx, gs); errs != nil {
-			state.invalidate(errs)
+			state.RecordFailure(opts.Clock, errs)
 			return result
 		}
 	}
@@ -172,7 +170,7 @@ func DefaultRunFunc(ctx context.Context, r Reconciler, trigger string) RunResult
 	oldSyncPath := state.cache.source.syncPath
 	// `read` is called no matter what the trigger is.
 	if errs := r.Read(ctx, trigger, gs, syncPath); errs != nil {
-		state.invalidate(errs)
+		state.RecordFailure(opts.Clock, errs)
 		return result
 	}
 
@@ -193,12 +191,12 @@ func DefaultRunFunc(ctx context.Context, r Reconciler, trigger string) RunResult
 
 	errs := r.ParseAndUpdate(ctx, trigger)
 	if errs != nil {
-		state.invalidate(errs)
+		state.RecordFailure(opts.Clock, errs)
 		return result
 	}
 
 	// Only checkpoint the state after *everything* succeeded, including status update.
-	state.checkpoint()
+	state.RecordSyncSuccess(opts.Clock)
 	result.Success = true
 	return result
 }
@@ -223,7 +221,7 @@ func (r *reconciler) Render(ctx context.Context, sourceStatus *SourceStatus) sta
 	renderedCommit, err := hydrate.RenderedCommit(doneFilePath)
 	if err != nil {
 		newRenderStatus.Message = RenderingFailed
-		newRenderStatus.LastUpdate = nowMeta(opts)
+		newRenderStatus.LastUpdate = nowMeta(opts.Clock)
 		newRenderStatus.Errs = status.InternalHydrationError(err, RenderingFailed)
 		klog.V(3).Info("Updating rendering status (before parse)")
 		if statusErr := r.SyncStatusClient().SetRenderingStatus(ctx, state.status.RenderingStatus, newRenderStatus); statusErr != nil {
@@ -235,16 +233,14 @@ func (r *reconciler) Render(ctx context.Context, sourceStatus *SourceStatus) sta
 	}
 	if renderedCommit == "" || renderedCommit != sourceStatus.Commit {
 		newRenderStatus.Message = RenderingInProgress
-		newRenderStatus.LastUpdate = nowMeta(opts)
+		newRenderStatus.LastUpdate = nowMeta(opts.Clock)
 		klog.V(3).Info("Updating rendering status (before parse)")
 		if statusErr := r.SyncStatusClient().SetRenderingStatus(ctx, state.status.RenderingStatus, newRenderStatus); statusErr != nil {
 			return statusErr
 		}
 		state.status.RenderingStatus = newRenderStatus
 		state.status.SyncingConditionLastUpdate = newRenderStatus.LastUpdate
-		// Reset cache to ensure the next sync attempt waits for rendering
-		// TODO: is this necessary? Has anything updated the cache before this?
-		state.resetCache()
+		state.RecordRenderInProgress()
 		// Transient error will be logged as info, instead of error,
 		// but still trigger retry with backoff.
 		return status.TransientError(errors.New(RenderingInProgress))
@@ -271,7 +267,7 @@ func (r *reconciler) Read(ctx context.Context, trigger string, sourceStatus *Sou
 			hydrationStatus.Errs = status.Append(hydrationStatus.Errs, err)
 		}
 	}
-	hydrationStatus.LastUpdate = nowMeta(opts)
+	hydrationStatus.LastUpdate = nowMeta(opts.Clock)
 	// update the rendering status before source status because the parser needs to
 	// read and parse the configs after rendering is done and there might have errors.
 	klog.V(3).Info("Updating rendering status (after parse)")
@@ -291,7 +287,7 @@ func (r *reconciler) Read(ctx context.Context, trigger string, sourceStatus *Sou
 
 	// Only call `setSourceStatus` if `readFromSource` fails.
 	// If `readFromSource` succeeds, `parse` may still fail.
-	sourceStatus.LastUpdate = nowMeta(opts)
+	sourceStatus.LastUpdate = nowMeta(opts.Clock)
 	var setSourceStatusErr error
 	if state.status.needToSetSourceStatus(sourceStatus) {
 		klog.V(3).Info("Updating source status (after parse)")
@@ -394,11 +390,10 @@ func (r *reconciler) readFromSource(ctx context.Context, trigger string, srcStat
 		}
 	}
 
-	// Reset the cache to make sure all the steps of a parse-apply-watch loop will run.
-	recState.resetCache()
-	if srcStatus.Errs == nil {
-		// Set `state.cache.source` after `readConfigFiles` succeeded
-		recState.cache.source = srcState
+	if srcStatus.Errs != nil {
+		recState.RecordReadFailure()
+	} else {
+		recState.RecordReadSuccess(srcState)
 	}
 	metrics.RecordParserDuration(ctx, trigger, "read", metrics.StatusTagKey(srcStatus.Errs), start)
 	return hydrationStatus, srcStatus
@@ -455,7 +450,7 @@ func (r *reconciler) ParseAndUpdate(ctx context.Context, trigger string) status.
 		Spec:       state.cache.source.spec,
 		Commit:     state.cache.source.commit,
 		Errs:       sourceErrs,
-		LastUpdate: nowMeta(opts),
+		LastUpdate: nowMeta(opts.Clock),
 	}
 	if state.status.needToSetSourceStatus(newSourceStatus) {
 		klog.V(3).Info("Updating source status (after parse)")
@@ -497,7 +492,7 @@ func (r *reconciler) ParseAndUpdate(ctx context.Context, trigger string) status.
 		Syncing:    false,
 		Commit:     state.cache.source.commit,
 		Errs:       syncErrs,
-		LastUpdate: nowMeta(opts),
+		LastUpdate: nowMeta(opts.Clock),
 	}
 	if err := r.SetSyncStatus(ctx, syncStatus); err != nil {
 		syncErrs = status.Append(syncErrs, err)
@@ -553,7 +548,7 @@ func (r *reconciler) updateSyncStatusPeriodically(ctx context.Context) {
 				Syncing:    true,
 				Commit:     state.cache.source.commit,
 				Errs:       r.ReconcilerState().SyncErrors(),
-				LastUpdate: nowMeta(opts),
+				LastUpdate: nowMeta(opts.Clock),
 			}
 			if err := r.SetSyncStatus(ctx, syncStatus); err != nil {
 				klog.Warningf("failed to update sync status: %v", err)
@@ -595,6 +590,6 @@ func reportRootSyncConflicts(ctx context.Context, k8sClient client.Client, confl
 	return nil
 }
 
-func nowMeta(opts *ReconcilerOptions) metav1.Time {
-	return metav1.Time{Time: opts.Clock.Now()}
+func nowMeta(c clock.Clock) metav1.Time {
+	return metav1.Time{Time: c.Now()}
 }

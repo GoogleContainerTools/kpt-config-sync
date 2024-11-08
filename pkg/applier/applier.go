@@ -864,6 +864,7 @@ func (s *supervisor) abandonObject(ctx context.Context, obj client.Object) error
 // cacheIgnoreMutationObjects gets the current cluster state of any declared objects with the ignore mutation annotation and puts it in the Resources ignore objects cache
 // Returns any errors that occur
 func (s *supervisor) cacheIgnoreMutationObjects(ctx context.Context, declaredResources *declared.Resources) error {
+	var objsToUpdate []client.Object
 	declaredObjs := declaredResources.DeclaredObjects()
 
 	for _, obj := range declaredObjs {
@@ -884,10 +885,12 @@ func (s *supervisor) cacheIgnoreMutationObjects(ctx context.Context, declaredRes
 					return err
 				}
 
-				declaredResources.UpdateIgnored(uObj)
+				objsToUpdate = append(objsToUpdate, uObj)
 			}
 		}
 	}
+
+	declaredResources.UpdateIgnored(objsToUpdate...)
 
 	if len(declaredResources.IgnoredObjects()) > 0 {
 		klog.Infof("%v mutation-ignored objects: %v", len(declaredResources.IgnoredObjects()), core.GKNNs(declaredResources.IgnoredObjects()))

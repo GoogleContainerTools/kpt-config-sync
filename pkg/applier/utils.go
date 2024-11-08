@@ -20,12 +20,14 @@ import (
 	"strings"
 
 	"github.com/GoogleContainerTools/kpt/pkg/live"
+	"github.com/elliotchance/orderedmap/v2"
 	"golang.org/x/net/context"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/metadata"
+	"kpt.dev/configsync/pkg/remediator/queue"
 	"kpt.dev/configsync/pkg/status"
 	syncerreconcile "kpt.dev/configsync/pkg/syncer/reconcile"
 	"sigs.k8s.io/cli-utils/pkg/object"
@@ -37,6 +39,7 @@ func partitionObjs(objs []client.Object) ([]client.Object, []client.Object) {
 	var enabled []client.Object
 	var disabled []client.Object
 	for _, obj := range objs {
+		// i.e. managed by Config Sync
 		if obj.GetAnnotations()[metadata.ResourceManagementKey] == metadata.ResourceManagementDisabled {
 			disabled = append(disabled, obj)
 		} else {
@@ -44,6 +47,32 @@ func partitionObjs(objs []client.Object) ([]client.Object, []client.Object) {
 		}
 	}
 	return enabled, disabled
+}
+
+// handleIgnoredObjects gets the cached cluster state of all mutation-ignored objects that are declared and applies the CS metadata on top of them
+// prior to sending them to the applier
+// Returns all objects that will be applied
+func handleIgnoredObjects(declared []client.Object, ignoredCache *orderedmap.OrderedMap[core.ID, client.Object]) []client.Object {
+	var allObjs []client.Object
+
+	for _, dObj := range declared {
+		cachedObj, found := ignoredCache.Get(core.IDOf(dObj))
+		_, deleted := cachedObj.(*queue.Deleted)
+
+		if found && !deleted {
+			//TODO: Maybe use Resource instead to get items?
+			// Applies declared Config Sync metadata on top of stored config
+			csAnnotations, csLabels := metadata.GetConfigSyncMetadata(dObj)
+			core.AddAnnotations(cachedObj, csAnnotations)
+			core.AddLabels(cachedObj, csLabels)
+
+			allObjs = append(allObjs, cachedObj)
+		} else {
+			allObjs = append(allObjs, dObj)
+		}
+	}
+
+	return allObjs
 }
 
 func toUnstructured(objs []client.Object) ([]*unstructured.Unstructured, status.MultiError) {

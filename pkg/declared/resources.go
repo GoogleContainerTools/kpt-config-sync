@@ -26,6 +26,7 @@ import (
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metrics"
+	"kpt.dev/configsync/pkg/remediator/queue"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/syncer/reconcile"
 	"kpt.dev/configsync/pkg/util/clusterconfig"
@@ -62,7 +63,12 @@ func (r *Resources) UpdateIgnored(objs ...client.Object) {
 	}
 
 	for _, o := range objs {
-		r.mutationIgnoreObjectsMap.Set(core.IDOf(o), o)
+		if _, wasDeleted := o.(*queue.Deleted); wasDeleted {
+			r.mutationIgnoreObjectsMap.Set(core.IDOf(o), o)
+		} else {
+			u, _ := reconcile.AsUnstructuredSanitized(o)
+			r.mutationIgnoreObjectsMap.Set(core.IDOf(u), u)
+		}
 	}
 
 }

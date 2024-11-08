@@ -24,10 +24,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
+	"kpt.dev/configsync/pkg/kinds"
+	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/syncer/reconcile"
 	"kpt.dev/configsync/pkg/syncer/syncertest"
@@ -39,7 +42,7 @@ import (
 var (
 	obj1       = k8sobjects.CustomResourceDefinitionV1Beta1Object()
 	obj2       = k8sobjects.ResourceQuotaObject()
-	ignoredObj = k8sobjects.NamespaceObject("test-ns", syncertest.IgnoreMutationAnnotation)
+	ignoredObj = createIgnoredObj()
 
 	testSet = []client.Object{obj1, obj2}
 	nilSet  = []client.Object{nil}
@@ -310,4 +313,14 @@ func TestDeleteIgnored(t *testing.T) {
 	deleted = dr.DeleteIgnored(id)
 	assert.True(t, deleted)
 	assert.NotContains(t, ignored, ignoredObj)
+}
+
+func createIgnoredObj() *unstructured.Unstructured {
+	o := k8sobjects.NamespaceObject("test-ns", syncertest.IgnoreMutationAnnotation) //&corev1.Namespace{TypeMeta: k8sobjects.ToTypeMeta(kinds.Namespace())}
+	o.SetManagedFields([]metav1.ManagedFieldsEntry{{Manager: "foo"}})
+	core.SetAnnotation(o, metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation)
+
+	u, _ := kinds.ToUnstructured(o, core.Scheme)
+	return u
+
 }

@@ -781,9 +781,9 @@ func TestDriftKubectlAnnotateManagedFieldWithIgnoreMutationAnnotation(t *testing
 			))
 	})
 	tg.Go(func() error {
-		// Note: this proves that the applier does not currently honor the ignore-mutation annotation.
+		// Note: this proves that the applier DOES honor the ignore-mutation annotation.
 		return nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
-			testwatcher.WatchPredicates(testpredicates.HasAnnotation("season", "summer")))
+			testwatcher.WatchPredicates(testpredicates.HasAnnotation("season", "winter")))
 	})
 	nt.Must(tg.Wait())
 
@@ -857,7 +857,7 @@ func TestDriftKubectlAnnotateDeleteManagedFields(t *testing.T) {
 // TestDriftKubectlAnnotateDeleteManagedFieldsWithIgnoreMutationAnnotation
 // deletes a managed field of a resource having the
 // `client.lifecycle.config.k8s.io/mutation` annotation, and verifies that
-// Config Sync does not correct it.
+// Config Sync does correct it.
 func TestDriftKubectlAnnotateDeleteManagedFieldsWithIgnoreMutationAnnotation(t *testing.T) {
 	rootSyncID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t, nomostesting.DriftControl,
@@ -900,9 +900,9 @@ func TestDriftKubectlAnnotateDeleteManagedFieldsWithIgnoreMutationAnnotation(t *
 			))
 	})
 	tg.Go(func() error {
-		// Note: this proves that the applier does not currently honor the ignore-mutation annotation.
+		// Note: this proves that the applier DOES currently honor the ignore-mutation annotation.
 		return nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
-			testwatcher.WatchPredicates(testpredicates.HasAnnotation("season", "summer")))
+			testwatcher.WatchPredicates(testpredicates.MissingAnnotation("season")))
 	})
 	nt.Must(tg.Wait())
 
@@ -914,8 +914,22 @@ func TestDriftKubectlAnnotateDeleteManagedFieldsWithIgnoreMutationAnnotation(t *
 
 	time.Sleep(10 * time.Second)
 
-	// Remediator SHOULD NOT correct it
-	err = nt.Validate("bookstore", "", &corev1.Namespace{}, testpredicates.MissingAnnotation(metadata.ResourceManagementKey))
+	// Remediator SHOULD correct it
+	err = nt.Validate("bookstore", "", &corev1.Namespace{}, testpredicates.HasAnnotationKey(metadata.ResourceManagementKey))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+
+	// Delete Config Sync annotation lifecycle mutation
+	out, err = nt.Shell.Kubectl("annotate", "namespace", "bookstore", fmt.Sprintf("%s-", metadata.LifecycleMutationAnnotation))
+	if err != nil {
+		nt.T.Fatalf("got `kubectl annotate namespace bookstore %s-` error %v %s, want return nil", metadata.LifecycleMutationAnnotation, err, out)
+	}
+
+	time.Sleep(10 * time.Second)
+
+	// Remediator SHOULD correct it
+	err = nt.Validate("bookstore", "", &corev1.Namespace{}, testpredicates.HasAnnotationKey(metadata.LifecycleMutationAnnotation))
 	if err != nil {
 		nt.T.Fatal(err)
 	}

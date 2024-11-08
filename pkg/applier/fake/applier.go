@@ -20,6 +20,7 @@ import (
 
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/applier/stats"
+	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -32,6 +33,7 @@ type Applier struct {
 	ApplyCalls   int
 	ApplyInputs  []ApplierInputs
 	ApplyOutputs []ApplierOutputs
+	ApplyClient  client.Client
 }
 
 // ApplierInputs stores inputs for fake.Applier.Apply()
@@ -47,7 +49,9 @@ type ApplierOutputs struct {
 }
 
 // Apply fakes applier.Applier.Apply()
-func (a *Applier) Apply(_ context.Context, eventHandler func(applier.Event), objects []client.Object) (applier.ObjectStatusMap, *stats.SyncStats) {
+func (a *Applier) Apply(_ context.Context, eventHandler func(applier.Event), resources *declared.Resources) (applier.ObjectStatusMap, *stats.SyncStats) {
+	objects, _ := resources.DeclaredObjects()
+
 	a.ApplyInputs = append(a.ApplyInputs, ApplierInputs{
 		Objects: objects,
 	})

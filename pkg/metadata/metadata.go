@@ -154,3 +154,25 @@ func RemoveApplySetPartOfLabel(obj client.Object, applySetID string) bool {
 	obj.SetLabels(labels)
 	return true
 }
+
+// GetConfigSyncMetadata gets all Config Sync annotations and labels from the given resource
+func GetConfigSyncMetadata(obj client.Object) (map[string]string, map[string]string) {
+	configSyncAnnotations := map[string]string{}
+	configSyncLabels := map[string]string{}
+
+	annotations := obj.GetAnnotations()
+
+	for k, v := range annotations {
+		if isConfigSyncAnnotation(k, v) {
+			configSyncAnnotations[k] = v
+		}
+	}
+
+	labels := obj.GetLabels()
+	for k, v := range labels {
+		if isConfigSyncLabel(k, v) {
+			configSyncLabels[k] = v
+		}
+	}
+	return configSyncAnnotations, configSyncLabels
+}

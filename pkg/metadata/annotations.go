@@ -177,7 +177,7 @@ const (
 // This annotation is set by Config Sync on a managed resource.
 const OwningInventoryKey = "config.k8s.io/owning-inventory"
 
-// HNCManagedBy is the annotatiƒon that indicates the namespace hierarchy is
+// HNCManagedBy is the annotation that indicates the namespace hierarchy is
 // not managed by the Hierarchical Namespace Controller (http://bit.ly/k8s-hnc-design) but
 // someone else, "configmanagement.gke.io" in this case.
 // This annotation is set by Config Sync on a managed namespace resource.

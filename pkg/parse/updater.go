@@ -22,7 +22,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/applier"
-	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/metrics"
@@ -126,9 +125,6 @@ func (u *Updater) update(ctx context.Context, cache *cacheForCommit) status.Mult
 
 	// Apply the declared resources
 	if !cache.applied {
-		declaredObjs := u.Resources.DeclaredObjects()
-		klog.Infof("%v objects that were declared: %v", len(declaredObjs), core.GKNNs(declaredObjs))
-
 		if err := u.apply(ctx, cache.source.commit); err != nil {
 			return err
 		}

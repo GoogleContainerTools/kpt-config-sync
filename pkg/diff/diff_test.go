@@ -148,14 +148,14 @@ func TestDiffType(t *testing.T) {
 			scope:    declared.RootScope,
 			declared: k8sobjects.RoleObject(syncertest.ManagementDisabled),
 			actual:   k8sobjects.RoleObject(),
-			want:     Abandon,
+			want:     NoOp,
 		},
 		{
 			name:     "declared + actual, management disabled, namespace scope, can manage, no meta: no op",
 			scope:    "shipping",
 			declared: k8sobjects.RoleObject(syncertest.ManagementDisabled),
 			actual:   k8sobjects.RoleObject(),
-			want:     Abandon,
+			want:     NoOp,
 		},
 		{
 			name:  "declared + actual, management disabled, namespace scope / root-owned object: no op",
@@ -194,7 +194,7 @@ func TestDiffType(t *testing.T) {
 			actual: k8sobjects.RoleObject(syncertest.ManagementEnabled,
 				core.Namespace("shipping"),
 				difftest.ManagedBy("shipping", "any-rs")),
-			want: Abandon,
+			want: NoOp,
 		},
 		{
 			name: "declared + actual, management disabled, root scope / self-owned object: abandon",

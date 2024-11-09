@@ -153,7 +153,13 @@ func (d Diff) updateType(scope declared.Scope, syncName string) Operation {
 		// This reconciler can't manage this object but is erroneously being told to.
 		return ManagementConflict
 	case differ.ManagementDisabled(d.Declared) && canManage:
-		return Abandon
+		if metadata.HasConfigSyncMetadata(d.Actual) {
+			manager := d.Actual.GetAnnotations()[metadata.ResourceManagerKey]
+			if manager == "" || manager == declared.ResourceManager(scope, syncName) {
+				return Abandon
+			}
+		}
+		return NoOp
 	case differ.ManagementDisabled(d.Declared) && !canManage:
 		// Management is disabled and the object isn't owned by this reconciler, so
 		// there's nothing to do.

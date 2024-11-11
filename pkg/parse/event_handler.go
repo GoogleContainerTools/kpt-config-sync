@@ -95,7 +95,7 @@ func (s *EventHandler) Handle(event events.Event) events.Result {
 				Syncing:    false,
 				Commit:     state.status.SyncStatus.Commit,
 				Errs:       s.Reconciler.ReconcilerState().SyncErrors(),
-				LastUpdate: nowMeta(opts),
+				LastUpdate: nowMeta(opts.Clock),
 			}
 			if err := s.Reconciler.SetSyncStatus(s.Context, syncStatus); err != nil {
 				if errors.Is(err, context.Canceled) {

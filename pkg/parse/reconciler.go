@@ -54,8 +54,7 @@ type Reconciler interface {
 	ParseAndUpdate(ctx context.Context, trigger string) status.MultiError
 
 	// SetSyncStatus updates `.status.sync` and the Syncing condition, if needed,
-	// as well as `state.syncStatus` and `state.syncingConditionLastUpdate` if
-	// the update is successful.
+	// as well as `state.syncStatus`  if the update is successful.
 	//
 	// SetSyncStatus is exposed for use by the EventHandler, for periodic status
 	// updates.

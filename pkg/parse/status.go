@@ -32,19 +32,15 @@ type ReconcilerStatus struct {
 
 	// SyncStatus tracks info from the `Status.Sync` field of a RepoSync/RootSync.
 	SyncStatus *SyncStatus
-
-	// SyncingConditionLastUpdate tracks when the `Syncing` condition was updated most recently.
-	SyncingConditionLastUpdate metav1.Time
 }
 
 // DeepCopy returns a deep copy of the receiver.
 // Warning: Go errors are not copy-able. So this isn't a true deep-copy.
 func (s *ReconcilerStatus) DeepCopy() *ReconcilerStatus {
 	return &ReconcilerStatus{
-		SourceStatus:               s.SourceStatus.DeepCopy(),
-		RenderingStatus:            s.RenderingStatus.DeepCopy(),
-		SyncStatus:                 s.SyncStatus.DeepCopy(),
-		SyncingConditionLastUpdate: *s.SyncingConditionLastUpdate.DeepCopy(),
+		SourceStatus:    s.SourceStatus.DeepCopy(),
+		RenderingStatus: s.RenderingStatus.DeepCopy(),
+		SyncStatus:      s.SyncStatus.DeepCopy(),
 	}
 }
 

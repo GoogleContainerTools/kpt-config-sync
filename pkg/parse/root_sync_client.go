@@ -343,21 +343,19 @@ func (p *rootSyncStatusClient) GetReconcilerStatus(ctx context.Context) (*Reconc
 	}
 
 	syncing := false
-	var syncingConditionLastUpdate metav1.Time
 	for _, condition := range rs.Status.Conditions {
 		if condition.Type == v1beta1.RootSyncSyncing {
 			if condition.Status == metav1.ConditionTrue {
 				syncing = true
 			}
-			syncingConditionLastUpdate = condition.LastUpdateTime
 			break
 		}
 	}
 
-	return reconcilerStatusFromRSyncStatus(rs.Status.Status, opts.SourceType, syncing, syncingConditionLastUpdate), nil
+	return reconcilerStatusFromRSyncStatus(rs.Status.Status, opts.SourceType, syncing), nil
 }
 
-func reconcilerStatusFromRSyncStatus(rsyncStatus v1beta1.Status, sourceType configsync.SourceType, syncing bool, syncingConditionLastUpdate metav1.Time) *ReconcilerStatus {
+func reconcilerStatusFromRSyncStatus(rsyncStatus v1beta1.Status, sourceType configsync.SourceType, syncing bool) *ReconcilerStatus {
 	var sourceSpec, renderSpec, syncSpec SourceSpec
 	switch sourceType {
 	case configsync.GitSource:
@@ -458,7 +456,6 @@ func reconcilerStatusFromRSyncStatus(rsyncStatus v1beta1.Status, sourceType conf
 			Errs:       nil,
 			LastUpdate: rsyncStatus.Sync.LastUpdate,
 		},
-		SyncingConditionLastUpdate: syncingConditionLastUpdate,
 	}
 }
 

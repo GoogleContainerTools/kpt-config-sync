@@ -53,9 +53,9 @@ type ReconcilerState struct {
 }
 
 type checkpoint struct {
-	// sourcePath caches the source path that was last successfully applied.
+	// syncPath caches the sync path that was last successfully applied.
 	// Set to the empty string if the last attempt failed.
-	sourcePath cmpath.Absolute
+	syncPath cmpath.Absolute
 	// lastUpdateTime is the last time the checkpoint was updated.
 	// AKA: Last successful sync.
 	// TODO: Surface this timestamp in the RSync status API
@@ -68,23 +68,23 @@ type checkpoint struct {
 
 // updateCheckpoint records the last known source path, updates the
 // timestamps, and logs the message.
-func (s *ReconcilerState) updateCheckpoint(c clock.Clock, newSourcePath cmpath.Absolute) {
+func (s *ReconcilerState) updateCheckpoint(c clock.Clock, newSyncPath cmpath.Absolute) {
 	now := nowMeta(c)
 	// Check for transition
 	transitioned := false
-	if s.checkpoint.sourcePath != newSourcePath {
+	if s.checkpoint.syncPath != newSyncPath {
 		transitioned = true
-		s.checkpoint.sourcePath = newSourcePath
+		s.checkpoint.syncPath = newSyncPath
 		s.checkpoint.lastTransitionTime = now
 	}
 	// Record when the checkpoint was last updated
 	s.checkpoint.lastUpdateTime = now
-	if newSourcePath == invalidSyncPath {
+	if newSyncPath == invalidSyncPath {
 		klog.Info("Reconciler checkpoint invalidated")
 	} else if transitioned {
-		klog.Infof("Reconciler checkpoint updated with new source path: %s", newSourcePath)
+		klog.Infof("Reconciler checkpoint updated with new sync path: %s", newSyncPath)
 	} else {
-		klog.Infof("Reconciler checkpoint updated with existing source path: %s", newSourcePath)
+		klog.Infof("Reconciler checkpoint updated with existing sync path: %s", newSyncPath)
 	}
 }
 

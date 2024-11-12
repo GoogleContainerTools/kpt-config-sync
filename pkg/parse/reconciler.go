@@ -33,6 +33,13 @@ type Reconciler interface {
 	// ReconcilerState returns the current state of the parser/reconciler.
 	ReconcilerState() *ReconcilerState
 
+	// Fetch waits for the *-sync sidecars to fetch the source manifests to the
+	// shared source volume.
+	// Updates the RSync status (source status and syncing condition).
+	//
+	// Fetch is exposed for use by DefaultRunFunc.
+	Fetch(context.Context) (sourceStatus *SourceStatus, syncPath cmpath.Absolute, errs status.MultiError)
+
 	// Render waits for the hydration-controller sidecar to render the source
 	// manifests on the shared source volume.
 	// Updates the RSync status (rendering status and syncing condition).
@@ -41,7 +48,7 @@ type Reconciler interface {
 	Render(context.Context, *SourceStatus) status.MultiError
 
 	// Read source manifests from the shared source volume.
-	// Waits for rendering, if enabled.
+	// Errors if rendering is required but not enabled.
 	// Updates the RSync status (source, rendering, and syncing condition).
 	//
 	// Read is exposed for use by DefaultRunFunc.

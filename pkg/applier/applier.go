@@ -524,6 +524,10 @@ func (s *supervisor) applyInner(ctx context.Context, eventHandler func(Event), d
 		return objStatusMap, syncStats
 	}
 
+	if len(declaredResources.IgnoredObjects()) > 0 {
+		klog.Infof("%v mutation-ignored objects: %v", len(declaredResources.IgnoredObjects()), core.GKNNs(declaredResources.IgnoredObjects()))
+	}
+
 	// disabledObjs are objects for which the management are disabled
 	// through annotation.
 	enabledObjs, disabledObjs := partitionObjs(objs)
@@ -891,10 +895,6 @@ func (s *supervisor) cacheIgnoreMutationObjects(ctx context.Context, declaredRes
 	}
 
 	declaredResources.UpdateIgnored(objsToUpdate...)
-
-	if len(declaredResources.IgnoredObjects()) > 0 {
-		klog.Infof("%v mutation-ignored objects: %v", len(declaredResources.IgnoredObjects()), core.GKNNs(declaredResources.IgnoredObjects()))
-	}
 
 	return nil
 }

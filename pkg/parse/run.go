@@ -132,6 +132,18 @@ func (r *reconciler) Reconcile(ctx context.Context, trigger string) ReconcileRes
 		state.RecordFailure(opts.Clock, errs)
 		return result
 	}
+	if newSourceStatus.Errs == nil {
+		if err := r.syncStatusClient.SetImageToSyncAnnotation(ctx, newSourceStatus.Commit); err != nil {
+			newSourceStatus.Errs = status.Append(newSourceStatus.Errs, err)
+		} else {
+			// write the commit into the read-to-render file in hydrated root
+			if opts.RenderingEnabled {
+				if err := unblockHydration(newSourceStatus.Commit, r); err != nil {
+					newSourceStatus.Errs = status.Append(newSourceStatus.Errs, err)
+				}
+			}
+		}
+	}
 
 	if opts.RenderingEnabled {
 		if errs := r.render(ctx, newSourceStatus); errs != nil {
@@ -261,9 +273,9 @@ func (r *reconciler) render(ctx context.Context, sourceStatus *SourceStatus) sta
 	}
 	// Check the done file, created by the hydration-controller.
 	// It should contain the last rendered commit.
-	// RenderedCommit returns the empty string if the done file doesn't exist yet.
+	// ExtractCommit returns the empty string if the done file doesn't exist yet.
 	doneFilePath := opts.RepoRoot.Join(cmpath.RelativeSlash(hydrate.DoneFile)).OSPath()
-	renderedCommit, err := hydrate.RenderedCommit(doneFilePath)
+	renderedCommit, err := hydrate.ExtractCommit(doneFilePath)
 	if err != nil {
 		newRenderStatus.Message = RenderingFailed
 		newRenderStatus.LastUpdate = nowMeta(opts.Clock)
@@ -582,6 +594,26 @@ func (r *reconciler) startAsyncStatusUpdates(ctx context.Context) <-chan struct{
 		}
 	}()
 	return doneCh
+}
+
+// unblockHydration adds the image digest into the ready-to-render file under the
+// /shared directory to inform the hydration-controller to proceed rendering
+func unblockHydration(commit string, r Reconciler) status.Error {
+	absShared, err := cmpath.AbsoluteOS("/shared")
+	readToRenderFile := absShared.Join(cmpath.RelativeSlash(hydrate.ReadyToRenderFile)).OSPath()
+	klog.Infof("writing commit %s to ready to render file", commit)
+	// Overwrite the commit in ready-to-render file
+	file, err := os.OpenFile(readToRenderFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
+	if err != nil {
+		return status.OSWrap(err)
+	}
+	defer file.Close()
+
+	_, err = file.WriteString(commit)
+	if err != nil {
+		return status.OSWrap(err)
+	}
+	return nil
 }
 
 // reportRootSyncConflicts reports conflicts to the RootSync that manages the

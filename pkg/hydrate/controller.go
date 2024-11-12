@@ -40,6 +40,9 @@ const (
 	DoneFile = "done"
 	// ErrorFile is the file name of the hydration errors.
 	ErrorFile = "error.json"
+	// ReadyToRenderFile is the file that contains the commit that has passed image verification
+	// If file exists but not containing the expected srcCommit, halt the hydration
+	ReadyToRenderFile = "ready-to-render"
 )
 
 // Hydrator runs the hydration process.
@@ -100,12 +103,25 @@ func (h *Hydrator) Run(ctx context.Context) {
 						srcCommit, err)
 				}
 			} else if doneCommit(h.DonePath.OSPath()) != srcCommit {
-				// If the commit has been processed before, regardless of success or failure,
-				// skip the hydration to avoid repeated execution.
-				// The rehydrate ticker will retry on the failed commit.
-				hydrateErr = h.hydrate(srcCommit, syncPath)
-				if err := h.complete(srcCommit, hydrateErr); err != nil {
-					klog.Errorf("failed to complete the rendering execution for commit %q: %v", srcCommit, err)
+				absShared := cmpath.Absolute("/shared")
+				readyToRenderFile := absShared.Join(cmpath.RelativeSlash(ReadyToRenderFile)).OSPath()
+				readyToRenderCommit, err := ExtractCommit(readyToRenderFile)
+				if err != nil {
+					klog.Error(err)
+					h.complete(readyToRenderCommit, NewActionableError(err))
+				}
+				if readyToRenderCommit != srcCommit {
+					klog.Warningf("srcCommit %s, readyToRenderCommit %s, hydration skipped", srcCommit, readyToRenderCommit)
+					h.complete(readyToRenderCommit, NewActionableError(fmt.Errorf("commit %s is not ready to render, skipping hydration. Current ready to render commit on record %s", srcCommit, ReadyToRenderFile)))
+				} else {
+					// If the commit has been processed before, regardless of success or failure,
+					// skip the hydration to avoid repeated execution.
+					// The rehydrate ticker will retry on the failed commit.
+					// Only proceed to rendering if the ready-to-render file contains the srcCommit
+					hydrateErr = h.hydrate(srcCommit, syncPath)
+					if err := h.complete(srcCommit, hydrateErr); err != nil {
+						klog.Errorf("failed to complete the rendering execution for commit %q: %v", srcCommit, err)
+					}
 				}
 			}
 			runTimer.Reset(h.PollingPeriod) // Schedule re-run attempt
@@ -269,7 +285,7 @@ func (h *Hydrator) complete(commit string, hydrationErr HydrationError) error {
 // If it fails to extract the commit hash for various errors, we only log a warning,
 // and wait for the next hydration loop to retry the hydration.
 func doneCommit(donePath string) string {
-	commit, err := RenderedCommit(donePath)
+	commit, err := ExtractCommit(donePath)
 	if err != nil {
 		klog.Warningf("unable to read the done file %s: %v", donePath, err)
 	} else if commit == "" {
@@ -278,16 +294,16 @@ func doneCommit(donePath string) string {
 	return commit
 }
 
-// RenderedCommit extracts the commit hash from the done file if exists.
+// ExtractCommit extracts the commit hash from the specified file if exists.
 // Returns empty string with nil error if the done file does not exist.
-func RenderedCommit(donePath string) (string, error) {
-	commit, err := os.ReadFile(donePath)
+func ExtractCommit(filePath string) (string, error) {
+	commit, err := os.ReadFile(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Rendering in-progress
 			return "", nil
 		}
-		return "", fmt.Errorf("reading rendering done file: %s", donePath)
+		return "", fmt.Errorf("reading file: %s", filePath)
 	}
 	return string(commit), nil
 }

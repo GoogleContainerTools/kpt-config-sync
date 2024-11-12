@@ -70,10 +70,14 @@ data:
            - name: service-account # This is needed to prevent any credentials from being exposed to malicious users.
              mountPath: /var/run/secrets/kubernetes.io/serviceaccount
              readOnly: true
+           - name: shared-volume  # Mount the shared volume for reading
+             mountPath: /shared
+             readOnly: true
            imagePullPolicy: IfNotPresent
            securityContext:
              allowPrivilegeEscalation: false
              readOnlyRootFilesystem: false
+   
              capabilities:
                drop:
                - ALL
@@ -96,6 +100,8 @@ data:
              readOnly: true
            - name: kube
              mountPath: /.kube
+           - name: shared-volume  # Mount the shared volume for reading
+             mountPath: /shared
            securityContext:
              allowPrivilegeEscalation: false
              readOnlyRootFilesystem: true
@@ -265,6 +271,8 @@ data:
            emptyDir: {}
          - name: kube
            emptyDir: {}
+         - name: shared-volume
+           emptyDir: {}  # Shared volume for ready-to-render file
          - name: helm-creds
            secret:
              secretName: helm-creds

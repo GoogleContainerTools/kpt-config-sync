@@ -236,18 +236,16 @@ func (p *repoSyncStatusClient) GetReconcilerStatus(ctx context.Context) (*Reconc
 
 	// Read Syncing condition
 	syncing := false
-	var syncingConditionLastUpdate metav1.Time
 	for _, condition := range rs.Status.Conditions {
 		if condition.Type == v1beta1.RepoSyncSyncing {
 			if condition.Status == metav1.ConditionTrue {
 				syncing = true
 			}
-			syncingConditionLastUpdate = condition.LastUpdateTime
 			break
 		}
 	}
 
-	return reconcilerStatusFromRSyncStatus(rs.Status.Status, opts.SourceType, syncing, syncingConditionLastUpdate), nil
+	return reconcilerStatusFromRSyncStatus(rs.Status.Status, opts.SourceType, syncing), nil
 }
 
 // SetSyncStatus implements the Parser interface

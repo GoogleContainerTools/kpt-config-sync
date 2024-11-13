@@ -270,41 +270,22 @@ func TestUpdateIgnored(t *testing.T) {
 func TestIgnoredObjects(t *testing.T) {
 	dr := Resources{}
 
-	ignored := dr.IgnoredObjects()
-	assert.Nil(t, ignored)
+	ignoredObjs := dr.IgnoredObjects()
+	assert.Nil(t, ignoredObjs)
 
 	dr.UpdateIgnored(ignoredObj)
-	ignored = dr.IgnoredObjects()
-	assert.Contains(t, ignored, ignoredObj)
-}
+	ignoredObjs = dr.IgnoredObjects()
 
-func TestIgnoredObjsCache(t *testing.T) {
-	dr := Resources{}
-	id := core.IDOf(ignoredObj)
+	cachedIgnoredObj := asUnstructured(t, ignoredObj.DeepCopy())
+	assert.Contains(t, ignoredObjs, cachedIgnoredObj)
 
-	cache := dr.GetIgnoredObjsCache()
-
-	assert.NotNil(t, cache)
-
-	dr.UpdateIgnored(ignoredObj)
-
-	_, found := cache.Get(id)
-	assert.False(t, found, "object was found in the supposed cache copy")
-
-	cache = dr.GetIgnoredObjsCache()
-	foundObj, _ := cache.Get(id)
-
-	cachedIgnoredObj := ignoredObj.DeepCopy()
-	unstructured.RemoveNestedField(cachedIgnoredObj.Object, "metadata", "creationTimestamp")
-	unstructured.RemoveNestedField(cachedIgnoredObj.Object, "status")
-	unstructured.RemoveNestedField(cachedIgnoredObj.Object, "metadata", "managedFields")
-
-	testutil.AssertEqual(t, cachedIgnoredObj, foundObj)
-
+	foundObj := ignoredObjs[0]
 	foundObj.SetName("foo")
+	foundObj = asUnstructured(t, foundObj)
 
-	testutil.AssertNotEqual(t, ignoredObj, foundObj, "objects should not be equal if found is a copy")
+	ignoredObjs = dr.IgnoredObjects()
 
+	assert.NotContains(t, ignoredObjs, foundObj, "foundObj shouldn't have been modified in mutationIgnoreObjectsMap")
 }
 
 func TestDeleteIgnored(t *testing.T) {

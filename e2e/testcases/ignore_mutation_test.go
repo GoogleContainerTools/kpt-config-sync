@@ -46,11 +46,9 @@ func TestDeclareIgnoreMutationForUnmanagedObject(t *testing.T) {
 
 	nt.T.Log("Add an unmanaged namespace using kubectl")
 	nsObj := k8sobjects.NamespaceObject("bookstore")
-	nt.Must(rootSyncGitRepo.Add("ns.yaml", nsObj))
-	nt.MustKubectl("apply", "-f", filepath.Join(rootSyncGitRepo.Root, "ns.yaml"))
+	nt.Must(nt.KubeClient.Apply(nsObj))
 
-	err := nt.Validate(nsObj.Name, "", &corev1.Namespace{})
-	if err != nil {
+	if err := nt.Validate(nsObj.Name, "", &corev1.Namespace{}); err != nil {
 		nt.T.Error(err)
 	}
 

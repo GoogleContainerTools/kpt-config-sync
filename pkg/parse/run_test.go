@@ -182,7 +182,7 @@ func TestSplitObjects(t *testing.T) {
 	}
 }
 
-func TestRun(t *testing.T) {
+func TestReconciler_Reconcile(t *testing.T) {
 	fakeMetaTime := metav1.Now().Rfc3339Copy() // truncate to second precision
 	fakeTime := fakeMetaTime.Time
 	fakeClock := fakeclock.NewFakeClock(fakeTime)
@@ -769,7 +769,7 @@ func TestRun(t *testing.T) {
 			fakeClient := syncerFake.NewClient(t, core.Scheme, k8sobjects.RootSyncObjectV1Beta1(rootSyncName))
 			reconciler := newRootReconciler(t, fakeClock, fakeClient, fs, tc.renderingEnabled)
 			t.Logf("start running test at %v", time.Now())
-			result := DefaultRunFunc(context.Background(), reconciler, triggerSync)
+			result := reconciler.Reconcile(context.Background(), triggerSync)
 
 			assert.Equal(t, tc.expectedSourceChanged, result.SourceChanged)
 			assert.Equal(t, tc.needRetry, reconciler.ReconcilerState().cache.needToRetry)

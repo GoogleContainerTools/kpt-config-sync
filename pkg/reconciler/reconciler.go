@@ -314,9 +314,9 @@ func Run(opts Options) {
 			// TODO: Trigger namespace events with a buffered channel from the NamespaceController
 			pgBuilder.NamespaceControllerPeriod = time.Second
 		}
-		reconciler = parse.NewRootRunner(reconcilerOpts, rootParseOpts)
+		reconciler = parse.NewRootSyncReconciler(reconcilerOpts, rootParseOpts)
 	} else {
-		reconciler = parse.NewNamespaceRunner(reconcilerOpts, parseOpts)
+		reconciler = parse.NewRepoSyncReconciler(reconcilerOpts, parseOpts)
 	}
 
 	// Start listening to signals
@@ -425,7 +425,7 @@ func Run(opts Options) {
 	funnel := &events.Funnel{
 		Publishers: pgBuilder.Build(),
 		// Wrap the parser with an event handler that triggers the RunFunc, as needed.
-		Subscriber: parse.NewEventHandler(ctx, reconciler, nsControllerState, parse.DefaultRunFunc),
+		Subscriber: parse.NewEventHandler(ctx, reconciler, nsControllerState),
 	}
 	doneChForParser := funnel.Start(ctx)
 

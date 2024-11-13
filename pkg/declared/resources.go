@@ -44,9 +44,9 @@ type Resources struct {
 	// this reference; it should be treated as read-only from then on.
 	declaredObjectsMap *orderedmap.OrderedMap[core.ID, *unstructured.Unstructured]
 
-	// mutationIgnoreObjectsMap is a map of object IDs to the Object of objects
-	// with the ignore mutation annotation
-	mutationIgnoreObjectsMap *orderedmap.OrderedMap[core.ID, client.Object]
+	// mutationIgnoredObjectsMap is a map of object IDs to the cluster-state of mutation-ignored objects.
+	// The cluster-state is initialized by the applier and updated by the remediator.
+	mutationIgnoredObjectsMap *orderedmap.OrderedMap[core.ID, client.Object]
 
 	// commit of the source in which the resources were declared
 	commit string
@@ -58,16 +58,16 @@ type Resources struct {
 func (r *Resources) UpdateIgnored(objs ...client.Object) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	if r.mutationIgnoreObjectsMap == nil {
-		r.mutationIgnoreObjectsMap = orderedmap.NewOrderedMap[core.ID, client.Object]()
+	if r.mutationIgnoredObjectsMap == nil {
+		r.mutationIgnoredObjectsMap = orderedmap.NewOrderedMap[core.ID, client.Object]()
 	}
 
 	for _, o := range objs {
 		if _, wasDeleted := o.(*queue.Deleted); wasDeleted {
-			r.mutationIgnoreObjectsMap.Set(core.IDOf(o), o)
+			r.mutationIgnoredObjectsMap.Set(core.IDOf(o), o)
 		} else {
 			u, _ := reconcile.AsUnstructuredSanitized(o)
-			r.mutationIgnoreObjectsMap.Set(core.IDOf(u), u)
+			r.mutationIgnoredObjectsMap.Set(core.IDOf(u), u)
 		}
 	}
 
@@ -77,11 +77,11 @@ func (r *Resources) UpdateIgnored(objs ...client.Object) {
 func (r *Resources) GetIgnored(id core.ID) (client.Object, bool) {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
-	if r.mutationIgnoreObjectsMap == nil || r.mutationIgnoreObjectsMap.Len() == 0 {
+	if r.mutationIgnoredObjectsMap == nil || r.mutationIgnoredObjectsMap.Len() == 0 {
 		return nil, false
 	}
 
-	o, found := r.mutationIgnoreObjectsMap.Get(id)
+	o, found := r.mutationIgnoredObjectsMap.Get(id)
 
 	if found {
 		oCopy := o.DeepCopyObject().(client.Object)
@@ -95,12 +95,12 @@ func (r *Resources) GetIgnored(id core.ID) (client.Object, bool) {
 func (r *Resources) IgnoredObjects() []client.Object {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
-	if r.mutationIgnoreObjectsMap == nil || r.mutationIgnoreObjectsMap.Len() == 0 {
+	if r.mutationIgnoredObjectsMap == nil || r.mutationIgnoredObjectsMap.Len() == 0 {
 		return nil
 	}
 
 	var objects []client.Object
-	for pair := r.mutationIgnoreObjectsMap.Front(); pair != nil; pair = pair.Next() {
+	for pair := r.mutationIgnoredObjectsMap.Front(); pair != nil; pair = pair.Next() {
 		objects = append(objects, pair.Value.DeepCopyObject().(client.Object))
 	}
 	return objects
@@ -110,11 +110,11 @@ func (r *Resources) IgnoredObjects() []client.Object {
 func (r *Resources) DeleteIgnored(id core.ID) bool {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
-	if r.mutationIgnoreObjectsMap == nil || r.mutationIgnoreObjectsMap.Len() == 0 {
+	if r.mutationIgnoredObjectsMap == nil || r.mutationIgnoredObjectsMap.Len() == 0 {
 		return false
 	}
 
-	return r.mutationIgnoreObjectsMap.Delete(id)
+	return r.mutationIgnoredObjectsMap.Delete(id)
 }
 
 // UpdateDeclared performs an atomic update on the resource declaration set.

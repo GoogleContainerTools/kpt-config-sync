@@ -285,7 +285,7 @@ func TestIgnoredObjects(t *testing.T) {
 
 	ignoredObjs = dr.IgnoredObjects()
 
-	assert.NotContains(t, ignoredObjs, foundObj, "foundObj shouldn't have been modified in mutationIgnoreObjectsMap")
+	assert.NotContains(t, ignoredObjs, foundObj, "foundObj shouldn't have been modified in mutationIgnoredObjectsMap")
 }
 
 func TestDeleteIgnored(t *testing.T) {

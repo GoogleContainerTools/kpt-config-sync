@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package parse
+package syncclient
 
 import (
 	"context"
@@ -548,7 +548,7 @@ For more information, see https://g.co/cloud/acm-errors#knv1060`
 		},
 		// TODO: De-dupe ManagementConflictErrorWrap & KptManagementConflictError
 		// These are currently de-duped locally by the conflict handler,
-		// but not remotely by prependRootSyncRemediatorStatus.
+		// but not remotely by PrependRootSyncRemediatorStatus.
 		"prepend KptManagementConflictError": {
 			thisSyncErrors: []v1beta1.ConfigSyncError{
 				kptConflictError.ToCSE(),
@@ -565,8 +565,8 @@ For more information, see https://g.co/cloud/acm-errors#knv1060`
 			rootSync.Status.Sync.Errors = tc.thisSyncErrors
 			fakeClient := syncertest.NewClient(t, core.Scheme, rootSync)
 			ctx := context.Background()
-			err := prependRootSyncRemediatorStatus(ctx, fakeClient, rootSyncName,
-				[]status.ManagementConflictError{conflictAB}, defaultDenominator)
+			err := PrependRootSyncRemediatorStatus(ctx, fakeClient, rootSyncName,
+				[]status.ManagementConflictError{conflictAB})
 			require.NoError(t, err)
 			var updatedRootSync v1beta1.RootSync
 			statuserr := fakeClient.Get(ctx, rootsync.ObjectKey(rootSyncName), &updatedRootSync)

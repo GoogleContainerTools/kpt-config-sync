@@ -22,64 +22,65 @@ import (
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
+	"kpt.dev/configsync/pkg/syncclient"
 )
 
-// cacheForCommit tracks the progress made by the reconciler for a source commit (a source commit or an oci image digest).
+// CacheForCommit tracks the progress made by the reconciler for a source commit (a source commit or an oci image digest).
 //
 // The reconciler resets the whole cache when a new commit is detected.
 //
-// The reconciler resets the whole cache except for the cached sourceState when:
+// The reconciler resets the whole cache except for the cached SourceState when:
 //   - a force-resync happens, or
 //   - one of the watchers noticed a management conflict.
-type cacheForCommit struct {
-	// source tracks the state of the source repo.
-	// This field is only set after the reconciler successfully reads all the source files.
-	source *sourceState
+type CacheForCommit struct {
+	// Source tracks the state of the Source repo.
+	// This field is only set after the reconciler successfully reads all the Source files.
+	Source *syncclient.SourceState
 
-	// hasParserResult indicates whether the cache includes the parser result.
-	hasParserResult bool
+	// HasParserResult indicates whether the cache includes the parser result.
+	HasParserResult bool
 
-	// objsSkipped contains the objects which will not be sent to the applier to apply.
+	// ObjsSkipped contains the objects which will not be sent to the applier to apply.
 	// For example, the objects whose scope is unknown will not be sent to the applier since
 	// the kpt applier cannot handle unknown-scoped objects.
-	objsSkipped []ast.FileObject
+	ObjsSkipped []ast.FileObject
 
-	// objsToApply contains the objects which will be sent to the applier to apply.
-	objsToApply []ast.FileObject
+	// ObjsToApply contains the objects which will be sent to the applier to apply.
+	ObjsToApply []ast.FileObject
 
-	// parserErrs includes the parser errors.
-	parserErrs status.MultiError
+	// ParserErrs includes the parser errors.
+	ParserErrs status.MultiError
 
-	// declaredResourcesUpdated indicates whether the resource declaration set
+	// DeclaredResourcesUpdated indicates whether the resource declaration set
 	// has been updated.
-	declaredResourcesUpdated bool
+	DeclaredResourcesUpdated bool
 
-	// applied indicates whether the applier has successfully applied the
+	// Applied indicates whether the applier has successfully Applied the
 	// declared resources.
-	applied bool
+	Applied bool
 
-	// watchesUpdated indicates whether the remediator watches have been updated
+	// WatchesUpdated indicates whether the remediator watches have been updated
 	// for the latest declared resources.
-	watchesUpdated bool
+	WatchesUpdated bool
 
-	// needToRetry indicates whether a retry is needed.
-	needToRetry bool
+	// NeedToRetry indicates whether a retry is needed.
+	NeedToRetry bool
 }
 
-func (c *cacheForCommit) setParserResult(objs []ast.FileObject, parserErrs status.MultiError) {
+func (c *CacheForCommit) SetParserResult(objs []ast.FileObject, parserErrs status.MultiError) {
 	knownScopeObjs, unknownScopeObjs := splitObjects(objs)
-	c.objsSkipped = unknownScopeObjs
-	c.objsToApply = knownScopeObjs
-	c.parserErrs = parserErrs
-	c.hasParserResult = true
+	c.ObjsSkipped = unknownScopeObjs
+	c.ObjsToApply = knownScopeObjs
+	c.ParserErrs = parserErrs
+	c.HasParserResult = true
 }
 
-func (c *cacheForCommit) parserResultUpToDate() bool {
+func (c *CacheForCommit) ParserResultUpToDate() bool {
 	// If len(c.objsSkipped) > 0, it mean that some objects were skipped to be sent to
 	// the kpt applier. For example, the objects whose scope is unknown will not be sent
 	// to the applier since the kpt applier cannot handle unknown-scoped objects.
 	// Therefore, if len(c.objsSkipped) > 0, we would parse the configs from scratch.
-	return c.hasParserResult && len(c.objsSkipped) == 0 && c.parserErrs == nil
+	return c.HasParserResult && len(c.ObjsSkipped) == 0 && c.ParserErrs == nil
 }
 
 // splitObjects splits `objs` into two groups: the objects whose scope is known, and the objects whose scope is unknown.

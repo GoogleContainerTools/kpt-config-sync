@@ -12,13 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package parse
+package syncclient
 
 import (
-	"strings"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/status"
 )
 
@@ -44,8 +41,8 @@ func (s *ReconcilerStatus) DeepCopy() *ReconcilerStatus {
 	}
 }
 
-// needToSetSourceStatus returns true if `p.setSourceStatus` should be called.
-func (s *ReconcilerStatus) needToSetSourceStatus(newStatus *SourceStatus) bool {
+// NeedToSetSourceStatus returns true if `p.setSourceStatus` should be called.
+func (s *ReconcilerStatus) NeedToSetSourceStatus(newStatus *SourceStatus) bool {
 	if s.SourceStatus == nil {
 		return newStatus != nil
 	}
@@ -61,8 +58,8 @@ func (s *ReconcilerStatus) needToSetSourceStatus(newStatus *SourceStatus) bool {
 	return !s.SourceStatus.Equals(newStatus)
 }
 
-// needToSetSyncStatus returns true if `p.SetSyncStatus` should be called.
-func (s *ReconcilerStatus) needToSetSyncStatus(newStatus *SyncStatus) bool {
+// NeedToSetSyncStatus returns true if `p.SetSyncStatus` should be called.
+func (s *ReconcilerStatus) NeedToSetSyncStatus(newStatus *SyncStatus) bool {
 	if s.SyncStatus == nil {
 		return newStatus != nil
 	}
@@ -91,49 +88,6 @@ type SourceSpec interface {
 	// Equals returns true if the specified SourceSpec equals this
 	// SourceSpec, including type and all field values.
 	Equals(SourceSpec) bool
-}
-
-// SourceSpecFromFileSource builds a SourceSpec from the FileSource.
-// The type of SourceSpec depends on the SourceType.
-// Commit is only necessary for Helm sources, because the chart Version is
-// parsed from the "commit" string (`chart:version`).
-func SourceSpecFromFileSource(source FileSource, sourceType configsync.SourceType, commit string) SourceSpec {
-	var ss SourceSpec
-	switch sourceType {
-	case configsync.GitSource:
-		ss = GitSourceSpec{
-			Repo:     source.SourceRepo,
-			Revision: source.SourceRev,
-			Branch:   source.SourceBranch,
-			Dir:      source.SyncDir.SlashPath(),
-		}
-	case configsync.OciSource:
-		ss = OCISourceSpec{
-			Image: source.SourceRepo,
-			Dir:   source.SyncDir.SlashPath(),
-		}
-	case configsync.HelmSource:
-		ss = HelmSourceSpec{
-			Repo:    source.SourceRepo,
-			Chart:   source.SyncDir.SlashPath(),
-			Version: getChartVersionFromCommit(source.SourceRev, commit),
-		}
-	}
-	return ss
-}
-
-// sourceRev will display the source version,
-// but that could potentially be provided to use as a range of
-// versions from which we pick the latest. We should display the
-// version that was actually pulled down if we can.
-// commit is expected to be of the format `chart:version`,
-// so we parse it to grab the version.
-func getChartVersionFromCommit(sourceRev, commit string) string {
-	split := strings.Split(commit, ":")
-	if len(split) == 2 {
-		return split[1]
-	}
-	return sourceRev
 }
 
 // GitSourceSpec is a SourceSpec for the Git SourceType

@@ -12,14 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package parse
+package reconciler
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
+	"kpt.dev/configsync/pkg/parse"
 	"kpt.dev/configsync/pkg/status"
+	"kpt.dev/configsync/pkg/syncclient"
 )
 
 const invalidSyncPath = ""
@@ -35,8 +37,8 @@ const invalidSyncPath = ""
 // ReconcilerState also includes a cache of the RSync spec and status
 // (ReconcilerStatus).
 //
-// TODO: break up cacheForCommit into phase-based caches
-// TODO: move sourceState into ReconcilerState so the RSync spec and status are next to each other
+// TODO: break up CacheForCommit into phase-based caches
+// TODO: move SourceState into ReconcilerState so the RSync spec and status are next to each other
 type ReconcilerState struct {
 	// checkpoint tracks the sourcePath the last time reconciling succeeded or
 	// failed. Reconciling includes multiple stages: fetch, render, read, parse,
@@ -44,12 +46,12 @@ type ReconcilerState struct {
 	checkpoint checkpoint
 
 	// status contains fields that map to RSync status fields.
-	status *ReconcilerStatus
+	status *syncclient.ReconcilerStatus
 
 	// cache tracks the progress made by the reconciler for a source commit.
-	cache cacheForCommit
+	cache parse.CacheForCommit
 
-	syncErrorCache *SyncErrorCache
+	syncErrorCache *parse.SyncErrorCache
 }
 
 type checkpoint struct {
@@ -93,23 +95,23 @@ func (s *ReconcilerState) updateCheckpoint(c clock.Clock, newSyncPath cmpath.Abs
 // transitioned.
 func (s *ReconcilerState) RecordSyncSuccess(c clock.Clock) {
 	klog.Info("Sync successful")
-	s.updateCheckpoint(c, s.cache.source.syncPath)
-	s.cache.needToRetry = false
+	s.updateCheckpoint(c, s.cache.Source.SyncPath)
+	s.cache.NeedToRetry = false
 }
 
 // RecordRenderInProgress is called when waiting for rendering status. It resets
-// the cacheForCommit, which tells the next reconcile attempt to re-parse from
+// the CacheForCommit, which tells the next reconcile attempt to re-parse from
 // source.
 func (s *ReconcilerState) RecordRenderInProgress() {
 	klog.Info("Rendering in progress")
 	// TODO: track render status lastUpdateTime & lastTransitionTime
-	// TODO: update parserResultUpToDate() to trigger parsing when syncPath changes, to avoid needing to reset the cache to trigger parsing when render is successful
-	s.cache = cacheForCommit{}
+	// TODO: update ParserResultUpToDate() to trigger parsing when syncPath changes, to avoid needing to reset the cache to trigger parsing when render is successful
+	s.cache = parse.CacheForCommit{}
 }
 
 // RecordFailure is called when a sync attempt errors. It invalidates the
 // checkpoint, requests a retry, and logs the errors. Does not reset the
-// cacheForCommit.
+// CacheForCommit.
 func (s *ReconcilerState) RecordFailure(c clock.Clock, errs status.MultiError) {
 	if status.AllTransientErrors(errs) {
 		klog.Infof("Reconcile attempt failed with transient error(s): %v", status.FormatSingleLine(errs))
@@ -117,40 +119,40 @@ func (s *ReconcilerState) RecordFailure(c clock.Clock, errs status.MultiError) {
 		klog.Errorf("Reconcile attempt failed: %v", status.FormatSingleLine(errs))
 	}
 	s.updateCheckpoint(c, invalidSyncPath)
-	s.cache.needToRetry = true
+	s.cache.NeedToRetry = true
 }
 
 // RecordReadSuccess is called when read succeeds after a source change is
-// detected. It resets the cacheForCommit, which skips re-reading, but forces
+// detected. It resets the CacheForCommit, which skips re-reading, but forces
 // re-parsing.
-func (s *ReconcilerState) RecordReadSuccess(source *sourceState) {
+func (s *ReconcilerState) RecordReadSuccess(source *syncclient.SourceState) {
 	klog.Info("Read successful")
 	// TODO: track read status lastUpdateTime & lastTransitionTime
-	// TODO: update parserResultUpToDate() to trigger parsing when syncPath changes, to avoid needing to reset the cache to trigger parsing when read is successful
-	s.cache = cacheForCommit{
-		source: source,
+	// TODO: update ParserResultUpToDate() to trigger parsing when syncPath changes, to avoid needing to reset the cache to trigger parsing when read is successful
+	s.cache = parse.CacheForCommit{
+		Source: source,
 	}
 }
 
 // RecordReadFailure is called when read errors after a source change is
-// detected. It resets the cacheForCommit, forces re-reading and re-parsing.
+// detected. It resets the CacheForCommit, forces re-reading and re-parsing.
 func (s *ReconcilerState) RecordReadFailure() {
 	klog.Info("Read attempt failed")
 	// TODO: track read status lastUpdateTime & lastTransitionTime
-	s.cache = cacheForCommit{}
+	s.cache = parse.CacheForCommit{}
 }
 
 // RecordFullSyncStart is called when a full sync attempt starts. It resets the
-// cacheForCommit, which tells the parser to re-parse from source, but keeps the
+// CacheForCommit, which tells the parser to re-parse from source, but keeps the
 // last known read status, to skip re-read on next sync attempt.
 // Retry request will not be reset, to avoid resetting the backoff retries.
 func (s *ReconcilerState) RecordFullSyncStart() {
 	// TODO: Does keeping the cache.source actually do anything? It seems like it always gets regenerated by Read anyway.
-	source := s.cache.source
-	needToRetry := s.cache.needToRetry
-	s.cache = cacheForCommit{}
-	s.cache.source = source
-	s.cache.needToRetry = needToRetry
+	source := s.cache.Source
+	needToRetry := s.cache.NeedToRetry
+	s.cache = parse.CacheForCommit{}
+	s.cache.Source = source
+	s.cache.NeedToRetry = needToRetry
 }
 
 // SyncErrors returns all the sync errors, including remediator errors,

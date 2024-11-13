@@ -22,21 +22,22 @@ import (
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/reader"
 	"kpt.dev/configsync/pkg/status"
+	"kpt.dev/configsync/pkg/syncclient"
 	utildiscovery "kpt.dev/configsync/pkg/util/discovery"
 	"kpt.dev/configsync/pkg/validate"
 )
 
-type repoSyncParser struct {
-	options *Options
+type RepoSyncParser struct {
+	Options *syncclient.Options
 }
 
 // ParseSource implements the Parser interface
-func (p *repoSyncParser) ParseSource(ctx context.Context, state *sourceState) ([]ast.FileObject, status.MultiError) {
-	opts := p.options
+func (p *RepoSyncParser) ParseSource(ctx context.Context, state *syncclient.SourceState) ([]ast.FileObject, status.MultiError) {
+	opts := p.Options
 	filePaths := reader.FilePaths{
-		RootDir:   state.syncPath,
+		RootDir:   state.SyncPath,
 		PolicyDir: opts.SyncDir,
-		Files:     state.files,
+		Files:     state.Files,
 	}
 	crds, err := opts.DeclaredResources.DeclaredCRDs()
 	if err != nil {
@@ -44,7 +45,7 @@ func (p *repoSyncParser) ParseSource(ctx context.Context, state *sourceState) ([
 	}
 	builder := utildiscovery.ScoperBuilder(opts.DiscoveryClient)
 
-	klog.Infof("Parsing files from source path: %s", state.syncPath.OSPath())
+	klog.Infof("Parsing files from source path: %s", state.SyncPath.OSPath())
 	objs, err := opts.ConfigParser.Parse(filePaths)
 	if err != nil {
 		return nil, err
@@ -73,7 +74,7 @@ func (p *repoSyncParser) ParseSource(ctx context.Context, state *sourceState) ([
 	}
 
 	// Duplicated with root.go.
-	e := addAnnotationsAndLabels(objs, opts.Scope, opts.SyncName, opts.Files.sourceContext(), state.commit)
+	e := syncclient.AddAnnotationsAndLabels(objs, opts.Scope, opts.SyncName, opts.Files.SourceContext(), state.Commit)
 	if e != nil {
 		err = status.Append(err, status.InternalErrorf("unable to add annotations and labels: %v", e))
 		return nil, err

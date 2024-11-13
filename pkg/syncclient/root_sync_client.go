@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package parse
+package syncclient
 
 import (
 	"context"
@@ -32,60 +32,30 @@ import (
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
-	"kpt.dev/configsync/pkg/reconciler/namespacecontroller"
 	"kpt.dev/configsync/pkg/rootsync"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/util/compare"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// RootOptions includes options specific to RootSync objects.
-type RootOptions struct {
-	// Extend parse.Options
-	*Options
-
-	// SourceFormat defines the structure of the Root repository. Only the Root
-	// repository may be SourceFormatHierarchy; all others are implicitly
-	// SourceFormatUnstructured.
-	SourceFormat configsync.SourceFormat
-
-	// NamespaceStrategy indicates the NamespaceStrategy to be used by this
-	// reconciler.
-	NamespaceStrategy configsync.NamespaceStrategy
-
-	// DynamicNSSelectorEnabled represents whether the NamespaceSelector's dynamic
-	// mode is enabled. If it is enabled, NamespaceSelector will also select
-	// resources matching the on-cluster Namespaces.
-	// Only Root reconciler may have dynamic NamespaceSelector enabled because
-	// RepoSync can't manage NamespaceSelectors.
-	DynamicNSSelectorEnabled bool
-
-	// NSControllerState stores whether the Namespace Controller schedules a sync
-	// event for the reconciler thread, along with the cached NamespaceSelector
-	// and selected namespaces.
-	// Only Root reconciler may have Namespace Controller state because
-	// RepoSync can't manage NamespaceSelectors.
-	NSControllerState *namespacecontroller.State
-}
-
-type rootSyncStatusClient struct {
-	options *Options
+type RootSyncStatusClient struct {
+	Options *Options
 	// mux prevents status update conflicts.
 	mux sync.Mutex
 }
 
 // SetSourceStatus implements the Parser interface
-func (p *rootSyncStatusClient) SetSourceStatus(ctx context.Context, newStatus *SourceStatus) status.Error {
+func (p *RootSyncStatusClient) SetSourceStatus(ctx context.Context, newStatus *SourceStatus) status.Error {
 	p.mux.Lock()
 	defer p.mux.Unlock()
 	return p.setSourceStatusWithRetries(ctx, newStatus, defaultDenominator)
 }
 
-func (p *rootSyncStatusClient) setSourceStatusWithRetries(ctx context.Context, newStatus *SourceStatus, denominator int) status.Error {
+func (p *RootSyncStatusClient) setSourceStatusWithRetries(ctx context.Context, newStatus *SourceStatus, denominator int) status.Error {
 	if denominator <= 0 {
 		return status.InternalErrorf("denominator must be positive: %d", denominator)
 	}
-	opts := p.options
+	opts := p.Options
 
 	var rs v1beta1.RootSync
 	if err := opts.Client.Get(ctx, rootsync.ObjectKey(opts.SyncName), &rs); err != nil {
@@ -176,8 +146,8 @@ func setSourceStatusFields(source *v1beta1.SourceStatus, newStatus *SourceStatus
 	source.LastUpdate = newStatus.LastUpdate
 }
 
-func (p *rootSyncStatusClient) SetImageToSyncAnnotation(ctx context.Context, commit string) status.Error {
-	opts := p.options
+func (p *RootSyncStatusClient) SetImageToSyncAnnotation(ctx context.Context, commit string) status.Error {
+	opts := p.Options
 	rs := &v1beta1.RootSync{}
 	rs.Namespace = configsync.ControllerNamespace
 	rs.Name = opts.SyncName
@@ -203,8 +173,8 @@ func (p *rootSyncStatusClient) SetImageToSyncAnnotation(ctx context.Context, com
 	return nil
 }
 
-func (p *rootSyncStatusClient) SetRequiresRenderingAnnotation(ctx context.Context, renderingRequired bool) status.Error {
-	opts := p.options
+func (p *RootSyncStatusClient) SetRequiresRenderingAnnotation(ctx context.Context, renderingRequired bool) status.Error {
+	opts := p.Options
 	rs := &v1beta1.RootSync{}
 	if err := opts.Client.Get(ctx, rootsync.ObjectKey(opts.SyncName), rs); err != nil {
 		return status.APIServerError(err, "failed to get RootSync for parser")
@@ -226,7 +196,7 @@ func (p *rootSyncStatusClient) SetRequiresRenderingAnnotation(ctx context.Contex
 }
 
 // SetRenderingStatus implements the Parser interface
-func (p *rootSyncStatusClient) SetRenderingStatus(ctx context.Context, oldStatus, newStatus *RenderingStatus) status.Error {
+func (p *RootSyncStatusClient) SetRenderingStatus(ctx context.Context, oldStatus, newStatus *RenderingStatus) status.Error {
 	if oldStatus.Equals(newStatus) {
 		return nil
 	}
@@ -236,11 +206,11 @@ func (p *rootSyncStatusClient) SetRenderingStatus(ctx context.Context, oldStatus
 	return p.setRenderingStatusWithRetries(ctx, newStatus, defaultDenominator)
 }
 
-func (p *rootSyncStatusClient) setRenderingStatusWithRetries(ctx context.Context, newStatus *RenderingStatus, denominator int) status.Error {
+func (p *RootSyncStatusClient) setRenderingStatusWithRetries(ctx context.Context, newStatus *RenderingStatus, denominator int) status.Error {
 	if denominator <= 0 {
 		return status.InternalErrorf("denominator must be positive: %d", denominator)
 	}
-	opts := p.options
+	opts := p.Options
 
 	var rs v1beta1.RootSync
 	if err := opts.Client.Get(ctx, rootsync.ObjectKey(opts.SyncName), &rs); err != nil {
@@ -332,8 +302,8 @@ func setRenderingStatusFields(rendering *v1beta1.RenderingStatus, newStatus *Ren
 }
 
 // GetReconcilerStatus gets the RootSync sync status from the cluster.
-func (p *rootSyncStatusClient) GetReconcilerStatus(ctx context.Context) (*ReconcilerStatus, status.Error) {
-	opts := p.options
+func (p *RootSyncStatusClient) GetReconcilerStatus(ctx context.Context) (*ReconcilerStatus, status.Error) {
+	opts := p.Options
 	rs := &v1beta1.RootSync{}
 	if err := opts.Client.Get(ctx, rootsync.ObjectKey(opts.SyncName), rs); err != nil {
 		if apierrors.IsNotFound(err) || meta.IsNoMatchError(err) {
@@ -462,17 +432,17 @@ func reconcilerStatusFromRSyncStatus(rsyncStatus v1beta1.Status, sourceType conf
 // SetSyncStatus implements the Parser interface
 // SetSyncStatus sets the RootSync sync status.
 // `errs` includes the errors encountered during the apply step;
-func (p *rootSyncStatusClient) SetSyncStatus(ctx context.Context, newStatus *SyncStatus) status.Error {
+func (p *RootSyncStatusClient) SetSyncStatus(ctx context.Context, newStatus *SyncStatus) status.Error {
 	p.mux.Lock()
 	defer p.mux.Unlock()
 	return p.setSyncStatusWithRetries(ctx, newStatus, defaultDenominator)
 }
 
-func (p *rootSyncStatusClient) setSyncStatusWithRetries(ctx context.Context, newStatus *SyncStatus, denominator int) status.Error {
+func (p *RootSyncStatusClient) setSyncStatusWithRetries(ctx context.Context, newStatus *SyncStatus, denominator int) status.Error {
 	if denominator <= 0 {
 		return status.InternalErrorf("denominator must be positive: %d", denominator)
 	}
-	opts := p.options
+	opts := p.Options
 
 	rs := &v1beta1.RootSync{}
 	if err := opts.Client.Get(ctx, rootsync.ObjectKey(opts.SyncName), rs); err != nil {
@@ -589,7 +559,11 @@ func summarizeErrorsForCommit(sourceStatus v1beta1.SourceStatus, renderingStatus
 	return errorSources, errorSummary
 }
 
-// prependRootSyncRemediatorStatus adds the conflict error detected by the remediator to the front of the sync errors.
+func PrependRootSyncRemediatorStatus(ctx context.Context, c client.Client, syncName string, conflictErrs []status.ManagementConflictError) status.Error {
+	return prependRootSyncRemediatorStatus(ctx, c, syncName, conflictErrs, defaultDenominator)
+}
+
+// PrependRootSyncRemediatorStatus adds the conflict error detected by the remediator to the front of the sync errors.
 func prependRootSyncRemediatorStatus(ctx context.Context, c client.Client, syncName string, conflictErrs []status.ManagementConflictError, denominator int) status.Error {
 	if denominator <= 0 {
 		return status.InternalErrorf("denominator must be positive: %d", denominator)

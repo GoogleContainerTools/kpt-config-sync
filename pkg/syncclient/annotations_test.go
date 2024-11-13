@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package parse
+package syncclient
 
 import (
 	"testing"
@@ -37,7 +37,7 @@ func TestAddAnnotationsAndLabels(t *testing.T) {
 		name       string
 		actual     []ast.FileObject
 		expected   []ast.FileObject
-		gc         sourceContext
+		gc         SourceContext
 		commitHash string
 	}{
 		{
@@ -47,7 +47,7 @@ func TestAddAnnotationsAndLabels(t *testing.T) {
 		},
 		{
 			name: "nil annotation without env",
-			gc: sourceContext{
+			gc: SourceContext{
 				Repo:   "git@github.com/foo",
 				Branch: "main",
 				Rev:    "HEAD",
@@ -70,7 +70,7 @@ func TestAddAnnotationsAndLabels(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := addAnnotationsAndLabels(tc.actual, syncScope, syncName, tc.gc, tc.commitHash); err != nil {
+			if err := AddAnnotationsAndLabels(tc.actual, syncScope, syncName, tc.gc, tc.commitHash); err != nil {
 				t.Fatalf("Failed to add annotations and labels: %v", err)
 			}
 			if diff := cmp.Diff(tc.expected, tc.actual, ast.CompareFileObject); diff != "" {

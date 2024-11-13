@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package parse
+package reconciler
 
 import (
 	"context"
@@ -24,7 +24,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -39,16 +38,17 @@ import (
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/hydrate"
-	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/importer/reader"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
+	"kpt.dev/configsync/pkg/parse"
 	"kpt.dev/configsync/pkg/remediator/conflict"
 	remediatorfake "kpt.dev/configsync/pkg/remediator/fake"
 	"kpt.dev/configsync/pkg/rootsync"
 	"kpt.dev/configsync/pkg/status"
+	"kpt.dev/configsync/pkg/syncclient"
 	"kpt.dev/configsync/pkg/syncer/reconcile/fight"
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/openapitest"
@@ -57,19 +57,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-const (
-	symLink = "rev"
-)
+const symLink = "rev"
 
-func newRootReconciler(t *testing.T, clock clock.Clock, fakeClient client.Client, fs FileSource, renderingEnabled bool) *reconciler {
+func newRootReconciler(t *testing.T, clock clock.Clock, fakeClient client.Client, fs syncclient.FileSource, renderingEnabled bool) *reconciler {
 	converter, err := openapitest.ValueConverterForTest()
 	if err != nil {
 		t.Fatal(err)
 	}
 	state := &ReconcilerState{
-		syncErrorCache: NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
+		syncErrorCache: parse.NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
 	}
-	opts := &Options{
+	opts := &syncclient.Options{
 		Clock:             clock,
 		ConfigParser:      filesystem.NewParser(&reader.File{}),
 		SyncName:          rootSyncName,
@@ -78,16 +76,16 @@ func newRootReconciler(t *testing.T, clock clock.Clock, fakeClient client.Client
 		Client:            fakeClient,
 		DiscoveryClient:   syncerFake.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
 		Converter:         converter,
-		Files:             Files{FileSource: fs},
+		Files:             syncclient.Files{FileSource: fs},
 		DeclaredResources: &declared.Resources{},
 	}
-	rootOpts := &RootOptions{
+	rootOpts := &syncclient.RootOptions{
 		Options:      opts,
 		SourceFormat: configsync.SourceFormatUnstructured,
 	}
 	recOpts := &ReconcilerOptions{
 		Options: opts,
-		Updater: &Updater{
+		Updater: &parse.Updater{
 			Scope:      opts.Scope,
 			Resources:  opts.DeclaredResources,
 			Remediator: &remediatorfake.Remediator{},
@@ -103,11 +101,11 @@ func newRootReconciler(t *testing.T, clock clock.Clock, fakeClient client.Client
 	}
 	return &reconciler{
 		options: recOpts,
-		syncStatusClient: &rootSyncStatusClient{
-			options: opts,
+		syncStatusClient: &syncclient.RootSyncStatusClient{
+			Options: opts,
 		},
-		parser: &rootSyncParser{
-			options: rootOpts,
+		parser: &parse.RootSyncParser{
+			Options: rootOpts,
 		},
 		reconcilerState: state,
 	}
@@ -130,58 +128,6 @@ func writeFile(rootDir, file, content string) error {
 	return os.WriteFile(errFile, []byte(content), 0644)
 }
 
-func TestSplitObjects(t *testing.T) {
-	testCases := []struct {
-		name             string
-		objs             []ast.FileObject
-		knownScopeObjs   []ast.FileObject
-		unknownScopeObjs []ast.FileObject
-	}{
-		{
-			name: "no unknown scope objects",
-			objs: []ast.FileObject{
-				k8sobjects.Namespace("namespaces/prod", core.Label("environment", "prod")),
-				k8sobjects.Role(core.Namespace("prod")),
-			},
-			knownScopeObjs: []ast.FileObject{
-				k8sobjects.Namespace("namespaces/prod", core.Label("environment", "prod")),
-				k8sobjects.Role(core.Namespace("prod")),
-			},
-		},
-		{
-			name: "has unknown scope objects",
-			objs: []ast.FileObject{
-				k8sobjects.ClusterRole(
-					core.Annotation(metadata.UnknownScopeAnnotationKey, metadata.UnknownScopeAnnotationValue),
-				),
-				k8sobjects.Namespace("namespaces/prod", core.Label("environment", "prod")),
-				k8sobjects.Role(core.Namespace("prod")),
-			},
-			knownScopeObjs: []ast.FileObject{
-				k8sobjects.Namespace("namespaces/prod", core.Label("environment", "prod")),
-				k8sobjects.Role(core.Namespace("prod")),
-			},
-			unknownScopeObjs: []ast.FileObject{
-				k8sobjects.ClusterRole(
-					core.Annotation(metadata.UnknownScopeAnnotationKey, metadata.UnknownScopeAnnotationValue),
-				),
-			},
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			gotKnownScopeObjs, gotUnknownScopeObjs := splitObjects(tc.objs)
-			if diff := cmp.Diff(tc.knownScopeObjs, gotKnownScopeObjs, ast.CompareFileObject); diff != "" {
-				t.Errorf("cmp.Diff(tc.knownScopeObjs, gotKnownScopeObjs) = %v", diff)
-			}
-			if diff := cmp.Diff(tc.unknownScopeObjs, gotUnknownScopeObjs, ast.CompareFileObject); diff != "" {
-				t.Errorf("cmp.Diff(tc.unknownScopeObjs, gotUnknownScopeObjs) = %v", diff)
-			}
-		})
-	}
-}
-
 func TestReconciler_Reconcile(t *testing.T) {
 	fakeMetaTime := metav1.Now().Rfc3339Copy() // truncate to second precision
 	fakeTime := fakeMetaTime.Time
@@ -200,7 +146,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 
 	sourceCommit := "abcd123"
 
-	fileSource := FileSource{
+	fileSource := syncclient.FileSource{
 		SourceType:   configsync.GitSource,
 		SourceRepo:   "https://github.com/test/test.git",
 		SourceBranch: "main",
@@ -757,7 +703,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 				}
 			}()
 
-			fs := FileSource{
+			fs := syncclient.FileSource{
 				SourceDir:    cmpath.Absolute(sourceDir),
 				RepoRoot:     cmpath.Absolute(rootDir),
 				HydratedRoot: hydratedRoot,
@@ -772,7 +718,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 			result := reconciler.Reconcile(context.Background(), triggerSync)
 
 			assert.Equal(t, tc.expectedSourceChanged, result.SourceChanged)
-			assert.Equal(t, tc.needRetry, reconciler.ReconcilerState().cache.needToRetry)
+			assert.Equal(t, tc.needRetry, reconciler.ReconcilerState().cache.NeedToRetry)
 
 			rs := &v1beta1.RootSync{}
 			err = fakeClient.Get(context.Background(), rootsync.ObjectKey(rootSyncName), rs)

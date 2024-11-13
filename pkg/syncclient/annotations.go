@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package parse
+package syncclient
 
 import (
 	"encoding/json"
@@ -26,14 +26,14 @@ import (
 	"kpt.dev/configsync/pkg/metadata"
 )
 
-// sourceContext contains the fields which identify where a resource is being synced from.
-type sourceContext struct {
+// SourceContext contains the fields which identify where a resource is being synced from.
+type SourceContext struct {
 	Repo   string `json:"repo"`
 	Branch string `json:"branch,omitempty"`
 	Rev    string `json:"rev,omitempty"`
 }
 
-func addAnnotationsAndLabels(objs []ast.FileObject, scope declared.Scope, syncName string, sc sourceContext, commitHash string) error {
+func AddAnnotationsAndLabels(objs []ast.FileObject, scope declared.Scope, syncName string, sc SourceContext, commitHash string) error {
 	gcVal, err := json.Marshal(sc)
 	if err != nil {
 		return fmt.Errorf("marshaling sourceContext: %w", err)

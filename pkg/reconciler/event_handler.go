@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package parse
+package reconciler
 
 import (
 	"context"
@@ -105,9 +105,9 @@ func (s *EventHandler) Handle(event events.Event) events.Result {
 		var trigger string
 		if opts.HasManagementConflict() {
 			trigger = triggerManagementConflict
-		} else if state.cache.needToRetry {
+		} else if state.cache.NeedToRetry {
 			trigger = triggerRetry
-		} else if opts.needToUpdateWatch() {
+		} else if opts.Remediator.NeedsUpdate() {
 			trigger = triggerWatchUpdate
 		} else {
 			// Skip RunFunc and reset the backoff to keep checking for conflicts & watch updates.

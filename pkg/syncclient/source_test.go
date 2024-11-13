@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package parse
+package syncclient
 
 import (
 	"errors"
@@ -30,8 +30,11 @@ import (
 	"kpt.dev/configsync/pkg/status"
 )
 
-var originCommit = "1234567890abcde"
-var differentCommit = "abcde1234567890"
+const (
+	symLink         = "rev"
+	originCommit    = "1234567890abcde"
+	differentCommit = "abcde1234567890"
+)
 
 func TestReadConfigFiles(t *testing.T) {
 	testCases := []struct {
@@ -68,8 +71,8 @@ func TestReadConfigFiles(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			// mock the original sourceCommit that is passed by sourceState when
-			// running readConfigFiles
+			// mock the original sourceCommit that is passed by SourceState when
+			// running ReadConfigFiles
 			sourceCommitPath := filepath.Join(tempRoot, originCommit)
 			if _, err := os.Stat(sourceCommitPath); errors.Is(err, os.ErrNotExist) {
 				err = os.Mkdir(sourceCommitPath, os.ModePerm)
@@ -92,11 +95,11 @@ func TestReadConfigFiles(t *testing.T) {
 				}
 			}()
 
-			srcState := &sourceState{
-				spec:     nil, // TODO: Add tests for behavior when spec is non-nil
-				commit:   originCommit,
-				syncPath: cmpath.Absolute(sourceCommitPath),
-				files:    nil,
+			srcState := &SourceState{
+				Spec:     nil, // TODO: Add tests for behavior when spec is non-nil
+				Commit:   originCommit,
+				SyncPath: cmpath.Absolute(sourceCommitPath),
+				Files:    nil,
 			}
 
 			files := &Files{}
@@ -104,7 +107,7 @@ func TestReadConfigFiles(t *testing.T) {
 			// set the necessary FileSource of parser
 			files.SourceDir = symDir
 
-			err = files.readConfigFiles(srcState)
+			err = files.ReadConfigFiles(srcState)
 			assert.Equal(t, tc.wantedErr, err)
 		})
 	}
@@ -240,9 +243,9 @@ func TestReadHydratedPathWithRetry(t *testing.T) {
 				}
 			}()
 
-			srcState := &sourceState{
-				spec:   nil, // TODO: Add tests for behavior when spec is non-nil
-				commit: originCommit,
+			srcState := &SourceState{
+				Spec:   nil, // TODO: Add tests for behavior when spec is non-nil
+				Commit: originCommit,
 			}
 
 			files := Files{
@@ -253,13 +256,13 @@ func TestReadHydratedPathWithRetry(t *testing.T) {
 				},
 			}
 
-			wantState := &sourceState{
-				commit:   tc.commit,
-				syncPath: cmpath.Absolute(filepath.Join(parserCommitPath, syncDir)),
+			wantState := &SourceState{
+				Commit:   tc.commit,
+				SyncPath: cmpath.Absolute(filepath.Join(parserCommitPath, syncDir)),
 			}
 
 			t.Logf("start calling readHydratedDirWithRetry at %v", time.Now())
-			hydrationState, hydrationErr := files.readHydratedPathWithRetry(backoff,
+			hydrationState, hydrationErr := files.ReadHydratedPathWithRetry(backoff,
 				cmpath.Absolute(hydratedRoot), "unused", srcState)
 
 			if tc.expectedErrMsg == "" {

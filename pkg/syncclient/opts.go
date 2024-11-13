@@ -1,25 +1,11 @@
-// Copyright 2022 Google LLC
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//      http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-package parse
+package syncclient
 
 import (
-	"time"
-
 	"k8s.io/utils/clock"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/filesystem"
+	"kpt.dev/configsync/pkg/reconciler/namespacecontroller"
 	"kpt.dev/configsync/pkg/util/discovery"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -73,19 +59,31 @@ type Options struct {
 	DeclaredResources *declared.Resources
 }
 
-// ReconcilerOptions holds configuration for the reconciler.
-type ReconcilerOptions struct {
-	// Extend parser options to ensure they're using the same dependencies.
+// RootOptions includes options specific to RootSync objects.
+type RootOptions struct {
+	// Extend Options
 	*Options
 
-	// Updater syncs the source from the parsed cache to the cluster.
-	*Updater
+	// SourceFormat defines the structure of the Root repository. Only the Root
+	// repository may be SourceFormatHierarchy; all others are implicitly
+	// SourceFormatUnstructured.
+	SourceFormat configsync.SourceFormat
 
-	// StatusUpdatePeriod is how long the Parser waits between updates of the
-	// sync status, to account for management conflict errors from the Remediator.
-	StatusUpdatePeriod time.Duration
+	// NamespaceStrategy indicates the NamespaceStrategy to be used by this
+	// reconciler.
+	NamespaceStrategy configsync.NamespaceStrategy
 
-	// RenderingEnabled indicates whether the hydration-controller is currently
-	// running for this reconciler.
-	RenderingEnabled bool
+	// DynamicNSSelectorEnabled represents whether the NamespaceSelector's dynamic
+	// mode is enabled. If it is enabled, NamespaceSelector will also select
+	// resources matching the on-cluster Namespaces.
+	// Only Root reconciler may have dynamic NamespaceSelector enabled because
+	// RepoSync can't manage NamespaceSelectors.
+	DynamicNSSelectorEnabled bool
+
+	// NSControllerState stores whether the Namespace Controller schedules a sync
+	// event for the reconciler thread, along with the cached NamespaceSelector
+	// and selected namespaces.
+	// Only Root reconciler may have Namespace Controller state because
+	// RepoSync can't manage NamespaceSelectors.
+	NSControllerState *namespacecontroller.State
 }

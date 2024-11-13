@@ -33,29 +33,31 @@ import (
 	"kpt.dev/configsync/pkg/importer/reader"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
+	"kpt.dev/configsync/pkg/syncclient"
 	"kpt.dev/configsync/pkg/util/discovery"
 	"kpt.dev/configsync/pkg/validate"
 	"sigs.k8s.io/cli-utils/pkg/common"
 )
 
-type rootSyncParser struct {
-	options *RootOptions
+type RootSyncParser struct {
+	// TODO: disentangle status client Options and parser Options
+	Options *syncclient.RootOptions
 }
 
 // ParseSource implements the Parser interface
-func (p *rootSyncParser) ParseSource(ctx context.Context, state *sourceState) ([]ast.FileObject, status.MultiError) {
-	opts := p.options
+func (p *RootSyncParser) ParseSource(ctx context.Context, state *syncclient.SourceState) ([]ast.FileObject, status.MultiError) {
+	opts := p.Options
 
-	wantFiles := state.files
+	wantFiles := state.Files
 	if opts.SourceFormat == configsync.SourceFormatHierarchy {
 		// We're using hierarchical mode for the root repository, so ignore files
 		// outside of the allowed directories.
-		wantFiles = filesystem.FilterHierarchyFiles(state.syncPath, wantFiles)
+		wantFiles = filesystem.FilterHierarchyFiles(state.SyncPath, wantFiles)
 	}
 
 	filePaths := reader.FilePaths{
-		RootDir:   state.syncPath,
-		PolicyDir: p.options.SyncDir,
+		RootDir:   state.SyncPath,
+		PolicyDir: p.Options.SyncDir,
 		Files:     wantFiles,
 	}
 
@@ -65,7 +67,7 @@ func (p *rootSyncParser) ParseSource(ctx context.Context, state *sourceState) ([
 	}
 	builder := discovery.ScoperBuilder(opts.DiscoveryClient)
 
-	klog.Infof("Parsing files from source path: %s", state.syncPath.OSPath())
+	klog.Infof("Parsing files from source path: %s", state.SyncPath.OSPath())
 	objs, err := opts.ConfigParser.Parse(filePaths)
 	if err != nil {
 		return nil, err
@@ -101,7 +103,7 @@ func (p *rootSyncParser) ParseSource(ctx context.Context, state *sourceState) ([
 	}
 
 	// Duplicated with namespace.go.
-	e := addAnnotationsAndLabels(objs, declared.RootScope, opts.SyncName, opts.Files.sourceContext(), state.commit)
+	e := syncclient.AddAnnotationsAndLabels(objs, declared.RootScope, opts.SyncName, opts.Files.SourceContext(), state.Commit)
 	if e != nil {
 		err = status.Append(err, status.InternalErrorf("unable to add annotations and labels: %v", e))
 		return nil, err
@@ -113,8 +115,8 @@ func (p *rootSyncParser) ParseSource(ctx context.Context, state *sourceState) ([
 // namespaces into the list before returning it. Implicit namespaces are those
 // that are declared by an object's metadata namespace field but are not present
 // in the list. The implicit namespace is only added if it doesn't exist.
-func (p *rootSyncParser) addImplicitNamespaces(objs []ast.FileObject) ([]ast.FileObject, status.MultiError) {
-	opts := p.options
+func (p *RootSyncParser) addImplicitNamespaces(objs []ast.FileObject) ([]ast.FileObject, status.MultiError) {
+	opts := p.Options
 	var errs status.MultiError
 	// namespaces will track the set of Namespaces we expect to exist, and those
 	// which actually do.

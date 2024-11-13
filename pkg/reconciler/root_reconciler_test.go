@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package parse
+package reconciler
 
 import (
 	"context"
@@ -48,10 +48,12 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
+	"kpt.dev/configsync/pkg/parse"
 	"kpt.dev/configsync/pkg/remediator/conflict"
 	remediatorfake "kpt.dev/configsync/pkg/remediator/fake"
 	"kpt.dev/configsync/pkg/rootsync"
 	"kpt.dev/configsync/pkg/status"
+	"kpt.dev/configsync/pkg/syncclient"
 	"kpt.dev/configsync/pkg/syncer/reconcile/fight"
 	syncertest "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/openapitest"
@@ -92,7 +94,7 @@ func TestRootReconciler_ParseAndUpdate(t *testing.T) {
 	otherRootSyncApplySetID := applyset.IDFromSync(otherRootSyncName, declared.RootScope)
 
 	// TODO: Test different source types and inputs
-	fileSource := FileSource{
+	fileSource := syncclient.FileSource{
 		SourceType:   configsync.GitSource,
 		SourceRepo:   "example-repo",
 		SourceRev:    testGitCommit,
@@ -108,13 +110,13 @@ func TestRootReconciler_ParseAndUpdate(t *testing.T) {
 	gitContextOutput := fmt.Sprintf(`{"repo":%q,"branch":%q,"rev":%q}`,
 		fileSource.SourceRepo, fileSource.SourceBranch, fileSource.SourceRev)
 
-	reconcilerStatus := &ReconcilerStatus{
-		SourceStatus: &SourceStatus{
+	reconcilerStatus := &syncclient.ReconcilerStatus{
+		SourceStatus: &syncclient.SourceStatus{
 			Commit:     testGitCommit,
 			Errs:       nil,
 			LastUpdate: fakeMetaTime,
 		},
-		RenderingStatus: &RenderingStatus{
+		RenderingStatus: &syncclient.RenderingStatus{
 			Commit:            testGitCommit,
 			Message:           RenderingSkipped,
 			Errs:              nil,
@@ -681,22 +683,22 @@ func TestRootReconciler_ParseAndUpdate(t *testing.T) {
 			}
 			state := &ReconcilerState{
 				status: reconcilerStatus.DeepCopy(),
-				cache: cacheForCommit{
-					source: &sourceState{
-						spec: GitSourceSpec{
+				cache: parse.CacheForCommit{
+					Source: &syncclient.SourceState{
+						Spec: syncclient.GitSourceSpec{
 							Repo:     fileSource.SourceRepo,
 							Revision: fileSource.SourceRev,
 							Branch:   fileSource.SourceBranch,
 							Dir:      fileSource.SourceDir.SlashPath(),
 						},
-						commit:   testGitCommit,
-						syncPath: "/",
-						files:    files,
+						Commit:   testGitCommit,
+						SyncPath: "/",
+						Files:    files,
 					},
 				},
-				syncErrorCache: NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
+				syncErrorCache: parse.NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
 			}
-			opts := &Options{
+			opts := &syncclient.Options{
 				Clock:             fakeClock,
 				ConfigParser:      fakeConfigParser,
 				SyncName:          rootSyncName,
@@ -705,17 +707,17 @@ func TestRootReconciler_ParseAndUpdate(t *testing.T) {
 				Client:            fakeClient,
 				DiscoveryClient:   syncertest.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
 				Converter:         converter,
-				Files:             Files{FileSource: fileSource},
+				Files:             syncclient.Files{FileSource: fileSource},
 				DeclaredResources: &declared.Resources{},
 			}
-			rootOpts := &RootOptions{
+			rootOpts := &syncclient.RootOptions{
 				Options:           opts,
 				SourceFormat:      tc.format,
 				NamespaceStrategy: tc.namespaceStrategy,
 			}
 			recOpts := &ReconcilerOptions{
 				Options: opts,
-				Updater: &Updater{
+				Updater: &parse.Updater{
 					Scope:          opts.Scope,
 					Resources:      opts.DeclaredResources,
 					Remediator:     &remediatorfake.Remediator{},
@@ -727,11 +729,11 @@ func TestRootReconciler_ParseAndUpdate(t *testing.T) {
 			}
 			reconciler := &reconciler{
 				options: recOpts,
-				syncStatusClient: &rootSyncStatusClient{
-					options: opts,
+				syncStatusClient: &syncclient.RootSyncStatusClient{
+					Options: opts,
 				},
-				parser: &rootSyncParser{
-					options: rootOpts,
+				parser: &parse.RootSyncParser{
+					Options: rootOpts,
 				},
 				reconcilerState: state,
 			}
@@ -753,7 +755,7 @@ func TestRootReconciler_ParseAndUpdate(t *testing.T) {
 
 			// After parsing, the objects set is processed and modified.
 			// Validate that the result is stored in state.cache.objsToApply.
-			testutil.AssertEqual(t, tc.expectedObjsToApply, state.cache.objsToApply, "unexpected state.cache.objsToApply contents")
+			testutil.AssertEqual(t, tc.expectedObjsToApply, state.cache.ObjsToApply, "unexpected state.cache.objsToApply contents")
 
 			// Build expected apply inputs from the expectedFileObjects
 			expectedApplyInputs := []applierfake.ApplierInputs{
@@ -932,13 +934,13 @@ func TestRootReconciler_DeclaredFields(t *testing.T) {
 			}
 			tc.existingObjects = append(tc.existingObjects, k8sobjects.RootSyncObjectV1Beta1(rootSyncName))
 			state := &ReconcilerState{
-				status: &ReconcilerStatus{},
-				cache: cacheForCommit{
-					source: &sourceState{},
+				status: &syncclient.ReconcilerStatus{},
+				cache: parse.CacheForCommit{
+					Source: &syncclient.SourceState{},
 				},
-				syncErrorCache: NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
+				syncErrorCache: parse.NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
 			}
-			opts := &Options{
+			opts := &syncclient.Options{
 				Clock:             clock.RealClock{}, // TODO: Test with fake clock
 				ConfigParser:      fakeConfigParser,
 				SyncName:          rootSyncName,
@@ -950,14 +952,14 @@ func TestRootReconciler_DeclaredFields(t *testing.T) {
 				WebhookEnabled:    tc.webhookEnabled,
 				DeclaredResources: &declared.Resources{},
 			}
-			rootOpts := &RootOptions{
+			rootOpts := &syncclient.RootOptions{
 				Options:           opts,
 				SourceFormat:      configsync.SourceFormatUnstructured,
 				NamespaceStrategy: configsync.NamespaceStrategyExplicit,
 			}
 			recOpts := &ReconcilerOptions{
 				Options: opts,
-				Updater: &Updater{
+				Updater: &parse.Updater{
 					Scope:          opts.Scope,
 					Resources:      opts.DeclaredResources,
 					Remediator:     &remediatorfake.Remediator{},
@@ -969,11 +971,11 @@ func TestRootReconciler_DeclaredFields(t *testing.T) {
 			}
 			reconciler := &reconciler{
 				options: recOpts,
-				syncStatusClient: &rootSyncStatusClient{
-					options: opts,
+				syncStatusClient: &syncclient.RootSyncStatusClient{
+					Options: opts,
 				},
-				parser: &rootSyncParser{
-					options: rootOpts,
+				parser: &parse.RootSyncParser{
+					Options: rootOpts,
 				},
 				reconcilerState: state,
 			}
@@ -983,7 +985,7 @@ func TestRootReconciler_DeclaredFields(t *testing.T) {
 
 			// After parsing, the objects set is processed and modified.
 			// Validate that the result is stored in state.cache.objsToApply.
-			testutil.AssertEqual(t, tc.expectedObjsToApply, state.cache.objsToApply, "unexpected state.cache.objsToApply contents")
+			testutil.AssertEqual(t, tc.expectedObjsToApply, state.cache.ObjsToApply, "unexpected state.cache.objsToApply contents")
 		})
 	}
 }
@@ -1217,13 +1219,13 @@ func TestRootReconciler_Parse_Discovery(t *testing.T) {
 				},
 			}
 			state := &ReconcilerState{
-				status: &ReconcilerStatus{},
-				cache: cacheForCommit{
-					source: &sourceState{},
+				status: &syncclient.ReconcilerStatus{},
+				cache: parse.CacheForCommit{
+					Source: &syncclient.SourceState{},
 				},
-				syncErrorCache: NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
+				syncErrorCache: parse.NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
 			}
-			opts := &Options{
+			opts := &syncclient.Options{
 				Clock:             clock.RealClock{}, // TODO: Test with fake clock
 				ConfigParser:      fakeConfigParser,
 				SyncName:          rootSyncName,
@@ -1234,14 +1236,14 @@ func TestRootReconciler_Parse_Discovery(t *testing.T) {
 				Converter:         converter,
 				DeclaredResources: &declared.Resources{},
 			}
-			rootOpts := &RootOptions{
+			rootOpts := &syncclient.RootOptions{
 				Options:           opts,
 				SourceFormat:      configsync.SourceFormatUnstructured,
 				NamespaceStrategy: configsync.NamespaceStrategyImplicit,
 			}
 			recOpts := &ReconcilerOptions{
 				Options: opts,
-				Updater: &Updater{
+				Updater: &parse.Updater{
 					Scope:          opts.Scope,
 					Resources:      opts.DeclaredResources,
 					Remediator:     &remediatorfake.Remediator{},
@@ -1253,11 +1255,11 @@ func TestRootReconciler_Parse_Discovery(t *testing.T) {
 			}
 			reconciler := &reconciler{
 				options: recOpts,
-				syncStatusClient: &rootSyncStatusClient{
-					options: opts,
+				syncStatusClient: &syncclient.RootSyncStatusClient{
+					Options: opts,
 				},
-				parser: &rootSyncParser{
-					options: rootOpts,
+				parser: &parse.RootSyncParser{
+					Options: rootOpts,
 				},
 				reconcilerState: state,
 			}
@@ -1266,7 +1268,7 @@ func TestRootReconciler_Parse_Discovery(t *testing.T) {
 
 			// After parsing, the objects set is processed and modified.
 			// Validate that the result is stored in state.cache.objsToApply.
-			testutil.AssertEqual(t, tc.expectedObjsToApply, state.cache.objsToApply, "unexpected state.cache.objsToApply contents")
+			testutil.AssertEqual(t, tc.expectedObjsToApply, state.cache.ObjsToApply, "unexpected state.cache.objsToApply contents")
 		})
 	}
 }
@@ -1326,13 +1328,13 @@ func TestRootReconciler_SourceReconcilerErrorsMetricValidation(t *testing.T) {
 				},
 			}
 			state := &ReconcilerState{
-				status: &ReconcilerStatus{},
-				cache: cacheForCommit{
-					source: &sourceState{},
+				status: &syncclient.ReconcilerStatus{},
+				cache: parse.CacheForCommit{
+					Source: &syncclient.SourceState{},
 				},
-				syncErrorCache: NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
+				syncErrorCache: parse.NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
 			}
-			opts := &Options{
+			opts := &syncclient.Options{
 				Clock:             clock.RealClock{}, // TODO: Test with fake clock
 				ConfigParser:      fakeConfigParser,
 				SyncName:          rootSyncName,
@@ -1342,13 +1344,13 @@ func TestRootReconciler_SourceReconcilerErrorsMetricValidation(t *testing.T) {
 				DiscoveryClient:   syncertest.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
 				DeclaredResources: &declared.Resources{},
 			}
-			rootOpts := &RootOptions{
+			rootOpts := &syncclient.RootOptions{
 				Options:      opts,
 				SourceFormat: configsync.SourceFormatUnstructured,
 			}
 			recOpts := &ReconcilerOptions{
 				Options: opts,
-				Updater: &Updater{
+				Updater: &parse.Updater{
 					Scope:          opts.Scope,
 					Resources:      opts.DeclaredResources,
 					Remediator:     &remediatorfake.Remediator{},
@@ -1360,11 +1362,11 @@ func TestRootReconciler_SourceReconcilerErrorsMetricValidation(t *testing.T) {
 			}
 			reconciler := &reconciler{
 				options: recOpts,
-				syncStatusClient: &rootSyncStatusClient{
-					options: opts,
+				syncStatusClient: &syncclient.RootSyncStatusClient{
+					Options: opts,
 				},
-				parser: &rootSyncParser{
-					options: rootOpts,
+				parser: &parse.RootSyncParser{
+					Options: rootOpts,
 				},
 				reconcilerState: state,
 			}
@@ -1435,13 +1437,13 @@ func TestRootReconciler_SourceAndSyncReconcilerErrorsMetricValidation(t *testing
 				},
 			}
 			state := &ReconcilerState{
-				status: &ReconcilerStatus{},
-				cache: cacheForCommit{
-					source: &sourceState{},
+				status: &syncclient.ReconcilerStatus{},
+				cache: parse.CacheForCommit{
+					Source: &syncclient.SourceState{},
 				},
-				syncErrorCache: NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
+				syncErrorCache: parse.NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
 			}
-			opts := &Options{
+			opts := &syncclient.Options{
 				Clock:             clock.RealClock{}, // TODO: Test with fake clock
 				ConfigParser:      fakeConfigParser,
 				SyncName:          rootSyncName,
@@ -1451,13 +1453,13 @@ func TestRootReconciler_SourceAndSyncReconcilerErrorsMetricValidation(t *testing
 				DiscoveryClient:   syncertest.NewDiscoveryClient(kinds.Namespace(), kinds.Role()),
 				DeclaredResources: &declared.Resources{},
 			}
-			rootOpts := &RootOptions{
+			rootOpts := &syncclient.RootOptions{
 				Options:      opts,
 				SourceFormat: configsync.SourceFormatUnstructured,
 			}
 			recOpts := &ReconcilerOptions{
 				Options: opts,
-				Updater: &Updater{
+				Updater: &parse.Updater{
 					Scope:          opts.Scope,
 					Resources:      opts.DeclaredResources,
 					Remediator:     &remediatorfake.Remediator{},
@@ -1469,11 +1471,11 @@ func TestRootReconciler_SourceAndSyncReconcilerErrorsMetricValidation(t *testing
 			}
 			reconciler := &reconciler{
 				options: recOpts,
-				syncStatusClient: &rootSyncStatusClient{
-					options: opts,
+				syncStatusClient: &syncclient.RootSyncStatusClient{
+					Options: opts,
 				},
-				parser: &rootSyncParser{
-					options: rootOpts,
+				parser: &parse.RootSyncParser{
+					Options: rootOpts,
 				},
 				reconcilerState: state,
 			}

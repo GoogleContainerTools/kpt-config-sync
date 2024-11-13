@@ -19,10 +19,11 @@ import (
 
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/status"
+	"kpt.dev/configsync/pkg/syncclient"
 )
 
 // Parser represents a parser that can be pointed at and continuously parse a source.
 type Parser interface {
 	// ParseSource parses the source manifest files and returns the objects.
-	ParseSource(ctx context.Context, state *sourceState) ([]ast.FileObject, status.MultiError)
+	ParseSource(ctx context.Context, state *syncclient.SourceState) ([]ast.FileObject, status.MultiError)
 }

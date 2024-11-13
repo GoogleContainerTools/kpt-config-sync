@@ -21,7 +21,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
-	"kpt.dev/configsync/pkg/parse"
+	"kpt.dev/configsync/pkg/reconciler"
 	"kpt.dev/configsync/pkg/reposync"
 	"kpt.dev/configsync/pkg/rootsync"
 	"kpt.dev/configsync/pkg/util/log"
@@ -180,7 +180,7 @@ func statusHasSyncCommitAndNoErrors(status v1beta1.Status, commit string) error 
 	if renderCommit := status.Rendering.Commit; renderCommit != commit {
 		return fmt.Errorf("status.rendering.commit %q does not match git revision %q", renderCommit, commit)
 	}
-	if message := status.Rendering.Message; message != parse.RenderingSucceeded && message != parse.RenderingSkipped {
+	if message := status.Rendering.Message; message != reconciler.RenderingSucceeded && message != reconciler.RenderingSkipped {
 		return fmt.Errorf("status.rendering.message %q does not indicate a successful state", message)
 	}
 	if lastSyncedCommit := status.LastSyncedCommit; lastSyncedCommit != commit {
@@ -199,7 +199,7 @@ func statusHasSyncDirAndNoErrors(status v1beta1.Status, sourceType configsync.So
 	if status.Rendering.ErrorSummary != nil && status.Rendering.ErrorSummary.TotalCount > 0 {
 		return fmt.Errorf("status.rendering contains %d errors", status.Rendering.ErrorSummary.TotalCount)
 	}
-	if message := status.Rendering.Message; message != parse.RenderingSucceeded && message != parse.RenderingSkipped {
+	if message := status.Rendering.Message; message != reconciler.RenderingSucceeded && message != reconciler.RenderingSkipped {
 		return fmt.Errorf("status.rendering.message %q does not indicate a successful state", message)
 	}
 	switch sourceType {

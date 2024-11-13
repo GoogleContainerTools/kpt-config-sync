@@ -61,6 +61,8 @@ type Hydrator struct {
 	HydratedLink string
 	// SyncDir is the relative path to the configs within the Git repository.
 	SyncDir cmpath.Relative
+	// ReconcilerSignalDir is the absolute path to the signal files from Reconciler
+	ReconcilerSignalDir cmpath.Absolute
 	// PollingPeriod is the period of time between checking the filesystem for source updates to render.
 	PollingPeriod time.Duration
 	// RehydratePeriod is the period of time between rehydrating on errors.
@@ -102,18 +104,10 @@ func (h *Hydrator) Run(ctx context.Context) {
 					klog.Errorf("failed to complete the rendering execution for commit %q: %v",
 						srcCommit, err)
 				}
-			} else if doneCommit(h.DonePath.OSPath()) != srcCommit {
-				absShared := cmpath.Absolute("/shared")
-				readyToRenderFile := absShared.Join(cmpath.RelativeSlash(ReadyToRenderFile)).OSPath()
-				readyToRenderCommit, err := ExtractCommit(readyToRenderFile)
-				if err != nil {
-					klog.Error(err)
-					h.complete(readyToRenderCommit, NewActionableError(err))
-				}
-				if readyToRenderCommit != srcCommit {
-					klog.Warningf("srcCommit %s, readyToRenderCommit %s, hydration skipped", srcCommit, readyToRenderCommit)
-					h.complete(readyToRenderCommit, NewActionableError(fmt.Errorf("commit %s is not ready to render, skipping hydration. Current ready to render commit on record %s", srcCommit, ReadyToRenderFile)))
-				} else {
+			} else if extractCommit(h.DonePath.OSPath()) != srcCommit {
+				readyToRenderFile := h.ReconcilerSignalDir.Join(cmpath.RelativeSlash(ReadyToRenderFile)).OSPath()
+				readyToRenderCommit := extractCommit(readyToRenderFile)
+				if readyToRenderCommit == srcCommit {
 					// If the commit has been processed before, regardless of success or failure,
 					// skip the hydration to avoid repeated execution.
 					// The rehydrate ticker will retry on the failed commit.
@@ -122,6 +116,8 @@ func (h *Hydrator) Run(ctx context.Context) {
 					if err := h.complete(srcCommit, hydrateErr); err != nil {
 						klog.Errorf("failed to complete the rendering execution for commit %q: %v", srcCommit, err)
 					}
+				} else if readyToRenderFile != "" {
+					klog.Warningf("skip hydration as commit to render %s does not match srcCommit %s", readyToRenderCommit, srcCommit)
 				}
 			}
 			runTimer.Reset(h.PollingPeriod) // Schedule re-run attempt
@@ -280,16 +276,16 @@ func (h *Hydrator) complete(commit string, hydrationErr HydrationError) error {
 	return nil
 }
 
-// doneCommit extracts the commit hash from the done file if exists.
+// extractCommit extracts the commit hash from the specified file if exists.
 // It returns the commit hash if exists, otherwise, returns an empty string.
 // If it fails to extract the commit hash for various errors, we only log a warning,
 // and wait for the next hydration loop to retry the hydration.
-func doneCommit(donePath string) string {
-	commit, err := ExtractCommit(donePath)
+func extractCommit(path string) string {
+	commit, err := ExtractCommit(path)
 	if err != nil {
-		klog.Warningf("unable to read the done file %s: %v", donePath, err)
+		klog.Warningf("unable to read the file %s: %v", path, err)
 	} else if commit == "" {
-		klog.Warningf("unable to check the status of the done file %s: %v", donePath, err)
+		klog.Warningf("unable to check the status of the file %s: %v", path, err)
 	}
 	return commit
 }

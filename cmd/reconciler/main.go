@@ -93,7 +93,7 @@ var (
 
 	debug = flag.Bool("debug", false,
 		"Enable debug mode, panicking in many scenarios where normally an InternalError would be logged. "+
-			"Do not use in production.")
+				"Do not use in production.")
 
 	renderingEnabled  = flag.Bool("rendering-enabled", util.EnvBool(reconcilermanager.RenderingEnabled, false), "")
 	namespaceStrategy = flag.String(flags.namespaceStrategy, util.EnvString(reconcilermanager.NamespaceStrategy, ""),
@@ -102,27 +102,31 @@ var (
 
 	dynamicNSSelectorEnabled = flag.Bool("dynamic-ns-selector-enabled", util.EnvBool(reconcilermanager.DynamicNSSelectorEnabled, false), "")
 
-	webhookEnabled = flag.Bool("webhook-enabled", util.EnvBool(reconcilermanager.WebhookEnabled, false), "")
+	webhookEnabled       = flag.Bool("webhook-enabled", util.EnvBool(reconcilermanager.WebhookEnabled, false), "")
+	reconcilerSignalsDir = flag.String(flags.reconcilerSignalDir, "/reconciler-signals",
+		"The absolute path in the container that contains the image digest which has passed signature verification")
 )
 
 var flags = struct {
-	sourceDir         string
-	repoRootDir       string
-	hydratedRootDir   string
-	clusterName       string
-	sourceFormat      string
-	statusMode        string
-	reconcileTimeout  string
-	namespaceStrategy string
+	sourceDir           string
+	repoRootDir         string
+	hydratedRootDir     string
+	reconcilerSignalDir string
+	clusterName         string
+	sourceFormat        string
+	statusMode          string
+	reconcileTimeout    string
+	namespaceStrategy   string
 }{
-	repoRootDir:       "repo-root",
-	sourceDir:         "source-dir",
-	hydratedRootDir:   "hydrated-root",
-	clusterName:       "cluster-name",
-	sourceFormat:      reconcilermanager.SourceFormat,
-	statusMode:        "status-mode",
-	reconcileTimeout:  "reconcile-timeout",
-	namespaceStrategy: "namespace-strategy",
+	repoRootDir:         "repo-root",
+	sourceDir:           "source-dir",
+	hydratedRootDir:     "hydrated-root",
+	reconcilerSignalDir: "reconciler-signals",
+	clusterName:         "cluster-name",
+	sourceFormat:        reconcilermanager.SourceFormat,
+	statusMode:          "status-mode",
+	reconcileTimeout:    "reconcile-timeout",
+	namespaceStrategy:   "namespace-strategy",
 }
 
 func main() {
@@ -154,6 +158,11 @@ func main() {
 	absRepoRoot, err := cmpath.AbsoluteOS(*repoRootDir)
 	if err != nil {
 		klog.Fatalf("%s must be an absolute path: %v", flags.repoRootDir, err)
+	}
+
+	absReconcilerSignalDir, err := cmpath.AbsoluteOS(*reconcilerSignalsDir)
+	if err != nil {
+		klog.Fatalf("%s must be an absolute path: %v", flags.reconcilerSignalDir, err)
 	}
 
 	// Normalize syncDirRelative.
@@ -199,6 +208,7 @@ func main() {
 		RenderingEnabled:         *renderingEnabled,
 		DynamicNSSelectorEnabled: *dynamicNSSelectorEnabled,
 		WebhookEnabled:           *webhookEnabled,
+		ReconcilerSignalsDir:     absReconcilerSignalDir,
 	}
 
 	if scope == declared.RootScope {

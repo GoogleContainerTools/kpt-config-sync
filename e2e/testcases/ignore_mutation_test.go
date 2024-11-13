@@ -65,6 +65,34 @@ func TestDeclareIgnoreMutationForUnmanagedObject(t *testing.T) {
 			testpredicates.MissingAnnotation("season"))))
 }
 
+func TestDeclareExistingObjectWithIgnoreAnnotation(t *testing.T) {
+	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
+
+	nt.T.Log("Add an umanaged namespace with the ignore-mutation annotation using kubectl ")
+	nsObj := k8sobjects.NamespaceObject("bookstore",
+		core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation),
+	)
+
+	nt.Must(nt.KubeClient.Apply(nsObj))
+	if err := nt.Validate(nsObj.Name, "", &corev1.Namespace{}); err != nil {
+		nt.T.Error(err)
+	}
+
+	nt.T.Log("Declare the namespace without the ignore mutation annotation")
+	namespace := k8sobjects.NamespaceObject(
+		nsObj.Name,
+		core.Annotation("season", "summer"))
+	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
+	nt.Must(rootSyncGitRepo.CommitAndPush("add a namespace"))
+	nt.Must(nt.WatchForAllSyncs())
+
+	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), nsObj.Name, "",
+		testwatcher.WatchPredicates(
+			testpredicates.HasAnnotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation),
+			testpredicates.MissingAnnotation("season"))))
+}
+
 func TestIgnoreObjectIsDeleted(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)

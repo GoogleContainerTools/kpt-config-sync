@@ -834,7 +834,7 @@ func TestProcessPruneEvent(t *testing.T) {
 	}
 	testutil.AssertEqual(t, expectedObjStatusMap, objStatusMap, "expected object status to match")
 
-	testutil.AssertEqual(t, 0, resources.GetIgnoredObjsCache().Len())
+	testutil.AssertEqual(t, 0, len(resources.IgnoredObjects()))
 
 	// TODO: test handleMetrics on success
 	// TODO: test PruneErrorForResource on failed

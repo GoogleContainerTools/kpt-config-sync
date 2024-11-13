@@ -17,13 +17,13 @@ package applier
 import (
 	"testing"
 
-	"github.com/elliotchance/orderedmap/v2"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
+	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/remediator/queue"
 	"kpt.dev/configsync/pkg/syncer/syncertest"
@@ -190,7 +190,7 @@ func TestHandleIgnoredObjects(t *testing.T) {
 	testcases := []struct {
 		name         string
 		declaredObjs []client.Object
-		ignoredCache *orderedmap.OrderedMap[core.ID, client.Object]
+		ignoredObjs  []client.Object
 		expectedObjs []client.Object
 	}{
 		{
@@ -198,7 +198,7 @@ func TestHandleIgnoredObjects(t *testing.T) {
 			declaredObjs: []client.Object{
 				k8sobjects.NamespaceObject("test-ns", syncertest.IgnoreMutationAnnotation),
 			},
-			ignoredCache: createIgnoredCache(),
+			ignoredObjs: []client.Object{},
 			expectedObjs: []client.Object{
 				k8sobjects.NamespaceObject("test-ns", syncertest.IgnoreMutationAnnotation),
 			},
@@ -208,9 +208,9 @@ func TestHandleIgnoredObjects(t *testing.T) {
 			declaredObjs: []client.Object{
 				k8sobjects.NamespaceObject("test-ns", syncertest.IgnoreMutationAnnotation),
 			},
-			ignoredCache: createIgnoredCache(
+			ignoredObjs: []client.Object{
 				k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("test-ns")),
-			),
+			},
 			expectedObjs: []client.Object{
 				k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("test-ns"), syncertest.IgnoreMutationAnnotation),
 			},
@@ -222,7 +222,7 @@ func TestHandleIgnoredObjects(t *testing.T) {
 					syncertest.ManagementEnabled,
 					syncertest.IgnoreMutationAnnotation),
 			},
-			ignoredCache: createIgnoredCache(k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("test-ns"))),
+			ignoredObjs: []client.Object{k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("test-ns"))},
 			expectedObjs: []client.Object{
 				k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("test-ns"),
 					syncertest.ManagementEnabled,
@@ -237,7 +237,7 @@ func TestHandleIgnoredObjects(t *testing.T) {
 					syncertest.IgnoreMutationAnnotation,
 					core.Annotation("foo", "bar")),
 			},
-			ignoredCache: createIgnoredCache(k8sobjects.UnstructuredObject(kinds.Namespace(), syncertest.ManagementEnabled, core.Name("test-ns"))),
+			ignoredObjs: []client.Object{(k8sobjects.UnstructuredObject(kinds.Namespace(), syncertest.ManagementEnabled, core.Name("test-ns")))},
 			expectedObjs: []client.Object{
 				k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("test-ns"),
 					syncertest.ManagementEnabled,
@@ -251,14 +251,14 @@ func TestHandleIgnoredObjects(t *testing.T) {
 					syncertest.ManagementEnabled,
 					syncertest.IgnoreMutationAnnotation),
 			},
-			ignoredCache: createIgnoredCache(
+			ignoredObjs: []client.Object{
 				&queue.Deleted{
 					Object: k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("test-ns"),
 						syncertest.ManagementEnabled,
 						syncertest.IgnoreMutationAnnotation,
 						core.Annotation("foo", "bar"),
 					),
-				}),
+				}},
 			expectedObjs: []client.Object{
 				k8sobjects.NamespaceObject("test-ns",
 					syncertest.ManagementEnabled,
@@ -269,17 +269,10 @@ func TestHandleIgnoredObjects(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
-			allObjs := handleIgnoredObjects(tc.declaredObjs, tc.ignoredCache)
+			resources := &declared.Resources{}
+			resources.UpdateIgnored(tc.ignoredObjs...)
+			allObjs := handleIgnoredObjects(tc.declaredObjs, resources)
 			testutil.AssertEqual(t, tc.expectedObjs, allObjs)
 		})
 	}
-}
-
-func createIgnoredCache(objs ...client.Object) *orderedmap.OrderedMap[core.ID, client.Object] {
-	cache := orderedmap.NewOrderedMap[core.ID, client.Object]()
-
-	for _, obj := range objs {
-		cache.Set(core.IDOf(obj), obj)
-	}
-	return cache
 }

@@ -20,12 +20,12 @@ import (
 	"strings"
 
 	"github.com/GoogleContainerTools/kpt/pkg/live"
-	"github.com/elliotchance/orderedmap/v2"
 	"golang.org/x/net/context"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/remediator/queue"
 	"kpt.dev/configsync/pkg/status"
@@ -52,15 +52,14 @@ func partitionObjs(objs []client.Object) ([]client.Object, []client.Object) {
 // handleIgnoredObjects gets the cached cluster state of all mutation-ignored objects that are declared and applies the CS metadata on top of them
 // prior to sending them to the applier
 // Returns all objects that will be applied
-func handleIgnoredObjects(declared []client.Object, ignoredCache *orderedmap.OrderedMap[core.ID, client.Object]) []client.Object {
+func handleIgnoredObjects(enabled []client.Object, resources *declared.Resources) []client.Object {
 	var allObjs []client.Object
 
-	for _, dObj := range declared {
-		cachedObj, found := ignoredCache.Get(core.IDOf(dObj))
+	for _, dObj := range enabled {
+		cachedObj, found := resources.GetIgnored(core.IDOf(dObj))
 		_, deleted := cachedObj.(*queue.Deleted)
 
 		if found && !deleted {
-			//TODO: Maybe use Resource instead to get items?
 			// Applies declared Config Sync metadata on top of stored config
 			csAnnotations, csLabels := metadata.GetConfigSyncMetadata(dObj)
 			core.AddAnnotations(cachedObj, csAnnotations)

@@ -106,24 +106,6 @@ func (r *Resources) IgnoredObjects() []client.Object {
 	return objects
 }
 
-// GetIgnoredObjsCache returns a copy of the ignoredObjsMap
-func (r *Resources) GetIgnoredObjsCache() *orderedmap.OrderedMap[core.ID, client.Object] {
-	//TODO: add test to verify empty map isn't passed to ignore
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-	cacheCopy := orderedmap.NewOrderedMap[core.ID, client.Object]()
-
-	if r.mutationIgnoreObjectsMap == nil {
-		return cacheCopy
-	}
-
-	for pair := r.mutationIgnoreObjectsMap.Front(); pair != nil; pair = pair.Next() {
-		cacheCopy.Set(pair.Key, pair.Value.DeepCopyObject().(client.Object))
-	}
-
-	return cacheCopy
-}
-
 // DeleteIgnored deletes an ignore-mutation object from the ignored cache
 func (r *Resources) DeleteIgnored(id core.ID) bool {
 	r.mutex.RLock()

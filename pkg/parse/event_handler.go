@@ -29,16 +29,14 @@ type EventHandler struct {
 	Context           context.Context
 	Reconciler        Reconciler
 	NSControllerState *namespacecontroller.State
-	Run               RunFunc
 }
 
 // NewEventHandler builds an EventHandler
-func NewEventHandler(ctx context.Context, r Reconciler, nsControllerState *namespacecontroller.State, runFn RunFunc) *EventHandler {
+func NewEventHandler(ctx context.Context, r Reconciler, nsControllerState *namespacecontroller.State) *EventHandler {
 	return &EventHandler{
 		Context:           ctx,
 		Reconciler:        r,
 		NSControllerState: nsControllerState,
-		Run:               runFn,
 	}
 }
 
@@ -52,19 +50,20 @@ func NewEventHandler(ctx context.Context, r Reconciler, nsControllerState *names
 //   - Reconciler requested a retry due to error
 //   - Remediator requested a watch update
 func (s *EventHandler) Handle(event events.Event) events.Result {
+	ctx := s.Context
 	opts := s.Reconciler.Options()
 	state := s.Reconciler.ReconcilerState()
 
 	var eventResult events.Result
 	// Wrap the RunFunc to set Result.RunAttempted.
 	// This delays status update and sync events.
-	runFn := func(ctx context.Context, r Reconciler, trigger string) RunResult {
-		result := s.Run(ctx, r, trigger)
+	runFn := func(ctx context.Context, trigger string) ReconcileResult {
+		result := s.Reconciler.Reconcile(ctx, trigger)
 		eventResult.RunAttempted = true
 		return result
 	}
 
-	var runResult RunResult
+	var runResult ReconcileResult
 	switch event.Type {
 	case events.FullSyncEventType:
 		// FullSync = Read* + Render* + Parse + Update
@@ -72,7 +71,7 @@ func (s *EventHandler) Handle(event events.Event) events.Result {
 		// * Read & Render will only happen if there's a new commit, new source
 		//   spec change, or a previous error invalidated the cache.
 		//   Otherwise full-sync starts from re-parsing the objects from disk.
-		runResult = runFn(s.Context, s.Reconciler, triggerFullSync)
+		runResult = runFn(ctx, triggerFullSync)
 
 	case events.SyncEventType:
 		// Sync = Read* + Render* + Parse* + Update
@@ -81,28 +80,15 @@ func (s *EventHandler) Handle(event events.Event) events.Result {
 		//   new source spec change, or a previous error invalidated the cache.
 		//   Otherwise sync skips directly to the Update stage, using the
 		//   previously parsed in-memory object cache.
-		runResult = runFn(s.Context, s.Reconciler, triggerSync)
+		runResult = runFn(ctx, triggerSync)
 
 	case events.StatusUpdateEventType:
 		// Publish the sync status periodically to update remediator errors.
-		// Skip updates if the remediator is not running yet, paused, or watches haven't been updated yet.
-		// This implies that this reconciler has successfully parsed, rendered, validated, and synced.
-		if opts.Remediating() {
-			klog.V(3).Info("Updating sync status (periodic while not syncing)")
-			// Don't update the sync spec or commit, just the errors and status.
-			syncStatus := &SyncStatus{
-				Spec:       state.status.SyncStatus.Spec,
-				Syncing:    false,
-				Commit:     state.status.SyncStatus.Commit,
-				Errs:       s.Reconciler.ReconcilerState().SyncErrors(),
-				LastUpdate: nowMeta(opts.Clock),
-			}
-			if err := s.Reconciler.SetSyncStatus(s.Context, syncStatus); err != nil {
-				if errors.Is(err, context.Canceled) {
-					klog.Infof("Sync status update skipped: %v", err)
-				} else {
-					klog.Warningf("Failed to update sync status: %v", err)
-				}
+		if err := s.Reconciler.UpdateSyncStatus(ctx); err != nil {
+			if errors.Is(err, context.Canceled) {
+				klog.Infof("Sync status update skipped: %v", err)
+			} else {
+				klog.Warningf("Failed to update sync status: %v", err)
 			}
 		}
 
@@ -112,7 +98,7 @@ func (s *EventHandler) Handle(event events.Event) events.Result {
 			// No RunFunc call
 			break
 		}
-		runResult = runFn(s.Context, s.Reconciler, triggerNamespaceUpdate)
+		runResult = runFn(ctx, triggerNamespaceUpdate)
 
 	case events.RetrySyncEventType:
 		// Retry if there was an error, conflict, or any watches need to be updated.
@@ -134,7 +120,7 @@ func (s *EventHandler) Handle(event events.Event) events.Result {
 		// retryTimer will be reset to `Options.RetryPeriod`, and state.backoff is reset to `defaultBackoff()`.
 		// In this case, `run` will try to sync the configs from the new commit instead of the old commit
 		// being retried.
-		runResult = runFn(s.Context, s.Reconciler, trigger)
+		runResult = runFn(ctx, trigger)
 
 	default:
 		klog.Fatalf("Invalid event received: %#v", event)

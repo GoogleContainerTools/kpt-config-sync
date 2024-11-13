@@ -60,47 +60,16 @@ func TestDeclareIgnoreMutationForUnmanagedObject(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
 	nt.Must(rootSyncGitRepo.CommitAndPush("add a namespace"))
 	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), nsObj.Name, "",
-		testwatcher.WatchPredicates(testpredicates.HasAnnotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation), testpredicates.MissingAnnotation("season"))))
-}
-
-func TestDeclareExistingObjectWithAnnotation(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
-	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
-
-	// Create nsObj with managed annotation using kubectl.
-	nt.T.Log("Declare namespace with ignore annotation using kubectl ")
-	nsObj := k8sobjects.NamespaceObject("bookstore",
-		core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation),
-	)
-	nt.Must(rootSyncGitRepo.Add("ns.yaml", nsObj))
-	nt.MustKubectl("apply", "-f", filepath.Join(rootSyncGitRepo.Root, "ns.yaml"))
-
-	err := nt.Validate(nsObj.Name, "", &corev1.Namespace{})
-	if err != nil {
-		nt.T.Error(err)
-	}
-
-	nt.T.Log("Declare the namespace without the ignore mutation annotation")
-	namespace := k8sobjects.NamespaceObject(
-		nsObj.Name,
-		core.Annotation("season", "summer"))
-	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
-	nt.Must(rootSyncGitRepo.CommitAndPush("add a namespace"))
-
-	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), nsObj.Name, "",
 		testwatcher.WatchPredicates(
-			testpredicates.HasAnnotation("season", "summer"),
-			testpredicates.MissingAnnotation(metadata.LifecycleMutationAnnotation),
-		)))
+			testpredicates.HasAnnotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation),
+			testpredicates.MissingAnnotation("season"))))
 }
 
-// TODO: Is this test necessary?
 func TestIgnoreObjectIsDeleted(t *testing.T) {
-	//TODO: Add, update, then delete
 	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
-	nt.T.Log("Adding namespace to Git")
+	nt.T.Log("Add namespace with the ignore-mutation annotation to Git")
 	namespace := k8sobjects.NamespaceObject("bookstore",
 		core.Annotation("season", "summer"), core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation),
 		core.Annotation("foo", "bar"))
@@ -119,7 +88,7 @@ func TestIgnoreObjectIsDeleted(t *testing.T) {
 			testpredicates.HasAnnotation("foo", "bar"),
 			testpredicates.HasAnnotationKey(metadata.LifecycleMutationAnnotation))))
 
-	// Modify a managed field
+	nt.T.Log("Modify managed field foo of the declared namespace using kubectl")
 	out, err := nt.Shell.Kubectl("annotate", "namespace", "bookstore", "--overwrite", "foo=baz")
 	if err != nil {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore --overwrite foo=baz` error %v %s, want return nil", err, out)
@@ -143,13 +112,14 @@ func TestIgnoreObjectIsDeleted(t *testing.T) {
 			testpredicates.DeploymentMissingEnvVar(reconcilermanager.Reconciler, reconcilermanager.WebhookEnabled),
 		)))
 
+	nt.T.Log("Delete declared namespace using kubectl")
 	nt.MustKubectl("delete", "ns", namespace.Name)
-	time.Sleep(10 * time.Second)
 
 	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), namespace.Name, "",
 		testwatcher.WatchPredicates(
 			testpredicates.HasAnnotation("season", "summer"),
 			testpredicates.HasAnnotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation),
+			testpredicates.MissingAnnotation("foo"),
 		)))
 }
 

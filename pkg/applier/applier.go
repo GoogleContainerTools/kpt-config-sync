@@ -544,7 +544,7 @@ func (s *supervisor) applyInner(ctx context.Context, eventHandler func(Event), d
 		}
 	}
 
-	objsToApply := handleIgnoredObjects(enabledObjs, declaredResources.GetIgnoredObjsCache())
+	objsToApply := handleIgnoredObjects(enabledObjs, declaredResources)
 
 	klog.Infof("%v objects to be applied: %v", len(objsToApply), core.GKNNs(objsToApply))
 	resources, err := toUnstructured(objsToApply)

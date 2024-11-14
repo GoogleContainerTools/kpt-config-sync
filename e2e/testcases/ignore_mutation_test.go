@@ -1,7 +1,6 @@
 package e2e
 
 import (
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -184,36 +183,6 @@ func TestPruningIgnoredObject(t *testing.T) {
 		)))
 }
 
-func TestDeclare(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
-	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
-
-	nt.T.Log("Adding namespace to Git")
-	namespace := k8sobjects.NamespaceObject("bookstore",
-		core.Annotation("season", "summer"), core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation))
-	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
-	nt.Must(rootSyncGitRepo.CommitAndPush("add a namespace"))
-	nt.Must(nt.WatchForAllSyncs())
-
-	nt.T.Log("Remove label for declared namespace")
-	updatedNamespace := k8sobjects.NamespaceObject("bookstore", core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation))
-	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", updatedNamespace))
-	nt.Must(rootSyncGitRepo.CommitAndPush("update namespace"))
-	nt.Must(nt.WatchForAllSyncs())
-
-	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), namespace.Name, "",
-		testwatcher.WatchPredicates(
-			testpredicates.HasAnnotation("season", "summer"),
-			testpredicates.HasAnnotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation),
-		)))
-
-}
-
-//TODO: Something that tests both applier and remediator?
-// Can force resync on new commit
-
-// Add, Update, Add (force resync), Delete, Prune
-
 func TestAddUpdateAdd(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
@@ -225,37 +194,38 @@ func TestAddUpdateAdd(t *testing.T) {
 	nt.Must(rootSyncGitRepo.CommitAndPush("add a namespace"))
 	nt.Must(nt.WatchForAllSyncs())
 
-	nt.T.Log("Add annotation")
-	updatedNamespace := k8sobjects.NamespaceObject("bookstore", core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation), core.Annotation("season", "summer"))
+	nt.T.Log("Add annotation to the declared namespace")
+	updatedNamespace := k8sobjects.NamespaceObject("bookstore",
+		core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation),
+		core.Annotation("season", "summer"))
 	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", updatedNamespace))
 	nt.Must(rootSyncGitRepo.CommitAndPush("update namespace"))
+
 	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
 		testwatcher.WatchPredicates(
 			testpredicates.MissingAnnotation("season"),
 			testpredicates.HasAnnotationKey(metadata.LifecycleMutationAnnotation))))
 
-	nt.T.Log("Modify using kubectl")
+	nt.T.Log("Add the 'season=winter' annotation to the namespace using kubectl")
 	nsObj := namespace.DeepCopy()
 	nsObj.Annotations["season"] = "winter"
-	nt.Must(rootSyncGitRepo.Add("unmanaged-ns.yaml", nsObj))
-	nt.MustKubectl("apply", "-f", filepath.Join(rootSyncGitRepo.Root, "unmanaged-ns.yaml"))
-	nt.Must(rootSyncGitRepo.Remove("unmanaged-ns.yaml"))
+	nt.Must(nt.KubeClient.Apply(nsObj))
+
+	// Wait so the remediator can process the event
+	time.Sleep(10 * time.Second)
 
 	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), nsObj.Name, "",
 		testwatcher.WatchPredicates(
 			testpredicates.HasAnnotation("season", "winter"),
 		)))
 
+	nt.T.Log("Add another namespace to Git to run the applier")
 	nsObj2 := k8sobjects.NamespaceObject("new-ns")
 	nt.Must(rootSyncGitRepo.Add("acme/ns2.yaml", nsObj2))
 	nt.Must(rootSyncGitRepo.CommitAndPush("add another namespace"))
-	nt.Must(nt.WatchForAllSyncs())
 
 	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), nsObj.Name, "",
 		testwatcher.WatchPredicates(
 			testpredicates.HasAnnotation("season", "winter"),
 		)))
-
-	// Manually modify
-	//Force reapply
 }

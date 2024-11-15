@@ -1,13 +1,14 @@
 package e2e
 
 import (
-	"path/filepath"
+	"fmt"
 	"testing"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
@@ -208,53 +209,62 @@ func TestDeclare(t *testing.T) {
 
 }
 
-//TODO: Something that tests both applier and remediator?
-// Can force resync on new commit
-
-// Add, Update, Add (force resync), Delete, Prune
-
 func TestAddUpdateAdd(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
-	nt.T.Log("Adding namespace to Git")
-	namespace := k8sobjects.NamespaceObject("bookstore",
-		core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation))
+	nt.T.Log("Add namespace to Git")
+	namespace := k8sobjects.NamespaceObject("bookstore")
 	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
 	nt.Must(rootSyncGitRepo.CommitAndPush("add a namespace"))
 	nt.Must(nt.WatchForAllSyncs())
 
-	nt.T.Log("Add annotation")
-	updatedNamespace := k8sobjects.NamespaceObject("bookstore", core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation), core.Annotation("season", "summer"))
-	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", updatedNamespace))
-	nt.Must(rootSyncGitRepo.CommitAndPush("update namespace"))
-	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
-		testwatcher.WatchPredicates(
-			testpredicates.MissingAnnotation("season"),
-			testpredicates.HasAnnotationKey(metadata.LifecycleMutationAnnotation))))
+	// The reason we need to stop the webhook here is that the webhook denies a request to modify Config Sync metadata
+	// even if the resource has the `client.lifecycle.config.k8s.io/mutation` annotation.
+	nomostest.StopWebhook(nt)
+	// Stopping the webhook causes the reconciler to restart. Wait so that we aren't
+	// racing with the applier and are actually testing the remediator.
+	tg := taskgroup.New()
+	tg.Go(func() error {
+		return nt.Watcher.WatchObject(kinds.Deployment(),
+			core.RootReconcilerName(nomostest.DefaultRootSyncID.Name), configsync.ControllerNamespace,
+			testwatcher.WatchPredicates(
+				testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
+				testpredicates.DeploymentMissingEnvVar(reconcilermanager.Reconciler, reconcilermanager.WebhookEnabled),
+			))
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
+			testwatcher.WatchPredicates(testpredicates.MissingAnnotation(metadata.LifecycleMutationAnnotation)))
+	})
+	nt.Must(tg.Wait())
 
-	nt.T.Log("Modify using kubectl")
-	nsObj := namespace.DeepCopy()
-	nsObj.Annotations["season"] = "winter"
-	nt.Must(rootSyncGitRepo.Add("unmanaged-ns.yaml", nsObj))
-	nt.MustKubectl("apply", "-f", filepath.Join(rootSyncGitRepo.Root, "unmanaged-ns.yaml"))
-	nt.Must(rootSyncGitRepo.Remove("unmanaged-ns.yaml"))
+	nt.T.Log("Add the 'ignore annotation' annotation to the namespace using kubectl")
+	// Delete a Config Sync annotation
+	out, err := nt.Shell.Kubectl("annotate", "namespace", "bookstore", fmt.Sprintf("%s=`%s`", metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation))
+	if err != nil {
+		nt.T.Fatalf("got `kubectl annotate --overwrite namespace bookstore %s=`%s`` error %v %s, want return nil", metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation, err, out)
+	}
+	// nsObj := namespace.DeepCopy()
+	// nsObj.Annotations[metadata.LifecycleMutationAnnotation] = metadata.IgnoreMutation
+	// nt.Must(nt.KubeClient.Apply(nsObj))
 
-	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), nsObj.Name, "",
+	time.Sleep(10 * time.Second)
+
+	// Test remediator
+	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), namespace.Name, "",
 		testwatcher.WatchPredicates(
-			testpredicates.HasAnnotation("season", "winter"),
+			testpredicates.MissingAnnotation(metadata.LifecycleMutationAnnotation),
 		)))
 
-	nsObj2 := k8sobjects.NamespaceObject("new-ns")
-	nt.Must(rootSyncGitRepo.Add("acme/ns2.yaml", nsObj2))
-	nt.Must(rootSyncGitRepo.CommitAndPush("add another namespace"))
-	nt.Must(nt.WatchForAllSyncs())
+	// //TODO: Tests applier?
+	// nt.T.Log("Add another namespace to Git to run the applier")
+	// nsObj2 := k8sobjects.NamespaceObject("new-ns")
+	// nt.Must(rootSyncGitRepo.Add("acme/ns2.yaml", nsObj2))
+	// nt.Must(rootSyncGitRepo.CommitAndPush("add another namespace"))
 
-	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), nsObj.Name, "",
-		testwatcher.WatchPredicates(
-			testpredicates.HasAnnotation("season", "winter"),
-		)))
-
-	// Manually modify
-	//Force reapply
+	// nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), nsObj.Name, "",
+	// 	testwatcher.WatchPredicates(
+	// 		testpredicates.HasAnnotation("season", "winter"),
+	// 	)))
 }

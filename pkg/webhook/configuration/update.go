@@ -20,7 +20,6 @@ import (
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/util/discovery"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -31,8 +30,8 @@ import (
 //
 // Returns an error if the API Server returns invalid API Resource lists or
 // there is a problem updating the Configuration.
-func Update(ctx context.Context, c client.Client, dc discovery.ServerResourcer, objs []ast.FileObject, opts ...client.UpdateOption) status.MultiError {
-	if len(objs) == 0 {
+func Update(ctx context.Context, c client.Client, dc discovery.ServerResourcer, gvks []schema.GroupVersionKind, opts ...client.UpdateOption) status.MultiError {
+	if len(gvks) == 0 {
 		// Nothing to do.
 		return nil
 	}
@@ -44,7 +43,6 @@ func Update(ctx context.Context, c client.Client, dc discovery.ServerResourcer, 
 		return status.APIServerError(err, "unable to list API Resources")
 	}
 
-	gvks := toGVKs(objs)
 	newCfg := toWebhookConfiguration(gvks)
 	if newCfg == nil {
 		// The repository declares no objects, so there's nothing to do.
@@ -72,19 +70,4 @@ func Update(ctx context.Context, c client.Client, dc discovery.ServerResourcer, 
 		return status.APIServerError(err, "applying changes to admission webhook")
 	}
 	return nil
-}
-
-func toGVKs(objs []ast.FileObject) []schema.GroupVersionKind {
-	seen := make(map[schema.GroupVersionKind]bool)
-	var gvks []schema.GroupVersionKind
-	for _, o := range objs {
-		gvk := o.GetObjectKind().GroupVersionKind()
-		if !seen[gvk] {
-			seen[gvk] = true
-			gvks = append(gvks, gvk)
-		}
-	}
-	// The order of GVKs is not deterministic, but we're using it for
-	// toWebhookConfiguration which does not require its input to be sorted.
-	return gvks
 }

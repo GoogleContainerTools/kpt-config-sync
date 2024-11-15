@@ -37,6 +37,7 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/remediator/queue"
 	"kpt.dev/configsync/pkg/status"
+	"kpt.dev/configsync/pkg/syncer/reconcile"
 	"kpt.dev/configsync/pkg/syncer/syncertest"
 	testfake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -54,8 +55,8 @@ func TestFilteredWatcher(t *testing.T) {
 	scope := declared.Scope("test")
 	syncName := "rs"
 
-	deployment1 := k8sobjects.DeploymentObject(core.Name("hello"), syncertest.IgnoreMutationAnnotation)
-	deployment1Beta := k8sobjects.DeploymentObject(core.Name("hello"))
+	deployment1 := k8sobjects.DeploymentObject(core.Name("hello"))
+	deployment1Beta := k8sobjects.DeploymentObject(core.Name("hello"), syncertest.IgnoreMutationAnnotation)
 	deployment1Beta.GetObjectKind().SetGroupVersionKind(deployment1Beta.GroupVersionKind().GroupKind().WithVersion("beta1"))
 
 	deployment2 := k8sobjects.DeploymentObject(core.Name("world"))
@@ -364,7 +365,10 @@ func TestFilteredWatcher(t *testing.T) {
 				}(),
 			},
 			expectedCachedIgnored: []client.Object{
-				deployment2,
+				func() client.Object {
+					u, _ := reconcile.AsUnstructuredSanitized(deployment2)
+					return u
+				}(),
 				&queue.Deleted{Object: deployment3},
 			},
 		},

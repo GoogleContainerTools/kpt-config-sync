@@ -64,7 +64,8 @@ func TestDeclareIgnoreMutationForUnmanagedObject(t *testing.T) {
 			testpredicates.MissingAnnotation("season"))))
 }
 
-func TestDeclareExistingObjectWithIgnoreAnnotation(t *testing.T) {
+// TODO: Fix failing test. Using Kubectl.Apply makes it so the ignore-mutation annotation is managed by the nomos field manager
+func TestDeclareExistingObjectWithoutIgnoreAnnotation(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 

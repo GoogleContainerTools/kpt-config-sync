@@ -120,13 +120,14 @@ func (p *repoSyncStatusClient) SetImageToSyncAnnotation(ctx context.Context, com
 	var patch string
 	if opts.SourceType == configsync.OciSource ||
 		(opts.SourceType == configsync.HelmSource && strings.HasPrefix(opts.SourceRepo, "oci://")) {
+		newVal := fmt.Sprintf("%s@sha256:%s", opts.SourceRepo, commit)
 		patch = fmt.Sprintf(`{"metadata":{"annotations":{"%s":"%s"}}}`,
-			metadata.ImageToSyncAnnotationKey,
-			fmt.Sprintf("%s@sha256:%s", opts.SourceRepo, commit),
-		)
+			metadata.ImageToSyncAnnotationKey, newVal)
+		klog.V(3).Infof("Updating annotation: %s: %s", metadata.ImageToSyncAnnotationKey, newVal)
 	} else {
 		patch = fmt.Sprintf(`{"metadata":{"annotations":{"%s":null}}}`,
 			metadata.ImageToSyncAnnotationKey)
+		klog.V(3).Infof("Updating annotation: %s: %s", metadata.ImageToSyncAnnotationKey, "null")
 	}
 
 	err := opts.Client.Patch(ctx, rs,
@@ -149,6 +150,7 @@ func (p *repoSyncStatusClient) SetRequiresRenderingAnnotation(ctx context.Contex
 		// avoid unnecessary updates
 		return nil
 	}
+	klog.V(3).Infof("Updating annotation: %s: %s", metadata.RequiresRenderingAnnotationKey, newVal)
 	existing := rs.DeepCopy()
 	core.SetAnnotation(rs, metadata.RequiresRenderingAnnotationKey, newVal)
 	err := opts.Client.Patch(ctx, rs,

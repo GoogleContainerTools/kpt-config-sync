@@ -260,7 +260,7 @@ func (r *reconciler) render(ctx context.Context, sourceStatus *SourceStatus) sta
 		newRenderStatus.Message = RenderingFailed
 		newRenderStatus.LastUpdate = nowMeta(opts.Clock)
 		newRenderStatus.Errs = status.InternalHydrationError(err, RenderingFailed)
-		klog.V(3).Info("Updating rendering status (before parse)")
+		klog.V(3).Info("Updating rendering status (before read)")
 		if statusErr := r.syncStatusClient.SetRenderingStatus(ctx, state.status.RenderingStatus, newRenderStatus); statusErr != nil {
 			return status.Append(newRenderStatus.Errs, statusErr)
 		}
@@ -270,7 +270,7 @@ func (r *reconciler) render(ctx context.Context, sourceStatus *SourceStatus) sta
 	if renderedCommit == "" || renderedCommit != sourceStatus.Commit {
 		newRenderStatus.Message = RenderingInProgress
 		newRenderStatus.LastUpdate = nowMeta(opts.Clock)
-		klog.V(3).Info("Updating rendering status (before parse)")
+		klog.V(3).Info("Updating rendering status (before read)")
 		if statusErr := r.syncStatusClient.SetRenderingStatus(ctx, state.status.RenderingStatus, newRenderStatus); statusErr != nil {
 			return statusErr
 		}

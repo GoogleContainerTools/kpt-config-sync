@@ -352,7 +352,7 @@ func (s *supervisor) processPruneEvent(ctx context.Context, e event.PruneEvent, 
 
 		iObj, found := declaredResources.GetIgnored(id)
 		if found {
-			klog.Infof("Deleting object '%v' from the ignore cache", core.GKNN(iObj))
+			klog.V(3).Infof("Deleting object '%v' from the ignore cache", core.GKNN(iObj))
 			declaredResources.DeleteIgnored(id)
 		}
 

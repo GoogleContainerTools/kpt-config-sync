@@ -60,11 +60,7 @@ func handleIgnoredObjects(enabled []client.Object, resources *declared.Resources
 		_, deleted := cachedObj.(*queue.Deleted)
 
 		if found && !deleted {
-			// Applies declared Config Sync metadata on top of stored config
-			csAnnotations, csLabels := metadata.GetConfigSyncMetadata(dObj)
-			core.AddAnnotations(cachedObj, csAnnotations)
-			core.AddLabels(cachedObj, csLabels)
-
+			metadata.UpdateConfigSyncMetadata(dObj, cachedObj)
 			allObjs = append(allObjs, cachedObj)
 		} else {
 			allObjs = append(allObjs, dObj)

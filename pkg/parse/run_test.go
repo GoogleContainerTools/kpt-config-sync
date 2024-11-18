@@ -42,7 +42,7 @@ import (
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
-	"kpt.dev/configsync/pkg/importer/reader"
+	fsfake "kpt.dev/configsync/pkg/importer/filesystem/fake"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/remediator/conflict"
@@ -61,7 +61,7 @@ const (
 	symLink = "rev"
 )
 
-func newRootReconciler(t *testing.T, clock clock.Clock, fakeClient client.Client, fs FileSource, renderingEnabled bool) *reconciler {
+func newRootReconciler(t *testing.T, clock clock.Clock, fakeClient client.Client, parser filesystem.ConfigParser, fs FileSource, renderingEnabled bool) *reconciler {
 	converter, err := openapitest.ValueConverterForTest()
 	if err != nil {
 		t.Fatal(err)
@@ -71,7 +71,7 @@ func newRootReconciler(t *testing.T, clock clock.Clock, fakeClient client.Client
 	}
 	opts := &Options{
 		Clock:             clock,
-		ConfigParser:      filesystem.NewParser(&reader.File{}),
+		ConfigParser:      parser,
 		SyncName:          rootSyncName,
 		Scope:             declared.RootScope,
 		ReconcilerName:    rootReconcilerName,
@@ -230,22 +230,25 @@ func TestReconciler_Reconcile(t *testing.T) {
 		hydratedRootExist     bool
 		retryCap              time.Duration
 		srcRootCreateLatency  time.Duration
-		sourceError           string
+		gitError              string
 		hydratedError         string
 		hydrationDone         bool
 		expectedSourceChanged bool
 		needRetry             bool
+		parseOutputs          []fsfake.ParserOutputs
 		expectedRootSync      *v1beta1.RootSync
 	}{
 		{
-			name:                  "source commit directory isn't created within the retry cap",
+			name:                  "read retryable error because missing source commit directory",
 			retryCap:              5 * time.Millisecond,
 			srcRootCreateLatency:  10 * time.Millisecond,
 			expectedSourceChanged: false,
 			needRetry:             true,
+			parseOutputs:          nil, // parse should not be called
 			expectedRootSync: func() *v1beta1.RootSync {
 				rs := rootSyncOutput.DeepCopy()
-				rs.ObjectMeta.ResourceVersion = "2" // Create + Update (source status)
+				// Create + Update (fetch error)
+				rs.ObjectMeta.ResourceVersion = "2"
 				rs.Status.Status.Source = v1beta1.SourceStatus{
 					Git: &v1beta1.GitStatus{
 						Repo:   fileSource.SourceRepo,
@@ -277,14 +280,17 @@ func TestReconciler_Reconcile(t *testing.T) {
 			}(),
 		},
 		{
-			name:                  "source commit directory created within the retry cap",
+			name:                  "reconcile success with delayed source commit directory creation",
 			retryCap:              100 * time.Millisecond,
 			srcRootCreateLatency:  5 * time.Millisecond,
 			expectedSourceChanged: true,
 			needRetry:             false,
+			parseOutputs: []fsfake.ParserOutputs{
+				{}, // parse should be called exactly once
+			},
 			expectedRootSync: func() *v1beta1.RootSync {
 				rs := rootSyncOutput.DeepCopy()
-				// Create + Update (source status) + Update (rendering status) + Update (sync status)
+				// Create + Update (fetch success) + Update (render skipped) + Update (sync success)
 				rs.ObjectMeta.ResourceVersion = "4"
 				rs.Status.Status.LastSyncedCommit = sourceCommit
 				rs.Status.Status.Source = v1beta1.SourceStatus{
@@ -331,13 +337,14 @@ func TestReconciler_Reconcile(t *testing.T) {
 			}(),
 		},
 		{
-			name:                  "source fetch error",
-			sourceError:           "git sync permission issue",
+			name:                  "fetch retriable error because git-sync error",
+			gitError:              "git sync permission issue",
 			expectedSourceChanged: false,
 			needRetry:             true,
+			parseOutputs:          nil, // parse should not be called
 			expectedRootSync: func() *v1beta1.RootSync {
 				rs := rootSyncOutput.DeepCopy()
-				// Create + Update (source status)
+				// Create + Update (fetch error)
 				rs.ObjectMeta.ResourceVersion = "2"
 				rs.Status.Status.Source = v1beta1.SourceStatus{
 					Git: &v1beta1.GitStatus{
@@ -370,14 +377,15 @@ func TestReconciler_Reconcile(t *testing.T) {
 			}(),
 		},
 		{
-			name:                  "rendering in progress",
+			name:                  "render in progress",
 			renderingEnabled:      true,
 			hydratedRootExist:     true,
 			expectedSourceChanged: false,
 			needRetry:             true,
+			parseOutputs:          nil, // parse should not be called
 			expectedRootSync: func() *v1beta1.RootSync {
 				rs := rootSyncOutput.DeepCopy()
-				// Create + Update (source status) + Update (rendering status)
+				// Create + Update (fetch success) + Update (render in-progress)
 				rs.ObjectMeta.ResourceVersion = "3"
 				rs.Status.Status.Source = v1beta1.SourceStatus{
 					Git: &v1beta1.GitStatus{
@@ -414,7 +422,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 			}(),
 		},
 		{
-			name:                  "hydration error",
+			name:                  "render error because hydration failed",
 			renderingEnabled:      true,
 			hasKustomization:      true,
 			hydratedRootExist:     true,
@@ -422,9 +430,10 @@ func TestReconciler_Reconcile(t *testing.T) {
 			hydratedError:         `{"code": "1068", "error": "rendering error"}`,
 			expectedSourceChanged: false,
 			needRetry:             true,
+			parseOutputs:          nil, // parse should not be called
 			expectedRootSync: func() *v1beta1.RootSync {
 				rs := rootSyncOutput.DeepCopy()
-				// Create + Update (source status) + Update (rendering status)
+				// Create + Update (fetch success) + Update (render error)
 				rs.ObjectMeta.ResourceVersion = "3"
 				rs.Status.Status.Source = v1beta1.SourceStatus{
 					Git: &v1beta1.GitStatus{
@@ -445,7 +454,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 					Errors: status.ToCSE(
 						status.HydrationError(status.ActionableHydrationErrorCode, fmt.Errorf("rendering error")),
 					),
-					// TODO: Fix bug with rendering status not setting ErrorCountAfterTruncation = 1
+					// TODO: Fix bug with rendering status not setting ErrorCountAfterTruncation = 1 (b/379720690)
 					ErrorSummary: &v1beta1.ErrorSummary{TotalCount: 1, ErrorCountAfterTruncation: 0},
 					LastUpdate:   fakeMetaTime,
 				}
@@ -465,18 +474,200 @@ func TestReconciler_Reconcile(t *testing.T) {
 				return rs
 			}(),
 		},
-		// TODO: Add source parse error test case (with and without rendering)
 		{
-			name:                  "successful read",
+			name:                  "parse blocking error because missing name without rendering",
+			expectedSourceChanged: true,
+			needRetry:             true,
+			parseOutputs: []fsfake.ParserOutputs{
+				{
+					Errors: status.ResourceErrorBuilder.Wrap(
+						fmt.Errorf("missing field %q", "metadata.name")).
+						Build(),
+				},
+			},
+			expectedRootSync: func() *v1beta1.RootSync {
+				rs := rootSyncOutput.DeepCopy()
+				// Create + Update (fetch success) + Update (render skipped) + Update (parse error)
+				rs.ObjectMeta.ResourceVersion = "4"
+				rs.Status.Status.Source = v1beta1.SourceStatus{
+					Git: &v1beta1.GitStatus{
+						Repo:   fileSource.SourceRepo,
+						Branch: fileSource.SourceBranch,
+					},
+					Commit:     sourceCommit,
+					LastUpdate: fakeMetaTime,
+					Errors: status.ToCSE(
+						status.ResourceErrorBuilder.Wrap(
+							fmt.Errorf("missing field %q", "metadata.name")).
+							Build(),
+					),
+					ErrorSummary: &v1beta1.ErrorSummary{TotalCount: 1, ErrorCountAfterTruncation: 1},
+				}
+				rs.Status.Status.Rendering = v1beta1.RenderingStatus{
+					Git: &v1beta1.GitStatus{
+						Repo:   fileSource.SourceRepo,
+						Branch: fileSource.SourceBranch,
+					},
+					Commit:       sourceCommit,
+					Message:      RenderingSkipped,
+					ErrorSummary: &v1beta1.ErrorSummary{},
+					LastUpdate:   fakeMetaTime,
+				}
+				rs.Status.Conditions = []v1beta1.RootSyncCondition{
+					{
+						Type:               v1beta1.RootSyncSyncing,
+						Status:             metav1.ConditionFalse,
+						LastUpdateTime:     fakeMetaTime,
+						LastTransitionTime: fakeMetaTime,
+						Reason:             "Source",
+						Message:            "Source",
+						Commit:             sourceCommit,
+						ErrorSourceRefs:    []v1beta1.ErrorSource{v1beta1.SourceError},
+						ErrorSummary:       &v1beta1.ErrorSummary{TotalCount: 1, ErrorCountAfterTruncation: 1},
+					},
+				}
+				return rs
+			}(),
+		},
+		{
+			name:                  "parse blocking error because missing name with rendering",
+			renderingEnabled:      true,
+			hasKustomization:      true,
+			hydratedRootExist:     true,
+			hydrationDone:         true,
+			expectedSourceChanged: true,
+			needRetry:             true,
+			parseOutputs: []fsfake.ParserOutputs{
+				{
+					Errors: status.ResourceErrorBuilder.Wrap(
+						fmt.Errorf("missing field %q", "metadata.name")).
+						Build(),
+				},
+			},
+			expectedRootSync: func() *v1beta1.RootSync {
+				rs := rootSyncOutput.DeepCopy()
+				// Create + Update (fetch success) + Update (render success) + Update (parse error)
+				rs.ObjectMeta.ResourceVersion = "4"
+				rs.Status.Status.Source = v1beta1.SourceStatus{
+					Git: &v1beta1.GitStatus{
+						Repo:   fileSource.SourceRepo,
+						Branch: fileSource.SourceBranch,
+					},
+					Commit:     sourceCommit,
+					LastUpdate: fakeMetaTime,
+					Errors: status.ToCSE(
+						status.ResourceErrorBuilder.Wrap(
+							fmt.Errorf("missing field %q", "metadata.name")).
+							Build(),
+					),
+					ErrorSummary: &v1beta1.ErrorSummary{TotalCount: 1, ErrorCountAfterTruncation: 1},
+				}
+				rs.Status.Status.Rendering = v1beta1.RenderingStatus{
+					Git: &v1beta1.GitStatus{
+						Repo:   fileSource.SourceRepo,
+						Branch: fileSource.SourceBranch,
+					},
+					Commit:       sourceCommit,
+					Message:      RenderingSucceeded,
+					ErrorSummary: &v1beta1.ErrorSummary{},
+					LastUpdate:   fakeMetaTime,
+				}
+				rs.Status.Conditions = []v1beta1.RootSyncCondition{
+					{
+						Type:               v1beta1.RootSyncSyncing,
+						Status:             metav1.ConditionFalse,
+						LastUpdateTime:     fakeMetaTime,
+						LastTransitionTime: fakeMetaTime,
+						Reason:             "Source",
+						Message:            "Source",
+						Commit:             sourceCommit,
+						ErrorSourceRefs:    []v1beta1.ErrorSource{v1beta1.SourceError},
+						ErrorSummary:       &v1beta1.ErrorSummary{TotalCount: 1, ErrorCountAfterTruncation: 1},
+					},
+				}
+				return rs
+			}(),
+		},
+		{
+			name:                  "parse non-blocking error because unknown kind",
+			expectedSourceChanged: true,
+			needRetry:             true,
+			parseOutputs: []fsfake.ParserOutputs{
+				{
+					Errors: status.UnknownObjectKindError(
+						k8sobjects.Unstructured(kinds.Anvil(), core.Name("deploy"),
+							core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/obj.yaml"),
+						)),
+				},
+			},
+			expectedRootSync: func() *v1beta1.RootSync {
+				rs := rootSyncOutput.DeepCopy()
+				// Create + Update (fetch success) + Update (render skipped) + Update (parse error) + Update (sync success)
+				rs.ObjectMeta.ResourceVersion = "5"
+				rs.Status.Status.Source = v1beta1.SourceStatus{
+					Git: &v1beta1.GitStatus{
+						Repo:   fileSource.SourceRepo,
+						Branch: fileSource.SourceBranch,
+					},
+					Commit:     sourceCommit,
+					LastUpdate: fakeMetaTime,
+					Errors: status.ToCSE(
+						status.UnknownObjectKindError(
+							k8sobjects.Unstructured(kinds.Anvil(), core.Name("deploy"),
+								core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/obj.yaml"),
+							)),
+					),
+					ErrorSummary: &v1beta1.ErrorSummary{TotalCount: 1, ErrorCountAfterTruncation: 1},
+				}
+				rs.Status.Status.Rendering = v1beta1.RenderingStatus{
+					Git: &v1beta1.GitStatus{
+						Repo:   fileSource.SourceRepo,
+						Branch: fileSource.SourceBranch,
+					},
+					Commit:       sourceCommit,
+					Message:      RenderingSkipped,
+					ErrorSummary: &v1beta1.ErrorSummary{},
+					LastUpdate:   fakeMetaTime,
+				}
+				rs.Status.Status.Sync = v1beta1.SyncStatus{
+					Git: &v1beta1.GitStatus{
+						Repo:   fileSource.SourceRepo,
+						Branch: fileSource.SourceBranch,
+					},
+					Commit:       sourceCommit,
+					LastUpdate:   fakeMetaTime,
+					ErrorSummary: &v1beta1.ErrorSummary{},
+				}
+				rs.Status.Conditions = []v1beta1.RootSyncCondition{
+					{
+						Type:               v1beta1.RootSyncSyncing,
+						Status:             metav1.ConditionFalse,
+						LastUpdateTime:     fakeMetaTime,
+						LastTransitionTime: fakeMetaTime,
+						Reason:             "Sync",
+						Message:            "Sync Completed",
+						Commit:             sourceCommit,
+						ErrorSourceRefs:    []v1beta1.ErrorSource{v1beta1.SourceError},
+						ErrorSummary:       &v1beta1.ErrorSummary{TotalCount: 1, ErrorCountAfterTruncation: 1},
+					},
+				}
+				return rs
+			}(),
+		},
+		{
+			name:                  "reconcile success with rendering",
 			renderingEnabled:      true,
 			hasKustomization:      true,
 			hydratedRootExist:     true,
 			hydrationDone:         true,
 			expectedSourceChanged: true,
 			needRetry:             false,
+			parseOutputs: []fsfake.ParserOutputs{
+				{}, // parse should be called exactly once
+			},
 			expectedRootSync: func() *v1beta1.RootSync {
 				rs := rootSyncOutput.DeepCopy()
-				// Create + Update (source status) + Update (rendering status) + Update (sync status)
+				// Create + Update (fetch success) + Update (render success) + Update (sync success)
 				rs.ObjectMeta.ResourceVersion = "4"
 				rs.Status.Status.LastSyncedCommit = sourceCommit
 				rs.Status.Status.Source = v1beta1.SourceStatus{
@@ -523,14 +714,17 @@ func TestReconciler_Reconcile(t *testing.T) {
 			}(),
 		},
 		{
-			name:                  "successful read without hydration",
+			name:                  "reconcile success without rendering",
 			hydratedRootExist:     false,
 			hydrationDone:         false,
 			expectedSourceChanged: true,
 			needRetry:             false,
+			parseOutputs: []fsfake.ParserOutputs{
+				{}, // parse should be called exactly once
+			},
 			expectedRootSync: func() *v1beta1.RootSync {
 				rs := rootSyncOutput.DeepCopy()
-				// Create + Update (source status) + Update (rendering status) + Update (sync status)
+				// Create + Update (fetch success) + Update (render skipped) + Update (sync success)
 				rs.ObjectMeta.ResourceVersion = "4"
 				rs.Status.Status.LastSyncedCommit = sourceCommit
 				rs.Status.Status.Source = v1beta1.SourceStatus{
@@ -577,17 +771,18 @@ func TestReconciler_Reconcile(t *testing.T) {
 			}(),
 		},
 		{
-			name:                  "error because hydration enabled with wet source",
+			name:                  "render transient error because hydration enabled with wet source",
 			renderingEnabled:      true,
 			hasKustomization:      false,
 			hydratedRootExist:     false,
 			hydrationDone:         true,
 			expectedSourceChanged: false,
 			needRetry:             true,
+			parseOutputs:          nil, // parse should not be called
 			expectedRootSync: func() *v1beta1.RootSync {
 				rs := rootSyncOutput.DeepCopy()
-				// Create + Update (source status) + Update (rendering status)
-				rs.ObjectMeta.ResourceVersion = "4" // TODO: Why 4 and not just 3?
+				// Create + Update (fetch success) + Patch (requires-rendering annotation) + Update (render error)
+				rs.ObjectMeta.ResourceVersion = "4"
 				// Tell reconciler-manager to disable the hydration-controller container
 				core.SetAnnotation(rs, metadata.RequiresRenderingAnnotationKey, "false")
 				rs.Status.Status.Source = v1beta1.SourceStatus{
@@ -630,17 +825,18 @@ func TestReconciler_Reconcile(t *testing.T) {
 			}(),
 		},
 		{
-			name:                  "error because hydration disabled with dry source",
+			name:                  "render transient error because hydration disabled with dry source",
 			renderingEnabled:      false,
 			hasKustomization:      true,
 			hydratedRootExist:     true,
 			hydrationDone:         true,
 			expectedSourceChanged: false,
 			needRetry:             true,
+			parseOutputs:          nil, // parse should not be called
 			expectedRootSync: func() *v1beta1.RootSync {
 				rs := rootSyncOutput.DeepCopy()
-				// Create + Update (source status) + Update (rendering status)
-				rs.ObjectMeta.ResourceVersion = "4" // TODO: Why 4 and not just 3?
+				// Create + Update (fetch success) + Patch (requires-rendering annotation) + Update (render error)
+				rs.ObjectMeta.ResourceVersion = "4"
 				// Tell reconciler-manager to enable the hydration-controller container
 				core.SetAnnotation(rs, metadata.RequiresRenderingAnnotationKey, "true")
 				rs.Status.Status.Source = v1beta1.SourceStatus{
@@ -728,9 +924,8 @@ func TestReconciler_Reconcile(t *testing.T) {
 								return fmt.Errorf("failed to write kustomization file: %v", err)
 							}
 						}
-
-						if tc.sourceError != "" {
-							if err = writeFile(sourceRoot, hydrate.ErrorFile, tc.sourceError); err != nil {
+						if tc.gitError != "" {
+							if err = writeFile(sourceRoot, hydrate.ErrorFile, tc.gitError); err != nil {
 								return fmt.Errorf("failed to write source error file: %v", err)
 							}
 						}
@@ -767,7 +962,10 @@ func TestReconciler_Reconcile(t *testing.T) {
 				SourceBranch: fileSource.SourceBranch,
 			}
 			fakeClient := syncerFake.NewClient(t, core.Scheme, k8sobjects.RootSyncObjectV1Beta1(rootSyncName))
-			reconciler := newRootReconciler(t, fakeClock, fakeClient, fs, tc.renderingEnabled)
+			fakeConfigParser := &fsfake.ConfigParser{
+				Outputs: tc.parseOutputs,
+			}
+			reconciler := newRootReconciler(t, fakeClock, fakeClient, fakeConfigParser, fs, tc.renderingEnabled)
 			t.Logf("start running test at %v", time.Now())
 			result := reconciler.Reconcile(context.Background(), triggerSync)
 

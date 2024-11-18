@@ -28,6 +28,7 @@ import (
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/hydrate"
+	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
@@ -159,8 +160,28 @@ func (r *reconciler) Reconcile(ctx context.Context, trigger string) ReconcileRes
 		return result
 	}
 
-	if errs := r.parseAndUpdate(ctx, trigger); errs != nil {
-		state.RecordFailure(opts.Clock, errs)
+	parseErrs := r.parse(ctx, trigger)
+	// Fail if there are any blocking errors.
+	// Otherwise, continue to sync objects with known scope.
+	if status.HasBlockingErrors(parseErrs) {
+		state.RecordFailure(opts.Clock, parseErrs)
+		return result
+	}
+
+	if opts.WebhookEnabled {
+		err := webhookconfiguration.Update(ctx, opts.Client, opts.DiscoveryClient,
+			state.cache.parse.GKVs(), client.FieldOwner(configsync.FieldManager))
+		if err != nil {
+			// RBAC needs to be set up manually by the user to allow updating the webhook.
+			// TODO: Only continue if it's an authorization error, others should trigger retry
+			klog.Errorf("Failed to update admission webhook: %v", err)
+		}
+	}
+
+	updateErrs := r.update(ctx, trigger)
+	// Fail if there are any update errors or non-blocking parse errors.
+	if parseErrs != nil || updateErrs != nil {
+		state.RecordFailure(opts.Clock, status.Append(parseErrs, updateErrs))
 		return result
 	}
 
@@ -286,7 +307,7 @@ func (r *reconciler) read(ctx context.Context, trigger string, sourceStatus *Sou
 	newRenderStatus.LastUpdate = nowMeta(opts.Clock)
 	// update the rendering status before source status because the parser needs to
 	// read and parse the configs after rendering is done and there might have errors.
-	klog.V(3).Info("Updating rendering status (after parse)")
+	klog.V(3).Info("Updating rendering status (after read)")
 	if statusErr := r.syncStatusClient.SetRenderingStatus(ctx, state.status.RenderingStatus, newRenderStatus); statusErr != nil {
 		// Return both errors
 		return status.Append(newRenderStatus.Errs, statusErr)
@@ -302,7 +323,7 @@ func (r *reconciler) read(ctx context.Context, trigger string, sourceStatus *Sou
 	if newSourceStatus.Errs != nil {
 		newSourceStatus.LastUpdate = nowMeta(opts.Clock)
 		if state.status.needToSetSourceStatus(newSourceStatus) {
-			klog.V(3).Info("Updating source status (after parse)")
+			klog.V(3).Info("Updating source status (after read)")
 			if statusErr := r.syncStatusClient.SetSourceStatus(ctx, newSourceStatus); statusErr != nil {
 				return status.Append(newSourceStatus.Errs, statusErr)
 			}
@@ -413,70 +434,54 @@ func (r *reconciler) readFromSource(ctx context.Context, trigger string, srcStat
 	return newRenderStatus, newSourceStatus
 }
 
-func (r *reconciler) parseSource(ctx context.Context, trigger string) status.MultiError {
-	state := r.ReconcilerState()
-	if state.cache.parserResultUpToDate() {
-		return nil
-	}
-
-	opts := r.Options()
-	start := opts.Clock.Now()
-	var sourceErrs status.MultiError
-
-	objs, errs := r.parser.ParseSource(ctx, state.cache.source)
-	if !opts.WebhookEnabled {
-		klog.V(3).Infof("Removing %s annotation as Admission Webhook is disabled", metadata.DeclaredFieldsKey)
-		for _, obj := range objs {
-			core.RemoveAnnotations(obj, metadata.DeclaredFieldsKey)
-		}
-	}
-	sourceErrs = status.Append(sourceErrs, errs)
-	metrics.RecordParserDuration(ctx, trigger, "parse", metrics.StatusTagKey(sourceErrs), start)
-	state.cache.setParserResult(objs, sourceErrs)
-
-	if !status.HasBlockingErrors(sourceErrs) && opts.WebhookEnabled {
-		err := webhookconfiguration.Update(ctx, opts.Client, opts.DiscoveryClient, objs,
-			client.FieldOwner(configsync.FieldManager))
-		if err != nil {
-			// Don't block if updating the admission webhook fails.
-			// Return an error instead if we remove the remediator as otherwise we
-			// will simply never correct the type.
-			// This should be treated as a warning once we have
-			// that capability.
-			klog.Errorf("Failed to update admission webhook: %v", err)
-			// TODO: Handle case where multiple reconciler Pods try to
-			//  create or update the Configuration simultaneously.
-		}
-	}
-
-	return sourceErrs
-}
-
-// parseAndUpdate parses objects from the source manifests, validates them, and
-// then syncs them to the cluster with the Updater.
-func (r *reconciler) parseAndUpdate(ctx context.Context, trigger string) status.MultiError {
+// parse objects from the source files and perform scope validation.
+// If any objects have unknown scope, parse will return non-blocking errors.
+func (r *reconciler) parse(ctx context.Context, trigger string) status.MultiError {
 	opts := r.Options()
 	state := r.ReconcilerState()
-	klog.V(3).Info("Parser starting...")
-	sourceErrs := r.parseSource(ctx, trigger)
-	klog.V(3).Info("Parser stopped")
+
+	var parseErrs status.MultiError
+	if state.cache.parse.IsUpdateRequired() {
+		klog.V(3).Info("Parsing starting...")
+		start := opts.Clock.Now()
+		var objs []ast.FileObject
+		objs, parseErrs = r.parser.ParseSource(ctx, state.cache.source)
+		if !opts.WebhookEnabled {
+			klog.V(3).Infof("Removing %s annotation as Admission Webhook is disabled", metadata.DeclaredFieldsKey)
+			for _, obj := range objs {
+				core.RemoveAnnotations(obj, metadata.DeclaredFieldsKey)
+			}
+		}
+		metrics.RecordParserDuration(ctx, trigger, "parse", metrics.StatusTagKey(parseErrs), start)
+		state.cache.UpdateParseResult(objs, parseErrs, nowMeta(opts.Clock))
+		klog.V(3).Info("Parsing stopped")
+	} else {
+		klog.V(3).Info("Parsing skipped")
+	}
+
+	// Update the source status if the status has changed, whether there are any
+	// source errors or not. This confirms whether the fetch & parse stages
+	// succeeded, since they share the same RSync `status.source` fields.
 	newSourceStatus := &SourceStatus{
 		Spec:       state.cache.source.spec,
 		Commit:     state.cache.source.commit,
-		Errs:       sourceErrs,
+		Errs:       parseErrs,
 		LastUpdate: nowMeta(opts.Clock),
 	}
 	if state.status.needToSetSourceStatus(newSourceStatus) {
 		klog.V(3).Info("Updating source status (after parse)")
 		if statusErr := r.syncStatusClient.SetSourceStatus(ctx, newSourceStatus); statusErr != nil {
-			return status.Append(sourceErrs, statusErr)
+			return status.Append(parseErrs, statusErr)
 		}
 		state.status.SourceStatus = newSourceStatus
 	}
+	return parseErrs
+}
 
-	if status.HasBlockingErrors(sourceErrs) {
-		return sourceErrs
-	}
+// update syncs the objects with known scope to the cluster.
+func (r *reconciler) update(ctx context.Context, trigger string) status.MultiError {
+	opts := r.Options()
+	state := r.ReconcilerState()
 
 	asyncCtx, asyncCancel := context.WithCancel(ctx)
 	asyncDoneCh := r.startAsyncStatusUpdates(asyncCtx)
@@ -495,8 +500,6 @@ func (r *reconciler) parseAndUpdate(ctx context.Context, trigger string) status.
 	// SyncErrors include errors from both the Updater and Remediator
 	klog.V(3).Info("Updating sync status (after sync)")
 	syncErrs := r.ReconcilerState().SyncErrors()
-	// Return all the errors from the Parser, Updater, and Remediator
-	reconcileErrs := status.Append(sourceErrs, syncErrs)
 
 	// Copy the spec and commit from the source status
 	syncStatus := &SyncStatus{
@@ -507,9 +510,9 @@ func (r *reconciler) parseAndUpdate(ctx context.Context, trigger string) status.
 		LastUpdate: nowMeta(opts.Clock),
 	}
 	if statusErr := r.setSyncStatus(ctx, syncStatus); statusErr != nil {
-		return status.Append(reconcileErrs, statusErr)
+		return status.Append(syncErrs, statusErr)
 	}
-	return reconcileErrs
+	return syncErrs
 }
 
 // setSyncStatus updates `.status.sync` and the Syncing condition, if needed,

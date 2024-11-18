@@ -206,23 +206,31 @@ func TestHandleIgnoredObjects(t *testing.T) {
 		{
 			name: "an existing but unmanaged object is declared with the ignore mutation annotation",
 			declaredObjs: []client.Object{
-				k8sobjects.NamespaceObject("test-ns", syncertest.IgnoreMutationAnnotation),
+				k8sobjects.NamespaceObject("test-ns",
+					syncertest.IgnoreMutationAnnotation,
+					syncertest.ManagementEnabled),
 			},
 			ignoredObjs: []client.Object{
-				k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("test-ns")),
+				k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("test-ns"),
+					core.Annotation("foo", "bar")),
 			},
 			expectedObjs: []client.Object{
-				k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("test-ns"), syncertest.IgnoreMutationAnnotation),
+				k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("test-ns"),
+					core.Annotation("foo", "bar"),
+					syncertest.IgnoreMutationAnnotation,
+					syncertest.ManagementEnabled),
 			},
 		},
 		{
 			name: "a managed object is now declared with the ignore mutation annotation",
 			declaredObjs: []client.Object{
-				k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("test-ns"),
+				k8sobjects.NamespaceObject("test-ns",
 					syncertest.ManagementEnabled,
 					syncertest.IgnoreMutationAnnotation),
 			},
-			ignoredObjs: []client.Object{k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("test-ns"))},
+			ignoredObjs: []client.Object{
+				k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("test-ns"),
+					syncertest.ManagementEnabled)},
 			expectedObjs: []client.Object{
 				k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("test-ns"),
 					syncertest.ManagementEnabled,
@@ -232,12 +240,15 @@ func TestHandleIgnoredObjects(t *testing.T) {
 		{
 			name: "a managed object is now declared with the ignore mutation annotation and other spec changes",
 			declaredObjs: []client.Object{
-				k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("test-ns"),
+				k8sobjects.NamespaceObject("test-ns",
 					syncertest.ManagementEnabled,
 					syncertest.IgnoreMutationAnnotation,
 					core.Annotation("foo", "bar")),
 			},
-			ignoredObjs: []client.Object{(k8sobjects.UnstructuredObject(kinds.Namespace(), syncertest.ManagementEnabled, core.Name("test-ns")))},
+			ignoredObjs: []client.Object{
+				k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("test-ns"),
+					syncertest.ManagementEnabled),
+			},
 			expectedObjs: []client.Object{
 				k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("test-ns"),
 					syncertest.ManagementEnabled,
@@ -263,6 +274,25 @@ func TestHandleIgnoredObjects(t *testing.T) {
 				k8sobjects.NamespaceObject("test-ns",
 					syncertest.ManagementEnabled,
 					syncertest.IgnoreMutationAnnotation),
+			},
+		},
+		{
+			name: "an object exists with the ignore mutation annotation but it is declared without it",
+			declaredObjs: []client.Object{
+				k8sobjects.NamespaceObject("test-ns",
+					syncertest.ManagementEnabled),
+			},
+			ignoredObjs: []client.Object{
+				k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("test-ns"),
+					syncertest.ManagementEnabled,
+					syncertest.IgnoreMutationAnnotation,
+					core.Annotation("foo", "bar"),
+				),
+			},
+			expectedObjs: []client.Object{
+				k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("test-ns"),
+					syncertest.ManagementEnabled,
+					core.Annotation("foo", "bar")),
 			},
 		},
 	}

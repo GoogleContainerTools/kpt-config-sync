@@ -478,7 +478,7 @@ func TestApplyMutationIgnoredObjects(t *testing.T) {
 					core.Label("foo", "bar")),
 			},
 			declaredObjs: []client.Object{
-				newNamespaceObj(core.Name("managed-ns"),
+				k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("managed-ns"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
@@ -527,7 +527,7 @@ func TestApplyMutationIgnoredObjects(t *testing.T) {
 					core.Label("foo", "baz")),
 			},
 			declaredObjs: []client.Object{
-				newNamespaceObj(core.Name("deleted-ns"),
+				k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("deleted-ns"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
@@ -542,18 +542,18 @@ func TestApplyMutationIgnoredObjects(t *testing.T) {
 					syncertest.IgnoreMutationAnnotation)},
 			cachedIgnoredObjs: []client.Object{
 				&queue.Deleted{
-					Object: newNamespaceObj(
+					Object: k8sobjects.UnstructuredObject(kinds.Namespace(),
 						core.Name("deleted-ns"),
 						syncertest.ManagementEnabled,
 						syncertest.IgnoreMutationAnnotation)}},
 			expectedItemsInIgnoreCache: []client.Object{
 				&queue.Deleted{
-					Object: newNamespaceObj(
+					Object: k8sobjects.UnstructuredObject(kinds.Namespace(),
 						core.Name("deleted-ns"),
 						syncertest.ManagementEnabled,
 						syncertest.IgnoreMutationAnnotation)}},
 			expectedObjsToApply: object.UnstructuredSet{
-				asUnstructuredSanitizedObj(newNamespaceObj(core.Name("deleted-ns"),
+				asUnstructuredSanitizedObj(k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("deleted-ns"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
@@ -572,7 +572,7 @@ func TestApplyMutationIgnoredObjects(t *testing.T) {
 			name:       "mutation-ignored object doesn't currently exist on the cluster",
 			serverObjs: []client.Object{},
 			declaredObjs: []client.Object{
-				newNamespaceObj(core.Name("test-ns"),
+				k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("test-ns"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
@@ -587,7 +587,7 @@ func TestApplyMutationIgnoredObjects(t *testing.T) {
 			cachedIgnoredObjs:          []client.Object{},
 			expectedItemsInIgnoreCache: nil,
 			expectedObjsToApply: object.UnstructuredSet{
-				asUnstructuredSanitizedObj(newNamespaceObj(core.Name("test-ns"),
+				asUnstructuredSanitizedObj(k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("test-ns"),
 					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 					core.Label(metadata.ApplySetPartOfLabel, applySetID),
 					core.Label(metadata.DeclaredVersionLabel, "v1"),
@@ -1005,10 +1005,6 @@ func newTestObj(name string) *unstructured.Unstructured {
 		Version: "v1",
 		Kind:    "Test",
 	}, core.Namespace("test-namespace"), core.Name(name), core.Annotation(metadata.SourcePathAnnotationKey, "foo/test.yaml"))
-}
-
-func newNamespaceObj(opts ...core.MetaMutator) *unstructured.Unstructured {
-	return k8sobjects.UnstructuredObject(kinds.Namespace(), opts...)
 }
 
 func asUnstructuredSanitizedObj(o client.Object) *unstructured.Unstructured {

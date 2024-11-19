@@ -19,6 +19,7 @@ import (
 
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/core"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -138,6 +139,15 @@ func RemoveConfigSyncMetadata(obj client.Object) bool {
 	return before != after
 }
 
+// UpdateConfigSyncMetadata applies the Config Sync metadata of fromObj
+// to toObj where toObj is modified in place.
+func UpdateConfigSyncMetadata(fromObj client.Object, toObj client.Object) {
+	removeAllConfigSyncMetadata(toObj)
+	csAnnotations, csLabels := getConfigSyncMetadata(fromObj)
+	core.AddAnnotations(toObj, csAnnotations)
+	core.AddLabels(toObj, csLabels)
+}
+
 // RemoveApplySetPartOfLabel removes the ApplySet part-of label IFF the value
 // matches the specified applySetID.
 // The resource is modified in place. Returns true if the object was modified.
@@ -155,8 +165,18 @@ func RemoveApplySetPartOfLabel(obj client.Object, applySetID string) bool {
 	return true
 }
 
+// RemoveAllConfigSyncMetadata removes all of the Config Sync metadata, including both Config Sync
+// annotations and labels, from the given resource.
+// The resource is modified in place. Returns true if the object was modified.
+func removeAllConfigSyncMetadata(obj client.Object) {
+	RemoveConfigSyncMetadata(obj)
+	annotations := obj.GetAnnotations()
+	delete(annotations, LifecycleMutationAnnotation)
+	obj.SetAnnotations(annotations)
+}
+
 // GetConfigSyncMetadata gets all Config Sync annotations and labels from the given resource
-func GetConfigSyncMetadata(obj client.Object) (map[string]string, map[string]string) {
+func getConfigSyncMetadata(obj client.Object) (map[string]string, map[string]string) {
 	configSyncAnnotations := map[string]string{}
 	configSyncLabels := map[string]string{}
 

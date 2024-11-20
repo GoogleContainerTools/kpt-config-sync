@@ -15,6 +15,7 @@
 package metadata
 
 import (
+	"reflect"
 	"strings"
 
 	"kpt.dev/configsync/pkg/api/configmanagement"
@@ -146,6 +147,14 @@ func UpdateConfigSyncMetadata(fromObj client.Object, toObj client.Object) {
 	csAnnotations, csLabels := getConfigSyncMetadata(fromObj)
 	core.AddAnnotations(toObj, csAnnotations)
 	core.AddLabels(toObj, csLabels)
+}
+
+func HasSameCSMetadata(obj1, obj2 client.Object) bool {
+	// Compare CSmetadata
+	csAnnotations1, csLabels1 := getConfigSyncMetadata(obj1)
+	csAnnotations2, csLabels2 := getConfigSyncMetadata(obj2)
+
+	return reflect.DeepEqual(csAnnotations1, csAnnotations2) && reflect.DeepEqual(csLabels1, csLabels2)
 }
 
 // RemoveApplySetPartOfLabel removes the ApplySet part-of label IFF the value

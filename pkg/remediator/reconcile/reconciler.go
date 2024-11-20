@@ -18,7 +18,7 @@ import (
 	"context"
 	"time"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"github.com/google/go-cmp/cmp"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
@@ -29,6 +29,7 @@ import (
 	"kpt.dev/configsync/pkg/remediator/conflict"
 	"kpt.dev/configsync/pkg/status"
 	syncerclient "kpt.dev/configsync/pkg/syncer/client"
+	"kpt.dev/configsync/pkg/syncer/reconcile"
 	syncerreconcile "kpt.dev/configsync/pkg/syncer/reconcile"
 	"kpt.dev/configsync/pkg/syncer/reconcile/fight"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -171,27 +172,43 @@ func (r *reconciler) remediate(ctx context.Context, id core.ID, objDiff diff.Dif
 		return r.applier.RemoveNomosMeta(ctx, actual, metrics.RemediatorController)
 	case diff.UpdateCSMetadata:
 
+		declared, err := objDiff.UnstructuredDeclared()
+		if err != nil {
+			return err
+		}
 		actual, err := objDiff.UnstructuredActual()
 		if err != nil {
 			return err
 		}
 
-		uObj := &unstructured.Unstructured{}
+		expected := actual.DeepCopy()
+		expected, _ = reconcile.AsUnstructuredSanitized(expected)
 
-		uObj.SetGroupVersionKind(objDiff.Declared.GetObjectKind().GroupVersionKind())
-		uObj.SetName(objDiff.Declared.GetName())
-		csAnnotations, csLabels := metadata.GetConfigSyncMetadata(objDiff.Declared)
+		metadata.UpdateConfigSyncMetadata(declared, expected)
 
-		uObj.SetAnnotations(objDiff.Actual.GetAnnotations())
-		uObj.SetLabels(objDiff.Actual.GetLabels())
-		metadata.RemoveConfigSyncMetadata(uObj)
-		core.RemoveAnnotations(uObj, metadata.LifecycleMutationAnnotation)
-		core.AddAnnotations(uObj, csAnnotations)
-		core.AddLabels(uObj, csLabels)
+		// actual, err := objDiff.UnstructuredActual()
+		// if err != nil {
+		// 	return err
+		// }
 
+		// uObj := &unstructured.Unstructured{}
+
+		// uObj.SetGroupVersionKind(objDiff.Declared.GetObjectKind().GroupVersionKind())
+		// uObj.SetName(objDiff.Declared.GetName())
+
+		// uObj.SetAnnotations(objDiff.Actual.GetAnnotations())
+		// uObj.SetLabels(objDiff.Actual.GetLabels())
+		// metadata.UpdateConfigSyncMetadata(objDiff.Declared, uObj)
+
+		//TODO: Figure out why it's giving me the error: "failed to remediate "Namespace, /bookstore": KNV2010: unable to update resource: metadata.managedFields must be nil"
 		klog.V(3).Infof("Remediator updating Config Sync metadata of object: %v", id)
 
-		return r.applier.Update(ctx, uObj, actual)
+		if klog.V(3).Enabled() {
+			klog.V(3).Infof("Updating CS metadata:\nDiff (- Removed, + Added):\n%s",
+				cmp.Diff(actual, expected))
+		}
+		//TODO: This isn't working as expected
+		return r.applier.Update(ctx, expected, actual)
 	default:
 		// e.g. differ.DeleteNsConfig, which shouldn't be possible to get to any way.
 		metrics.RecordInternalError(ctx, "remediator")

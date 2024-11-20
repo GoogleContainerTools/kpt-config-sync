@@ -17,8 +17,6 @@
 package diff
 
 import (
-	"reflect"
-
 	admissionv1 "k8s.io/api/admission/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/klog/v2"
@@ -271,9 +269,5 @@ func (d *Diff) GetName() string {
 }
 
 func (d *Diff) sameCSMetadata() bool {
-	// Compare CSmetadata
-	dCSAnnotations, dCSLabels := metadata.GetConfigSyncMetadata(d.Declared)
-	aCSAnnotations, aCSLabels := metadata.GetConfigSyncMetadata(d.Actual)
-
-	return reflect.DeepEqual(dCSAnnotations, aCSAnnotations) && reflect.DeepEqual(dCSLabels, aCSLabels)
+	return metadata.HasSameCSMetadata(d.Declared, d.Actual)
 }

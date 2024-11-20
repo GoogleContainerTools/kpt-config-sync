@@ -14,6 +14,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
@@ -366,7 +367,7 @@ func TestDriftKubectlAnnotateManagedFieldWithIgnoreMutationAnnotation(t *testing
 
 	time.Sleep(10 * time.Second)
 
-	// Remediator SHOULD NOT correct it
+	// Remediator SHOULD correct it
 	err = nt.Validate("bookstore", "", &corev1.Namespace{}, testpredicates.HasAnnotation(metadata.ResourceManagementKey, "fall"))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -434,8 +435,58 @@ func TestDriftKubectlAnnotateDeleteManagedFieldsWithIgnoreMutationAnnotation(t *
 
 	time.Sleep(10 * time.Second)
 
-	// Remediator SHOULD NOT correct it
-	err = nt.Validate("bookstore", "", &corev1.Namespace{}, testpredicates.MissingAnnotation(metadata.ResourceManagementKey))
+	// Remediator SHOULD correct it
+	err = nt.Validate("bookstore", "", &corev1.Namespace{}, testpredicates.HasAnnotationKey(metadata.ResourceManagementKey))
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+}
+
+// TestDriftAddIgnoreMutationAnnotationWithKubectl
+// Adds the `client.lifecycle.config.k8s.io/mutation` annotation to an object via kubectl and verifies that
+// Config Sync corrects it.
+func TestDriftAddIgnoreMutationAnnotationWithKubectl(t *testing.T) {
+	rootSyncID := nomostest.DefaultRootSyncID
+	nt := nomostest.New(t, nomostesting.DriftControl,
+		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured))
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
+
+	namespace := k8sobjects.NamespaceObject("bookstore",
+		core.Annotation("season", "summer"))
+	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
+	nt.Must(rootSyncGitRepo.CommitAndPush("add a namespace"))
+	nt.Must(nt.WatchForAllSyncs())
+
+	// The reason we need to stop the webhook here is that the webhook denies a request to modify Config Sync metadata
+	// even if the resource has the `client.lifecycle.config.k8s.io/mutation` annotation.
+	nomostest.StopWebhook(nt)
+	// Stopping the webhook causes the reconciler to restart. Wait so that we aren't
+	// racing with the applier and are actually testing the remediator.
+	nt.Must(nt.Watcher.WatchObject(kinds.Deployment(),
+		core.RootReconcilerName(rootSyncID.Name), configsync.ControllerNamespace,
+		testwatcher.WatchPredicates(
+			testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
+			testpredicates.DeploymentMissingEnvVar(reconcilermanager.Reconciler, reconcilermanager.WebhookEnabled),
+		)))
+
+	nt.T.Log("Increase log level of reconciler to help debug failures")
+	rs := nomostest.RootSyncObjectV1Beta1FromRootRepo(nt, configsync.RootSyncName)
+	rs.Spec.SafeOverride().LogLevels = []v1beta1.ContainerLogLevelOverride{
+		{ContainerName: reconcilermanager.Reconciler, LogLevel: 5},
+	}
+	nt.Must(nt.KubeClient.Apply(rs))
+	nt.Must(nt.Watcher.WatchForCurrentStatus(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace))
+
+	// Manually add the ignore mutation annotation
+	out, err := nt.Shell.Kubectl("annotate", "namespace", "bookstore", fmt.Sprintf("%s=%s", metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation))
+	if err != nil {
+		nt.T.Fatalf("got `kubectl annotate namespace bookstore %s=%s` error %v %s, want return nil", metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation, err, out)
+	}
+
+	time.Sleep(10 * time.Second)
+
+	// Remediator SHOULD correct it
+	err = nt.Validate("bookstore", "", &corev1.Namespace{}, testpredicates.MissingAnnotation(metadata.LifecycleMutationAnnotation))
 	if err != nil {
 		nt.T.Fatal(err)
 	}

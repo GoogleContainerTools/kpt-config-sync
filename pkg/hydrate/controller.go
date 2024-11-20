@@ -116,8 +116,8 @@ func (h *Hydrator) Run(ctx context.Context) {
 					if err := h.complete(srcCommit, hydrateErr); err != nil {
 						klog.Errorf("failed to complete the rendering execution for commit %q: %v", srcCommit, err)
 					}
-				} else if readyToRenderFile != "" {
-					klog.Warningf("skip hydration as commit to render %s does not match srcCommit %s", readyToRenderCommit, srcCommit)
+				} else {
+					klog.Warningf("skip hydration as readyToRenderCommit does not match srcCommit, want %s, got %s", srcCommit, readyToRenderCommit)
 				}
 			}
 			runTimer.Reset(h.PollingPeriod) // Schedule re-run attempt

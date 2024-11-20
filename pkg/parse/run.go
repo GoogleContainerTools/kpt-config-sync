@@ -597,17 +597,21 @@ func (r *reconciler) startAsyncStatusUpdates(ctx context.Context) <-chan struct{
 }
 
 // unblockHydration adds the image digest into the ready-to-render file under the
-// /shared directory to inform the hydration-controller to proceed rendering
+// shared directory between reconciler and hydration-controller to inform the
+// hydration-controller to proceed rendering
 func unblockHydration(commit string, r Reconciler) status.Error {
-	absShared, err := cmpath.AbsoluteOS("/shared")
-	readToRenderFile := absShared.Join(cmpath.RelativeSlash(hydrate.ReadyToRenderFile)).OSPath()
+	readToRenderFile := r.Options().ReconcilerSignalsDir.Join(cmpath.RelativeSlash(hydrate.ReadyToRenderFile)).OSPath()
 	klog.Infof("writing commit %s to ready to render file", commit)
 	// Overwrite the commit in ready-to-render file
 	file, err := os.OpenFile(readToRenderFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
 	if err != nil {
 		return status.OSWrap(err)
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			klog.Errorf("failed to close file %s: %v", readToRenderFile, closeErr)
+		}
+	}()
 
 	_, err = file.WriteString(commit)
 	if err != nil {

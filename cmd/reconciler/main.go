@@ -93,7 +93,7 @@ var (
 
 	debug = flag.Bool("debug", false,
 		"Enable debug mode, panicking in many scenarios where normally an InternalError would be logged. "+
-				"Do not use in production.")
+			"Do not use in production.")
 
 	renderingEnabled  = flag.Bool("rendering-enabled", util.EnvBool(reconcilermanager.RenderingEnabled, false), "")
 	namespaceStrategy = flag.String(flags.namespaceStrategy, util.EnvString(reconcilermanager.NamespaceStrategy, ""),

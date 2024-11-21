@@ -253,12 +253,6 @@ func (c *clientApplier) update(ctx context.Context, intendedState, currentState 
 	if err != nil {
 		return nil, err
 	}
-
-	if klog.V(3).Enabled() {
-		klog.V(3).Infof("Updating CS metadata:\nDiff (- Removed, + Added):\n%s",
-			cmp.Diff(objCopy, currentState))
-	}
-
 	if equal(objCopy, currentState) {
 		return nil, nil
 	}

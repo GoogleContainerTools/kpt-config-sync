@@ -646,7 +646,6 @@ func TestDriftKubectlAnnotateUnmanagedField(t *testing.T) {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore %s` error %v %s, want return nil", ignoreMutation, err, out)
 	}
 
-	//TODO: Validate if still true
 	// Remediator SHOULD NOT remove this field
 	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
 		testwatcher.WatchPredicates(

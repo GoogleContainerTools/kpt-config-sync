@@ -18,7 +18,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
@@ -171,7 +170,6 @@ func (r *reconciler) remediate(ctx context.Context, id core.ID, objDiff diff.Dif
 		klog.V(3).Infof("Remediator abandoning object %v", id)
 		return r.applier.RemoveNomosMeta(ctx, actual, metrics.RemediatorController)
 	case diff.UpdateCSMetadata:
-
 		declared, err := objDiff.UnstructuredDeclared()
 		if err != nil {
 			return err
@@ -181,33 +179,13 @@ func (r *reconciler) remediate(ctx context.Context, id core.ID, objDiff diff.Dif
 			return err
 		}
 
-		expected := actual.DeepCopy()
-		expected, _ = reconcile.AsUnstructuredSanitized(expected)
+		expected, err := reconcile.AsUnstructuredSanitized(actual)
+		if err != nil {
+			return err
+		}
 
 		metadata.UpdateConfigSyncMetadata(declared, expected)
 
-		// actual, err := objDiff.UnstructuredActual()
-		// if err != nil {
-		// 	return err
-		// }
-
-		// uObj := &unstructured.Unstructured{}
-
-		// uObj.SetGroupVersionKind(objDiff.Declared.GetObjectKind().GroupVersionKind())
-		// uObj.SetName(objDiff.Declared.GetName())
-
-		// uObj.SetAnnotations(objDiff.Actual.GetAnnotations())
-		// uObj.SetLabels(objDiff.Actual.GetLabels())
-		// metadata.UpdateConfigSyncMetadata(objDiff.Declared, uObj)
-
-		//TODO: Figure out why it's giving me the error: "failed to remediate "Namespace, /bookstore": KNV2010: unable to update resource: metadata.managedFields must be nil"
-		klog.V(3).Infof("Remediator updating Config Sync metadata of object: %v", id)
-
-		if klog.V(3).Enabled() {
-			klog.V(3).Infof("Updating CS metadata:\nDiff (- Removed, + Added):\n%s",
-				cmp.Diff(actual, expected))
-		}
-		//TODO: This isn't working as expected
 		return r.applier.Update(ctx, expected, actual)
 	default:
 		// e.g. differ.DeleteNsConfig, which shouldn't be possible to get to any way.

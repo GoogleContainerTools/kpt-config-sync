@@ -382,7 +382,7 @@ func TestDriftKubectlAnnotateManagedFieldWithIgnoreMutationAnnotation(t *testing
 	time.Sleep(10 * time.Second)
 
 	// Remediator SHOULD correct it
-	err = nt.Validate("bookstore", "", &corev1.Namespace{}, testpredicates.HasAnnotation(metadata.ResourceManagementKey, "fall"))
+	err = nt.Validate("bookstore", "", &corev1.Namespace{}, testpredicates.HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -504,4 +504,43 @@ func TestDriftAddIgnoreMutationAnnotationWithKubectl(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
+}
+
+// TestDriftKubectlAnnotateUnmanagedField adds a new field with kubectl into a
+// resource managed by Config Sync, and verifies that Config Sync
+// does not remove this field.
+func TestDriftKubectlAnnotateWithIgnoreMutation(t *testing.T) {
+	nt := nomostest.New(t, nomostesting.DriftControl,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
+
+	namespace := k8sobjects.NamespaceObject("bookstore")
+	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
+	nt.Must(rootSyncGitRepo.CommitAndPush("add a namespace"))
+	nt.Must(nt.WatchForAllSyncs())
+
+	// Stop the Config Sync webhook to test the drift correction functionality
+	nomostest.StopWebhook(nt)
+
+	nt.T.Log("Increase log level of reconciler to help debug failures")
+	rs := nomostest.RootSyncObjectV1Beta1FromRootRepo(nt, configsync.RootSyncName)
+	rs.Spec.SafeOverride().LogLevels = []v1beta1.ContainerLogLevelOverride{
+		{ContainerName: reconcilermanager.Reconciler, LogLevel: 5},
+	}
+	nt.Must(nt.KubeClient.Apply(rs))
+	nt.Must(nt.Watcher.WatchForCurrentStatus(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace))
+
+	// Add the `client.lifecycle.config.k8s.io/mutation` annotation into the namespace object
+	ignoreMutation := fmt.Sprintf("%s=%s", metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation)
+	out, err := nt.Shell.Kubectl("annotate", "namespace", "bookstore", ignoreMutation)
+	if err != nil {
+		nt.T.Fatalf("got `kubectl annotate namespace bookstore %s` error %v %s, want return nil", ignoreMutation, err, out)
+	}
+
+	// Remediator SHOULD remove this field
+	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
+		testwatcher.WatchPredicates(
+			testpredicates.MissingAnnotation(metadata.LifecycleMutationAnnotation),
+		),
+		testwatcher.WatchTimeout(30*time.Second)))
 }

@@ -600,16 +600,16 @@ func (r *reconciler) startAsyncStatusUpdates(ctx context.Context) <-chan struct{
 // shared directory between reconciler and hydration-controller to inform the
 // hydration-controller to proceed rendering
 func unblockHydration(commit string, r Reconciler) status.Error {
-	readToRenderFile := r.Options().ReconcilerSignalsDir.Join(cmpath.RelativeSlash(hydrate.ReadyToRenderFile)).OSPath()
-	klog.Infof("writing commit %s to ready to render file", commit)
+	readyToRenderFile := r.Options().ReconcilerSignalsDir.Join(cmpath.RelativeSlash(hydrate.ReadyToRenderFile)).OSPath()
+	klog.Infof("writing commit %s to ready to render file %s", commit, readyToRenderFile)
 	// Overwrite the commit in ready-to-render file
-	file, err := os.OpenFile(readToRenderFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
+	file, err := os.OpenFile(readyToRenderFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
 	if err != nil {
 		return status.OSWrap(err)
 	}
 	defer func() {
 		if closeErr := file.Close(); closeErr != nil {
-			klog.Errorf("failed to close file %s: %v", readToRenderFile, closeErr)
+			klog.Errorf("failed to close file %s: %v", readyToRenderFile, closeErr)
 		}
 	}()
 

@@ -235,6 +235,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 		gitError              string
 		hydratedError         string
 		hydrationDone         bool
+		imageVerified         bool
 		expectedSourceChanged bool
 		needRetry             bool
 		parseOutputs          []fsfake.ParserOutputs
@@ -444,6 +445,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 			hydratedRootExist:     true,
 			expectedSourceChanged: false,
 			needRetry:             true,
+			imageVerified:         true,
 			parseOutputs:          nil, // parse should not be called
 			expectedRootSyncFunc: func(_ string) *v1beta1.RootSync {
 				rs := rootSyncOutput.DeepCopy()
@@ -490,6 +492,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 			hasKustomization:      true,
 			hydratedRootExist:     true,
 			hydrationDone:         true,
+			imageVerified:         true,
 			hydratedError:         `{"code": "1068", "error": "rendering error"}`,
 			expectedSourceChanged: false,
 			needRetry:             true,
@@ -602,6 +605,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 			hydrationDone:         true,
 			expectedSourceChanged: true,
 			needRetry:             true,
+			imageVerified:         true,
 			parseOutputs: []fsfake.ParserOutputs{
 				{
 					Errors: status.ResourceErrorBuilder.Wrap(
@@ -729,6 +733,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 			hydrationDone:         true,
 			expectedSourceChanged: true,
 			needRetry:             false,
+			imageVerified:         true,
 			parseOutputs: []fsfake.ParserOutputs{
 				{}, // parse should be called exactly once
 			},
@@ -847,6 +852,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 			hydrationDone:         true,
 			expectedSourceChanged: false,
 			needRetry:             true,
+			imageVerified:         true,
 			parseOutputs:          nil, // parse should not be called
 			expectedRootSyncFunc: func(_ string) *v1beta1.RootSync {
 				rs := rootSyncOutput.DeepCopy()
@@ -1049,6 +1055,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 			sourceRoot := filepath.Join(rootDir, "source")     // /repo/source
 			hydratedRoot := filepath.Join(rootDir, "hydrated") // /repo/hydrated
 			sourceDir := filepath.Join(sourceRoot, symLink)
+			reconcilerSignalDir := filepath.Join(rootDir, "reconciler-signals")
 
 			// Simulating the creation of source configs and errors in the background
 			doneCh := make(chan struct{})
@@ -1098,6 +1105,9 @@ func TestReconciler_Reconcile(t *testing.T) {
 								return fmt.Errorf("failed to write hydrated error file: %v", err)
 							}
 						}
+						if err = createRootDir(reconcilerSignalDir, sourceCommit); err != nil {
+							return fmt.Errorf("failed to create reconciler-signals directory: %v", err)
+						}
 					}
 					return nil
 				}()
@@ -1107,13 +1117,14 @@ func TestReconciler_Reconcile(t *testing.T) {
 			}()
 
 			fs := FileSource{
-				SourceDir:    cmpath.Absolute(sourceDir),
-				RepoRoot:     cmpath.Absolute(rootDir),
-				HydratedRoot: hydratedRoot,
-				HydratedLink: symLink,
-				SourceType:   fileSource.SourceType,
-				SourceRepo:   fileSource.SourceRepo,
-				SourceBranch: fileSource.SourceBranch,
+				SourceDir:            cmpath.Absolute(sourceDir),
+				RepoRoot:             cmpath.Absolute(rootDir),
+				HydratedRoot:         hydratedRoot,
+				HydratedLink:         symLink,
+				SourceType:           fileSource.SourceType,
+				SourceRepo:           fileSource.SourceRepo,
+				SourceBranch:         fileSource.SourceBranch,
+				ReconcilerSignalsDir: cmpath.Absolute(reconcilerSignalDir),
 			}
 			fakeClient := syncerFake.NewClient(t, core.Scheme, k8sobjects.RootSyncObjectV1Beta1(rootSyncName))
 			fakeConfigParser := &fsfake.ConfigParser{
@@ -1134,6 +1145,12 @@ func TestReconciler_Reconcile(t *testing.T) {
 			err = fakeClient.Get(context.Background(), rootsync.ObjectKey(rootSyncName), rs)
 			require.NoError(t, err)
 			testutil.AssertEqual(t, tc.expectedRootSyncFunc(sourceRoot), rs)
+
+			if tc.imageVerified {
+				readyToRenderFilePath := filepath.Join(reconcilerSignalDir, "ready-to-render")
+				_, err = os.Stat(readyToRenderFilePath)
+				assert.NoError(t, err, fmt.Sprintf("ready-to-render file should exist at %s", readyToRenderFilePath))
+			}
 
 			// Block and wait for the goroutine to complete.
 			<-doneCh

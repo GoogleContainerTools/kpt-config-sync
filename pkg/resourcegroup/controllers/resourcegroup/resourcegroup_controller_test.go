@@ -63,7 +63,7 @@ func TestReconcile(t *testing.T) {
 
 	// Setup the controller
 	channelKpt = make(chan event.GenericEvent)
-	resolver, err := typeresolver.NewTypeResolver(mgr, logger)
+	resolver, err := typeresolver.ForManager(mgr, logger)
 	assert.NoError(t, err)
 	resMap := resourcemap.NewResourceMap()
 	err = NewRGController(mgr, channelKpt, logger, resolver, resMap, 0)

@@ -16,6 +16,8 @@ package typeresolver
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/go-logr/logr"
@@ -23,10 +25,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 // TypeResolver keeps the preferred GroupVersionKind for all the
@@ -34,21 +32,31 @@ import (
 type TypeResolver struct {
 	log         logr.Logger
 	mu          sync.Mutex
-	dc          *discovery.DiscoveryClient
+	dc          discovery.DiscoveryInterface
 	typeMapping map[schema.GroupKind]schema.GroupVersionKind
 }
 
 // Refresh refreshes the type mapping by querying the api server
-func (r *TypeResolver) Refresh() {
+func (r *TypeResolver) Refresh() error {
 	mapping := make(map[schema.GroupKind]schema.GroupVersionKind)
 	apiResourcesList, err := discovery.ServerPreferredResources(r.dc)
 	if err != nil {
-		r.log.Error(err, "Unable to fetch api resources list by dynamic client")
-		return
+		if isStaleGroupDiscoveryError(err) {
+			// Log and continue, using the cached APIs.
+			// Stale groups means one or more of the APIService backends are
+			// unhealthy. This is especially common for metrics providers.
+			// If the API provider of a managed resource remains unhealthy, it
+			// will be surfaced as a resource-specific API error later, when
+			// watched or listed, which are retried and won't prevent updating
+			// the status of other managed resources.
+			r.log.Error(err, "Failed to discover API resources; using cached results")
+		} else {
+			// Return error, where it will be logged by the controller manager and retried
+			return fmt.Errorf("discovery of API resources failed: %w", err)
+		}
 	}
 	for _, resources := range apiResourcesList {
-		groupversion := resources.GroupVersion
-		gv, err := schema.ParseGroupVersion(groupversion)
+		gv, err := schema.ParseGroupVersion(resources.GroupVersion)
 		if err != nil {
 			continue
 		}
@@ -63,6 +71,38 @@ func (r *TypeResolver) Refresh() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.typeMapping = mapping
+	return nil
+}
+
+// isStaleGroupDiscoveryError returns true if the error is a
+// ErrGroupDiscoveryFailed and all the errors it wraps are
+// StaleGroupVersionError.
+//
+// Clusters with Aggregated Discovery enabled return this error when one
+// or more of the APIService backends fails to respond. However, the
+// cached APIs are still returned, with unhealthy groups marked as stale.
+// So if this returns true, it should be safe to use the cached APIs.
+func isStaleGroupDiscoveryError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var groupDiscoErr *discovery.ErrGroupDiscoveryFailed
+	if !errors.As(err, &groupDiscoErr) {
+		return false
+	}
+	if len(groupDiscoErr.Groups) == 0 {
+		// unlikely - improper use of ErrGroupDiscoveryFailed
+		return false
+	}
+	for _, gvErr := range groupDiscoErr.Groups {
+		var staleErr discovery.StaleGroupVersionError
+		if !errors.As(gvErr, &staleErr) {
+			// At least one of the group discovery errors is NOT a stale error
+			return false
+		}
+	}
+	// All errors are StaleGroupVersionErrors
+	return true
 }
 
 // Resolve maps the provided GroupKind to a GroupVersionKind
@@ -79,32 +119,39 @@ func (r *TypeResolver) Resolve(gk schema.GroupKind) (schema.GroupVersionKind, bo
 func (r *TypeResolver) Reconcile(context.Context, ctrl.Request) (ctrl.Result, error) {
 	logger := r.log
 	logger.Info("refreshing type resolver")
-	r.Refresh()
-	return ctrl.Result{}, nil
+	var result ctrl.Result
+	if err := r.Refresh(); err != nil {
+		// log the error and retry with backoff
+		return result, err
+	}
+	return result, nil
 }
 
-// NewTypeResolver creates a new TypeResolver
-func NewTypeResolver(mgr ctrl.Manager, logger logr.Logger) (*TypeResolver, error) {
-	dc := discovery.NewDiscoveryClientForConfigOrDie(mgr.GetConfig())
-	r := &TypeResolver{
+// NewTypeResolver constructs a new TypeResolver
+func NewTypeResolver(dc discovery.DiscoveryInterface, logger logr.Logger) *TypeResolver {
+	return &TypeResolver{
 		log: logger,
 		dc:  dc,
 	}
+}
 
-	c, err := controller.New("TypeResolver", mgr, controller.Options{
-		Reconciler: reconcile.Func(r.Reconcile),
-	})
-
+// ForManager creates a new TypeResolver and registers it with the controller
+// manager.
+func ForManager(mgr ctrl.Manager, logger logr.Logger) (*TypeResolver, error) {
+	dc, err := discovery.NewDiscoveryClientForConfig(mgr.GetConfig())
 	if err != nil {
 		return nil, err
 	}
-
-	u := &unstructured.Unstructured{}
-	u.SetGroupVersionKind(schema.GroupVersionKind{
+	reconciler := NewTypeResolver(dc, logger)
+	uObj := &unstructured.Unstructured{}
+	uObj.SetGroupVersionKind(schema.GroupVersionKind{
 		Group:   "apiextensions.k8s.io",
 		Version: "v1",
 		Kind:    "CustomResourceDefinition",
 	})
-	return r, c.Watch(source.Kind(mgr.GetCache(), u,
-		&handler.TypedEnqueueRequestForObject[*unstructured.Unstructured]{}))
+	_, err = ctrl.NewControllerManagedBy(mgr).
+		Named("TypeResolver").
+		For(uObj).
+		Build(reconciler)
+	return reconciler, err
 }

@@ -142,8 +142,15 @@ func RemoveConfigSyncMetadata(obj client.Object) bool {
 // UpdateConfigSyncMetadata applies the Config Sync metadata of fromObj
 // to toObj where toObj is modified in place.
 func UpdateConfigSyncMetadata(fromObj client.Object, toObj client.Object) {
-	removeAllConfigSyncMetadata(toObj)
 	csAnnotations, csLabels := getConfigSyncMetadata(fromObj)
+
+	// toObj object has the lifecycle annotation but not the fromObj object
+	// This is necessary as otherwise, the annotation won't be removed when using SSA
+	if fromObj.GetAnnotations()[LifecycleMutationAnnotation] == "" &&
+		toObj.GetAnnotations()[LifecycleMutationAnnotation] == IgnoreMutation {
+		csAnnotations[LifecycleMutationAnnotation] = ""
+	}
+
 	core.AddAnnotations(toObj, csAnnotations)
 	core.AddLabels(toObj, csLabels)
 }
@@ -163,16 +170,6 @@ func RemoveApplySetPartOfLabel(obj client.Object, applySetID string) bool {
 	delete(labels, ApplySetPartOfLabel)
 	obj.SetLabels(labels)
 	return true
-}
-
-// RemoveAllConfigSyncMetadata removes all of the Config Sync metadata, including both Config Sync
-// annotations and labels, from the given resource.
-// The resource is modified in place. Returns true if the object was modified.
-func removeAllConfigSyncMetadata(obj client.Object) {
-	RemoveConfigSyncMetadata(obj)
-	annotations := obj.GetAnnotations()
-	delete(annotations, LifecycleMutationAnnotation)
-	obj.SetAnnotations(annotations)
 }
 
 // GetConfigSyncMetadata gets all Config Sync annotations and labels from the given resource

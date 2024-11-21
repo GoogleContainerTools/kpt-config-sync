@@ -128,11 +128,13 @@ func registerControllersForGroup(mgr ctrl.Manager, logger logr.Logger, group str
 	channel := make(chan event.GenericEvent)
 
 	klog.Info("adding the type resolver")
-	resolver, err := typeresolver.NewTypeResolver(mgr, logger.WithName("TypeResolver"))
+	resolver, err := typeresolver.ForManager(mgr, logger.WithName("TypeResolver"))
 	if err != nil {
 		return fmt.Errorf("unable to set up the type resolver: %w", err)
 	}
-	resolver.Refresh()
+	if err := resolver.Refresh(); err != nil {
+		return fmt.Errorf("unable to initialize the type resolver resource cache: %w", err)
+	}
 
 	klog.Info("adding the Root controller for group " + group)
 	resMap := resourcemap.NewResourceMap()

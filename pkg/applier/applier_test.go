@@ -852,12 +852,8 @@ func TestProcessPruneEvent(t *testing.T) {
 		clientSet: cs,
 	}
 
-	//TODO: Refactor
-	testObj2 := k8sobjects.UnstructuredObject(schema.GroupVersionKind{
-		Group:   "configsync.test",
-		Version: "v1",
-		Kind:    "Test",
-	}, core.Namespace("test-namespace"), core.Name("test-1"), core.Annotation(metadata.SourcePathAnnotationKey, "foo/test.yaml"), syncertest.IgnoreMutationAnnotation)
+	testObj2 := testObj.DeepCopy()
+	core.SetAnnotation(testObj2, metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation)
 
 	resources := &declared.Resources{}
 	resources.UpdateIgnored(testObj2)

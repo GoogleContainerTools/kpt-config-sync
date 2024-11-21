@@ -276,7 +276,6 @@ func Run(opts Options) {
 		// a lot of other checks as well. So we call it a sync event/attempt,
 		// not a polling event/attempt.
 		SyncPeriod:         opts.PollingPeriod,
-		FullSyncPeriod:     opts.FullSyncPeriod,
 		StatusUpdatePeriod: opts.StatusUpdatePeriod,
 		// TODO: Shouldn't this use opts.RetryPeriod as the initial duration?
 		// Limit to 12 retries, with no max retry duration.
@@ -292,6 +291,7 @@ func Run(opts Options) {
 			Remediator:     rem,
 			SyncErrorCache: parse.NewSyncErrorCache(conflictHandler, fightHandler),
 		},
+		FullSyncPeriod:     opts.FullSyncPeriod,
 		StatusUpdatePeriod: opts.StatusUpdatePeriod,
 		RenderingEnabled:   opts.RenderingEnabled,
 	}

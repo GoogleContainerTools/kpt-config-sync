@@ -23,7 +23,6 @@
 //
 // Events and their Publisher:
 // - SyncEvent             - ResetOnRunAttemptPublisher (SyncPeriod)
-// - SyncWithReimportEvent - TimeDelayPublisher (SyncWithReimportPeriod)
 // - NamespaceResyncEvent  - TimeDelayPublisher (NamespaceControllerPeriod)
 // - RetrySyncEvent        - RetrySyncPublisher (RetryBackoff)
 // - StatusEvent           - ResetOnRunAttemptPublisher (StatusUpdatePeriod)

@@ -98,13 +98,14 @@ type ReconcileResult struct {
 //   - Update (aka Sync) - Updates the cluster and remediator to reflect the
 //     latest resource object manifests in the source.
 func (r *reconciler) Reconcile(ctx context.Context, trigger string) ReconcileResult {
-	klog.Infof("Starting sync attempt (trigger: %s)", trigger)
-	opts := r.Options()
 	result := ReconcileResult{}
+	opts := r.Options()
 	state := r.ReconcilerState()
+	startTime := nowMeta(opts.Clock)
 
 	// Initialize ReconcilerStatus from RSync status
 	if state.status == nil {
+		klog.V(3).Infof("Initializing reconciler status from %s status", opts.Options.Scope.SyncKind())
 		reconcilerStatus, err := r.syncStatusClient.GetReconcilerStatus(ctx)
 		if err != nil {
 			state.RecordFailure(opts.Clock, err)
@@ -113,10 +114,17 @@ func (r *reconciler) Reconcile(ctx context.Context, trigger string) ReconcileRes
 		state.status = reconcilerStatus
 	}
 
+	// Perform full-sync, if required
+	if trigger == triggerSync && state.IsFullSyncRequired(startTime, opts.FullSyncPeriod) {
+		trigger = triggerFullSync
+	}
+
+	klog.Infof("Starting sync attempt (trigger: %s)", trigger)
+
 	switch trigger {
 	case triggerFullSync, triggerManagementConflict, triggerNamespaceUpdate:
 		// Force parsing and updating, but skip fetch, render, and read unless required.
-		state.RecordFullSyncStart()
+		state.RecordFullSyncStart(startTime)
 	}
 
 	newSourceStatus, syncPath, errs := r.fetch(ctx)

@@ -14,7 +14,7 @@ pull-buildenv:
 
 build-buildenv: build/buildenv/Dockerfile
 	@echo "+++ Creating the docker container for $(BUILDENV_IMAGE)"
-	@docker buildx build $(DOCKER_BUILD_QUIET) \
+	docker buildx build $(DOCKER_BUILD_QUIET) \
 		build/buildenv \
 		-t $(BUILDENV_IMAGE) \
 		$(DOCKER_BUILD_ARGS)
@@ -35,11 +35,11 @@ build: $(OUTPUT_DIR) pull-buildenv
 
 # NOTE: this rule depends on OUTPUT_DIR because buildenv needs those dirs to
 # exist in order to work.
-PLATFORMS := linux_amd64 linux_arm64 darwin_amd64 darwin_arm64 windows_amd64
+CLI_PLATFORMS := linux_amd64 linux_arm64 darwin_amd64 darwin_arm64 windows_amd64
 build-cli: pull-buildenv buildenv-dirs
-	@echo "+++ Compiling Nomos binaries for $(PLATFORMS)"
+	@echo "+++ Compiling Nomos binaries for $(CLI_PLATFORMS)"
 	@echo "+++ Compiling with VERSION: $(VERSION)"
-	@mkdir -p $(addprefix $(OUTPUT_DIR)/go/bin/,$(PLATFORMS))
+	@mkdir -p $(addprefix $(OUTPUT_DIR)/go/bin/,$(CLI_PLATFORMS))
 	@docker run $(DOCKER_RUN_ARGS) ./scripts/build.sh \
 		--version $(VERSION) \
 		$(PLATFORMS)
@@ -52,10 +52,17 @@ copy-cli: buildenv-dirs
 # Targets for building individual images
 BUILD_IMAGE_TARGETS := $(patsubst %,__build-image-%,$(IMAGES))
 
+# This seems to be the consensus way of replacing space with comma in a list. Oh Makefiles
+null  :=
+space := $(null) #
+comma := ,
+
+IMAGE_PLATFORMS := linux/arm64 linux/amd64
 .PHONY: $(BUILD_IMAGE_TARGETS)
-$(BUILD_IMAGE_TARGETS): "$(HELM)" "$(KUSTOMIZE)"
+$(BUILD_IMAGE_TARGETS): 
 	@echo "+++ Building the $(subst __build-image-,,$@) image: $(call gen_image_tag,$(subst __build-image-,,$@))"
-	@docker buildx build $(DOCKER_BUILD_QUIET) \
+	docker buildx build $(DOCKER_BUILD_QUIET) \
+                --platform $(subst $(space),$(comma),$(strip $(IMAGE_PLATFORMS))) \
 		--target $(subst __build-image-,,$@) \
 		-t $(call gen_image_tag,$(subst __build-image-,,$@)) \
 		-f build/all/Dockerfile \

@@ -75,11 +75,11 @@ CRANE := $(BIN_DIR)/crane
 GOLANGCI_LINT_VERSION := v1.60.3
 GOLANGCI_LINT := $(BIN_DIR)/golangci-lint
 
-KUSTOMIZE_VERSION := v5.4.2-gke.0
+KUSTOMIZE_VERSION := v5.4.2
 KUSTOMIZE := $(BIN_DIR)/kustomize
 KUSTOMIZE_STAGING_DIR := $(OUTPUT_DIR)/third_party/kustomize
 
-HELM_VERSION := v3.15.3-gke.0
+HELM_VERSION := v3.15.3
 HELM := $(BIN_DIR)/helm
 HELM_STAGING_DIR := $(OUTPUT_DIR)/third_party/helm
 
@@ -237,7 +237,9 @@ DOCKER_BUILD_ARGS = \
 	--build-arg GOLANG_IMAGE=$(GOLANG_IMAGE) \
 	--build-arg DEBIAN_BASE_IMAGE=$(DEBIAN_BASE_IMAGE) \
 	--build-arg GCLOUD_IMAGE=$(GCLOUD_IMAGE) \
-	--build-arg DOCKER_CLI_IMAGE=$(DOCKER_CLI_IMAGE)
+	--build-arg DOCKER_CLI_IMAGE=$(DOCKER_CLI_IMAGE) \
+	--build-arg KUSTOMIZE_VERSION=$(KUSTOMIZE_VERSION) \
+	--build-arg HELM_VERSION=$(HELM_VERSION)
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))

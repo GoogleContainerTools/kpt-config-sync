@@ -22,6 +22,10 @@ WORKDIR /workspace
 
 COPY . .
 
+ARG TARGETARCH
+ARG HELM_VERSION
+ARG KUSTOMIZE_VERSION
+
 # Version string to embed in built binary.
 ARG VERSION
 
@@ -40,6 +44,8 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on \
     ./cmd/gcenode-askpass-sidecar \
     ./cmd/resource-group
 
+RUN scripts/install-helm-in-docker.sh
+RUN scripts/install-kustomize-in-docker.sh
 
 # Concatenate vendored licenses into LICENSES.txt
 # Built in the container to include binary licenses (helm & kustomize)
@@ -62,9 +68,7 @@ FROM gcr.io/distroless/static:nonroot as hydration-controller
 WORKDIR /
 COPY --from=bins /go/bin/hydration-controller .
 COPY --from=bins /workspace/.output/third_party/helm/helm /usr/local/bin/helm
-COPY --from=bins /workspace/.output/third_party/helm/NOTICES /third_party/helm/NOTICES
 COPY --from=bins /workspace/.output/third_party/kustomize/kustomize /usr/local/bin/kustomize
-COPY --from=bins /workspace/.output/third_party/kustomize/NOTICES /third_party/kustomize/NOTICES
 COPY --from=bins /workspace/LICENSE LICENSE
 COPY --from=bins /workspace/LICENSES.txt LICENSES.txt
 USER nonroot:nonroot
@@ -88,7 +92,6 @@ ENV HOME=/tmp
 WORKDIR /
 COPY --from=bins /go/bin/helm-sync .
 COPY --from=bins /workspace/.output/third_party/helm/helm /usr/local/bin/helm
-COPY --from=bins /workspace/.output/third_party/helm/NOTICES /third_party/helm/NOTICES
 COPY --from=bins /workspace/LICENSE LICENSE
 COPY --from=bins /workspace/LICENSES.txt LICENSES.txt
 USER nonroot:nonroot
@@ -100,9 +103,7 @@ WORKDIR /
 USER root
 COPY --from=bins /go/bin/hydration-controller .
 COPY --from=bins /workspace/.output/third_party/helm/helm /usr/local/bin/helm
-COPY --from=bins /workspace/.output/third_party/helm/NOTICES /third_party/helm/NOTICES
 COPY --from=bins /workspace/.output/third_party/kustomize/kustomize /usr/local/bin/kustomize
-COPY --from=bins /workspace/.output/third_party/kustomize/NOTICES /third_party/kustomize/NOTICES
 COPY --from=bins /workspace/LICENSE LICENSE
 COPY --from=bins /workspace/LICENSES.txt LICENSES.txt
 USER nonroot:nonroot
@@ -164,9 +165,7 @@ RUN mkdir -p /opt/nomos/bin
 WORKDIR /opt/nomos/bin
 COPY --from=bins /go/bin/nomos nomos
 COPY --from=bins /workspace/.output/third_party/helm/helm /usr/local/bin/helm
-COPY --from=bins /workspace/.output/third_party/helm/NOTICES /third_party/helm/NOTICES
 COPY --from=bins /workspace/.output/third_party/kustomize/kustomize /usr/local/bin/kustomize
-COPY --from=bins /workspace/.output/third_party/kustomize/NOTICES /third_party/kustomize/NOTICES
 COPY --from=bins /workspace/LICENSE LICENSE
 COPY --from=bins /workspace/LICENSES.txt LICENSES.txt
 

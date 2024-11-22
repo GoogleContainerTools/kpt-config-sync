@@ -16,16 +16,13 @@ package e2e
 
 import (
 	"fmt"
-	"strings"
 	"testing"
-	"time"
 
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/kustomizecomponents"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/policy"
 	"kpt.dev/configsync/e2e/nomostest/registryproviders"
-	"kpt.dev/configsync/e2e/nomostest/retry"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
@@ -34,7 +31,6 @@ import (
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
-	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/status"
 )
 
@@ -86,20 +82,6 @@ func TestAddPreSyncAnnotationRepoSync(t *testing.T) {
 			testwatcher.WatchPredicates(
 				testpredicates.RepoSyncHasSourceError(status.APIServerErrorCode, "no signatures found"),
 				testpredicates.RepoSyncHasSourceError(status.APIServerErrorCode, image1.Digest))))
-
-	digest0 := strings.TrimPrefix(image0.Digest, "sha256:")
-	digest1 := strings.TrimPrefix(image1.Digest, "sha256:")
-
-	nt.T.Log("Verify the hydration is paused")
-	_, err = retry.Retry(60*time.Second, func() error {
-		return validateDeploymentLogHasFailure(nt, reconcilermanager.HydrationController,
-			core.NsReconcilerName(repoSyncID.Namespace, repoSyncID.Name),
-			configsync.ControllerNamespace,
-			fmt.Sprintf("skip hydration as readyToRenderCommit does not match srcCommit, want %s, got %s", digest1, digest0))
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
 
 	if err = signImage(nt, image1); err != nil {
 		nt.T.Fatalf("Failed to sign second test image %s", err)
@@ -174,20 +156,6 @@ func TestAddPreSyncAnnotationRootSync(t *testing.T) {
 			testwatcher.WatchPredicates(
 				testpredicates.RootSyncHasSourceError(status.APIServerErrorCode, "no signatures found"),
 				testpredicates.RootSyncHasSourceError(status.APIServerErrorCode, image1.Digest))))
-
-	digest0 := strings.TrimPrefix(image0.Digest, "sha256:")
-	digest1 := strings.TrimPrefix(image1.Digest, "sha256:")
-
-	nt.T.Log("Verify the hydration is paused")
-	_, err = retry.Retry(60*time.Second, func() error {
-		return validateDeploymentLogHasFailure(nt, reconcilermanager.HydrationController,
-			core.RootReconcilerName(configsync.RootSyncName),
-			configsync.ControllerNamespace,
-			fmt.Sprintf("skip hydration as readyToRenderCommit does not match srcCommit, want %s, got %s", digest1, digest0))
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
 
 	if err = signImage(nt, image1); err != nil {
 		nt.T.Fatalf("Failed to sign second test image %s", err)

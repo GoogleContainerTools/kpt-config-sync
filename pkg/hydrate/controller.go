@@ -105,9 +105,8 @@ func (h *Hydrator) Run(ctx context.Context) {
 						srcCommit, err)
 				}
 			} else if extractCommit(h.DonePath.OSPath()) != srcCommit {
-				readyToRenderFile := h.ReconcilerSignalDir.Join(cmpath.RelativeSlash(ReadyToRenderFile)).OSPath()
-				readyToRenderCommit := extractCommit(readyToRenderFile)
-				if readyToRenderCommit == srcCommit {
+				readyToRenderCommit, ready := h.isReadyToRender(srcCommit)
+				if ready {
 					// If the commit has been processed before, regardless of success or failure,
 					// skip the hydration to avoid repeated execution.
 					// The rehydrate ticker will retry on the failed commit.
@@ -123,6 +122,14 @@ func (h *Hydrator) Run(ctx context.Context) {
 			runTimer.Reset(h.PollingPeriod) // Schedule re-run attempt
 		}
 	}
+}
+
+// isReadyToRender returns true if commit in ready-to-render file is the same as
+// commit acquired from source
+func (h *Hydrator) isReadyToRender(srcCommit string) (string, bool) {
+	readyToRenderFile := h.ReconcilerSignalDir.Join(cmpath.RelativeSlash(ReadyToRenderFile)).OSPath()
+	readyToRenderCommit := extractCommit(readyToRenderFile)
+	return readyToRenderCommit, readyToRenderCommit == srcCommit
 }
 
 // runHydrate runs `kustomize build` on the source configs.

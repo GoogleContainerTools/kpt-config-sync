@@ -157,7 +157,7 @@ func TestOtelCollectorDeployment(t *testing.T) {
 	}
 
 	nt.T.Log("Checking the otel-collector log contains no failure...")
-	err = validateDeploymentLogHasNoFailure(nt, csmetrics.OtelCollectorName, csmetrics.OtelCollectorName, configmanagement.MonitoringNamespace, MetricExportErrorCaption)
+	err = validateDeploymentLogHasNoFailure(nt, csmetrics.OtelCollectorName, configmanagement.MonitoringNamespace, MetricExportErrorCaption)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -171,7 +171,7 @@ func TestOtelCollectorDeployment(t *testing.T) {
 
 	nt.T.Log("Checking the otel-collector log contains failure...")
 	_, err = retry.Retry(60*time.Second, func() error {
-		return validateDeploymentLogHasFailure(nt, csmetrics.OtelCollectorName, csmetrics.OtelCollectorName, configmanagement.MonitoringNamespace, MetricExportErrorCaption)
+		return validateDeploymentLogHasFailure(nt, csmetrics.OtelCollectorName, configmanagement.MonitoringNamespace, MetricExportErrorCaption)
 	})
 	if err != nil {
 		nt.T.Fatal(err)
@@ -206,7 +206,7 @@ func TestOtelCollectorDeployment(t *testing.T) {
 	}
 
 	nt.T.Log("Checking the otel-collector log contains no failure...")
-	err = validateDeploymentLogHasNoFailure(nt, csmetrics.OtelCollectorName, csmetrics.OtelCollectorName, configmanagement.MonitoringNamespace, MetricExportErrorCaption)
+	err = validateDeploymentLogHasNoFailure(nt, csmetrics.OtelCollectorName, configmanagement.MonitoringNamespace, MetricExportErrorCaption)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -219,7 +219,7 @@ func TestOtelCollectorDeployment(t *testing.T) {
 
 	nt.T.Log("Checking the otel-collector log contains failure...")
 	_, err = retry.Retry(60*time.Second, func() error {
-		return validateDeploymentLogHasFailure(nt, csmetrics.OtelCollectorName, csmetrics.OtelCollectorName, configmanagement.MonitoringNamespace, UnrecognizedLabelErrorCaption)
+		return validateDeploymentLogHasFailure(nt, csmetrics.OtelCollectorName, configmanagement.MonitoringNamespace, UnrecognizedLabelErrorCaption)
 	})
 	if err != nil {
 		nt.T.Fatal(err)
@@ -392,10 +392,10 @@ func setupMetricsServiceAccount(nt *nomostest.NT) {
 	}
 }
 
-func validateDeploymentLogHasFailure(nt *nomostest.NT, container, deployment, namespace, errorString string) error {
+func validateDeploymentLogHasFailure(nt *nomostest.NT, deployment, namespace, errorString string) error {
 	nt.T.Helper()
 
-	args := []string{"logs", fmt.Sprintf("deployment/%s", deployment), "-n", namespace, "-c", container}
+	args := []string{"logs", fmt.Sprintf("deployment/%s", deployment), "-n", namespace}
 	cmd := fmt.Sprintf("kubectl %s", strings.Join(args, " "))
 	out, err := nt.Shell.Kubectl(args...)
 	if err != nil {
@@ -412,10 +412,10 @@ func validateDeploymentLogHasFailure(nt *nomostest.NT, container, deployment, na
 	return fmt.Errorf("error expected in the log of deployment %s, namespace %s but found none", deployment, namespace)
 }
 
-func validateDeploymentLogHasNoFailure(nt *nomostest.NT, container, deployment, namespace, errorString string) error {
+func validateDeploymentLogHasNoFailure(nt *nomostest.NT, deployment, namespace, errorString string) error {
 	nt.T.Helper()
 
-	args := []string{"logs", fmt.Sprintf("deployment/%s", deployment), "-n", namespace, "-c", container}
+	args := []string{"logs", fmt.Sprintf("deployment/%s", deployment), "-n", namespace}
 	cmd := fmt.Sprintf("kubectl %s", strings.Join(args, " "))
 	out, err := nt.Shell.Kubectl(args...)
 	if err != nil {

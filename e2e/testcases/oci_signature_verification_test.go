@@ -19,7 +19,6 @@ import (
 	"testing"
 
 	"kpt.dev/configsync/e2e/nomostest"
-	"kpt.dev/configsync/e2e/nomostest/kustomizecomponents"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/policy"
 	"kpt.dev/configsync/e2e/nomostest/registryproviders"
@@ -28,7 +27,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/declared"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
@@ -39,11 +38,11 @@ var cosignPassword = map[string]string{
 }
 
 func TestAddPreSyncAnnotationRepoSync(t *testing.T) {
-	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, testNs)
+	repoSyncID := core.RepoSyncID(configsync.RepoSyncName, namespaceRepo)
 	nt := nomostest.New(t, nomostesting.SyncSource,
 		ntopts.RequireOCIProvider,
 		ntopts.SyncWithGitSource(repoSyncID),
-		ntopts.RepoSyncPermissions(policy.AllAdmin()))
+		ntopts.RepoSyncPermissions(policy.RBACAdmin(), policy.CoreAdmin()))
 
 	if err := nomostest.SetupOCISignatureVerification(nt); err != nil {
 		nt.T.Fatal(err)
@@ -52,33 +51,35 @@ func TestAddPreSyncAnnotationRepoSync(t *testing.T) {
 	repoSyncKey := repoSyncID.ObjectKey
 	gitSource := nt.SyncSources[repoSyncID]
 
-	nt.T.Log("Create and sign first OCI image that requires rendering with latest tag.")
-	image0, err := nt.BuildAndPushOCIImage(repoSyncKey, registryproviders.ImageSourcePackage("hydration/namespace-repo"))
+	nt.T.Log("Create first OCI image with latest tag.")
+	bookInfoRole := k8sobjects.RoleObject(core.Name("book-info-admin"))
+	image, err := nt.BuildAndPushOCIImage(repoSyncKey, registryproviders.ImageInputObjects(nt.Scheme, bookInfoRole))
 	if err != nil {
 		nt.T.Fatal(err)
-	}
-
-	if err = signImage(nt, image0); err != nil {
-		nt.T.Fatalf("Failed to sign first test image %s", err)
 	}
 
 	nt.T.Log("Create RepoSync with first OCI image")
-	repoSyncOCI := nt.RepoSyncObjectOCI(repoSyncKey, image0.OCIImageID().WithoutDigest(), "", image0.Digest)
+	repoSyncOCI := nt.RepoSyncObjectOCI(repoSyncKey, image.OCIImageID().WithoutDigest(), "", image.Digest)
 	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(repoSyncID.Namespace, repoSyncID.Name), repoSyncOCI))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Set the RepoSync to sync from OCI"))
-	nt.T.Log("Check for all sync and hydration working correctly")
-	nt.Must(nt.WatchForAllSyncs())
+	nt.Must(nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSyncID.Name, namespaceRepo,
+		testwatcher.WatchPredicates(testpredicates.RepoSyncHasSourceError(status.APIServerErrorCode, "no signatures found"))))
 
-	nt.T.Log("Create second image that requires rendering with latest tag.")
-	image1, err := nt.BuildAndPushOCIImage(repoSyncKey, registryproviders.ImageSourcePackage("hydration/namespace-repo-more"))
+	nt.T.Log("Create second image with latest tag.")
+	bookstoreSA := k8sobjects.ServiceAccountObject("bookstore-sa")
+	image1, err := nt.BuildAndPushOCIImage(repoSyncKey, registryproviders.ImageInputObjects(nt.Scheme, bookInfoRole, bookstoreSA))
 	if err != nil {
 		nt.T.Fatal(err)
+	}
+
+	if err = signImage(nt, image); err != nil {
+		nt.T.Fatalf("Failed to sign first test image %s", err)
 	}
 
 	nt.T.Log("Check that verification is up-to-date with floating tag")
 	nt.T.Logf("Checking no signature error exists for second image with digest %s", image1.Digest)
 	nt.Must(
-		nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSyncID.Name, testNs,
+		nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSyncID.Name, namespaceRepo,
 			testwatcher.WatchPredicates(
 				testpredicates.RepoSyncHasSourceError(status.APIServerErrorCode, "no signatures found"),
 				testpredicates.RepoSyncHasSourceError(status.APIServerErrorCode, image1.Digest))))
@@ -87,7 +88,7 @@ func TestAddPreSyncAnnotationRepoSync(t *testing.T) {
 		nt.T.Fatalf("Failed to sign second test image %s", err)
 	}
 	nt.T.Log("Update source expectation for watch")
-	_ = nt.RepoSyncObjectOCI(repoSyncKey, image1.OCIImageID().WithoutDigest(), "", image1.Digest)
+	_ = nt.RepoSyncObjectOCI(repoSyncKey, image.OCIImageID().WithoutDigest(), "", image1.Digest)
 	nt.Must(nt.WatchForAllSyncs())
 	err = nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), repoSyncID.Name, repoSyncID.Namespace,
 		testwatcher.WatchPredicates(
@@ -127,26 +128,28 @@ func TestAddPreSyncAnnotationRootSync(t *testing.T) {
 
 	gitSource := nt.SyncSources[rootSyncID]
 
-	nt.T.Log("Create and sign first OCI image that requires rendering with latest tag.")
-	image0, err := nt.BuildAndPushOCIImage(rootSyncKey, registryproviders.ImageSourcePackage("hydration/kustomize-components"))
+	nt.T.Log("Create first OCI image with latest tag.")
+	bookInfoRole := k8sobjects.RoleObject(core.Name("book-info-admin"))
+	image, err := nt.BuildAndPushOCIImage(rootSyncKey, registryproviders.ImageInputObjects(nt.Scheme, bookInfoRole))
 	if err != nil {
 		nt.T.Fatal(err)
-	}
-	if err = signImage(nt, image0); err != nil {
-		nt.T.Fatalf("Failed to sign first test image %s", err)
 	}
 
 	nt.T.Log("Create RootSync with first OCI image")
-	rootSyncOCI := nt.RootSyncObjectOCI(rootSyncKey.Name, image0.OCIImageID().WithoutDigest(), "", image0.Digest)
+	rootSyncOCI := nt.RootSyncObjectOCI(rootSyncKey.Name, image.OCIImageID().WithoutDigest(), "", image.Digest)
 	nt.Must(nt.KubeClient.Apply(rootSyncOCI))
-	nt.T.Log("Check for all sync and hydration working correctly")
-	nt.Must(nt.WatchForAllSyncs())
-	kustomizecomponents.ValidateAllTenants(nt, string(declared.RootScope), "base", "tenant-a", "tenant-b", "tenant-c")
+	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, configsync.ControllerNamespace,
+		testwatcher.WatchPredicates(testpredicates.RootSyncHasSourceError(status.APIServerErrorCode, "no signatures found"))))
 
-	nt.T.Log("Create second image that requires rendering with latest tag.")
-	image1, err := nt.BuildAndPushOCIImage(rootSyncKey, registryproviders.ImageSourcePackage("hydration/kustomize-components-more"))
+	nt.T.Log("Create second image with latest tag.")
+	bookstoreSA := k8sobjects.ServiceAccountObject("bookstore-sa")
+	image1, err := nt.BuildAndPushOCIImage(rootSyncKey, registryproviders.ImageInputObjects(nt.Scheme, bookInfoRole, bookstoreSA))
 	if err != nil {
 		nt.T.Fatal(err)
+	}
+
+	if err = signImage(nt, image); err != nil {
+		nt.T.Fatalf("Failed to sign first test image %s", err)
 	}
 
 	nt.T.Log("Check that verification is up-to-date with floating tag")
@@ -161,7 +164,7 @@ func TestAddPreSyncAnnotationRootSync(t *testing.T) {
 		nt.T.Fatalf("Failed to sign second test image %s", err)
 	}
 	nt.T.Log("Update source expectation for watch")
-	_ = nt.RootSyncObjectOCI(rootSyncKey.Name, image1.OCIImageID().WithoutDigest(), "", image1.Digest)
+	_ = nt.RootSyncObjectOCI(rootSyncKey.Name, image.OCIImageID().WithoutDigest(), "", image1.Digest)
 	nt.Must(nt.WatchForAllSyncs())
 	nt.T.Log("Check RootSync is synced to second image and annotations are updated.")
 	err = nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, rootSyncID.Namespace,
@@ -170,7 +173,6 @@ func TestAddPreSyncAnnotationRootSync(t *testing.T) {
 	if err != nil {
 		nt.T.Fatalf("Source annotation not updated for RootSync %v", err)
 	}
-	kustomizecomponents.ValidateAllTenants(nt, string(declared.RootScope), "base", "tenant-a", "tenant-b", "tenant-c", "tenant-d")
 
 	nt.T.Log("Set the RootSync to sync from Git")
 	nt.SyncSources[rootSyncID] = gitSource

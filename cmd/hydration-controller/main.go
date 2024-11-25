@@ -71,7 +71,7 @@ var (
 		"Name of the reconciler Deployment.")
 
 	reconcilerSignalsDir = flag.String("reconciler-signals", "/reconciler-signals",
-		"the absolute readonly path in the container that contains signal files written by Reconciler.")
+		"The absolute path in the container that contains reconciler signals written by the reconciler that unblock the rendering phase, for example, the latest image digest that is ready to render.")
 )
 
 func main() {

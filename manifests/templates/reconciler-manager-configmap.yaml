@@ -78,7 +78,6 @@ data:
            securityContext:
              allowPrivilegeEscalation: false
              readOnlyRootFilesystem: false
-   
              capabilities:
                drop:
                - ALL

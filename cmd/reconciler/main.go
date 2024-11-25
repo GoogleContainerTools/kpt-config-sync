@@ -104,7 +104,7 @@ var (
 
 	webhookEnabled       = flag.Bool("webhook-enabled", util.EnvBool(reconcilermanager.WebhookEnabled, false), "")
 	reconcilerSignalsDir = flag.String(flags.reconcilerSignalDir, "/reconciler-signals",
-		"The absolute path in the container that contains the image digest which has passed signature verification")
+		"The absolute path in the container that contains reconciler signals that unblock the rendering phase, for example, the latest image digest that is ready to render.")
 )
 
 var flags = struct {

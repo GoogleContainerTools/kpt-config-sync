@@ -104,19 +104,23 @@ func (h *Hydrator) Run(ctx context.Context) {
 					klog.Errorf("failed to complete the rendering execution for commit %q: %v",
 						srcCommit, err)
 				}
-			} else if extractCommit(h.DonePath.OSPath()) != srcCommit {
-				readyToRenderCommit, ready := h.isReadyToRender(srcCommit)
-				if ready {
-					// If the commit has been processed before, regardless of success or failure,
-					// skip the hydration to avoid repeated execution.
+			} else {
+				doneCommit := extractCommit(h.DonePath.OSPath())
+				readyToRenderFile := h.ReconcilerSignalDir.Join(cmpath.RelativeSlash(ReadyToRenderFile)).OSPath()
+				readyToRenderCommit := extractCommit(readyToRenderFile)
+				switch {
+				case doneCommit == srcCommit:
+					// no-op
+					// If the commit has been processed before, skip the hydration to avoid repeated execution regardless of success or failure.
 					// The rehydrate ticker will retry on the failed commit.
+				case doneCommit != srcCommit && readyToRenderCommit != srcCommit:
+					klog.Warningf("skip hydration as readyToRenderCommit does not match srcCommit, want %s, got %s", srcCommit, readyToRenderCommit)
+				case doneCommit != srcCommit && readyToRenderCommit == srcCommit:
 					// Only proceed to rendering if the ready-to-render file contains the srcCommit
 					hydrateErr = h.hydrate(srcCommit, syncPath)
 					if err := h.complete(srcCommit, hydrateErr); err != nil {
 						klog.Errorf("failed to complete the rendering execution for commit %q: %v", srcCommit, err)
 					}
-				} else {
-					klog.Warningf("skip hydration as readyToRenderCommit does not match srcCommit, want %s, got %s", srcCommit, readyToRenderCommit)
 				}
 			}
 			runTimer.Reset(h.PollingPeriod) // Schedule re-run attempt

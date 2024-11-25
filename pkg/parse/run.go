@@ -132,18 +132,6 @@ func (r *reconciler) Reconcile(ctx context.Context, trigger string) ReconcileRes
 		state.RecordFailure(opts.Clock, errs)
 		return result
 	}
-	if newSourceStatus.Errs == nil {
-		if err := r.syncStatusClient.SetImageToSyncAnnotation(ctx, newSourceStatus.Commit); err != nil {
-			newSourceStatus.Errs = status.Append(newSourceStatus.Errs, err)
-		} else {
-			// write the commit into the read-to-render file in hydrated root
-			if opts.RenderingEnabled {
-				if err := unblockHydration(newSourceStatus.Commit, r); err != nil {
-					newSourceStatus.Errs = status.Append(newSourceStatus.Errs, err)
-				}
-			}
-		}
-	}
 
 	if opts.RenderingEnabled {
 		if errs := r.render(ctx, newSourceStatus); errs != nil {
@@ -230,6 +218,13 @@ func (r *reconciler) fetch(ctx context.Context) (*SourceStatus, cmpath.Absolute,
 	if newSourceStatus.Errs == nil {
 		if err := r.syncStatusClient.SetImageToSyncAnnotation(ctx, newSourceStatus.Commit); err != nil {
 			newSourceStatus.Errs = status.Append(newSourceStatus.Errs, err)
+		} else {
+			// write the commit into the read-to-render file in hydrated root
+			if opts.RenderingEnabled {
+				if err := unblockHydration(newSourceStatus.Commit, r); err != nil {
+					newSourceStatus.Errs = status.Append(newSourceStatus.Errs, err)
+				}
+			}
 		}
 	}
 

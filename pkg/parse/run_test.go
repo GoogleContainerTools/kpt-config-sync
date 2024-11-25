@@ -1150,6 +1150,9 @@ func TestReconciler_Reconcile(t *testing.T) {
 				readyToRenderFilePath := filepath.Join(reconcilerSignalDir, "ready-to-render")
 				_, err = os.Stat(readyToRenderFilePath)
 				assert.NoError(t, err, fmt.Sprintf("ready-to-render file should exist at %s", readyToRenderFilePath))
+				commitWritten, err := hydrate.ExtractCommit(readyToRenderFilePath)
+				assert.NoError(t, err, "failed reading file ready-to-render")
+				assert.Equal(t, commitWritten, sourceCommit)
 			}
 
 			// Block and wait for the goroutine to complete.

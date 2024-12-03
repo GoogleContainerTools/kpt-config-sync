@@ -128,14 +128,6 @@ func (h *Hydrator) Run(ctx context.Context) {
 	}
 }
 
-// isReadyToRender returns true if commit in ready-to-render file is the same as
-// commit acquired from source
-func (h *Hydrator) isReadyToRender(srcCommit string) (string, bool) {
-	readyToRenderFile := h.ReconcilerSignalDir.Join(cmpath.RelativeSlash(ReadyToRenderFile)).OSPath()
-	readyToRenderCommit := extractCommit(readyToRenderFile)
-	return readyToRenderCommit, readyToRenderCommit == srcCommit
-}
-
 // runHydrate runs `kustomize build` on the source configs.
 func (h *Hydrator) runHydrate(sourceCommit string, syncPath cmpath.Absolute) HydrationError {
 	newHydratedDir := h.HydratedRoot.Join(cmpath.RelativeOS(sourceCommit))

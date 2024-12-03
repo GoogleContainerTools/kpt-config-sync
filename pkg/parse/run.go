@@ -207,6 +207,7 @@ func (r *reconciler) fetch(ctx context.Context) (*SourceStatus, cmpath.Absolute,
 	state := r.ReconcilerState()
 	var syncPath cmpath.Absolute
 	newSourceStatus := &SourceStatus{}
+	readyToRenderFile := r.Options().ReconcilerSignalsDir.Join(cmpath.RelativeSlash(hydrate.ReadyToRenderFile)).OSPath()
 
 	// pull the source commit and directory with retries within 5 minutes.
 	newSourceStatus.Commit, syncPath, newSourceStatus.Errs = hydrate.SourceCommitAndSyncPathWithRetry(
@@ -218,15 +219,15 @@ func (r *reconciler) fetch(ctx context.Context) (*SourceStatus, cmpath.Absolute,
 	if newSourceStatus.Errs == nil {
 		if err := r.syncStatusClient.SetImageToSyncAnnotation(ctx, newSourceStatus.Commit); err != nil {
 			newSourceStatus.Errs = status.Append(newSourceStatus.Errs, err)
-			blockHydration(r)
+			blockHydration(readyToRenderFile)
 		} else if opts.RenderingEnabled {
-			// write the commit into the ready-to-render file in hydrated root
-			if err := unblockHydration(newSourceStatus.Commit, r); err != nil {
+			// write the commit into the ready-to-render file in reconciler-signals
+			if err := unblockHydration(newSourceStatus.Commit, readyToRenderFile); err != nil {
 				newSourceStatus.Errs = status.Append(newSourceStatus.Errs, err)
 			}
 		}
 	} else {
-		blockHydration(r)
+		blockHydration(readyToRenderFile)
 	}
 
 	// Generate source spec from Reconciler config
@@ -595,17 +596,16 @@ func (r *reconciler) startAsyncStatusUpdates(ctx context.Context) <-chan struct{
 // unblockHydration adds the image digest into the ready-to-render file under the
 // shared directory between reconciler and hydration-controller to inform the
 // hydration-controller to proceed rendering
-func unblockHydration(commit string, r Reconciler) status.Error {
-	readyToRenderFile := r.Options().ReconcilerSignalsDir.Join(cmpath.RelativeSlash(hydrate.ReadyToRenderFile)).OSPath()
-	klog.Infof("writing commit %s to ready to render file %s", commit, readyToRenderFile)
-	// Overwrite the commit in ready-to-render file
-	file, err := os.OpenFile(readyToRenderFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
+func unblockHydration(commit, signalFile string) status.Error {
+	klog.Infof("signaling the hydration-controller that commit %s is ready to render", commit)
+	// Overwrite the commit in the given signal file
+	file, err := os.OpenFile(signalFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
 	if err != nil {
 		return status.OSWrap(err)
 	}
 	defer func() {
 		if closeErr := file.Close(); closeErr != nil {
-			klog.Errorf("failed to close file %s: %v", readyToRenderFile, closeErr)
+			klog.Errorf("failed to close file %s: %v", signalFile, closeErr)
 		}
 	}()
 
@@ -622,16 +622,15 @@ func unblockHydration(commit string, r Reconciler) status.Error {
 // best effort, since with source errors presenting, the ready-to-render
 // file will not be updated with the expected commit that is expected by
 // hydration-controller, thus rendering will be blocked.
-func blockHydration(r Reconciler) {
-	readyToRenderFile := r.Options().ReconcilerSignalsDir.Join(cmpath.RelativeSlash(hydrate.ReadyToRenderFile)).OSPath()
-	err := os.Remove(readyToRenderFile)
+func blockHydration(signalFile string) {
+	err := os.Remove(signalFile)
 	if err != nil {
 		if os.IsNotExist(err) {
-			klog.Infof("ready-to-render file %s not found, no action needed", readyToRenderFile)
+			klog.V(3).Infof("signal file %s not found, no action needed", signalFile)
 		}
-		klog.Errorf("failed to removed ready-to-render file %s: %v", readyToRenderFile, err)
+		klog.Errorf("failed to remove signal file %s: %v", signalFile, err)
 	}
-	klog.Infof("removed ready-to-render file %s to block hydration", readyToRenderFile)
+	klog.Infof("removed signal file %s to block hydration", signalFile)
 }
 
 // reportRootSyncConflicts reports conflicts to the RootSync that manages the

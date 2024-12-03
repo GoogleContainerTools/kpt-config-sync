@@ -189,7 +189,6 @@ func TestSourceCommitAndDirWithRetry(t *testing.T) {
 			<-doneCh
 		})
 	}
-
 }
 
 func TestRunHydrate(t *testing.T) {

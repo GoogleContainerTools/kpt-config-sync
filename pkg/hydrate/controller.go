@@ -40,6 +40,9 @@ const (
 	DoneFile = "done"
 	// ErrorFile is the file name of the hydration errors.
 	ErrorFile = "error.json"
+	// ReadyToRenderFile is the file that contains the commit that has passed image verification
+	// If file exists but not containing the expected srcCommit, halt the hydration
+	ReadyToRenderFile = "ready-to-render"
 )
 
 // Hydrator runs the hydration process.
@@ -58,6 +61,8 @@ type Hydrator struct {
 	HydratedLink string
 	// SyncDir is the relative path to the configs within the Git repository.
 	SyncDir cmpath.Relative
+	// ReconcilerSignalDir is the absolute path to the signal files from Reconciler
+	ReconcilerSignalDir cmpath.Absolute
 	// PollingPeriod is the period of time between checking the filesystem for source updates to render.
 	PollingPeriod time.Duration
 	// RehydratePeriod is the period of time between rehydrating on errors.
@@ -99,13 +104,23 @@ func (h *Hydrator) Run(ctx context.Context) {
 					klog.Errorf("failed to complete the rendering execution for commit %q: %v",
 						srcCommit, err)
 				}
-			} else if doneCommit(h.DonePath.OSPath()) != srcCommit {
-				// If the commit has been processed before, regardless of success or failure,
-				// skip the hydration to avoid repeated execution.
-				// The rehydrate ticker will retry on the failed commit.
-				hydrateErr = h.hydrate(srcCommit, syncPath)
-				if err := h.complete(srcCommit, hydrateErr); err != nil {
-					klog.Errorf("failed to complete the rendering execution for commit %q: %v", srcCommit, err)
+			} else {
+				doneCommit := extractCommit(h.DonePath.OSPath())
+				readyToRenderFile := h.ReconcilerSignalDir.Join(cmpath.RelativeSlash(ReadyToRenderFile)).OSPath()
+				readyToRenderCommit := extractCommit(readyToRenderFile)
+				switch {
+				case doneCommit == srcCommit:
+					// no-op
+					// If the commit has been processed before, skip the hydration to avoid repeated execution regardless of success or failure.
+					// The rehydrate ticker will retry on the failed commit.
+				case doneCommit != srcCommit && readyToRenderCommit != srcCommit:
+					klog.Warningf("skip hydration as readyToRenderCommit does not match srcCommit, want %s, got %s", srcCommit, readyToRenderCommit)
+				case doneCommit != srcCommit && readyToRenderCommit == srcCommit:
+					// Only proceed to rendering if the ready-to-render file contains the srcCommit
+					hydrateErr = h.hydrate(srcCommit, syncPath)
+					if err := h.complete(srcCommit, hydrateErr); err != nil {
+						klog.Errorf("failed to complete the rendering execution for commit %q: %v", srcCommit, err)
+					}
 				}
 			}
 			runTimer.Reset(h.PollingPeriod) // Schedule re-run attempt
@@ -264,30 +279,30 @@ func (h *Hydrator) complete(commit string, hydrationErr HydrationError) error {
 	return nil
 }
 
-// doneCommit extracts the commit hash from the done file if exists.
+// extractCommit extracts the commit hash from the specified file if exists.
 // It returns the commit hash if exists, otherwise, returns an empty string.
 // If it fails to extract the commit hash for various errors, we only log a warning,
 // and wait for the next hydration loop to retry the hydration.
-func doneCommit(donePath string) string {
-	commit, err := RenderedCommit(donePath)
+func extractCommit(path string) string {
+	commit, err := ExtractCommit(path)
 	if err != nil {
-		klog.Warningf("unable to read the done file %s: %v", donePath, err)
+		klog.Warningf("unable to read the file %s: %v", path, err)
 	} else if commit == "" {
-		klog.Warningf("unable to check the status of the done file %s: %v", donePath, err)
+		klog.Warningf("unable to check the status of the file %s: %v", path, err)
 	}
 	return commit
 }
 
-// RenderedCommit extracts the commit hash from the done file if exists.
+// ExtractCommit extracts the commit hash from the specified file if exists.
 // Returns empty string with nil error if the done file does not exist.
-func RenderedCommit(donePath string) (string, error) {
-	commit, err := os.ReadFile(donePath)
+func ExtractCommit(filePath string) (string, error) {
+	commit, err := os.ReadFile(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Rendering in-progress
 			return "", nil
 		}
-		return "", fmt.Errorf("reading rendering done file: %s", donePath)
+		return "", fmt.Errorf("reading file: %s", filePath)
 	}
 	return string(commit), nil
 }

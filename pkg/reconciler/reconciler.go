@@ -130,6 +130,8 @@ type Options struct {
 	// WebhookEnabled is indicates whether the Admission Webhook is currently
 	// installed and running
 	WebhookEnabled bool
+	// ReconcilerSignalsDir is the absolute path to the directory of ready-to-render file shared with hydration-controller
+	ReconcilerSignalsDir cmpath.Absolute
 }
 
 // RootOptions are the options specific to parsing Root repositories.
@@ -235,15 +237,16 @@ func Run(opts Options) {
 	// Configure the Parser.
 	var reconciler parse.Reconciler
 	fs := parse.FileSource{
-		SourceDir:    opts.SourceRoot,
-		RepoRoot:     opts.RepoRoot,
-		HydratedRoot: opts.HydratedRoot,
-		HydratedLink: opts.HydratedLink,
-		SyncDir:      opts.SyncDir,
-		SourceType:   opts.SourceType,
-		SourceRepo:   opts.SourceRepo,
-		SourceBranch: opts.SourceBranch,
-		SourceRev:    opts.SourceRev,
+		SourceDir:            opts.SourceRoot,
+		RepoRoot:             opts.RepoRoot,
+		HydratedRoot:         opts.HydratedRoot,
+		HydratedLink:         opts.HydratedLink,
+		SyncDir:              opts.SyncDir,
+		SourceType:           opts.SourceType,
+		SourceRepo:           opts.SourceRepo,
+		SourceBranch:         opts.SourceBranch,
+		SourceRev:            opts.SourceRev,
+		ReconcilerSignalsDir: opts.ReconcilerSignalsDir,
 	}
 
 	parseOpts := &parse.Options{

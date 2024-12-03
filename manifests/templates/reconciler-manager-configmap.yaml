@@ -64,11 +64,15 @@ data:
            - "--hydrated-root=hydrated"
            - "--source-link=rev"
            - "--hydrated-link=rev"
+           - "--reconciler-signals=/reconciler-signals"
            volumeMounts:
            - name: repo
              mountPath: /repo
            - name: service-account # This is needed to prevent any credentials from being exposed to malicious users.
              mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+             readOnly: true
+           - name: reconciler-signals
+             mountPath: /reconciler-signals
              readOnly: true
            imagePullPolicy: IfNotPresent
            securityContext:
@@ -87,6 +91,7 @@ data:
            - "--source-dir=/repo/source/rev"
            - "--hydrated-root=/repo/hydrated"
            - "--hydrated-link=rev"
+           - "--reconciler-signals=/reconciler-signals"
            env:
            - name: KUBECACHEDIR
              value: "/.kube/cache"
@@ -96,6 +101,8 @@ data:
              readOnly: true
            - name: kube
              mountPath: /.kube
+           - name: reconciler-signals
+             mountPath: /reconciler-signals
            securityContext:
              allowPrivilegeEscalation: false
              readOnlyRootFilesystem: true
@@ -265,6 +272,8 @@ data:
            emptyDir: {}
          - name: kube
            emptyDir: {}
+         - name: reconciler-signals
+           emptyDir: {}  # A shared volume that allows the reconciler to send signals to the hydration-controller
          - name: helm-creds
            secret:
              secretName: helm-creds

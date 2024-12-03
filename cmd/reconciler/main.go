@@ -102,27 +102,31 @@ var (
 
 	dynamicNSSelectorEnabled = flag.Bool("dynamic-ns-selector-enabled", util.EnvBool(reconcilermanager.DynamicNSSelectorEnabled, false), "")
 
-	webhookEnabled = flag.Bool("webhook-enabled", util.EnvBool(reconcilermanager.WebhookEnabled, false), "")
+	webhookEnabled       = flag.Bool("webhook-enabled", util.EnvBool(reconcilermanager.WebhookEnabled, false), "")
+	reconcilerSignalsDir = flag.String(flags.reconcilerSignalDir, "/reconciler-signals",
+		"The absolute path in the container that contains reconciler signals that unblock the rendering phase, for example, the latest image digest that is ready to render.")
 )
 
 var flags = struct {
-	sourceDir         string
-	repoRootDir       string
-	hydratedRootDir   string
-	clusterName       string
-	sourceFormat      string
-	statusMode        string
-	reconcileTimeout  string
-	namespaceStrategy string
+	sourceDir           string
+	repoRootDir         string
+	hydratedRootDir     string
+	reconcilerSignalDir string
+	clusterName         string
+	sourceFormat        string
+	statusMode          string
+	reconcileTimeout    string
+	namespaceStrategy   string
 }{
-	repoRootDir:       "repo-root",
-	sourceDir:         "source-dir",
-	hydratedRootDir:   "hydrated-root",
-	clusterName:       "cluster-name",
-	sourceFormat:      reconcilermanager.SourceFormat,
-	statusMode:        "status-mode",
-	reconcileTimeout:  "reconcile-timeout",
-	namespaceStrategy: "namespace-strategy",
+	repoRootDir:         "repo-root",
+	sourceDir:           "source-dir",
+	hydratedRootDir:     "hydrated-root",
+	reconcilerSignalDir: "reconciler-signals",
+	clusterName:         "cluster-name",
+	sourceFormat:        reconcilermanager.SourceFormat,
+	statusMode:          "status-mode",
+	reconcileTimeout:    "reconcile-timeout",
+	namespaceStrategy:   "namespace-strategy",
 }
 
 func main() {
@@ -154,6 +158,11 @@ func main() {
 	absRepoRoot, err := cmpath.AbsoluteOS(*repoRootDir)
 	if err != nil {
 		klog.Fatalf("%s must be an absolute path: %v", flags.repoRootDir, err)
+	}
+
+	absReconcilerSignalDir, err := cmpath.AbsoluteOS(*reconcilerSignalsDir)
+	if err != nil {
+		klog.Fatalf("%s must be an absolute path: %v", flags.reconcilerSignalDir, err)
 	}
 
 	// Normalize syncDirRelative.
@@ -199,6 +208,7 @@ func main() {
 		RenderingEnabled:         *renderingEnabled,
 		DynamicNSSelectorEnabled: *dynamicNSSelectorEnabled,
 		WebhookEnabled:           *webhookEnabled,
+		ReconcilerSignalsDir:     absReconcilerSignalDir,
 	}
 
 	if scope == declared.RootScope {

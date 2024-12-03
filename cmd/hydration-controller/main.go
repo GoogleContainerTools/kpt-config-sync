@@ -69,6 +69,9 @@ var (
 
 	reconcilerName = flag.String("reconciler-name", os.Getenv(reconcilermanager.ReconcilerNameKey),
 		"Name of the reconciler Deployment.")
+
+	reconcilerSignalsDir = flag.String("reconciler-signals", "/reconciler-signals",
+		"The absolute path in the container that contains reconciler signals written by the reconciler that unblock the rendering phase, for example, the latest image digest that is ready to render.")
 )
 
 func main() {
@@ -101,6 +104,11 @@ func main() {
 	absHydratedRootDir := absRepoRootDir.Join(cmpath.RelativeSlash(*hydratedRootDir))
 	absDonePath := absRepoRootDir.Join(cmpath.RelativeSlash(hydrate.DoneFile))
 
+	absReconcilerSignalDir, err := cmpath.AbsoluteOS(*reconcilerSignalsDir)
+	if err != nil {
+		klog.Fatalf("--reconiler-signals must be an absolute path: %v", err)
+	}
+
 	// Normalize syncDirRelative.
 	// Some users specify the directory as if the root of the repository is "/".
 	// Strip this from the front of the passed directory so behavior is as
@@ -109,16 +117,17 @@ func main() {
 	relSyncDir := cmpath.RelativeOS(dir)
 
 	hydrator := &hydrate.Hydrator{
-		DonePath:        absDonePath,
-		SourceType:      configsync.SourceType(*sourceType),
-		SourceRoot:      absSourceRootDir,
-		HydratedRoot:    absHydratedRootDir,
-		SourceLink:      *sourceLinkDir,
-		HydratedLink:    *hydratedLinkDir,
-		SyncDir:         relSyncDir,
-		PollingPeriod:   *pollingPeriod,
-		RehydratePeriod: *rehydratePeriod,
-		ReconcilerName:  *reconcilerName,
+		DonePath:            absDonePath,
+		SourceType:          configsync.SourceType(*sourceType),
+		SourceRoot:          absSourceRootDir,
+		HydratedRoot:        absHydratedRootDir,
+		SourceLink:          *sourceLinkDir,
+		HydratedLink:        *hydratedLinkDir,
+		SyncDir:             relSyncDir,
+		ReconcilerSignalDir: absReconcilerSignalDir,
+		PollingPeriod:       *pollingPeriod,
+		RehydratePeriod:     *rehydratePeriod,
+		ReconcilerName:      *reconcilerName,
 	}
 
 	hydrator.Run(context.Background())

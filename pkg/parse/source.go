@@ -50,7 +50,8 @@ type FileSource struct {
 	// SourceBranch is the branch of the source repo to sync.
 	SourceBranch string
 	// SourceRev is the revision of the source repo to sync.
-	SourceRev string
+	SourceRev            string
+	ReconcilerSignalsDir cmpath.Absolute
 }
 
 // Files lists files in a repository and ensures the source repository hasn't been

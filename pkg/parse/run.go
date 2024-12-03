@@ -218,14 +218,15 @@ func (r *reconciler) fetch(ctx context.Context) (*SourceStatus, cmpath.Absolute,
 	if newSourceStatus.Errs == nil {
 		if err := r.syncStatusClient.SetImageToSyncAnnotation(ctx, newSourceStatus.Commit); err != nil {
 			newSourceStatus.Errs = status.Append(newSourceStatus.Errs, err)
-		} else {
-			// write the commit into the read-to-render file in hydrated root
-			if opts.RenderingEnabled {
-				if err := unblockHydration(newSourceStatus.Commit, r); err != nil {
-					newSourceStatus.Errs = status.Append(newSourceStatus.Errs, err)
-				}
+			blockHydration(r)
+		} else if opts.RenderingEnabled {
+			// write the commit into the ready-to-render file in hydrated root
+			if err := unblockHydration(newSourceStatus.Commit, r); err != nil {
+				newSourceStatus.Errs = status.Append(newSourceStatus.Errs, err)
 			}
 		}
+	} else {
+		blockHydration(r)
 	}
 
 	// Generate source spec from Reconciler config
@@ -613,6 +614,24 @@ func unblockHydration(commit string, r Reconciler) status.Error {
 		return status.OSWrap(err)
 	}
 	return nil
+}
+
+// blockHydration removes the ready-to-render file from the shared
+// directory and returns any error that occurs during the procedure except
+// "file not found". This function removes the ready-to-render file at its
+// best effort, since with source errors presenting, the ready-to-render
+// file will not be updated with the expected commit that is expected by
+// hydration-controller, thus rendering will be blocked.
+func blockHydration(r Reconciler) {
+	readyToRenderFile := r.Options().ReconcilerSignalsDir.Join(cmpath.RelativeSlash(hydrate.ReadyToRenderFile)).OSPath()
+	err := os.Remove(readyToRenderFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			klog.Infof("ready-to-render file %s not found, no action needed", readyToRenderFile)
+		}
+		klog.Errorf("failed to removed ready-to-render file %s: %v", readyToRenderFile, err)
+	}
+	klog.Infof("removed ready-to-render file %s to block hydration", readyToRenderFile)
 }
 
 // reportRootSyncConflicts reports conflicts to the RootSync that manages the

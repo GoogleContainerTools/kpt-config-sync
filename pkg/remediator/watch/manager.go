@@ -16,7 +16,6 @@ package watch
 
 import (
 	"context"
-	"errors"
 	"sync"
 
 	"golang.org/x/exp/maps"
@@ -288,9 +287,8 @@ func (m *Manager) startWatcher(ctx context.Context, gvk schema.GroupVersionKind,
 // threadsafe.
 func (m *Manager) runWatcher(ctx context.Context, r Runnable, gvk schema.GroupVersionKind) {
 	if err := r.Run(ctx); err != nil {
-		// TODO: Make status.Error work with errors.Is unwrapping.
-		// For now, check the Cause directly, to avoid logging a warning on shutdown.
-		if errors.Is(err.Cause(), context.Canceled) {
+		// Avoid logging a warning on shutdown.
+		if status.IsContextCanceledError(err) {
 			klog.Infof("Watcher stopped for %s: %v", gvk, context.Canceled)
 		} else {
 			klog.Warningf("Watcher errored for %s: %v", gvk, status.FormatSingleLine(err))

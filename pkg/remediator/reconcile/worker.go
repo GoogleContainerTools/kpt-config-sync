@@ -64,7 +64,7 @@ func (w *Worker) Run(ctx context.Context) {
 					cancel()
 					return
 				}
-				if err == context.Canceled || err == context.DeadlineExceeded {
+				if status.IsContextCanceledError(err) {
 					klog.Infof("Worker stopping: %v", err)
 					return
 				}

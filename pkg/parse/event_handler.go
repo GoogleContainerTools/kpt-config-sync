@@ -16,11 +16,11 @@ package parse
 
 import (
 	"context"
-	"errors"
 
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/parse/events"
 	"kpt.dev/configsync/pkg/reconciler/namespacecontroller"
+	"kpt.dev/configsync/pkg/status"
 )
 
 // EventHandler is a events.Subscriber implementation that handles events and
@@ -71,7 +71,7 @@ func (s *EventHandler) Handle(event events.Event) events.Result {
 	case events.StatusUpdateEventType:
 		// Publish the sync status periodically to update remediator errors.
 		if err := s.Reconciler.UpdateSyncStatus(ctx); err != nil {
-			if errors.Is(err, context.Canceled) {
+			if status.IsContextCanceledError(err) {
 				klog.Infof("Sync status update skipped: %v", err)
 			} else {
 				klog.Warningf("Failed to update sync status: %v", err)

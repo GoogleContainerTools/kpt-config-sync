@@ -282,7 +282,7 @@ Watcher:
 					ignoredEventCount++
 				}
 				if err != nil {
-					if errors.Is(err, context.Canceled) || isContextCancelledStatusError(err) {
+					if status.IsContextCanceledError(err) || isContextCancelledStatusError(err) {
 						// The error wrappers are especially confusing for
 						// users, so just return context.Canceled.
 						runErr = status.InternalWrapf(context.Canceled, "remediator watch stopped for %s", w.gvk)

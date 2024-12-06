@@ -542,7 +542,7 @@ func TestWorker_Refresh(t *testing.T) {
 			want:        k8sobjects.UnstructuredObject(kinds.Role(), core.Name(name), core.Namespace(namespace)),
 			wantDeleted: false,
 			wantErr: status.APIServerError(errors.New("some error"),
-				"failed to get updated object for worker cache",
+				"failed to get updated object for remediator worker cache",
 				k8sobjects.UnstructuredObject(kinds.Role(), core.Name(name), core.Namespace(namespace))),
 		},
 	}

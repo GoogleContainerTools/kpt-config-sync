@@ -289,9 +289,9 @@ func (m *Manager) runWatcher(ctx context.Context, r Runnable, gvk schema.GroupVe
 	if err := r.Run(ctx); err != nil {
 		// Avoid logging a warning on shutdown.
 		if status.IsContextCanceledError(err) {
-			klog.Infof("Watcher stopped for %s: %v", gvk, context.Canceled)
+			klog.Infof("Remediator watcher stopped for %s: %v", gvk, context.Canceled)
 		} else {
-			klog.Warningf("Watcher errored for %s: %v", gvk, status.FormatSingleLine(err))
+			klog.Warningf("Remediator watcher errored for %s: %v", gvk, status.FormatSingleLine(err))
 		}
 		m.mux.Lock()
 		delete(m.watcherMap, gvk)

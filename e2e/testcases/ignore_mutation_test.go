@@ -36,7 +36,10 @@ import (
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 )
 
-func TestAddIgnoreMutationToManagedObject(t *testing.T) {
+// TestAddIgnoreMutationAndSpecChangesToManagedObject adds the `client.lifecycle.config.k8s.io/mutation`
+// annotation as well as the `season` annotation to a resource, and verifies that Config Sync doesn't update
+// the `season` annotation based on the source config
+func TestAddIgnoreMutationAndSpecChangesToManagedObject(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
@@ -69,6 +72,9 @@ func TestAddIgnoreMutationToManagedObject(t *testing.T) {
 			testpredicates.MissingAnnotation(metadata.LifecycleMutationAnnotation))))
 }
 
+// TestDeclareIgnoreMutationForUnmanagedObject declares an unmanaged resource in the source repo with the
+// `client.lifecycle.config.k8s.io/mutation` annotation and the `season` annotation, and verifies that
+// Config Sync doesn't update the `season` annotation based on the source config
 func TestDeclareIgnoreMutationForUnmanagedObject(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
@@ -102,6 +108,8 @@ func TestDeclareIgnoreMutationForUnmanagedObject(t *testing.T) {
 			testpredicates.MissingAnnotation("season"))))
 }
 
+// TestMutationIgnoredObjectIsDeleted verifies that a mutation-ignored object is recreated based on
+// the source configs
 func TestMutationIgnoredObjectIsDeleted(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
@@ -163,6 +171,7 @@ func TestMutationIgnoredObjectIsDeleted(t *testing.T) {
 		)))
 }
 
+// TestMutationIgnoredObjectPruned verifies a resource's state when it is pruned then recreated
 func TestMutationIgnoredObjectPruned(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
@@ -196,7 +205,9 @@ func TestMutationIgnoredObjectPruned(t *testing.T) {
 		)))
 }
 
-func TestAddUpdateAdd(t *testing.T) {
+// TestAnnotationDrift verifies that the `season` annotation is correct when modified with Kubectl and
+// in the declared config
+func TestAnnotationDrift(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
@@ -224,14 +235,12 @@ func TestAddUpdateAdd(t *testing.T) {
 	nsObj.Annotations["season"] = "winter"
 	nt.Must(nt.KubeClient.Apply(nsObj))
 
-	// Wait so the remediator can process the event
-	time.Sleep(10 * time.Second)
-
 	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), nsObj.Name, "",
 		testwatcher.WatchPredicates(
 			testpredicates.HasAnnotation("season", "winter"),
 		)))
 
+	// Push a new commit to trigger a new apply.
 	nt.T.Log("Add another namespace to Git to run the applier")
 	nsObj2 := k8sobjects.NamespaceObject("new-ns")
 	nt.Must(rootSyncGitRepo.Add("acme/ns2.yaml", nsObj2))
@@ -241,14 +250,24 @@ func TestAddUpdateAdd(t *testing.T) {
 		testwatcher.WatchPredicates(
 			testpredicates.HasAnnotation("season", "winter"),
 		)))
+
+	// Modify a managed field
+	out, err := nt.Shell.Kubectl("annotate", "namespace", "bookstore", "--overwrite", "season=fall")
+	if err != nil {
+		nt.T.Fatalf("got `kubectl annotate namespace bookstore --overwrite season=fall` error %v %s, want return nil", err, out)
+	}
+	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), nsObj.Name, "",
+		testwatcher.WatchPredicates(
+			testpredicates.HasAnnotation("season", "fall"),
+		)))
 }
 
-// TestDriftKubectlAnnotateManagedFieldWithIgnoreMutationAnnotation modifies a
+// TestDriftKubectlAnnotateConfigSyncAnnotation modifies a
 // managed field of a resource that has the
 // `client.lifecycle.config.k8s.io/mutation` annotation, and verifies that
 // Config Sync does not correct it.
 // TODO: Update this test when implementing the remediator changes to support the ignore mutation annotation
-func TestDriftKubectlAnnotateManagedFieldWithIgnoreMutationAnnotation(t *testing.T) {
+func TestDriftKubectlAnnotateConfigSyncAnnotation(t *testing.T) {
 	rootSyncID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t, nomostesting.DriftControl,
 		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured))
@@ -261,43 +280,20 @@ func TestDriftKubectlAnnotateManagedFieldWithIgnoreMutationAnnotation(t *testing
 	nt.Must(rootSyncGitRepo.CommitAndPush("add a namespace"))
 	nt.Must(nt.WatchForAllSyncs())
 
-	// Modify a managed field
-	out, err := nt.Shell.Kubectl("annotate", "namespace", "bookstore", "--overwrite", "season=winter")
-	if err != nil {
-		nt.T.Fatalf("got `kubectl annotate namespace bookstore --overwrite season=winter` error %v %s, want return nil", err, out)
-	}
-
-	time.Sleep(10 * time.Second)
-
-	// Remediator SHOULD NOT correct it
-	err = nt.Validate("bookstore", "", &corev1.Namespace{}, testpredicates.HasAnnotation("season", "winter"))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-
 	// The reason we need to stop the webhook here is that the webhook denies a request to modify Config Sync metadata
 	// even if the resource has the `client.lifecycle.config.k8s.io/mutation` annotation.
 	nomostest.StopWebhook(nt)
 	// Stopping the webhook causes the reconciler to restart. Wait so that we aren't
 	// racing with the applier and are actually testing the remediator.
-	tg := taskgroup.New()
-	tg.Go(func() error {
-		return nt.Watcher.WatchObject(kinds.Deployment(),
-			core.RootReconcilerName(rootSyncID.Name), configsync.ControllerNamespace,
-			testwatcher.WatchPredicates(
-				testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
-				testpredicates.DeploymentMissingEnvVar(reconcilermanager.Reconciler, reconcilermanager.WebhookEnabled),
-			))
-	})
-	tg.Go(func() error {
-		// Note: this proves that the applier DOES honor the ignore-mutation annotation.
-		return nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
-			testwatcher.WatchPredicates(testpredicates.HasAnnotation("season", "winter")))
-	})
-	nt.Must(tg.Wait())
+	nt.Must(nt.Watcher.WatchObject(kinds.Deployment(),
+		core.RootReconcilerName(rootSyncID.Name), configsync.ControllerNamespace,
+		testwatcher.WatchPredicates(
+			testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
+			testpredicates.DeploymentMissingEnvVar(reconcilermanager.Reconciler, reconcilermanager.WebhookEnabled),
+		)))
 
 	// Modify a Config Sync annotation
-	out, err = nt.Shell.Kubectl("annotate", "namespace", "bookstore", "--overwrite", fmt.Sprintf("%s=fall", metadata.ResourceManagementKey))
+	out, err := nt.Shell.Kubectl("annotate", "namespace", "bookstore", "--overwrite", fmt.Sprintf("%s=fall", metadata.ResourceManagementKey))
 	if err != nil {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore --overwrite %s=fall` error %v %s, want return nil", metadata.ResourceManagementKey, err, out)
 	}
@@ -379,6 +375,9 @@ func TestDriftKubectlAnnotateDeleteManagedFieldsWithIgnoreMutationAnnotation(t *
 	}
 }
 
+// TestAddIgnoreMutationAnnotationDirectly verifies the behavior of the applier when the
+// `client.lifecycle.config.k8s.io/mutation` annotation is added to a resource using kubectl
+// TODO: Update this test when implementing the remediator changes to support the ignore mutation annotation
 func TestAddIgnoreMutationAnnotationDirectly(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
@@ -415,11 +414,10 @@ func TestAddIgnoreMutationAnnotationDirectly(t *testing.T) {
 		testwatcher.WatchTimeout(30*time.Second)))
 }
 
-// TestDriftKubectlAnnotateUnmanagedFieldWithIgnoreMutationAnnotation adds a new
-// field with kubectl into a resource managed by Config Sync that has the
-// `client.lifecycle.config.k8s.io/mutation` annotation, and verifies that
-// Config Sync does not remove this field.
-func TestDriftKubectlAnnotateUnmanagedFieldWithIgnoreMutationAnnotation(t *testing.T) {
+// TestKubectlAddAnnotation adds a new field with kubectl into a resource managed
+// by Config Sync that has the `client.lifecycle.config.k8s.io/mutation` annotation,
+// and verifies that Config Sync does not remove this field.
+func TestKubectlAddAnnotation(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
@@ -429,7 +427,7 @@ func TestDriftKubectlAnnotateUnmanagedFieldWithIgnoreMutationAnnotation(t *testi
 	nt.Must(rootSyncGitRepo.CommitAndPush("add a namespace"))
 	nt.Must(nt.WatchForAllSyncs())
 
-	// Add a new annotation into the namespace object
+	// Add a new annotation to the namespace object
 	out, err := nt.Shell.Kubectl("annotate", "namespace", "bookstore", "season=summer")
 	if err != nil {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore season=summer` error %v %s, want return nil", err, out)
@@ -437,6 +435,5 @@ func TestDriftKubectlAnnotateUnmanagedFieldWithIgnoreMutationAnnotation(t *testi
 
 	// Remediator SHOULD NOT remove this field
 	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
-		testwatcher.WatchPredicates(testpredicates.HasAnnotation("season", "summer")),
-		testwatcher.WatchTimeout(30*time.Second)))
+		testwatcher.WatchPredicates(testpredicates.HasAnnotation("season", "summer"))))
 }

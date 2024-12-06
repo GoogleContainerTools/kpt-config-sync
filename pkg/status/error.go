@@ -15,6 +15,8 @@
 package status
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -267,4 +269,16 @@ func CountErrorByClass(errs []v1beta1.ConfigSyncError) map[string]int64 {
 		}
 	}
 	return result
+}
+
+// IsContextCanceledError returns true if the error is context.Canceled or if
+// it wraps a context.Canceled error.
+func IsContextCanceledError(err error) bool {
+	// Unwrap status.Error, because status.Error.Is only checks the error code.
+	// TODO: Make status.Error work with errors.Is unwrapping.
+	var statusErr Error
+	if errors.As(err, &statusErr) {
+		err = statusErr.Cause()
+	}
+	return errors.Is(err, context.Canceled)
 }

@@ -14,6 +14,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"net/http"
@@ -73,6 +74,7 @@ func main() {
 		utillog.HandleError(log, true, "root cannot be empty")
 	}
 
+	// TODO: Add support for BYOID, which does not use a GCP service account
 	var gsaEmail string
 	var err error
 	// for getting the GSA email we have several scenarios
@@ -82,7 +84,7 @@ func main() {
 	if *flGsaEmail != "" {
 		gsaEmail = *flGsaEmail
 	} else if metadata.OnGCE() {
-		gsaEmail, err = metadata.Email("")
+		gsaEmail, err = metadata.EmailWithContext(context.TODO(), "")
 		if err != nil {
 			utillog.HandleError(log, false, "error in http.ListenAndServe: %v", err)
 		}
@@ -93,6 +95,9 @@ func main() {
 
 	aps := &askpass.Server{
 		Email: gsaEmail,
+		CredentialProvider: &askpass.CachingCredentialProvider{
+			Scopes: askpass.DefaultSourceScopes(),
+		},
 	}
 	http.HandleFunc("/git_askpass", aps.GitAskPassHandler)
 

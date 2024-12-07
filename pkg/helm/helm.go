@@ -23,14 +23,14 @@ import (
 	"strconv"
 	"strings"
 
+	"cloud.google.com/go/auth"
 	setnamespace "github.com/GoogleContainerTools/kpt-functions-catalog/functions/go/set-namespace/transformer"
 	"github.com/GoogleContainerTools/kpt-functions-sdk/go/fn"
 	semverrange "github.com/Masterminds/semver/v3"
 	"golang.org/x/mod/semver"
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/google"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/askpass"
 	"kpt.dev/configsync/pkg/util"
 	"sigs.k8s.io/kustomize/kyaml/filesys"
 	"sigs.k8s.io/kustomize/kyaml/kio"
@@ -46,6 +46,11 @@ var (
 	// helmCacheHome is the local filepath where helm writes local cache data
 	helmCacheHome = os.Getenv("HOME") + "/.cache/helm"
 )
+
+// DefaultSourceScopes returns the scopes needed to fetch OCI source from GCR & GAR.
+func DefaultSourceScopes() []string {
+	return []string{"https://www.googleapis.com/auth/cloud-platform"}
+}
 
 // Hydrator runs the helm hydration process.
 type Hydrator struct {
@@ -65,6 +70,7 @@ type Hydrator struct {
 	Password                string
 	ValuesFileApplyStrategy string
 	CACertFilePath          string
+	CredentialProvider      askpass.CredentialProvider
 }
 
 func (h *Hydrator) templateArgs(ctx context.Context, destDir string) ([]string, error) {
@@ -189,16 +195,16 @@ func (h *Hydrator) getChartVersion(ctx context.Context) error {
 	return nil
 }
 
-func fetchNewToken(ctx context.Context) (*oauth2.Token, error) {
-	creds, err := google.FindDefaultCredentials(ctx, "https://www.googleapis.com/auth/cloud-platform")
+func (h *Hydrator) fetchToken(ctx context.Context) (*auth.Token, error) {
+	creds, err := h.CredentialProvider.Credentials()
 	if err != nil {
-		return nil, fmt.Errorf("failed to find default credentials: %w", err)
+		return nil, err
 	}
-	t, err := creds.TokenSource.Token()
+	token, err := creds.Token(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get token from credentials: %w", err)
+		return nil, fmt.Errorf("fetching auth token: %w", err)
 	}
-	return t, nil
+	return token, nil
 }
 
 func (h *Hydrator) setDeployNamespace(destDir string) error {
@@ -340,12 +346,12 @@ func (h *Hydrator) appendAuthArgs(ctx context.Context, args []string) ([]string,
 		args = append(args, "--username", h.UserName)
 		args = append(args, "--password", h.Password)
 	case configsync.AuthGCPServiceAccount, configsync.AuthK8sServiceAccount, configsync.AuthGCENode:
-		token, err := fetchNewToken(ctx)
+		token, err := h.fetchToken(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("failed to fetch new token: %w", err)
+			return nil, err
 		}
 		args = append(args, "--username", "oauth2accesstoken")
-		args = append(args, "--password", token.AccessToken)
+		args = append(args, "--password", token.Value)
 	}
 	return args, nil
 }

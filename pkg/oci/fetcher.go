@@ -24,14 +24,11 @@ import (
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
-	"github.com/google/go-containerregistry/pkg/v1/google"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"golang.org/x/net/context"
 	"k8s.io/klog/v2"
-	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/util"
-	utillog "kpt.dev/configsync/pkg/util/log"
 )
 
 const (
@@ -40,33 +37,22 @@ const (
 	NoFurtherSyncsLog = "Image has been synced, and no further syncs will occur"
 )
 
-// authenticator returns an authn.Authenticator that generates access tokens.
-func authenticator(authType string, logger *utillog.Logger) (authenticator authn.Authenticator, err error) {
-	switch configsync.AuthType(authType) {
-	case configsync.AuthNone:
-		return authn.Anonymous, nil
-	case configsync.AuthGCPServiceAccount, configsync.AuthK8sServiceAccount, configsync.AuthGCENode:
-		return google.NewEnvAuthenticator()
-	default:
-		utillog.HandleError(logger, true, "ERROR: unsupported authentication type %q", authType)
-	}
-	return nil, nil
-}
-
 // HasDigest returns whether the provided image name contains a digest.
 func HasDigest(imageName string) bool {
 	_, err := name.NewDigest(imageName)
 	return err == nil
 }
 
-// FetchPackage fetches the package from the OCI repository and write it to the destination.
-func FetchPackage(ctx context.Context, logger *utillog.Logger, authType, imageName, ociRoot, rev string) error {
-	auth, err := authenticator(authType, logger)
-	if err != nil {
-		return fmt.Errorf("failed to get the authentication with type %q: %w", authType, err)
-	}
+// Fetcher fetches package images from an OCI repository using the specified
+// authenticator.
+type Fetcher struct {
+	// Authenticator is used to authenticate with the OCI repository.
+	Authenticator authn.Authenticator
+}
 
-	image, err := PullImage(imageName, remote.WithContext(ctx), remote.WithAuth(auth))
+// FetchPackage fetches the package from the OCI repository and write it to the destination.
+func (f *Fetcher) FetchPackage(ctx context.Context, imageName, ociRoot, rev string) error {
+	image, err := PullImage(imageName, remote.WithContext(ctx), remote.WithAuth(f.Authenticator))
 	if err != nil {
 		return err
 	}

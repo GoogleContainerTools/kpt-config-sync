@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2/textlogger"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/askpass"
 	"kpt.dev/configsync/pkg/helm"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/util"
@@ -141,6 +142,9 @@ func main() {
 			UserName:        *flUsername,
 			Password:        *flPassword,
 			CACertFilePath:  *flCACert,
+			CredentialProvider: &askpass.CachingCredentialProvider{
+				Scopes: helm.DefaultSourceScopes(),
+			},
 		}
 
 		if err := hydrator.HelmTemplate(ctx); err != nil {

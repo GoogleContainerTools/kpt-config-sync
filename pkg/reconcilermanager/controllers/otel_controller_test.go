@@ -19,12 +19,13 @@ import (
 	"errors"
 	"testing"
 
+	goauth "cloud.google.com/go/auth"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/oauth2/google"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"kpt.dev/configsync/pkg/api/configmanagement"
+	"kpt.dev/configsync/pkg/auth"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/metadata"
@@ -59,7 +60,7 @@ const (
 	depAnnotationCustomDeleted = "271a8db08c5b57017546587f9b78864d"
 )
 
-func setupOtelReconciler(t *testing.T, objs ...client.Object) (*syncerFake.Client, *OtelReconciler) {
+func setupOtelReconciler(t *testing.T, credentialprovider auth.CredentialProvider, objs ...client.Object) (*syncerFake.Client, *OtelReconciler) {
 	t.Helper()
 
 	fakeClient := syncerFake.NewClient(t, core.Scheme, objs...)
@@ -67,6 +68,7 @@ func setupOtelReconciler(t *testing.T, objs ...client.Object) (*syncerFake.Clien
 		fakeClient,
 		controllerruntime.Log.WithName("controllers").WithName("Otel"),
 		fakeClient.Scheme(),
+		credentialprovider,
 	)
 	return fakeClient, testReconciler
 }
@@ -79,11 +81,12 @@ func TestOtelReconciler(t *testing.T) {
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
 	reqNamespacedName := namespacedName(metrics.OtelCollectorName, configmanagement.MonitoringNamespace)
-	fakeClient, testReconciler := setupOtelReconciler(t, cm, k8sobjects.DeploymentObject(core.Name(metrics.OtelCollectorName), core.Namespace(configmanagement.MonitoringNamespace)))
-
-	getDefaultCredentials = func(_ context.Context) (*google.Credentials, error) {
-		return nil, errors.New("could not find default credentials")
+	credentialProvider := &auth.FakeCredentialProvider{
+		CredentialsError: errors.New("credentials: could not find default credentials. Extra unused text."),
 	}
+	fakeClient, testReconciler := setupOtelReconciler(t, credentialProvider, cm,
+		k8sobjects.DeploymentObject(core.Name(metrics.OtelCollectorName),
+			core.Namespace(configmanagement.MonitoringNamespace)))
 
 	// Test updating Configmap and Deployment resources.
 	ctx := context.Background()
@@ -123,15 +126,15 @@ func TestOtelReconcilerGooglecloud(t *testing.T) {
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
 	reqNamespacedName := namespacedName(metrics.OtelCollectorName, configmanagement.MonitoringNamespace)
-	fakeClient, testReconciler := setupOtelReconciler(t, cm, k8sobjects.DeploymentObject(core.Name(metrics.OtelCollectorName), core.Namespace(configmanagement.MonitoringNamespace)))
-
-	getDefaultCredentials = func(_ context.Context) (*google.Credentials, error) {
-		return &google.Credentials{
-			ProjectID:   "test",
-			TokenSource: nil,
-			JSON:        nil,
-		}, nil
+	credentialProvider := &auth.FakeCredentialProvider{
+		CredentialsOut: goauth.NewCredentials(&goauth.CredentialsOptions{
+			ProjectIDProvider: goauth.CredentialsPropertyFunc(func(_ context.Context) (string, error) {
+				return "test", nil
+			}),
+		}),
 	}
+	fakeClient, testReconciler := setupOtelReconciler(t, credentialProvider, cm,
+		k8sobjects.DeploymentObject(core.Name(metrics.OtelCollectorName), core.Namespace(configmanagement.MonitoringNamespace)))
 
 	// Test updating Configmap and Deployment resources.
 	ctx := context.Background()
@@ -191,11 +194,12 @@ func TestOtelReconcilerCustom(t *testing.T) {
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
 	reqNamespacedName := namespacedName(metrics.OtelCollectorCustomCM, configmanagement.MonitoringNamespace)
-	fakeClient, testReconciler := setupOtelReconciler(t, cm, cmCustom, k8sobjects.DeploymentObject(core.Name(metrics.OtelCollectorName), core.Namespace(configmanagement.MonitoringNamespace)))
-
-	getDefaultCredentials = func(_ context.Context) (*google.Credentials, error) {
-		return nil, nil
+	credentialProvider := &auth.FakeCredentialProvider{
+		// Error: errors.New("could not find default credentials"),
 	}
+	fakeClient, testReconciler := setupOtelReconciler(t, credentialProvider, cm,
+		cmCustom, k8sobjects.DeploymentObject(core.Name(metrics.OtelCollectorName),
+			core.Namespace(configmanagement.MonitoringNamespace)))
 
 	// Test updating Deployment resources.
 	ctx := context.Background()
@@ -243,11 +247,12 @@ func TestOtelReconcilerDeleteCustom(t *testing.T) {
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
 	reqNamespacedName := namespacedName(metrics.OtelCollectorCustomCM, configmanagement.MonitoringNamespace)
-	fakeClient, testReconciler := setupOtelReconciler(t, cm, cmCustom, k8sobjects.DeploymentObject(core.Name(metrics.OtelCollectorName), core.Namespace(configmanagement.MonitoringNamespace)))
-
-	getDefaultCredentials = func(_ context.Context) (*google.Credentials, error) {
-		return nil, nil
+	credentialProvider := &auth.FakeCredentialProvider{
+		// Error: errors.New("could not find default credentials"),
 	}
+	fakeClient, testReconciler := setupOtelReconciler(t, credentialProvider, cm,
+		cmCustom, k8sobjects.DeploymentObject(core.Name(metrics.OtelCollectorName),
+			core.Namespace(configmanagement.MonitoringNamespace)))
 
 	// Test updating Deployment resources.
 	ctx := context.Background()

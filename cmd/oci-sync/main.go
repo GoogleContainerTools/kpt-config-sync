@@ -24,9 +24,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/go-containerregistry/pkg/authn"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2/textlogger"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/auth"
 	"kpt.dev/configsync/pkg/oci"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/util"
@@ -93,9 +95,34 @@ func main() {
 	failCount := 0
 	backoff := errorBackoff()
 
+	var authenticator authn.Authenticator
+	switch configsync.AuthType(*flAuth) {
+	case configsync.AuthNone:
+		authenticator = authn.Anonymous
+	case configsync.AuthGCPServiceAccount, configsync.AuthK8sServiceAccount, configsync.AuthGCENode:
+		authenticator = &oci.CredentialAuthenticator{
+			CredentialProvider: &auth.CachingCredentialProvider{
+				Scopes: auth.OCISourceScopes(),
+			},
+		}
+	default:
+		utillog.HandleError(log, true, "ERROR: --auth type must be one of %#v, but found %q",
+			[]configsync.AuthType{
+				configsync.AuthNone,
+				configsync.AuthGCPServiceAccount,
+				configsync.AuthK8sServiceAccount,
+				configsync.AuthGCENode,
+			},
+			*flAuth)
+	}
+
+	fetcher := &oci.Fetcher{
+		Authenticator: authenticator,
+	}
+
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(*flSyncTimeout))
-		if err := oci.FetchPackage(ctx, log, *flAuth, *flImage, *flRoot, *flDest); err != nil {
+		if err := fetcher.FetchPackage(ctx, *flImage, *flRoot, *flDest); err != nil {
 			if *flMaxSyncFailures != -1 && failCount >= *flMaxSyncFailures {
 				// Exit after too many retries, maybe the error is not recoverable.
 				log.Error(err, "too many failures, aborting", "failCount", failCount)

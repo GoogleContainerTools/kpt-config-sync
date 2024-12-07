@@ -21,7 +21,8 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/oauth2"
+	goauth "cloud.google.com/go/auth"
+	"kpt.dev/configsync/pkg/auth"
 )
 
 // GitAskPassHandler performs a basic "smoke test"
@@ -33,17 +34,20 @@ func TestCachedToken(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	token := &oauth2.Token{
-		AccessToken:  "0xBEEFCAFE",
-		TokenType:    "Bearer",
-		RefreshToken: "0xDEADC0DE",
+	token := &goauth.Token{
+		Value: "0xBEEFCAFE",
+		Type:  "Bearer",
 		// Expiry needs to be long enough to account for early refresh (5m).
 		Expiry: time.Now().Add(time.Minute * 6),
 	}
 
 	aps := &Server{
 		Email: "foo@bar.com",
-		token: token,
+		CredentialProvider: &auth.FakeCredentialProvider{
+			CredentialsOut: &auth.FakeTokenProvider{
+				TokenOut: token,
+			},
+		},
 	}
 
 	rr := httptest.NewRecorder()
@@ -58,7 +62,7 @@ func TestCachedToken(t *testing.T) {
 	}
 
 	// Check the response body is what we expect.
-	expected := fmt.Sprintf("username=%s\npassword=%s", aps.Email, token.AccessToken)
+	expected := fmt.Sprintf("username=%s\npassword=%s", aps.Email, token.Value)
 	if rr.Body.String() != expected {
 		t.Errorf("handler returned unexpected body: got %v want %v",
 			rr.Body.String(), expected)

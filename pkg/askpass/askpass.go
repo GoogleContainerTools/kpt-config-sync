@@ -17,88 +17,38 @@
 package askpass
 
 import (
-	"context"
 	"fmt"
 	"net/http"
-	"time"
 
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/google"
 	"k8s.io/klog/v2"
+	"kpt.dev/configsync/pkg/auth"
 )
-
-// bufferTime is the approximate amount of time that the credentials should
-// remain valid after being returned by the askpass sidecar.
-//
-// A 5m buffer was chosen as a compromise to avoid git API call errors without
-// significantly increasing credential refresh request volume. It's assumed that
-// credentials are valid for ~60m, so a 5m early refresh should cause less than
-// 10% increase in refresh call volume, while still allowing enough time for the
-// askpass service to respond and git to make at least one API call, possibly
-// multiple and/or retries.
-const bufferTime = 5 * time.Minute
 
 // Server contains server wide state and settings for the askpass sidecar
 type Server struct {
-	Email string
-	token *oauth2.Token
+	Email              string
+	CredentialProvider auth.CredentialProvider
 }
 
-// GitAskPassHandler is the main method for clients to ask us for
-// credentials
+// GitAskPassHandler handles credential requests, fetching a valid auth token
+// from the credential manager and writing it to the response.
+//
+// The underlying Credentials abstraction handles caching the auth token until
+// it expires, minus the EarlyTokenRefresh duration.
 func (aps *Server) GitAskPassHandler(w http.ResponseWriter, r *http.Request) {
 	klog.Infof("handling new askpass request from host: %s", r.Host)
 
-	if aps.needNewToken() {
-		err := aps.retrieveNewToken(r.Context())
-		if err != nil {
-			klog.Error(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-	} else {
-		klog.Infof("reusing existing oauth2 token, type: %s, expiration: %v",
-			aps.token.TokenType, aps.token.Expiry)
+	token, err := auth.FetchToken(r.Context(), aps.CredentialProvider)
+	if err != nil {
+		klog.Error(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
-	// this this point we should be equipped with all the credentials
-	// and it's just a matter of sending it back to the caller.
-	password := aps.token.AccessToken
+	// write the username and password (aka token) to the response
 	w.WriteHeader(http.StatusOK)
-	if _, err := fmt.Fprintf(w, "username=%s\npassword=%s", aps.Email, password); err != nil {
+	if _, err := fmt.Fprintf(w, "username=%s\npassword=%s", aps.Email, token.Value); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		klog.Error(err)
 	}
-}
-
-// needNewToken will tell us if we have an Oauth2 token that is
-// has not expired yet.
-func (aps *Server) needNewToken() bool {
-	if aps.token == nil {
-		return true
-	}
-
-	if time.Now().Add(bufferTime).After(aps.token.Expiry) {
-		return true
-	}
-
-	return false
-}
-
-// retrieveNewToken will use the default credentials in order to
-// fetch to fetch a new token.  Note the side effect that the
-// server token will be replaced in case of a successful retrieval.
-func (aps *Server) retrieveNewToken(ctx context.Context) error {
-	creds, err := google.FindDefaultCredentials(ctx, "https://www.googleapis.com/auth/cloud-platform")
-	if err != nil {
-		return fmt.Errorf("error calling google.FindDefaultCredentials: %w", err)
-	}
-	aps.token, err = creds.TokenSource.Token()
-	if err != nil {
-		return fmt.Errorf("error retrieveing TokenSource.Token: %w", err)
-	}
-
-	klog.Infof("retrieved new Oauth2 token, type: %s, expiration: %v",
-		aps.token.TokenType, aps.token.Expiry)
-	return nil
 }

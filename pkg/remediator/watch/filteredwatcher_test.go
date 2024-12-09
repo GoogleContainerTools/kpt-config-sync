@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,6 +37,7 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/remediator/queue"
 	"kpt.dev/configsync/pkg/status"
+	"kpt.dev/configsync/pkg/syncer/reconcile"
 	"kpt.dev/configsync/pkg/syncer/syncertest"
 	testfake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -54,7 +56,7 @@ func TestFilteredWatcher(t *testing.T) {
 	syncName := "rs"
 
 	deployment1 := k8sobjects.DeploymentObject(core.Name("hello"))
-	deployment1Beta := k8sobjects.DeploymentObject(core.Name("hello"))
+	deployment1Beta := k8sobjects.DeploymentObject(core.Name("hello"), syncertest.IgnoreMutationAnnotation)
 	deployment1Beta.GetObjectKind().SetGroupVersionKind(deployment1Beta.GroupVersionKind().GroupKind().WithVersion("beta1"))
 
 	deployment2 := k8sobjects.DeploymentObject(core.Name("world"))
@@ -67,12 +69,14 @@ func TestFilteredWatcher(t *testing.T) {
 	deploymentForRoot := k8sobjects.DeploymentObject(core.Name("managed-by-root"), difftest.ManagedBy(declared.RootScope, "any-rs"))
 
 	testCases := []struct {
-		name     string
-		declared []client.Object
-		watches  [][]action
-		timeout  *time.Duration
-		want     []core.ID
-		wantErr  status.Error
+		name                  string
+		declared              []client.Object
+		watches               [][]action
+		timeout               *time.Duration
+		want                  []core.ID
+		wantErr               status.Error
+		ignored               []client.Object
+		expectedCachedIgnored []client.Object
 	}{
 		{
 			name: "Enqueue events for declared resources",
@@ -319,6 +323,55 @@ func TestFilteredWatcher(t *testing.T) {
 			},
 			wantErr: nil,
 		},
+		{
+			name: "with objects in the ignore mutation cache",
+			declared: []client.Object{
+				deployment1,
+				deployment2,
+				deployment3,
+			},
+			watches: [][]action{{
+				{
+					event: watch.Added,
+					obj:   deployment1,
+				},
+				{
+					event: watch.Modified,
+					obj:   deployment2,
+				},
+				{
+					event: watch.Deleted,
+					obj:   deployment3,
+				},
+				{
+					stopRun: true,
+				},
+			}},
+			want: []core.ID{
+				core.IDOf(deployment1),
+				core.IDOf(deployment2),
+				core.IDOf(deployment3),
+			},
+			ignored: []client.Object{
+				func() client.Object {
+					dCopy := deployment2.DeepCopy()
+					core.SetAnnotation(dCopy, "foo", "bar")
+					return dCopy
+				}(),
+				func() client.Object {
+					dCopy := deployment3.DeepCopy()
+					core.SetAnnotation(dCopy, "foo", "bar")
+					return dCopy
+				}(),
+			},
+			expectedCachedIgnored: []client.Object{
+				func() client.Object {
+					u, _ := reconcile.AsUnstructuredSanitized(deployment2)
+					return u
+				}(),
+				&queue.Deleted{Object: deployment3},
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -331,8 +384,12 @@ func TestFilteredWatcher(t *testing.T) {
 			} else {
 				ctx, cancel = context.WithCancel(ctx)
 			}
-			if _, err := dr.Update(ctx, tc.declared, "unused"); err != nil {
+			if _, err := dr.UpdateDeclared(ctx, tc.declared, "unused"); err != nil {
 				t.Fatalf("unexpected error %v", err)
+			}
+
+			if tc.ignored != nil {
+				dr.UpdateIgnored(tc.ignored...)
 			}
 
 			watches := make(chan watch.Interface) // TODO: test startWatch errors
@@ -387,6 +444,8 @@ func TestFilteredWatcher(t *testing.T) {
 			if diff := cmp.Diff(tc.want, got); diff != "" {
 				t.Errorf("did not get desired object IDs: %v", diff)
 			}
+
+			assert.Equal(t, tc.expectedCachedIgnored, dr.IgnoredObjects())
 		})
 	}
 }

@@ -72,7 +72,7 @@ type Applier interface {
 	// Returns the status of the applied objects and statistics of the sync.
 	// This is called by the reconciler when changes are detected in the
 	// source of truth (git, OCI, helm) and periodically.
-	Apply(ctx context.Context, eventHandler func(Event), desiredResources []client.Object) (ObjectStatusMap, *stats.SyncStats)
+	Apply(ctx context.Context, eventHandler func(Event), resources *declared.Resources) (ObjectStatusMap, *stats.SyncStats)
 }
 
 // Destroyer is a bulk client for deleting all the managed resource objects
@@ -330,7 +330,7 @@ func (s *supervisor) handleApplySkippedEvent(obj *unstructured.Unstructured, id 
 }
 
 // processPruneEvent handles PruneEvents from the Applier
-func (s *supervisor) processPruneEvent(ctx context.Context, e event.PruneEvent, syncStats *stats.PruneEventStats, objectStatusMap ObjectStatusMap) status.Error {
+func (s *supervisor) processPruneEvent(ctx context.Context, e event.PruneEvent, syncStats *stats.PruneEventStats, objectStatusMap ObjectStatusMap, declaredResources *declared.Resources) status.Error {
 	id := idFrom(e.Identifier)
 	syncStats.Add(e.Status)
 
@@ -349,6 +349,13 @@ func (s *supervisor) processPruneEvent(ctx context.Context, e event.PruneEvent, 
 	case event.PruneSuccessful:
 		objectStatus.Actuation = actuation.ActuationSucceeded
 		handleMetrics(ctx, "delete", e.Error)
+
+		iObj, found := declaredResources.GetIgnored(id)
+		if found {
+			klog.V(3).Infof("Deleting object '%v' from the ignore cache", core.GKNN(iObj))
+			declaredResources.DeleteIgnored(id)
+		}
+
 		return nil
 
 	case event.PruneFailed:
@@ -504,12 +511,23 @@ func (s *supervisor) checkInventoryObjectSize(ctx context.Context, c client.Clie
 }
 
 // applyInner triggers a kpt live apply library call to apply a set of resources.
-func (s *supervisor) applyInner(ctx context.Context, eventHandler func(Event), objs []client.Object) (ObjectStatusMap, *stats.SyncStats) {
+func (s *supervisor) applyInner(ctx context.Context, eventHandler func(Event), declaredResources *declared.Resources) (ObjectStatusMap, *stats.SyncStats) {
 	s.checkInventoryObjectSize(ctx, s.clientSet.Client)
 	isDestroy := false
 
 	syncStats := stats.NewSyncStats()
 	objStatusMap := make(ObjectStatusMap)
+	objs := declaredResources.DeclaredObjects()
+
+	if err := s.cacheIgnoreMutationObjects(ctx, declaredResources); err != nil {
+		sendErrorEvent(err, eventHandler)
+		return objStatusMap, syncStats
+	}
+
+	if len(declaredResources.IgnoredObjects()) > 0 {
+		klog.Infof("%v mutation-ignored objects: %v", len(declaredResources.IgnoredObjects()), core.GKNNs(declaredResources.IgnoredObjects()))
+	}
+
 	// disabledObjs are objects for which the management are disabled
 	// through annotation.
 	enabledObjs, disabledObjs := partitionObjs(objs)
@@ -525,8 +543,11 @@ func (s *supervisor) applyInner(ctx context.Context, eventHandler func(Event), o
 			Succeeded: disabledCount,
 		}
 	}
-	klog.Infof("%v objects to be applied: %v", len(enabledObjs), core.GKNNs(enabledObjs))
-	resources, err := toUnstructured(enabledObjs)
+
+	objsToApply := handleIgnoredObjects(enabledObjs, declaredResources)
+
+	klog.Infof("%v objects to be applied: %v", len(objsToApply), core.GKNNs(objsToApply))
+	resources, err := toUnstructured(objsToApply)
 	if err != nil {
 		sendErrorEvent(err, eventHandler)
 		return objStatusMap, syncStats
@@ -610,7 +631,7 @@ func (s *supervisor) applyInner(ctx context.Context, eventHandler func(Event), o
 			} else {
 				klog.V(1).Info(e.PruneEvent)
 			}
-			if err := s.processPruneEvent(ctx, e.PruneEvent, syncStats.PruneEvent, objStatusMap); err != nil {
+			if err := s.processPruneEvent(ctx, e.PruneEvent, syncStats.PruneEvent, objStatusMap, declaredResources); err != nil {
 				sendErrorEvent(err, eventHandler)
 			}
 		default:
@@ -704,11 +725,11 @@ func (s *supervisor) destroyInner(ctx context.Context, eventHandler func(Event))
 
 // Apply all managed resource objects and return their status.
 // Apply implements the Applier interface.
-func (s *supervisor) Apply(ctx context.Context, eventHandler func(Event), desiredResource []client.Object) (ObjectStatusMap, *stats.SyncStats) {
+func (s *supervisor) Apply(ctx context.Context, eventHandler func(Event), resources *declared.Resources) (ObjectStatusMap, *stats.SyncStats) {
 	s.execMux.Lock()
 	defer s.execMux.Unlock()
 
-	return s.applyInner(ctx, eventHandler, desiredResource)
+	return s.applyInner(ctx, eventHandler, resources)
 }
 
 // Destroy all managed resource objects and return their status.
@@ -809,6 +830,7 @@ func (s *supervisor) abandonObject(ctx context.Context, obj client.Object) error
 	}
 	uObj := &unstructured.Unstructured{}
 	uObj.SetGroupVersionKind(gvk)
+
 	err = s.clientSet.Client.Get(ctx, client.ObjectKeyFromObject(obj), uObj)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
@@ -840,5 +862,39 @@ func (s *supervisor) abandonObject(ctx context.Context, obj client.Object) error
 		return s.clientSet.Client.Patch(ctx, toObj, client.MergeFrom(fromObj),
 			client.FieldOwner(configsync.FieldManager))
 	}
+	return nil
+}
+
+// cacheIgnoreMutationObjects gets the current cluster state of any declared objects with the ignore mutation annotation and puts it in the Resources ignore objects cache
+// Returns any errors that occur
+func (s *supervisor) cacheIgnoreMutationObjects(ctx context.Context, declaredResources *declared.Resources) error {
+	var objsToUpdate []client.Object
+	declaredObjs := declaredResources.DeclaredObjects()
+
+	for _, obj := range declaredObjs {
+		if obj.GetAnnotations()[metadata.LifecycleMutationAnnotation] == metadata.IgnoreMutation {
+
+			if _, found := declaredResources.GetIgnored(core.IDOf(obj)); !found {
+				// Fetch the cluster state of the object if not already in the cache
+				uObj := &unstructured.Unstructured{}
+				uObj.SetGroupVersionKind(obj.GetObjectKind().GroupVersionKind())
+				err := s.clientSet.Client.Get(ctx, client.ObjectKeyFromObject(obj), uObj)
+
+				// Object doesn't exist on the cluster
+				if apierrors.IsNotFound(err) {
+					continue
+				}
+
+				if err != nil {
+					return err
+				}
+
+				objsToUpdate = append(objsToUpdate, uObj)
+			}
+		}
+	}
+
+	declaredResources.UpdateIgnored(objsToUpdate...)
+
 	return nil
 }

@@ -76,7 +76,7 @@ func newReconciler(
 func (r *reconciler) Remediate(ctx context.Context, id core.ID, obj client.Object) status.Error {
 	start := time.Now()
 
-	declU, commit, found := r.declared.Get(id)
+	declU, commit, found := r.declared.GetDeclared(id)
 	// Yes, this if block is necessary because Go is pedantic about nil interfaces.
 	// 1) var decl client.Object = declU results in a panic.
 	// 2) Using declU as a client.Object results in a panic.

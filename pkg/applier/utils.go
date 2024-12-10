@@ -25,7 +25,9 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/metadata"
+	"kpt.dev/configsync/pkg/remediator/queue"
 	"kpt.dev/configsync/pkg/status"
 	syncerreconcile "kpt.dev/configsync/pkg/syncer/reconcile"
 	"sigs.k8s.io/cli-utils/pkg/object"
@@ -37,6 +39,7 @@ func partitionObjs(objs []client.Object) ([]client.Object, []client.Object) {
 	var enabled []client.Object
 	var disabled []client.Object
 	for _, obj := range objs {
+		// i.e. managed by Config Sync
 		if obj.GetAnnotations()[metadata.ResourceManagementKey] == metadata.ResourceManagementDisabled {
 			disabled = append(disabled, obj)
 		} else {
@@ -44,6 +47,27 @@ func partitionObjs(objs []client.Object) ([]client.Object, []client.Object) {
 		}
 	}
 	return enabled, disabled
+}
+
+// handleIgnoredObjects gets the cached cluster state of all mutation-ignored objects that are declared and applies the CS metadata on top of them
+// prior to sending them to the applier
+// Returns all objects that will be applied
+func handleIgnoredObjects(enabled []client.Object, resources *declared.Resources) []client.Object {
+	var allObjs []client.Object
+
+	for _, dObj := range enabled {
+		cachedObj, found := resources.GetIgnored(core.IDOf(dObj))
+		_, deleted := cachedObj.(*queue.Deleted)
+
+		if found && !deleted {
+			metadata.UpdateConfigSyncMetadata(dObj, cachedObj)
+			allObjs = append(allObjs, cachedObj)
+		} else {
+			allObjs = append(allObjs, dObj)
+		}
+	}
+
+	return allObjs
 }
 
 func toUnstructured(objs []client.Object) ([]*unstructured.Unstructured, status.MultiError) {

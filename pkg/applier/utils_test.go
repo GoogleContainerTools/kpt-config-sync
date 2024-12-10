@@ -25,6 +25,7 @@ import (
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/kinds"
+	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/remediator/queue"
 	"kpt.dev/configsync/pkg/syncer/syncertest"
 	"sigs.k8s.io/cli-utils/pkg/object"
@@ -292,7 +293,8 @@ func TestHandleIgnoredObjects(t *testing.T) {
 			expectedObjs: []client.Object{
 				k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("test-ns"),
 					syncertest.ManagementEnabled,
-					core.Annotation("foo", "bar")),
+					core.Annotation("foo", "bar"),
+					core.Annotation(metadata.LifecycleMutationAnnotation, "")),
 			},
 		},
 	}

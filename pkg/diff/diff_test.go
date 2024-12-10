@@ -283,7 +283,7 @@ func TestDiffType(t *testing.T) {
 				core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation),
 				core.Annotation("foo", "qux"),
 			),
-			want: Update,
+			want: UpdateCSMetadata,
 		},
 		// Actual + no declared paths.
 		{

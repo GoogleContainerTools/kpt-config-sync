@@ -674,6 +674,7 @@ func TestRootReconciler_ParseAndUpdate(t *testing.T) {
 				ApplyOutputs: []applierfake.ApplierOutputs{
 					{}, // One Apply call
 				},
+				ApplyClient: syncertest.NewClient(t, core.Scheme, tc.existingObjects...),
 			}
 			tc.existingObjects = append(tc.existingObjects, k8sobjects.RootSyncObjectV1Beta1(rootSyncName))
 			files := []cmpath.Absolute{

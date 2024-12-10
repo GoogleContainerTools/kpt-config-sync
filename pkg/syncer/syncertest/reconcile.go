@@ -36,4 +36,6 @@ var (
 	ManagementInvalid = core.Annotation(metadata.ResourceManagementKey, "invalid")
 	// TokenAnnotation sets the sync token annotation on the object
 	TokenAnnotation = core.Annotation(metadata.SyncTokenAnnotationKey, Token)
+	// IgnoreMutationAnnotation sets the ignore mutation annotation on the object
+	IgnoreMutationAnnotation = core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation)
 )

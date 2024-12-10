@@ -28,6 +28,7 @@ import (
 	"kpt.dev/configsync/pkg/remediator/conflict"
 	"kpt.dev/configsync/pkg/status"
 	syncerclient "kpt.dev/configsync/pkg/syncer/client"
+	"kpt.dev/configsync/pkg/syncer/reconcile"
 	syncerreconcile "kpt.dev/configsync/pkg/syncer/reconcile"
 	"kpt.dev/configsync/pkg/syncer/reconcile/fight"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -76,7 +77,7 @@ func newReconciler(
 func (r *reconciler) Remediate(ctx context.Context, id core.ID, obj client.Object) status.Error {
 	start := time.Now()
 
-	declU, commit, found := r.declared.Get(id)
+	declU, commit, found := r.declared.GetDeclared(id)
 	// Yes, this if block is necessary because Go is pedantic about nil interfaces.
 	// 1) var decl client.Object = declU results in a panic.
 	// 2) Using declU as a client.Object results in a panic.
@@ -168,6 +169,24 @@ func (r *reconciler) remediate(ctx context.Context, id core.ID, objDiff diff.Dif
 		}
 		klog.V(3).Infof("Remediator abandoning object %v", id)
 		return r.applier.RemoveNomosMeta(ctx, actual, metrics.RemediatorController)
+	case diff.UpdateCSMetadata:
+		declared, err := objDiff.UnstructuredDeclared()
+		if err != nil {
+			return err
+		}
+		actual, err := objDiff.UnstructuredActual()
+		if err != nil {
+			return err
+		}
+
+		expected, err := reconcile.AsUnstructuredSanitized(actual)
+		if err != nil {
+			return err
+		}
+
+		metadata.UpdateConfigSyncMetadata(declared, expected)
+
+		return r.applier.Update(ctx, expected, actual)
 	default:
 		// e.g. differ.DeleteNsConfig, which shouldn't be possible to get to any way.
 		metrics.RecordInternalError(ctx, "remediator")

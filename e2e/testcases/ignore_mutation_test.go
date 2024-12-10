@@ -298,13 +298,9 @@ func TestDriftKubectlAnnotateConfigSyncAnnotation(t *testing.T) {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore --overwrite %s=fall` error %v %s, want return nil", metadata.ResourceManagementKey, err, out)
 	}
 
-	time.Sleep(10 * time.Second)
-
 	// Remediator SHOULD NOT correct it
-	err = nt.Validate("bookstore", "", &corev1.Namespace{}, testpredicates.HasAnnotation(metadata.ResourceManagementKey, "fall"))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
+		testwatcher.WatchPredicates(testpredicates.HasAnnotation(metadata.ResourceManagementKey, "fall"))))
 }
 
 // TestDriftKubectlAnnotateDeleteManagedFieldsWithIgnoreMutationAnnotation
@@ -331,13 +327,9 @@ func TestDriftKubectlAnnotateDeleteManagedFieldsWithIgnoreMutationAnnotation(t *
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore season-` error %v %s, want return nil", err, out)
 	}
 
-	time.Sleep(10 * time.Second)
-
 	// Remediator SHOULD NOT correct it
-	err = nt.Validate("bookstore", "", &corev1.Namespace{}, testpredicates.MissingAnnotation("season"))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
+		testwatcher.WatchPredicates(testpredicates.MissingAnnotation("season"))))
 
 	// The reason we need to stop the webhook here is that the webhook denies a request to modify Config Sync metadata
 	// even if the resource has the `client.lifecycle.config.k8s.io/mutation` annotation.
@@ -369,10 +361,8 @@ func TestDriftKubectlAnnotateDeleteManagedFieldsWithIgnoreMutationAnnotation(t *
 	time.Sleep(10 * time.Second)
 
 	// Remediator SHOULD NOT correct it
-	err = nt.Validate("bookstore", "", &corev1.Namespace{}, testpredicates.MissingAnnotation(metadata.ResourceManagementKey))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
+		testwatcher.WatchPredicates(testpredicates.MissingAnnotation(metadata.ResourceManagementKey))))
 }
 
 // TestAddIgnoreMutationAnnotationDirectly verifies the behavior of the applier when the

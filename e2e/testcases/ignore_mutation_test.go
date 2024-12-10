@@ -327,7 +327,6 @@ func TestAnnotationDrift(t *testing.T) {
 // managed field of a resource that has the
 // `client.lifecycle.config.k8s.io/mutation` annotation, and verifies that
 // Config Sync does not correct it.
-// TODO: Update this test when implementing the remediator changes to support the ignore mutation annotation
 func TestDriftKubectlAnnotateConfigSyncAnnotation(t *testing.T) {
 	rootSyncID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t, nomostesting.DriftControl,
@@ -372,7 +371,6 @@ func TestDriftKubectlAnnotateConfigSyncAnnotation(t *testing.T) {
 // deletes a managed field of a resource that has the
 // `client.lifecycle.config.k8s.io/mutation` annotation, and verifies that
 // Config Sync does not correct it.
-// TODO: Update this test when implementing the remediator changes to support the ignore mutation annotation
 func TestDriftKubectlAnnotateDeleteManagedFieldsWithIgnoreMutationAnnotation(t *testing.T) {
 	rootSyncID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t, nomostesting.DriftControl,
@@ -438,7 +436,6 @@ func TestDriftKubectlAnnotateDeleteManagedFieldsWithIgnoreMutationAnnotation(t *
 
 // TestAddIgnoreMutationAnnotationDirectly verifies the behavior of the applier when the
 // `client.lifecycle.config.k8s.io/mutation` annotation is added to a resource using kubectl
-// TODO: Update this test when implementing the remediator changes to support the ignore mutation annotation
 func TestAddIgnoreMutationAnnotationDirectly(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))

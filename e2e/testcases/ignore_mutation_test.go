@@ -28,7 +28,6 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
-	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
@@ -109,46 +108,27 @@ func TestDeclareIgnoreMutationForUnmanagedObject(t *testing.T) {
 			testpredicates.MissingAnnotation("season"))))
 }
 
-func TestDeclareExistingObjectWithIgnoreAnnotation(t *testing.T) {
+// TestDeclareUnmanagedObjectWithoutIgnoreAnnotation verifies that the `client.lifecycle.config.k8s.io/mutation` annotation
+// is removed when an unmanaged object is declared in the source repo
+func TestDeclareUnmanagedObjectWithoutIgnoreAnnotation(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
-	nt.T.Log("Add an umanaged namespace with the ignore-mutation annotation using kubectl ")
+	nt.T.Log("Add an unmanaged namespace with the ignore-mutation annotation using kubectl ")
 	nsObj := k8sobjects.NamespaceObject("bookstore",
 		core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation),
 	)
 
-	nt.Must(nt.KubeClient.Apply(nsObj))
-	if err := nt.Validate(nsObj.Name, "", &corev1.Namespace{}); err != nil {
-		nt.T.Error(err)
-	}
-
-	nt.T.Log("Declare the namespace without the ignore mutation annotation")
-	namespace := k8sobjects.NamespaceObject(
-		nsObj.Name,
-		core.Annotation("season", "summer"))
-	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
-	nt.Must(rootSyncGitRepo.CommitAndPush("add a namespace"))
-	nt.Must(nt.WatchForAllSyncs())
-
-	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), nsObj.Name, "",
-		testwatcher.WatchPredicates(
-			testpredicates.HasAnnotation("season", "summer"),
-			testpredicates.MissingAnnotation(metadata.LifecycleMutationAnnotation),
-		)))
-}
-
-// TODO: Fix failing test. Using Kubectl.Apply makes it so the ignore-mutation annotation is managed by the nomos field manager
-func TestDeclareExistingObjectWithoutIgnoreAnnotation(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
-	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
-
-	nt.T.Log("Add an umanaged namespace with the ignore-mutation annotation using kubectl ")
-	nsObj := k8sobjects.NamespaceObject("bookstore",
-		core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation),
-	)
+	nt.T.Cleanup(func() {
+		if err := nt.KubeClient.Delete(nsObj); err != nil {
+			if !apierrors.IsNotFound(err) && !apierrors.IsForbidden(err) {
+				nt.T.Log(err)
+			}
+		}
+	})
 
 	nt.Must(nt.KubeClient.Apply(nsObj))
+
 	if err := nt.Validate(nsObj.Name, "", &corev1.Namespace{}); err != nil {
 		nt.T.Error(err)
 	}
@@ -435,14 +415,6 @@ func TestAddIgnoreMutationAnnotationDirectly(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
 	nt.Must(rootSyncGitRepo.CommitAndPush("add a namespace"))
 	nt.Must(nt.WatchForAllSyncs())
-
-	nt.T.Log("Increase log level of reconciler to help debug failures")
-	rs := nomostest.RootSyncObjectV1Beta1FromRootRepo(nt, configsync.RootSyncName)
-	rs.Spec.SafeOverride().LogLevels = []v1beta1.ContainerLogLevelOverride{
-		{ContainerName: reconcilermanager.Reconciler, LogLevel: 5},
-	}
-	nt.Must(nt.KubeClient.Apply(rs))
-	nt.Must(nt.Watcher.WatchForCurrentStatus(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace))
 
 	// Add the `client.lifecycle.config.k8s.io/mutation` annotation into the namespace object
 	// Webhook SHOULD deny the requests since this annotation is a part of the Config Sync metadata.

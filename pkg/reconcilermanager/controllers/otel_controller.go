@@ -18,9 +18,7 @@ import (
 	"context"
 	"fmt"
 
-	traceapi "cloud.google.com/go/trace/apiv2"
 	"github.com/go-logr/logr"
-	"golang.org/x/oauth2/google"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -28,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/auth"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
@@ -47,18 +46,20 @@ var _ reconcile.Reconciler = &OtelReconciler{}
 type OtelReconciler struct {
 	loggingController
 
-	client client.Client
-	scheme *runtime.Scheme
+	client             client.Client
+	scheme             *runtime.Scheme
+	credentialProvider auth.CredentialProvider
 }
 
 // NewOtelReconciler returns a new OtelReconciler.
-func NewOtelReconciler(client client.Client, log logr.Logger, scheme *runtime.Scheme) *OtelReconciler {
+func NewOtelReconciler(client client.Client, log logr.Logger, scheme *runtime.Scheme, credentialProvider auth.CredentialProvider) *OtelReconciler {
 	return &OtelReconciler{
 		loggingController: loggingController{
 			log: log,
 		},
-		client: client,
-		scheme: scheme,
+		client:             client,
+		scheme:             scheme,
+		credentialProvider: credentialProvider,
 	}
 }
 
@@ -131,11 +132,16 @@ func (r *OtelReconciler) reconcileConfigMap(ctx context.Context, req reconcile.R
 // configureGooglecloudConfigMap creates or updates a map with a config that
 // enables Googlecloud exporter if Application Default Credentials are present.
 func (r *OtelReconciler) configureGooglecloudConfigMap(ctx context.Context) ([]byte, error) {
-	// Check that GCP credentials are injected
-	creds, _ := getDefaultCredentials(ctx)
-	if creds == nil || creds.ProjectID == "" {
-		// No injected credentials
-		return nil, nil
+	// Only configure otel-collector to export metrics to Cloud Monitoring if
+	// GCP credentials are configured on the reconciler-manager.
+	// This assumes the otel-collector will be similarly configured.
+	_, err := r.credentialProvider.Credentials()
+	if err != nil {
+		if auth.IsCredentialsNotFoundError(err) {
+			// No injected credentials
+			return nil, nil
+		}
+		return nil, err
 	}
 
 	cm := &corev1.ConfigMap{}
@@ -211,11 +217,4 @@ func (r *OtelReconciler) Register(mgr controllerruntime.Manager) error {
 		For(&corev1.ConfigMap{}).
 		WithEventFilter(p).
 		Complete(r)
-}
-
-// getDefaultCredentials searches for "Application Default Credentials":
-// https://developers.google.com/accounts/docs/application-default-credentials.
-// It can be overridden during tests.
-var getDefaultCredentials = func(ctx context.Context) (*google.Credentials, error) {
-	return google.FindDefaultCredentials(ctx, traceapi.DefaultAuthScopes()...)
 }

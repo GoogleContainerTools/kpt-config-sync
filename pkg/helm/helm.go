@@ -27,10 +27,9 @@ import (
 	"github.com/GoogleContainerTools/kpt-functions-sdk/go/fn"
 	semverrange "github.com/Masterminds/semver/v3"
 	"golang.org/x/mod/semver"
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/google"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/auth"
 	"kpt.dev/configsync/pkg/util"
 	"sigs.k8s.io/kustomize/kyaml/filesys"
 	"sigs.k8s.io/kustomize/kyaml/kio"
@@ -65,6 +64,7 @@ type Hydrator struct {
 	Password                string
 	ValuesFileApplyStrategy string
 	CACertFilePath          string
+	CredentialProvider      auth.CredentialProvider
 }
 
 func (h *Hydrator) templateArgs(ctx context.Context, destDir string) ([]string, error) {
@@ -187,18 +187,6 @@ func (h *Hydrator) getChartVersion(ctx context.Context) error {
 	}
 	klog.Infoln("using chart version: ", h.Version)
 	return nil
-}
-
-func fetchNewToken(ctx context.Context) (*oauth2.Token, error) {
-	creds, err := google.FindDefaultCredentials(ctx, "https://www.googleapis.com/auth/cloud-platform")
-	if err != nil {
-		return nil, fmt.Errorf("failed to find default credentials: %w", err)
-	}
-	t, err := creds.TokenSource.Token()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get token from credentials: %w", err)
-	}
-	return t, nil
 }
 
 func (h *Hydrator) setDeployNamespace(destDir string) error {
@@ -340,12 +328,12 @@ func (h *Hydrator) appendAuthArgs(ctx context.Context, args []string) ([]string,
 		args = append(args, "--username", h.UserName)
 		args = append(args, "--password", h.Password)
 	case configsync.AuthGCPServiceAccount, configsync.AuthK8sServiceAccount, configsync.AuthGCENode:
-		token, err := fetchNewToken(ctx)
+		token, err := auth.FetchToken(ctx, h.CredentialProvider)
 		if err != nil {
-			return nil, fmt.Errorf("failed to fetch new token: %w", err)
+			return nil, err
 		}
 		args = append(args, "--username", "oauth2accesstoken")
-		args = append(args, "--password", token.AccessToken)
+		args = append(args, "--password", token.Value)
 	}
 	return args, nil
 }

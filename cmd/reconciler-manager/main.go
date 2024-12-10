@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"os"
 
+	traceapi "cloud.google.com/go/trace/apiv2"
 	"github.com/go-logr/logr"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -30,6 +31,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2/textlogger"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/auth"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metrics"
@@ -157,9 +159,13 @@ func main() {
 	})
 	setupLog.Info("RootSync controller registration scheduled")
 
+	otelCredentialProvider := &auth.CachingCredentialProvider{
+		Scopes: traceapi.DefaultAuthScopes(),
+	}
+
 	otel := controllers.NewOtelReconciler(mgr.GetClient(),
 		textlogger.NewLogger(textlogger.NewConfig()).WithName("controllers").WithName("Otel"),
-		mgr.GetScheme())
+		mgr.GetScheme(), otelCredentialProvider)
 	if err := otel.Register(mgr); err != nil {
 		setupLog.Error(err, "failed to register controller", "controller", "Otel")
 		os.Exit(1)

@@ -83,6 +83,7 @@ func listOperations(ctx context.Context, t testing.NTB, name string) ([]string, 
 		"--project", *e2e.GCPProject,
 		"--filter", fmt.Sprintf("status = RUNNING AND targetLink ~ ^.*/%s$", name),
 		"--format", "value(name)",
+		"--no-user-output-enabled", // mute warnings
 	}
 	if *e2e.GCPZone != "" {
 		args = append(args, "--zone", *e2e.GCPZone)

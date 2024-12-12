@@ -89,7 +89,7 @@ COSIGN := $(BIN_DIR)/cosign
 GIT_SYNC_VERSION := v4.3.0-gke.4__linux_amd64
 GIT_SYNC_IMAGE_NAME := gcr.io/config-management-release/git-sync:$(GIT_SYNC_VERSION)
 
-OTELCONTRIBCOL_VERSION := v0.106.0-gke.2
+OTELCONTRIBCOL_VERSION := v0.115.0-gke.0
 OTELCONTRIBCOL_IMAGE_NAME := gcr.io/config-management-release/otelcontribcol:$(OTELCONTRIBCOL_VERSION)
 
 # Directory used for staging Docker contexts.

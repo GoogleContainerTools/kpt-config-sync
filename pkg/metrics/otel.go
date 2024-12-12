@@ -34,6 +34,7 @@ const (
 	// the googlecloud exporter.
 	CollectorConfigGooglecloud = `receivers:
   opencensus:
+    endpoint: 0.0.0.0:55678
 exporters:
   prometheus:
     endpoint: :8675

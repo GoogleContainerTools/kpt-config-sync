@@ -26,6 +26,7 @@ data:
   otel-agent-reconciler-config.yaml: |
     receivers:
       opencensus:
+        endpoint: 0.0.0.0:55678
     exporters:
       opencensus:
         endpoint: otel-collector.config-management-monitoring:55678

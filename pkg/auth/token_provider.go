@@ -49,7 +49,7 @@ func (p *LoggingTokenProvider) Token(ctx context.Context) (*goauth.Token, error)
 	}
 
 	p.mux.Lock()
-	defer p.mux.Lock()
+	defer p.mux.Unlock()
 	p.tokenExpiry = token.Expiry
 	klog.Infof("fetched new auth token (type: %s, expiration: %v)",
 		token.Type, token.Expiry)
@@ -58,6 +58,6 @@ func (p *LoggingTokenProvider) Token(ctx context.Context) (*goauth.Token, error)
 
 func (p *LoggingTokenProvider) getTokenExpiry() time.Time {
 	p.mux.RLock()
-	defer p.mux.RLock()
+	defer p.mux.RUnlock()
 	return p.tokenExpiry
 }

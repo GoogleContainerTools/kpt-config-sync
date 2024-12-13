@@ -68,7 +68,6 @@ func TestWorkloadIdentity(t *testing.T) {
 	testCases := []struct {
 		name             string
 		fleetWITest      bool
-		crossProject     bool
 		rootSrcCfg       sourceConfig
 		nsSrcCfg         sourceConfig
 		sourceType       configsync.SourceType
@@ -81,39 +80,26 @@ func TestWorkloadIdentity(t *testing.T) {
 		newNSSrcCfg      sourceConfig
 	}{
 		{
-			name:         "Authenticate to Git repo on CSR with GKE WI",
-			fleetWITest:  false,
-			crossProject: false,
-			rootSrcCfg:   sourceConfig{pkg: "hydration/kustomize-components", dir: "kustomize-components", commitFn: nomostest.RemoteRootRepoSha1Fn},
-			nsSrcCfg:     sourceConfig{pkg: "hydration/namespace-repo", dir: "namespace-repo", commitFn: nomostest.RemoteNsRepoSha1Fn},
-			sourceType:   configsync.GitSource,
-			gsaEmail:     gitproviders.CSRReaderEmail(),
-			requireCSR:   true,
+			name:        "Authenticate to Git repo on CSR with GKE WI",
+			fleetWITest: false,
+			rootSrcCfg:  sourceConfig{pkg: "hydration/kustomize-components", dir: "kustomize-components", commitFn: nomostest.RemoteRootRepoSha1Fn},
+			nsSrcCfg:    sourceConfig{pkg: "hydration/namespace-repo", dir: "namespace-repo", commitFn: nomostest.RemoteNsRepoSha1Fn},
+			sourceType:  configsync.GitSource,
+			gsaEmail:    gitproviders.CSRReaderEmail(),
+			requireCSR:  true,
 		},
 		{
-			name:         "Authenticate to Git repo on CSR with Fleet WI in the same project",
-			fleetWITest:  true,
-			crossProject: false,
-			rootSrcCfg:   sourceConfig{pkg: "hydration/kustomize-components", dir: "kustomize-components", commitFn: nomostest.RemoteRootRepoSha1Fn},
-			nsSrcCfg:     sourceConfig{pkg: "hydration/namespace-repo", dir: "namespace-repo", commitFn: nomostest.RemoteNsRepoSha1Fn},
-			sourceType:   configsync.GitSource,
-			gsaEmail:     gitproviders.CSRReaderEmail(),
-			requireCSR:   true,
-		},
-		{
-			name:         "Authenticate to Git repo on CSR with Fleet WI across project",
-			fleetWITest:  true,
-			crossProject: true,
-			rootSrcCfg:   sourceConfig{pkg: "hydration/kustomize-components", dir: "kustomize-components", commitFn: nomostest.RemoteRootRepoSha1Fn},
-			nsSrcCfg:     sourceConfig{pkg: "hydration/namespace-repo", dir: "namespace-repo", commitFn: nomostest.RemoteNsRepoSha1Fn},
-			sourceType:   configsync.GitSource,
-			gsaEmail:     gitproviders.CSRReaderEmail(),
-			requireCSR:   true,
+			name:        "Authenticate to Git repo on CSR with Fleet WI in the same project",
+			fleetWITest: true,
+			rootSrcCfg:  sourceConfig{pkg: "hydration/kustomize-components", dir: "kustomize-components", commitFn: nomostest.RemoteRootRepoSha1Fn},
+			nsSrcCfg:    sourceConfig{pkg: "hydration/namespace-repo", dir: "namespace-repo", commitFn: nomostest.RemoteNsRepoSha1Fn},
+			sourceType:  configsync.GitSource,
+			gsaEmail:    gitproviders.CSRReaderEmail(),
+			requireCSR:  true,
 		},
 		{
 			name:             "Authenticate to OCI image on AR with GKE WI",
 			fleetWITest:      false,
-			crossProject:     false,
 			rootSrcCfg:       sourceConfig{pkg: "hydration/kustomize-components", dir: ".", version: "v1"},
 			nsSrcCfg:         sourceConfig{pkg: "hydration/namespace-repo", dir: ".", version: "v1"},
 			newRootSrcCfg:    sourceConfig{pkg: "hydration/kustomize-components", dir: "tenant-a", version: "v1"},
@@ -124,9 +110,8 @@ func TestWorkloadIdentity(t *testing.T) {
 			requireOCIGAR:    true,
 		},
 		{
-			name:         "Authenticate to OCI image on GCR with GKE WI",
-			fleetWITest:  false,
-			crossProject: false,
+			name:        "Authenticate to OCI image on GCR with GKE WI",
+			fleetWITest: false,
 			rootSrcCfg: sourceConfig{
 				repo:     privateGCRImage("kustomize-components"),
 				dir:      ".",
@@ -141,7 +126,6 @@ func TestWorkloadIdentity(t *testing.T) {
 		{
 			name:             "Authenticate to OCI image on AR with Fleet WI in the same project",
 			fleetWITest:      true,
-			crossProject:     false,
 			rootSrcCfg:       sourceConfig{pkg: "hydration/kustomize-components", dir: ".", version: "v1"},
 			nsSrcCfg:         sourceConfig{pkg: "hydration/namespace-repo", dir: ".", version: "v1"},
 			newRootSrcCfg:    sourceConfig{pkg: "hydration/kustomize-components", dir: "tenant-a", version: "v1"},
@@ -152,9 +136,8 @@ func TestWorkloadIdentity(t *testing.T) {
 			requireOCIGAR:    true,
 		},
 		{
-			name:         "Authenticate to OCI image on GCR with Fleet WI in the same project",
-			fleetWITest:  true,
-			crossProject: false,
+			name:        "Authenticate to OCI image on GCR with Fleet WI in the same project",
+			fleetWITest: true,
 			rootSrcCfg: sourceConfig{
 				repo:     privateGCRImage("kustomize-components"),
 				dir:      ".",
@@ -167,37 +150,8 @@ func TestWorkloadIdentity(t *testing.T) {
 			gsaEmail:   gsaGCRReaderEmail(),
 		},
 		{
-			name:             "Authenticate to OCI image on AR with Fleet WI across project",
-			fleetWITest:      true,
-			crossProject:     true,
-			rootSrcCfg:       sourceConfig{pkg: "hydration/kustomize-components", dir: ".", version: "v1"},
-			nsSrcCfg:         sourceConfig{pkg: "hydration/namespace-repo", dir: ".", version: "v1"},
-			newRootSrcCfg:    sourceConfig{pkg: "hydration/kustomize-components", dir: "tenant-a", version: "v1"},
-			newNSSrcCfg:      sourceConfig{pkg: "hydration/namespace-repo", dir: "test-ns", version: "v1"},
-			sourceType:       configsync.OciSource,
-			gsaEmail:         gsaARReaderEmail(),
-			testKSAMigration: true,
-			requireOCIGAR:    true,
-		},
-		{
-			name:         "Authenticate to OCI image on GCR with Fleet WI across project",
-			fleetWITest:  true,
-			crossProject: true,
-			rootSrcCfg: sourceConfig{
-				repo:     privateGCRImage("kustomize-components"),
-				dir:      ".",
-				commitFn: imageDigestFuncByName(privateGCRImage("kustomize-components"))},
-			nsSrcCfg: sourceConfig{
-				repo:     privateGCRImage("namespace-repo"),
-				dir:      ".",
-				commitFn: imageDigestFuncByName(privateGCRImage("namespace-repo"))},
-			sourceType: configsync.OciSource,
-			gsaEmail:   gsaGCRReaderEmail(),
-		},
-		{
-			name:         "Authenticate to Helm chart on AR with GKE WI",
-			fleetWITest:  false,
-			crossProject: false,
+			name:        "Authenticate to Helm chart on AR with GKE WI",
+			fleetWITest: false,
 			rootSrcCfg: sourceConfig{
 				chart:   privateCoreDNSHelmChart,
 				version: privateCoreDNSHelmChartVersion,
@@ -220,34 +174,8 @@ func TestWorkloadIdentity(t *testing.T) {
 			requireHelmGAR:   true,
 		},
 		{
-			name:         "Authenticate to Helm chart on AR with Fleet WI in the same project",
-			fleetWITest:  true,
-			crossProject: false,
-			rootSrcCfg: sourceConfig{
-				chart:   privateCoreDNSHelmChart,
-				version: privateCoreDNSHelmChartVersion,
-			},
-			nsSrcCfg: sourceConfig{
-				chart:   privateNSHelmChart,
-				version: "0.1.0",
-			},
-			newRootSrcCfg: sourceConfig{
-				chart:   privateSimpleHelmChart,
-				version: privateSimpleHelmChartVersion,
-			},
-			newNSSrcCfg: sourceConfig{
-				chart:   "simple-ns-chart",
-				version: "1.0.0",
-			},
-			sourceType:       configsync.HelmSource,
-			gsaEmail:         gsaARReaderEmail(),
-			testKSAMigration: true,
-			requireHelmGAR:   true,
-		},
-		{
-			name:         "Authenticate to Helm chart on AR with Fleet WI across project",
-			fleetWITest:  true,
-			crossProject: true,
+			name:        "Authenticate to Helm chart on AR with Fleet WI in the same project",
+			fleetWITest: true,
 			rootSrcCfg: sourceConfig{
 				chart:   privateCoreDNSHelmChart,
 				version: privateCoreDNSHelmChartVersion,
@@ -314,21 +242,16 @@ func TestWorkloadIdentity(t *testing.T) {
 			}
 
 			testutils.ClearMembershipInfo(nt, fleetMembership, *e2e.GCPProject, gkeURI)
-			testutils.ClearMembershipInfo(nt, fleetMembership, testutils.TestCrossProjectFleetProjectID, gkeURI)
 
 			rootSync := k8sobjects.RootSyncObjectV1Beta1(rootSyncID.Name)
 			repoSync := k8sobjects.RepoSyncObjectV1Beta1(repoSyncID.Namespace, repoSyncID.Name)
 			nt.T.Cleanup(func() {
 				testutils.ClearMembershipInfo(nt, fleetMembership, *e2e.GCPProject, gkeURI)
-				testutils.ClearMembershipInfo(nt, fleetMembership, testutils.TestCrossProjectFleetProjectID, gkeURI)
 			})
 
 			// Register the cluster for fleet workload identity test
 			if tc.fleetWITest {
 				fleetProject := *e2e.GCPProject
-				if tc.crossProject {
-					fleetProject = testutils.TestCrossProjectFleetProjectID
-				}
 				nt.T.Logf("Register the cluster to a fleet in project %q", fleetProject)
 				if err = testutils.RegisterCluster(nt, fleetMembership, fleetProject, gkeURI); err != nil {
 					nt.T.Fatalf("Failed to register the cluster to project %q: %v", fleetProject, err)

@@ -5,7 +5,6 @@ Most GCP resources are managed by [Terraform](./terraform/README.md), but the
 following resources need to be configured separately:
 - Test OCI images on Google Container Registry
 - KCC configurations
-- Workload identity configurations.
 
 ## Required environment variables
 
@@ -21,8 +20,6 @@ Below is a list of environment variables required by the setup scripts:
 prow jobs. The default value is `oss-prow-build-kpt-config-sync`.
 - **KCC_MANAGED_PROJECT**: the project that is created with the config-connector
 addon enabled for KCC test. The default value is `cs-dev-hub`.
-- **FLEET_HOST_PROJECT**: the project that hosts the fleet clusters. The default
-value is `cs-dev-hub`.
 
 ## Usage
 
@@ -33,9 +30,4 @@ value is `cs-dev-hub`.
 1. Set up KCC configurations, for example,
     ```bash
     GCP_PROJECT=your-gcp-project-name GCP_CLUSTER=your-cluster-name GCP_ZONE=your-cluster-zone make set-up-kcc-configs
-    ```
-
-1. Configure workload identity, for example,
-    ```bash
-    GCP_PROJECT=your-gcp-project-name PROW_PROJECT=your-prow-project-name make set-up-workload-identity-test
     ```

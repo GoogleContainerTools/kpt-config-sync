@@ -144,13 +144,6 @@ func RemoveConfigSyncMetadata(obj client.Object) bool {
 func UpdateConfigSyncMetadata(fromObj client.Object, toObj client.Object) {
 	csAnnotations, csLabels := getConfigSyncMetadata(fromObj)
 
-	// toObj object has the lifecycle annotation but not the fromObj object
-	// This is necessary as otherwise, the annotation won't be removed when using SSA
-	if fromObj.GetAnnotations()[LifecycleMutationAnnotation] == "" &&
-		toObj.GetAnnotations()[LifecycleMutationAnnotation] == IgnoreMutation {
-		csAnnotations[LifecycleMutationAnnotation] = ""
-	}
-
 	core.AddAnnotations(toObj, csAnnotations)
 	core.AddLabels(toObj, csLabels)
 }

@@ -248,13 +248,13 @@ func TestUpdateConfigSyncMetadata(t *testing.T) {
 			name:        "fromObj doesn't have the ignore mutation annotation but toObj does",
 			fromObj:     k8sobjects.NamespaceObject("test-ns", syncertest.ManagementEnabled),
 			toObj:       k8sobjects.NamespaceObject("test-ns", syncertest.IgnoreMutationAnnotation),
-			expectedObj: k8sobjects.NamespaceObject("test-ns", syncertest.ManagementEnabled, core.Annotation(metadata.LifecycleMutationAnnotation, "")),
+			expectedObj: k8sobjects.NamespaceObject("test-ns", syncertest.ManagementEnabled, syncertest.IgnoreMutationAnnotation),
 		},
 		{
 			name:        "fromObj doesn't have a non-CS annotation but toObj does",
 			fromObj:     k8sobjects.NamespaceObject("test-ns", syncertest.ManagementEnabled),
 			toObj:       k8sobjects.NamespaceObject("test-ns", syncertest.IgnoreMutationAnnotation, core.Annotation("foo", "bar")),
-			expectedObj: k8sobjects.NamespaceObject("test-ns", syncertest.ManagementEnabled, core.Annotation(metadata.LifecycleMutationAnnotation, ""), core.Annotation("foo", "bar")),
+			expectedObj: k8sobjects.NamespaceObject("test-ns", syncertest.ManagementEnabled, syncertest.IgnoreMutationAnnotation, core.Annotation("foo", "bar")),
 		},
 	}
 

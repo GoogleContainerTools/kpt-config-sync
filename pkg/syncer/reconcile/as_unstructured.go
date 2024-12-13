@@ -57,6 +57,10 @@ func AsUnstructuredSanitized(o client.Object) (*unstructured.Unstructured, statu
 
 	unstructured.RemoveNestedField(u.Object, "metadata", "creationTimestamp")
 	unstructured.RemoveNestedField(u.Object, "status")
+
+	// This field is populated when the object is fetched from the cluster, so it
+	// needs to be removed before the object is updated and sent to the Applier.
+	// SSA does not accept objects with this field.
 	unstructured.RemoveNestedField(u.Object, "metadata", "managedFields")
 	return u, nil
 }

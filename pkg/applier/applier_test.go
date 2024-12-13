@@ -27,14 +27,20 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/applier/stats"
+	"kpt.dev/configsync/pkg/applyset"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/declared"
+	"kpt.dev/configsync/pkg/diff/difftest"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
+	"kpt.dev/configsync/pkg/remediator/queue"
 	"kpt.dev/configsync/pkg/status"
+	"kpt.dev/configsync/pkg/syncer/reconcile"
+	"kpt.dev/configsync/pkg/syncer/syncertest"
 	testingfake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/testerrors"
 	"sigs.k8s.io/cli-utils/pkg/apis/actuation"
@@ -51,7 +57,8 @@ import (
 )
 
 type fakeKptApplier struct {
-	events []event.Event
+	events      []event.Event
+	objsToApply object.UnstructuredSet
 }
 
 var _ KptApplier = &fakeKptApplier{}
@@ -62,7 +69,8 @@ func newFakeKptApplier(events []event.Event) *fakeKptApplier {
 	}
 }
 
-func (a *fakeKptApplier) Run(_ context.Context, _ inventory.Info, _ object.UnstructuredSet, _ apply.ApplierOptions) <-chan event.Event {
+func (a *fakeKptApplier) Run(_ context.Context, _ inventory.Info, objsToApply object.UnstructuredSet, _ apply.ApplierOptions) <-chan event.Event {
+	a.objsToApply = objsToApply
 	events := make(chan event.Event, len(a.events))
 	go func() {
 		for _, e := range a.events {
@@ -380,13 +388,262 @@ func TestApply(t *testing.T) {
 				}
 			}
 
-			objectStatusMap, syncStats := applier.Apply(context.Background(), eventHandler, objs)
+			ctx := context.Background()
+			resources := &declared.Resources{}
+			_, err = resources.UpdateDeclared(ctx, objs, "")
+			require.NoError(t, err)
+
+			objectStatusMap, syncStats := applier.Apply(context.Background(), eventHandler, resources)
 
 			testutil.AssertEqual(t, tc.expectedError, errs)
 			testutil.AssertEqual(t, tc.expectedObjectStatusMap, objectStatusMap)
 			testutil.AssertEqual(t, tc.expectedSyncStats, syncStats)
 
 			fakeClient.Check(t, tc.expectedServerObjs...)
+		})
+	}
+}
+
+func TestApplyMutationIgnoredObjects(t *testing.T) {
+	rootSyncName := "my-rs"
+	syncScope := declared.RootScope
+	applySetID := applyset.IDFromSync(rootSyncName, syncScope)
+	testGitCommit := "example-commit"
+	gitContextOutput := fmt.Sprintf(`{"repo":%q,"branch":%q,"rev":%q}`,
+		"example-repo", "example-branch", testGitCommit)
+	resourceManager := declared.ResourceManager(syncScope, rootSyncName)
+
+	testcases := []struct {
+		name                       string
+		serverObjs                 []client.Object
+		declaredObjs               []client.Object
+		cachedIgnoredObjs          []client.Object
+		expectedObjsToApply        object.UnstructuredSet
+		expectedItemsInIgnoreCache []client.Object
+	}{
+		{
+			name: "unmanaged object exists on the cluster",
+			serverObjs: []client.Object{
+				k8sobjects.NamespaceObject("unmanaged-ns",
+					syncertest.ManagementDisabled,
+					core.Label("foo", "bar"),
+				),
+			},
+			declaredObjs: []client.Object{
+				k8sobjects.NamespaceObject("unmanaged-ns",
+					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
+					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+					core.Annotation(metadata.GitContextKey, gitContextOutput),
+					core.Annotation(metadata.SyncTokenAnnotationKey, testGitCommit),
+					core.Annotation(metadata.OwningInventoryKey, InventoryID(rootSyncName, configmanagement.ControllerNamespace)),
+					core.Annotation(metadata.ResourceIDKey, "_namespace_foo"),
+					difftest.ManagedBy(declared.RootScope, rootSyncName),
+					syncertest.ManagementEnabled,
+					syncertest.IgnoreMutationAnnotation),
+			},
+			expectedObjsToApply: object.UnstructuredSet{
+				asUnstructuredSanitizedObj(k8sobjects.NamespaceObject("unmanaged-ns",
+					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+					core.Annotation(metadata.GitContextKey, gitContextOutput),
+					core.Annotation(metadata.SyncTokenAnnotationKey, testGitCommit),
+					core.Annotation(metadata.OwningInventoryKey, InventoryID(rootSyncName, configmanagement.ControllerNamespace)),
+					core.Annotation(metadata.ResourceIDKey, "_namespace_foo"),
+					core.Annotation(metadata.ResourceManagerKey, resourceManager),
+					syncertest.ManagementEnabled,
+					syncertest.IgnoreMutationAnnotation,
+					core.Generation(1),
+					core.UID("1"),
+					core.ResourceVersion("1"),
+					core.Label("foo", "bar"))),
+			},
+			expectedItemsInIgnoreCache: []client.Object{
+				asUnstructuredSanitizedObj(
+					k8sobjects.NamespaceObject("unmanaged-ns",
+						syncertest.ManagementDisabled,
+						core.Label("foo", "bar"),
+						core.Generation(1),
+						core.UID("1"),
+						core.ResourceVersion("1"))),
+			},
+		},
+		{
+			name: "managed object exists on the cluster without the ignore mutation annotation",
+			serverObjs: []client.Object{
+				k8sobjects.NamespaceObject("managed-ns",
+					syncertest.ManagementEnabled,
+					core.Label("foo", "bar")),
+			},
+			declaredObjs: []client.Object{
+				k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("managed-ns"),
+					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
+					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+					core.Annotation(metadata.GitContextKey, gitContextOutput),
+					core.Annotation(metadata.SyncTokenAnnotationKey, testGitCommit),
+					core.Annotation(metadata.OwningInventoryKey, InventoryID(rootSyncName, configmanagement.ControllerNamespace)),
+					core.Annotation(metadata.ResourceIDKey, "_namespace_foo"),
+					difftest.ManagedBy(declared.RootScope, rootSyncName),
+					syncertest.ManagementEnabled,
+					syncertest.IgnoreMutationAnnotation),
+			},
+			expectedObjsToApply: object.UnstructuredSet{
+				asUnstructuredSanitizedObj(k8sobjects.NamespaceObject("managed-ns",
+					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+					core.Annotation(metadata.GitContextKey, gitContextOutput),
+					core.Annotation(metadata.SyncTokenAnnotationKey, testGitCommit),
+					core.Annotation(metadata.OwningInventoryKey, InventoryID(rootSyncName, configmanagement.ControllerNamespace)),
+					core.Annotation(metadata.ResourceIDKey, "_namespace_foo"),
+					core.Annotation(metadata.ResourceManagerKey, resourceManager),
+					syncertest.ManagementEnabled,
+					syncertest.IgnoreMutationAnnotation,
+					core.Generation(1),
+					core.UID("1"),
+					core.ResourceVersion("1"),
+					core.Label("foo", "bar"))),
+			},
+			expectedItemsInIgnoreCache: []client.Object{
+				asUnstructuredSanitizedObj(k8sobjects.NamespaceObject("managed-ns",
+					syncertest.ManagementDisabled,
+					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label("foo", "bar"),
+					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+					core.Annotation(metadata.ResourceIDKey, "_namespace_managed-ns"),
+					core.Generation(1),
+					core.UID("1"),
+					core.ResourceVersion("1")))},
+		},
+		{
+			name: "managed and mutation-ignored object was previously deleted",
+			serverObjs: []client.Object{
+				k8sobjects.NamespaceObject("other-ns",
+					syncertest.ManagementEnabled,
+					core.Label("foo", "baz")),
+			},
+			declaredObjs: []client.Object{
+				k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("deleted-ns"),
+					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
+					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+					core.Annotation(metadata.GitContextKey, gitContextOutput),
+					core.Annotation(metadata.SyncTokenAnnotationKey, testGitCommit),
+					core.Annotation(metadata.OwningInventoryKey, InventoryID(rootSyncName, configmanagement.ControllerNamespace)),
+					core.Annotation(metadata.ResourceIDKey, "_namespace_foo"),
+					difftest.ManagedBy(declared.RootScope, rootSyncName),
+					core.Label("foo", "bar"),
+					syncertest.ManagementEnabled,
+					syncertest.IgnoreMutationAnnotation)},
+			cachedIgnoredObjs: []client.Object{
+				&queue.Deleted{
+					Object: k8sobjects.UnstructuredObject(kinds.Namespace(),
+						core.Name("deleted-ns"),
+						syncertest.ManagementEnabled,
+						syncertest.IgnoreMutationAnnotation)}},
+			expectedItemsInIgnoreCache: []client.Object{
+				&queue.Deleted{
+					Object: k8sobjects.UnstructuredObject(kinds.Namespace(),
+						core.Name("deleted-ns"),
+						syncertest.ManagementEnabled,
+						syncertest.IgnoreMutationAnnotation)}},
+			expectedObjsToApply: object.UnstructuredSet{
+				asUnstructuredSanitizedObj(k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("deleted-ns"),
+					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
+					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+					core.Annotation(metadata.GitContextKey, gitContextOutput),
+					core.Annotation(metadata.SyncTokenAnnotationKey, testGitCommit),
+					core.Annotation(metadata.OwningInventoryKey, InventoryID(rootSyncName, configmanagement.ControllerNamespace)),
+					core.Annotation(metadata.ResourceIDKey, "_namespace_foo"),
+					difftest.ManagedBy(declared.RootScope, rootSyncName),
+					syncertest.ManagementEnabled,
+					syncertest.IgnoreMutationAnnotation,
+					core.Label("foo", "bar"))),
+			},
+		},
+		{
+			name:       "mutation-ignored object doesn't currently exist on the cluster",
+			serverObjs: []client.Object{},
+			declaredObjs: []client.Object{
+				k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("test-ns"),
+					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
+					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+					core.Annotation(metadata.GitContextKey, gitContextOutput),
+					core.Annotation(metadata.SyncTokenAnnotationKey, testGitCommit),
+					core.Annotation(metadata.OwningInventoryKey, InventoryID(rootSyncName, configmanagement.ControllerNamespace)),
+					core.Annotation(metadata.ResourceIDKey, "_namespace_foo"),
+					difftest.ManagedBy(declared.RootScope, rootSyncName),
+					syncertest.ManagementEnabled,
+					syncertest.IgnoreMutationAnnotation)},
+			cachedIgnoredObjs:          []client.Object{},
+			expectedItemsInIgnoreCache: nil,
+			expectedObjsToApply: object.UnstructuredSet{
+				asUnstructuredSanitizedObj(k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("test-ns"),
+					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
+					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+					core.Annotation(metadata.GitContextKey, gitContextOutput),
+					core.Annotation(metadata.SyncTokenAnnotationKey, testGitCommit),
+					core.Annotation(metadata.OwningInventoryKey, InventoryID(rootSyncName, configmanagement.ControllerNamespace)),
+					core.Annotation(metadata.ResourceIDKey, "_namespace_foo"),
+					difftest.ManagedBy(declared.RootScope, rootSyncName),
+					syncertest.ManagementEnabled,
+					syncertest.IgnoreMutationAnnotation)),
+			},
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			rsObj := &unstructured.Unstructured{}
+			rsObj.SetGroupVersionKind(kinds.RepoSyncV1Beta1())
+			rsObj.SetNamespace(syncScope.SyncNamespace())
+			rsObj.SetName(rootSyncName)
+			tc.serverObjs = append(tc.serverObjs, rsObj)
+
+			syncScope := declared.Scope("test-namespace")
+			syncName := "rs"
+			fakeClient := testingfake.NewClient(t, core.Scheme, tc.serverObjs...)
+			fakeKptApplier := newFakeKptApplier([]event.Event{})
+			cs := &ClientSet{
+				KptApplier: fakeKptApplier,
+				Client:     fakeClient,
+				Mapper:     fakeClient.RESTMapper(),
+				// TODO: Add tests to cover status mode
+			}
+			var errs status.MultiError
+			eventHandler := func(event Event) {
+				if errEvent, ok := event.(ErrorEvent); ok {
+					if errs == nil {
+						errs = errEvent.Error
+					} else {
+						errs = status.Append(errs, errEvent.Error)
+					}
+				}
+			}
+
+			applier, err := NewNamespaceSupervisor(cs, syncScope, syncName, 5*time.Minute)
+			require.NoError(t, err)
+
+			resources := &declared.Resources{}
+			_, err = resources.UpdateDeclared(context.Background(), tc.declaredObjs, "")
+			require.NoError(t, err)
+			resources.UpdateIgnored(tc.cachedIgnoredObjs...)
+
+			applier.Apply(context.Background(), eventHandler, resources)
+
+			testutil.AssertEqual(t, tc.expectedObjsToApply, fakeKptApplier.objsToApply)
+			testutil.AssertEqual(t, tc.expectedItemsInIgnoreCache, resources.IgnoredObjects())
 		})
 	}
 }
@@ -595,11 +852,17 @@ func TestProcessPruneEvent(t *testing.T) {
 		clientSet: cs,
 	}
 
-	err := s.processPruneEvent(ctx, formPruneEvent(event.PruneFailed, deploymentObj, fmt.Errorf("test error")).PruneEvent, syncStats.PruneEvent, objStatusMap)
+	testObj2 := testObj.DeepCopy()
+	core.SetAnnotation(testObj2, metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation)
+
+	resources := &declared.Resources{}
+	resources.UpdateIgnored(testObj2)
+
+	err := s.processPruneEvent(ctx, formPruneEvent(event.PruneFailed, deploymentObj, fmt.Errorf("test error")).PruneEvent, syncStats.PruneEvent, objStatusMap, resources)
 	expectedError := PruneErrorForResource(fmt.Errorf("test error"), idFrom(deploymentID))
 	testerrors.AssertEqual(t, expectedError, err, "expected processPruneEvent to error on prune %s", event.PruneFailed)
 
-	err = s.processPruneEvent(ctx, formPruneEvent(event.PruneSuccessful, testObj, nil).PruneEvent, syncStats.PruneEvent, objStatusMap)
+	err = s.processPruneEvent(ctx, formPruneEvent(event.PruneSuccessful, testObj, nil).PruneEvent, syncStats.PruneEvent, objStatusMap, resources)
 	assert.Nil(t, err, "expected processPruneEvent NOT to error on prune %s", event.PruneSuccessful)
 
 	expectedApplyStatus := stats.NewSyncStats()
@@ -618,6 +881,8 @@ func TestProcessPruneEvent(t *testing.T) {
 		},
 	}
 	testutil.AssertEqual(t, expectedObjStatusMap, objStatusMap, "expected object status to match")
+
+	testutil.AssertEqual(t, 0, len(resources.IgnoredObjects()))
 
 	// TODO: test handleMetrics on success
 	// TODO: test PruneErrorForResource on failed
@@ -736,4 +1001,11 @@ func newTestObj(name string) *unstructured.Unstructured {
 		Version: "v1",
 		Kind:    "Test",
 	}, core.Namespace("test-namespace"), core.Name(name), core.Annotation(metadata.SourcePathAnnotationKey, "foo/test.yaml"))
+}
+
+func asUnstructuredSanitizedObj(o client.Object) *unstructured.Unstructured {
+	core.Scheme.Default(o)
+	uObj, _ := reconcile.AsUnstructuredSanitized(o)
+
+	return uObj
 }

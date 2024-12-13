@@ -224,6 +224,7 @@ func TestAnnotationDrift(t *testing.T) {
 		core.Annotation("season", "summer"))
 	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", updatedNamespace))
 	nt.Must(rootSyncGitRepo.CommitAndPush("update namespace"))
+	firstCommitHash := rootSyncGitRepo.MustHash(nt.T)
 
 	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
 		testwatcher.WatchPredicates(
@@ -237,6 +238,7 @@ func TestAnnotationDrift(t *testing.T) {
 
 	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), nsObj.Name, "",
 		testwatcher.WatchPredicates(
+			testpredicates.HasAnnotation(metadata.SyncTokenAnnotationKey, firstCommitHash),
 			testpredicates.HasAnnotation("season", "winter"),
 		)))
 
@@ -245,9 +247,12 @@ func TestAnnotationDrift(t *testing.T) {
 	nsObj2 := k8sobjects.NamespaceObject("new-ns")
 	nt.Must(rootSyncGitRepo.Add("acme/ns2.yaml", nsObj2))
 	nt.Must(rootSyncGitRepo.CommitAndPush("add another namespace"))
+	nt.Must(nt.WatchForAllSyncs())
+	secondCommitHash := rootSyncGitRepo.MustHash(nt.T)
 
 	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), nsObj.Name, "",
 		testwatcher.WatchPredicates(
+			testpredicates.HasAnnotation(metadata.SyncTokenAnnotationKey, secondCommitHash),
 			testpredicates.HasAnnotation("season", "winter"),
 		)))
 

@@ -131,14 +131,14 @@ func (d Diff) updateType(scope declared.Scope, syncName string) Operation {
 		// declared and actual, so no need to check canManage
 
 		if differ.ManagementDisabled(d.Declared) {
-			return Abandon
+			return Abandon // remove CS metadata because it is no longer managed
 		}
 
 		if ignoreMutation {
 			return NoOp // ignore mutation
 		}
 
-		return Update
+		return Update // correct drift
 	}
 
 	switch {

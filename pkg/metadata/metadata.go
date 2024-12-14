@@ -145,20 +145,12 @@ func RemoveConfigSyncMetadata(obj client.Object) bool {
 func UpdateConfigSyncMetadata(fromObj client.Object, toObj client.Object) {
 	csAnnotations, csLabels := getConfigSyncMetadata(fromObj)
 
-	//TODO: Look at for remediator
-	// toObj object has the lifecycle annotation but not the fromObj object
-	// This is necessary as otherwise, the annotation won't be removed when using SSA
-	if fromObj.GetAnnotations()[LifecycleMutationAnnotation] == "" &&
-		toObj.GetAnnotations()[LifecycleMutationAnnotation] == IgnoreMutation {
-		csAnnotations[LifecycleMutationAnnotation] = ""
-	}
-
 	core.AddAnnotations(toObj, csAnnotations)
 	core.AddLabels(toObj, csLabels)
 }
 
+// HasSameCSMetadata returns true if the given objects have the same Config Sync metadata.
 func HasSameCSMetadata(obj1, obj2 client.Object) bool {
-	// Compare CSmetadata
 	csAnnotations1, csLabels1 := getConfigSyncMetadata(obj1)
 	csAnnotations2, csLabels2 := getConfigSyncMetadata(obj2)
 

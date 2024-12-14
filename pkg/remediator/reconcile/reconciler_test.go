@@ -118,7 +118,8 @@ func TestRemediator_Reconcile(t *testing.T) {
 				core.UID("1"),
 				core.ResourceVersion("2"),
 				core.Generation(1),
-				core.Annotation("foo", "bar")),
+				core.Annotation("foo", "bar"),
+				core.Annotation(metadata.LifecycleMutationAnnotation, "")),
 			wantError: nil,
 		},
 		{

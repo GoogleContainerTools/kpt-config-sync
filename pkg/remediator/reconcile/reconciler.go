@@ -186,6 +186,12 @@ func (r *reconciler) remediate(ctx context.Context, id core.ID, objDiff diff.Dif
 
 		metadata.UpdateConfigSyncMetadata(declared, expected)
 
+		// This is necessary as otherwise, the annotation won't be removed when using SSA
+		if declared.GetAnnotations()[metadata.LifecycleMutationAnnotation] == "" &&
+			expected.GetAnnotations()[metadata.LifecycleMutationAnnotation] == metadata.IgnoreMutation {
+			core.SetAnnotation(expected, metadata.LifecycleMutationAnnotation, "")
+		}
+
 		return r.applier.Update(ctx, expected, actual)
 	default:
 		// e.g. differ.DeleteNsConfig, which shouldn't be possible to get to any way.

@@ -79,14 +79,17 @@ KUSTOMIZE_VERSION := v5.4.2-gke.0
 KUSTOMIZE := $(BIN_DIR)/kustomize
 KUSTOMIZE_STAGING_DIR := $(OUTPUT_DIR)/third_party/kustomize
 
-HELM_VERSION := v3.15.3-gke.0
+HELM_VERSION := v3.15.3-gke.1
 HELM := $(BIN_DIR)/helm
 HELM_STAGING_DIR := $(OUTPUT_DIR)/third_party/helm
 
-GIT_SYNC_VERSION := v4.2.4-gke.8__linux_amd64
+COSIGN_VERSION := v2.4.1
+COSIGN := $(BIN_DIR)/cosign
+
+GIT_SYNC_VERSION := v4.3.0-gke.4__linux_amd64
 GIT_SYNC_IMAGE_NAME := gcr.io/config-management-release/git-sync:$(GIT_SYNC_VERSION)
 
-OTELCONTRIBCOL_VERSION := v0.103.0-gke.4
+OTELCONTRIBCOL_VERSION := v0.103.0-gke.6
 OTELCONTRIBCOL_IMAGE_NAME := gcr.io/config-management-release/otelcontribcol:$(OTELCONTRIBCOL_VERSION)
 
 # Directory used for staging Docker contexts.
@@ -314,7 +317,12 @@ test-unit: buildenv-dirs "$(KUSTOMIZE)"
 # small unit test to verify the behavior of an example kustomization for manual install
 .PHONY: test-kustomization
 test-kustomization:
-	$(MAKE) build-manifests STAGING_DIR=$(OUTPUT_DIR)/testing REGISTRY=gcr.io/cs-test IMAGE_TAG=placeholder
+	$(MAKE) build-manifests \
+		STAGING_DIR=$(OUTPUT_DIR)/testing \
+		REGISTRY=gcr.io/cs-test \
+		IMAGE_TAG=placeholder \
+		GIT_SYNC_VERSION=placeholder \
+		OTELCONTRIBCOL_VERSION=placeholder
 	@./scripts/test-kustomization.sh
 
 # Runs unit tests and linter.
@@ -424,6 +432,16 @@ clean-golangci-lint:
 		OUTPUT_DIR="$(OUTPUT_DIR)" \
 		STAGING_DIR="$(KUSTOMIZE_STAGING_DIR)" \
 		./scripts/install-kustomize.sh
+
+.PHONY: clean-cosign
+clean-cosign:
+	@rm -rf $(COSIGN)
+
+.PHONY: install-cosign
+install-cosign: "$(COSIGN)"
+
+"$(COSIGN)": buildenv-dirs
+	GOPATH="$(GO_DIR)" CGO_ENABLED=0 go install github.com/sigstore/cosign/v2/cmd/cosign@$(COSIGN_VERSION)
 
 .PHONY: install-kustomize
 # install kustomize (user-friendly target alias)

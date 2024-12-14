@@ -22,7 +22,6 @@ import (
 	"path/filepath"
 
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/hydrate"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
@@ -51,17 +50,15 @@ type FileSource struct {
 	// SourceBranch is the branch of the source repo to sync.
 	SourceBranch string
 	// SourceRev is the revision of the source repo to sync.
-	SourceRev string
+	SourceRev            string
+	ReconcilerSignalsDir cmpath.Absolute
 }
 
 // Files lists files in a repository and ensures the source repository hasn't been
 // modified from HEAD.
 type Files struct {
+	// TODO: unwrap composition
 	FileSource
-
-	// currentSyncDir is the directory (including git commit hash or OCI image digest)
-	// last seen by the Parser.
-	currentSyncDir string
 }
 
 // sourceState contains all state read from the mounted source repo.
@@ -71,33 +68,24 @@ type sourceState struct {
 	spec SourceSpec
 	// commit is the commit read from the source of truth.
 	commit string
-	// syncDir is the absolute path to the sync directory that includes the configurations.
-	syncDir cmpath.Absolute
+	// syncPath is the absolute path to the sync directory that includes the configurations.
+	syncPath cmpath.Absolute
 	// files is the list of all observed files in the sync directory (recursively).
 	files []cmpath.Absolute
 }
 
-// readConfigFiles reads all the files under state.syncDir and sets state.files.
-// - if rendering is enabled, state.syncDir contains the hydrated files.
-// - if rendered is disabled, state.syncDir contains the source files.
+// readConfigFiles reads all the files under state.syncPath and sets state.files.
+// - if rendering is enabled, state.syncPath contains the hydrated files.
+// - if rendered is disabled, state.syncPath contains the source files.
 // readConfigFiles should be called after sourceState is populated.
 func (o *Files) readConfigFiles(state *sourceState) status.Error {
-	if state == nil || state.commit == "" || state.syncDir.OSPath() == "" {
+	if state == nil || state.commit == "" || state.syncPath == "" {
 		return status.InternalError("sourceState is not populated yet")
 	}
-	syncDir := state.syncDir
-	if syncDir.OSPath() == o.currentSyncDir {
-		klog.V(4).Infof("The configs directory is unchanged: %s", syncDir.OSPath())
-	} else {
-		klog.Infof("Reading updated configs dir: %s", syncDir.OSPath())
-		o.currentSyncDir = syncDir.OSPath()
-	}
-
-	var fileList []cmpath.Absolute
-	var err error
-	fileList, err = listFiles(syncDir, map[string]bool{".git": true})
+	syncPath := state.syncPath
+	fileList, err := listFiles(syncPath, map[string]bool{".git": true})
 	if err != nil {
-		return status.PathWrapError(fmt.Errorf("listing files in the configs directory: %w", err), syncDir.OSPath())
+		return status.PathWrapError(fmt.Errorf("listing files in the configs directory: %w", err), syncPath.OSPath())
 	}
 
 	newCommit, err := hydrate.ComputeCommit(o.SourceDir)
@@ -119,14 +107,14 @@ func (o *Files) sourceContext() sourceContext {
 	}
 }
 
-// readHydratedDirWithRetry returns a sourceState object whose `commit` and `syncDir` fields are set if succeeded with retries.
-func (o *Files) readHydratedDirWithRetry(backoff wait.Backoff, hydratedRoot cmpath.Absolute, reconciler string, srcState *sourceState) (*sourceState, hydrate.HydrationError) {
+// readHydratedPathWithRetry returns a sourceState object whose `commit` and `syncPath` fields are set if succeeded with retries.
+func (o *Files) readHydratedPathWithRetry(backoff wait.Backoff, hydratedRoot cmpath.Absolute, reconciler string, srcState *sourceState) (*sourceState, hydrate.HydrationError) {
 	result := &sourceState{
 		spec: srcState.spec,
 	}
 	err := util.RetryWithBackoff(backoff, func() error {
 		var err error
-		result, err = o.readHydratedDir(hydratedRoot, reconciler, srcState)
+		result, err = o.readHydratedPath(hydratedRoot, reconciler, srcState)
 		return err
 	})
 	if err == nil {
@@ -139,8 +127,8 @@ func (o *Files) readHydratedDirWithRetry(backoff wait.Backoff, hydratedRoot cmpa
 	return result, hydrate.NewInternalError(err)
 }
 
-// readHydratedDir returns a sourceState object whose `commit` and `syncDir` fields are set if succeeded.
-func (o *Files) readHydratedDir(hydratedRoot cmpath.Absolute, reconciler string, srcState *sourceState) (*sourceState, error) {
+// readHydratedPath returns a sourceState object whose `commit` and `syncPath` fields are set if succeeded.
+func (o *Files) readHydratedPath(hydratedRoot cmpath.Absolute, reconciler string, srcState *sourceState) (*sourceState, error) {
 	result := &sourceState{
 		spec: srcState.spec,
 	}
@@ -156,12 +144,13 @@ func (o *Files) readHydratedDir(hydratedRoot cmpath.Absolute, reconciler string,
 		return result, util.NewRetriableError(fmt.Errorf("failed to check the error file %s: %v", errorFile.OSPath(), err))
 	default:
 		// the hydration error file doesn't exist
-		hydratedDir, err := hydratedRoot.Join(cmpath.RelativeSlash(o.HydratedLink)).EvalSymlinks()
+		logicalHydratedPath := hydratedRoot.Join(cmpath.RelativeSlash(o.HydratedLink))
+		physicalHydratedPath, err := logicalHydratedPath.EvalSymlinks()
 		if err != nil {
 			// Retry if failed to load the hydrated directory
 			return result, util.NewRetriableError(fmt.Errorf("failed to load the hydrated configs under %s", hydratedRoot.OSPath()))
 		}
-		result.commit = filepath.Base(hydratedDir.OSPath())
+		result.commit = filepath.Base(physicalHydratedPath.OSPath())
 		if result.commit != srcState.commit {
 			// It is not always retriable locally, so return a transient error for the reconciler's retryTime to trigger a retry.
 			// - If the source commit is newer than the hydrated commit, it is
@@ -171,13 +160,15 @@ func (o *Files) readHydratedDir(hydratedRoot cmpath.Absolute, reconciler string,
 			return result, hydrate.NewTransientError(fmt.Errorf("source commit changed while listing hydrated files, was %s, now %s. It will be retried in the next sync", srcState.commit, result.commit))
 		}
 
-		relSyncDir := hydratedDir.Join(o.SyncDir)
-		syncDir, err := relSyncDir.EvalSymlinks()
+		logicalSyncPath := physicalHydratedPath.Join(o.SyncDir)
+		// Evaluate symlinks to get the physical path to the sync directory.
+		// This is analogous to `pwd -P <path>`.
+		physicalSyncPath, err := logicalSyncPath.EvalSymlinks()
 		if err != nil {
 			// Retry if the symlink failed to be evaluated.
-			return result, util.NewRetriableError(fmt.Errorf("failed to evaluate symbolic link to the hydrated sync directory %s: %v", relSyncDir.OSPath(), err))
+			return result, util.NewRetriableError(fmt.Errorf("failed to evaluate symbolic link to the hydrated sync directory %s: %v", logicalSyncPath.OSPath(), err))
 		}
-		result.syncDir = syncDir
+		result.syncPath = physicalSyncPath
 	}
 	return result, nil
 }

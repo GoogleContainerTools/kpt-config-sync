@@ -690,9 +690,9 @@ func TestRootReconciler_ParseAndUpdate(t *testing.T) {
 							Branch:   fileSource.SourceBranch,
 							Dir:      fileSource.SourceDir.SlashPath(),
 						},
-						commit:  testGitCommit,
-						syncDir: "/",
-						files:   files,
+						commit:   testGitCommit,
+						syncPath: "/",
+						files:    files,
 					},
 				},
 				syncErrorCache: NewSyncErrorCache(conflict.NewHandler(), fight.NewHandler()),
@@ -723,6 +723,7 @@ func TestRootReconciler_ParseAndUpdate(t *testing.T) {
 					Applier:        fakeApplier,
 					SyncErrorCache: state.syncErrorCache,
 				},
+				FullSyncPeriod:     configsync.DefaultReconcilerFullSyncPeriod,
 				StatusUpdatePeriod: configsync.DefaultReconcilerSyncStatusUpdatePeriod,
 				RenderingEnabled:   false,
 			}
@@ -736,9 +737,13 @@ func TestRootReconciler_ParseAndUpdate(t *testing.T) {
 				},
 				reconcilerState: state,
 			}
-			if err := reconciler.ParseAndUpdate(context.Background(), triggerReimport); err != nil {
-				t.Fatal(err)
-			}
+
+			ctx := context.Background()
+			trigger := triggerSync
+			errs := reconciler.parse(ctx, trigger)
+			require.NoError(t, errs, "expected parse not to error")
+			errs = reconciler.update(ctx, trigger)
+			require.NoError(t, errs, "expected update not to error")
 
 			// Validate that Parser.Parse got the expected inputs from the cached source state.
 			expectedParseInputs := []fsfake.ParserInputs{
@@ -754,7 +759,7 @@ func TestRootReconciler_ParseAndUpdate(t *testing.T) {
 
 			// After parsing, the objects set is processed and modified.
 			// Validate that the result is stored in state.cache.objsToApply.
-			testutil.AssertEqual(t, tc.expectedObjsToApply, state.cache.objsToApply, "unexpected state.cache.objsToApply contents")
+			testutil.AssertEqual(t, tc.expectedObjsToApply, state.cache.parse.objsToApply, "unexpected state.cache.objsToApply contents")
 
 			// Build expected apply inputs from the expectedFileObjects
 			expectedApplyInputs := []applierfake.ApplierInputs{
@@ -764,14 +769,14 @@ func TestRootReconciler_ParseAndUpdate(t *testing.T) {
 			testutil.AssertEqual(t, expectedApplyInputs, fakeApplier.ApplyInputs, "unexpected Applier.Apply call inputs")
 
 			rs := &v1beta1.RootSync{}
-			err = fakeClient.Get(context.Background(), rootsync.ObjectKey(rootSyncName), rs)
-			require.NoError(t, err)
+			err = fakeClient.Get(ctx, rootsync.ObjectKey(rootSyncName), rs)
+			require.NoError(t, err, "expected get not to error")
 			testutil.AssertEqual(t, tc.expectedRootSync, rs)
 		})
 	}
 }
 
-func TestRootReconciler_DeclaredFields(t *testing.T) {
+func TestRootReconciler_Parse_DeclaredFields(t *testing.T) {
 	applySetID := applyset.IDFromSync(rootSyncName, declared.RootScope)
 
 	testCases := []struct {
@@ -965,6 +970,7 @@ func TestRootReconciler_DeclaredFields(t *testing.T) {
 					Applier:        fakeApplier,
 					SyncErrorCache: state.syncErrorCache,
 				},
+				FullSyncPeriod:     configsync.DefaultReconcilerFullSyncPeriod,
 				StatusUpdatePeriod: configsync.DefaultReconcilerSyncStatusUpdatePeriod,
 				RenderingEnabled:   false,
 			}
@@ -978,13 +984,15 @@ func TestRootReconciler_DeclaredFields(t *testing.T) {
 				},
 				reconcilerState: state,
 			}
-			if err := reconciler.ParseAndUpdate(context.Background(), triggerReimport); err != nil {
-				t.Fatal(err)
-			}
+
+			ctx := context.Background()
+			trigger := triggerSync
+			errs := reconciler.parse(ctx, trigger)
+			require.NoError(t, errs, "expected parse not to error")
 
 			// After parsing, the objects set is processed and modified.
 			// Validate that the result is stored in state.cache.objsToApply.
-			testutil.AssertEqual(t, tc.expectedObjsToApply, state.cache.objsToApply, "unexpected state.cache.objsToApply contents")
+			testutil.AssertEqual(t, tc.expectedObjsToApply, state.cache.parse.objsToApply, "unexpected state.cache.objsToApply contents")
 		})
 	}
 }
@@ -1249,6 +1257,7 @@ func TestRootReconciler_Parse_Discovery(t *testing.T) {
 					Applier:        fakeApplier,
 					SyncErrorCache: state.syncErrorCache,
 				},
+				FullSyncPeriod:     configsync.DefaultReconcilerFullSyncPeriod,
 				StatusUpdatePeriod: configsync.DefaultReconcilerSyncStatusUpdatePeriod,
 				RenderingEnabled:   false,
 			}
@@ -1262,17 +1271,20 @@ func TestRootReconciler_Parse_Discovery(t *testing.T) {
 				},
 				reconcilerState: state,
 			}
-			err := reconciler.ParseAndUpdate(context.Background(), triggerReimport)
-			testerrors.AssertEqual(t, tc.expectedError, err, "expected error to match")
+
+			ctx := context.Background()
+			trigger := triggerSync
+			errs := reconciler.parse(ctx, trigger)
+			testerrors.AssertEqual(t, tc.expectedError, errs, "expected parse errors to match")
 
 			// After parsing, the objects set is processed and modified.
 			// Validate that the result is stored in state.cache.objsToApply.
-			testutil.AssertEqual(t, tc.expectedObjsToApply, state.cache.objsToApply, "unexpected state.cache.objsToApply contents")
+			testutil.AssertEqual(t, tc.expectedObjsToApply, state.cache.parse.objsToApply, "unexpected state.cache.objsToApply contents")
 		})
 	}
 }
 
-func TestRootReconciler_SourceReconcilerErrorsMetricValidation(t *testing.T) {
+func TestRootReconciler_Parse_SourceErrorMetricValidation(t *testing.T) {
 	testCases := []struct {
 		name            string
 		parseErrors     status.MultiError
@@ -1356,6 +1368,7 @@ func TestRootReconciler_SourceReconcilerErrorsMetricValidation(t *testing.T) {
 					Applier:        fakeApplier,
 					SyncErrorCache: state.syncErrorCache,
 				},
+				FullSyncPeriod:     configsync.DefaultReconcilerFullSyncPeriod,
 				StatusUpdatePeriod: configsync.DefaultReconcilerSyncStatusUpdatePeriod,
 				RenderingEnabled:   false,
 			}
@@ -1369,8 +1382,11 @@ func TestRootReconciler_SourceReconcilerErrorsMetricValidation(t *testing.T) {
 				},
 				reconcilerState: state,
 			}
-			err := reconciler.ParseAndUpdate(context.Background(), triggerReimport)
-			testerrors.AssertEqual(t, tc.expectedError, err, "expected error to match")
+
+			ctx := context.Background()
+			trigger := triggerSync
+			errs := reconciler.parse(ctx, trigger)
+			testerrors.AssertEqual(t, tc.expectedError, errs, "expected parse errors to match")
 
 			if diff := m.ValidateMetrics(metrics.ReconcilerErrorsView, tc.expectedMetrics); diff != "" {
 				t.Error(diff)
@@ -1379,7 +1395,7 @@ func TestRootReconciler_SourceReconcilerErrorsMetricValidation(t *testing.T) {
 	}
 }
 
-func TestRootReconciler_SourceAndSyncReconcilerErrorsMetricValidation(t *testing.T) {
+func TestRootReconciler_Update_ApplierErrorMetricValidation(t *testing.T) {
 	testCases := []struct {
 		name            string
 		applyErrors     []status.Error
@@ -1465,6 +1481,7 @@ func TestRootReconciler_SourceAndSyncReconcilerErrorsMetricValidation(t *testing
 					Applier:        fakeApplier,
 					SyncErrorCache: state.syncErrorCache,
 				},
+				FullSyncPeriod:     configsync.DefaultReconcilerFullSyncPeriod,
 				StatusUpdatePeriod: configsync.DefaultReconcilerSyncStatusUpdatePeriod,
 				RenderingEnabled:   false,
 			}
@@ -1478,8 +1495,13 @@ func TestRootReconciler_SourceAndSyncReconcilerErrorsMetricValidation(t *testing
 				},
 				reconcilerState: state,
 			}
-			err := reconciler.ParseAndUpdate(context.Background(), triggerReimport)
-			testerrors.AssertEqual(t, tc.expectedError, err, "expected error to match")
+
+			ctx := context.Background()
+			trigger := triggerSync
+			errs := reconciler.parse(ctx, trigger)
+			require.NoError(t, errs, "expected parse not to error")
+			errs = reconciler.update(ctx, trigger)
+			testerrors.AssertEqual(t, tc.expectedError, errs, "expected update errors to match")
 
 			if diff := m.ValidateMetrics(metrics.ReconcilerErrorsView, tc.expectedMetrics); diff != "" {
 				t.Error(diff)

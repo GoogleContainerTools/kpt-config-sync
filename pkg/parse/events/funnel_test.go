@@ -54,27 +54,6 @@ func TestFunnel_Start(t *testing.T) {
 			},
 		},
 		{
-			name: "ResyncEvents From SyncWithReimportPeriod",
-			builder: &PublishingGroupBuilder{
-				SyncWithReimportPeriod: time.Second,
-			},
-			stepSize: time.Second,
-			expectedEvents: []eventResult{
-				{
-					Event:  Event{Type: SyncWithReimportEventType},
-					Result: Result{},
-				},
-				{
-					Event:  Event{Type: SyncWithReimportEventType},
-					Result: Result{},
-				},
-				{
-					Event:  Event{Type: SyncWithReimportEventType},
-					Result: Result{},
-				},
-			},
-		},
-		{
 			name: "StatusEvents From StatusUpdatePeriod",
 			builder: &PublishingGroupBuilder{
 				StatusUpdatePeriod: time.Second,
@@ -82,15 +61,15 @@ func TestFunnel_Start(t *testing.T) {
 			stepSize: time.Second,
 			expectedEvents: []eventResult{
 				{
-					Event:  Event{Type: StatusEventType},
+					Event:  Event{Type: StatusUpdateEventType},
 					Result: Result{},
 				},
 				{
-					Event:  Event{Type: StatusEventType},
+					Event:  Event{Type: StatusUpdateEventType},
 					Result: Result{},
 				},
 				{
-					Event:  Event{Type: StatusEventType},
+					Event:  Event{Type: StatusUpdateEventType},
 					Result: Result{},
 				},
 			},
@@ -103,15 +82,15 @@ func TestFunnel_Start(t *testing.T) {
 			stepSize: time.Second,
 			expectedEvents: []eventResult{
 				{
-					Event:  Event{Type: NamespaceResyncEventType},
+					Event:  Event{Type: NamespaceSyncEventType},
 					Result: Result{},
 				},
 				{
-					Event:  Event{Type: NamespaceResyncEventType},
+					Event:  Event{Type: NamespaceSyncEventType},
 					Result: Result{},
 				},
 				{
-					Event:  Event{Type: NamespaceResyncEventType},
+					Event:  Event{Type: NamespaceSyncEventType},
 					Result: Result{},
 				},
 			},
@@ -173,7 +152,7 @@ func TestFunnel_Start(t *testing.T) {
 			},
 		},
 		{
-			name: "RetryEvents From RetryBackoff with ResetRetryBackoff",
+			name: "RetryEvents and SyncEvents with RetryBackoff shorter than SyncPeriod",
 			builder: &PublishingGroupBuilder{
 				RetryBackoff: wait.Backoff{
 					Duration: time.Second,
@@ -183,11 +162,77 @@ func TestFunnel_Start(t *testing.T) {
 				SyncPeriod: 10 * time.Second,
 			},
 			steps: []time.Duration{
+				time.Second,      // 0+1
+				3 * time.Second,  // 1+2
+				7 * time.Second,  // 3+4
+				10 * time.Second, // 0+10
+				20 * time.Second, // 10+10
+				21 * time.Second, // 20+1
+				23 * time.Second, // 21+2
+				27 * time.Second, // 23+4
+			},
+			expectedEvents: []eventResult{
+				{
+					Event:  Event{Type: RetrySyncEventType}, // 1s
+					Result: Result{},
+				},
+				{
+					Event:  Event{Type: RetrySyncEventType}, // 3s
+					Result: Result{},
+				},
+				{
+					Event:  Event{Type: RetrySyncEventType}, // 7s
+					Result: Result{},
+				},
+				// No more retry events until another event sets ResetRetryBackoff=true
+				{
+					Event: Event{Type: SyncEventType}, // 10s
+					Result: Result{
+						ResetRetryBackoff: false,
+					},
+				},
+				{
+					Event: Event{Type: SyncEventType}, // 20s
+					Result: Result{
+						ResetRetryBackoff: true,
+					},
+				},
+				{
+					Event:  Event{Type: RetrySyncEventType}, // 21s
+					Result: Result{},
+				},
+				{
+					Event:  Event{Type: RetrySyncEventType}, // 23s
+					Result: Result{},
+				},
+				{
+					Event:  Event{Type: RetrySyncEventType}, // 27s
+					Result: Result{},
+				},
+				// No more retry events until another event sets ResetRetryBackoff=true
+			},
+		},
+		{
+			name: "RetryEvents and SyncEvents with RetryBackoff longer than SyncPeriod",
+			builder: &PublishingGroupBuilder{
+				RetryBackoff: wait.Backoff{
+					Duration: time.Second,
+					Factor:   2, // double the delay each time
+					Steps:    5, // more steps makes the max backoff longer than SyncPeriod
+				},
+				SyncPeriod: 20 * time.Second,
+			},
+			steps: []time.Duration{
 				time.Second,
-				3 * time.Second, //+2
-				7 * time.Second, //+4
-				10 * time.Second,
-				11 * time.Second, //+1
+				3 * time.Second,  // 1+2
+				7 * time.Second,  // 3+4
+				15 * time.Second, // 7+8
+				20 * time.Second, // 0+20
+				31 * time.Second, // 15+16
+				40 * time.Second, // 20+20
+				60 * time.Second, // 40+20
+				80 * time.Second, // 60+20
+				81 * time.Second, // 80+1
 			},
 			expectedEvents: []eventResult{
 				{
@@ -203,23 +248,54 @@ func TestFunnel_Start(t *testing.T) {
 					Result: Result{},
 				},
 				{
-					Event: Event{Type: SyncEventType}, // 10s
+					Event:  Event{Type: RetrySyncEventType}, // 15s
+					Result: Result{},
+				},
+				{
+					Event: Event{Type: SyncEventType}, // 20s
 					Result: Result{
-						ResetRetryBackoff: true,
+						RunAttempted:      true,
+						ResetRetryBackoff: false, // No source changes, ParseAndUpdate skipped
 					},
 				},
 				{
-					Event:  Event{Type: RetrySyncEventType}, // 11s
+					Event:  Event{Type: RetrySyncEventType}, // 31s
 					Result: Result{},
 				},
+				// No more retry events until another event sets ResetRetryBackoff=true
+				{
+					Event: Event{Type: SyncEventType}, // 40s
+					Result: Result{
+						RunAttempted:      true,
+						ResetRetryBackoff: false, // No source changes, ParseAndUpdate skipped
+					},
+				},
+				{
+					Event: Event{Type: SyncEventType}, // 60s
+					Result: Result{
+						RunAttempted:      true,
+						ResetRetryBackoff: false, // No source changes, ParseAndUpdate skipped
+					},
+				},
+				{
+					Event: Event{Type: SyncEventType}, // 80s
+					Result: Result{
+						RunAttempted:      true,
+						ResetRetryBackoff: true, // Source changes detected, ParseAndUpdate succeeded
+					},
+				},
+				{
+					Event:  Event{Type: RetrySyncEventType}, // 81s
+					Result: Result{},
+				},
+				// more backoff until max steps...
 			},
 		},
 		{
-			name: "SyncEvents, StatusEventType, ResyncEvents",
+			name: "SyncEvents, StatusUpdateEventType, FullSyncEvents",
 			builder: &PublishingGroupBuilder{
-				SyncPeriod:             700 * time.Millisecond,
-				SyncWithReimportPeriod: 4000 * time.Millisecond,
-				StatusUpdatePeriod:     300 * time.Millisecond,
+				SyncPeriod:         700 * time.Millisecond,
+				StatusUpdatePeriod: 300 * time.Millisecond,
 			},
 			// Explicit steps to avoid race conditions that make validation difficult.
 			steps: []time.Duration{
@@ -235,39 +311,14 @@ func TestFunnel_Start(t *testing.T) {
 				2400 * time.Millisecond,
 				2700 * time.Millisecond,
 				2800 * time.Millisecond,
-				3100 * time.Millisecond,
-				3400 * time.Millisecond,
-				3500 * time.Millisecond,
-				3800 * time.Millisecond,
-				4000 * time.Millisecond,
-				4300 * time.Millisecond,
-				4600 * time.Millisecond,
-				4700 * time.Millisecond,
-				5000 * time.Millisecond,
-				5300 * time.Millisecond,
-				5400 * time.Millisecond,
-				5700 * time.Millisecond,
-				6000 * time.Millisecond,
-				6100 * time.Millisecond,
-				6400 * time.Millisecond,
-				6700 * time.Millisecond,
-				6800 * time.Millisecond,
-				7100 * time.Millisecond,
-				7400 * time.Millisecond,
-				7500 * time.Millisecond,
-				7800 * time.Millisecond,
-				8000 * time.Millisecond,
-				8300 * time.Millisecond,
-				8600 * time.Millisecond,
-				8700 * time.Millisecond,
 			},
 			expectedEvents: []eventResult{
 				{
-					Event:  Event{Type: StatusEventType}, // 300ms
+					Event:  Event{Type: StatusUpdateEventType}, // 300ms
 					Result: Result{},
 				},
 				{
-					Event:  Event{Type: StatusEventType}, // 600ms
+					Event:  Event{Type: StatusUpdateEventType}, // 600ms
 					Result: Result{},
 				},
 				{
@@ -277,11 +328,11 @@ func TestFunnel_Start(t *testing.T) {
 					},
 				},
 				{
-					Event:  Event{Type: StatusEventType}, // 1000ms
+					Event:  Event{Type: StatusUpdateEventType}, // 1000ms
 					Result: Result{},
 				},
 				{
-					Event:  Event{Type: StatusEventType}, // 1300ms
+					Event:  Event{Type: StatusUpdateEventType}, // 1300ms
 					Result: Result{},
 				},
 				{
@@ -291,11 +342,11 @@ func TestFunnel_Start(t *testing.T) {
 					},
 				},
 				{
-					Event:  Event{Type: StatusEventType}, // 1700ms
+					Event:  Event{Type: StatusUpdateEventType}, // 1700ms
 					Result: Result{},
 				},
 				{
-					Event:  Event{Type: StatusEventType}, // 2000ms
+					Event:  Event{Type: StatusUpdateEventType}, // 2000ms
 					Result: Result{},
 				},
 				{
@@ -305,133 +356,15 @@ func TestFunnel_Start(t *testing.T) {
 					},
 				},
 				{
-					Event:  Event{Type: StatusEventType}, // 2400ms
+					Event:  Event{Type: StatusUpdateEventType}, // 2400ms
 					Result: Result{},
 				},
 				{
-					Event:  Event{Type: StatusEventType}, // 2700ms
+					Event:  Event{Type: StatusUpdateEventType}, // 2700ms
 					Result: Result{},
 				},
 				{
 					Event: Event{Type: SyncEventType}, // 2800ms
-					Result: Result{
-						RunAttempted: true,
-					},
-				},
-				{
-					Event:  Event{Type: StatusEventType}, // 3100ms
-					Result: Result{},
-				},
-				{
-					Event:  Event{Type: StatusEventType}, // 3400ms
-					Result: Result{},
-				},
-				{
-					Event: Event{Type: SyncEventType}, // 3500ms
-					Result: Result{
-						RunAttempted: true,
-					},
-				},
-				{
-					Event:  Event{Type: StatusEventType}, // 3800ms
-					Result: Result{},
-				},
-				{
-					Event: Event{Type: SyncWithReimportEventType}, // 4000ms
-					Result: Result{
-						RunAttempted: true,
-					},
-				},
-				{
-					Event:  Event{Type: StatusEventType}, // 4300ms
-					Result: Result{},
-				},
-				{
-					Event:  Event{Type: StatusEventType}, // 4600ms
-					Result: Result{},
-				},
-				{
-					Event: Event{Type: SyncEventType}, // 4700ms
-					Result: Result{
-						RunAttempted: true,
-					},
-				},
-				{
-					Event:  Event{Type: StatusEventType}, // 5000ms
-					Result: Result{},
-				},
-				{
-					Event:  Event{Type: StatusEventType}, // 5300ms
-					Result: Result{},
-				},
-				{
-					Event: Event{Type: SyncEventType}, // 5400ms
-					Result: Result{
-						RunAttempted: true,
-					},
-				},
-				{
-					Event:  Event{Type: StatusEventType}, // 5700ms
-					Result: Result{},
-				},
-				{
-					Event:  Event{Type: StatusEventType}, // 6000ms
-					Result: Result{},
-				},
-				{
-					Event: Event{Type: SyncEventType}, // 6100ms
-					Result: Result{
-						RunAttempted: true,
-					},
-				},
-				{
-					Event:  Event{Type: StatusEventType}, // 6400ms
-					Result: Result{},
-				},
-				{
-					Event:  Event{Type: StatusEventType}, // 6700ms
-					Result: Result{},
-				},
-				{
-					Event: Event{Type: SyncEventType}, // 6800ms
-					Result: Result{
-						RunAttempted: true,
-					},
-				},
-				{
-					Event:  Event{Type: StatusEventType}, // 7100ms
-					Result: Result{},
-				},
-				{
-					Event:  Event{Type: StatusEventType}, // 7400ms
-					Result: Result{},
-				},
-				{
-					Event: Event{Type: SyncEventType}, // 7500ms
-					Result: Result{
-						RunAttempted: true,
-					},
-				},
-				{
-					Event:  Event{Type: StatusEventType}, // 7800ms
-					Result: Result{},
-				},
-				{
-					Event: Event{Type: SyncWithReimportEventType}, // 8000ms
-					Result: Result{
-						RunAttempted: true,
-					},
-				},
-				{
-					Event:  Event{Type: StatusEventType}, // 8300ms
-					Result: Result{},
-				},
-				{
-					Event:  Event{Type: StatusEventType}, // 8600ms
-					Result: Result{},
-				},
-				{
-					Event: Event{Type: SyncEventType}, // 8700ms
 					Result: Result{
 						RunAttempted: true,
 					},

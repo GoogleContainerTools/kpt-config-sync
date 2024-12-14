@@ -48,15 +48,15 @@ type repoSyncStatusClient struct {
 //
 // SetSourceStatus sets the source status with a given source state and set of errors.  If errs is empty, all errors
 // will be removed from the status.
-func (p *repoSyncStatusClient) SetSourceStatus(ctx context.Context, newStatus *SourceStatus) error {
+func (p *repoSyncStatusClient) SetSourceStatus(ctx context.Context, newStatus *SourceStatus) status.Error {
 	p.mux.Lock()
 	defer p.mux.Unlock()
 	return p.setSourceStatusWithRetries(ctx, newStatus, defaultDenominator)
 }
 
-func (p *repoSyncStatusClient) setSourceStatusWithRetries(ctx context.Context, newStatus *SourceStatus, denominator int) error {
+func (p *repoSyncStatusClient) setSourceStatusWithRetries(ctx context.Context, newStatus *SourceStatus, denominator int) status.Error {
 	if denominator <= 0 {
-		return fmt.Errorf("The denominator must be a positive number")
+		return status.InternalErrorf("denominator must be positive: %d", denominator)
 	}
 	opts := p.options
 
@@ -111,7 +111,7 @@ func (p *repoSyncStatusClient) setSourceStatusWithRetries(ctx context.Context, n
 	return nil
 }
 
-func (p *repoSyncStatusClient) SetSourceAnnotations(ctx context.Context, commit string) error {
+func (p *repoSyncStatusClient) SetImageToSyncAnnotation(ctx context.Context, commit string) status.Error {
 	opts := p.options
 	rs := &v1beta1.RepoSync{}
 	rs.Namespace = string(opts.Scope)
@@ -120,27 +120,26 @@ func (p *repoSyncStatusClient) SetSourceAnnotations(ctx context.Context, commit 
 	var patch string
 	if opts.SourceType == configsync.OciSource ||
 		(opts.SourceType == configsync.HelmSource && strings.HasPrefix(opts.SourceRepo, "oci://")) {
+		newVal := fmt.Sprintf("%s@sha256:%s", opts.SourceRepo, commit)
 		patch = fmt.Sprintf(`{"metadata":{"annotations":{"%s":"%s"}}}`,
-			metadata.ImageToSyncAnnotationKey,
-			fmt.Sprintf("%s@sha256:%s", opts.SourceRepo, commit),
-		)
+			metadata.ImageToSyncAnnotationKey, newVal)
+		klog.V(3).Infof("Updating annotation: %s: %s", metadata.ImageToSyncAnnotationKey, newVal)
 	} else {
 		patch = fmt.Sprintf(`{"metadata":{"annotations":{"%s":null}}}`,
 			metadata.ImageToSyncAnnotationKey)
+		klog.V(3).Infof("Updating annotation: %s: %s", metadata.ImageToSyncAnnotationKey, "null")
 	}
 
 	err := opts.Client.Patch(ctx, rs,
 		client.RawPatch(types.MergePatchType, []byte(patch)),
 		client.FieldOwner(configsync.FieldManager))
-
 	if err != nil {
-		return fmt.Errorf("failed to patch RepoSync annotations: %w\nPatch content: %s", err, patch)
+		return status.APIServerErrorf(err, "failed to patch RepoSync annotation: %s", metadata.ImageToSyncAnnotationKey)
 	}
-
 	return nil
 }
 
-func (p *repoSyncStatusClient) SetRequiresRendering(ctx context.Context, renderingRequired bool) error {
+func (p *repoSyncStatusClient) SetRequiresRenderingAnnotation(ctx context.Context, renderingRequired bool) status.Error {
 	opts := p.options
 	rs := &v1beta1.RepoSync{}
 	if err := opts.Client.Get(ctx, reposync.ObjectKey(opts.Scope, opts.SyncName), rs); err != nil {
@@ -151,13 +150,20 @@ func (p *repoSyncStatusClient) SetRequiresRendering(ctx context.Context, renderi
 		// avoid unnecessary updates
 		return nil
 	}
+	klog.V(3).Infof("Updating annotation: %s: %s", metadata.RequiresRenderingAnnotationKey, newVal)
 	existing := rs.DeepCopy()
 	core.SetAnnotation(rs, metadata.RequiresRenderingAnnotationKey, newVal)
-	return opts.Client.Patch(ctx, rs, client.MergeFrom(existing), client.FieldOwner(configsync.FieldManager))
+	err := opts.Client.Patch(ctx, rs,
+		client.MergeFrom(existing),
+		client.FieldOwner(configsync.FieldManager))
+	if err != nil {
+		return status.APIServerErrorf(err, "failed to patch RepoSync annotation: %s", metadata.RequiresRenderingAnnotationKey)
+	}
+	return nil
 }
 
 // SetRenderingStatus implements the Parser interface
-func (p *repoSyncStatusClient) SetRenderingStatus(ctx context.Context, oldStatus, newStatus *RenderingStatus) error {
+func (p *repoSyncStatusClient) SetRenderingStatus(ctx context.Context, oldStatus, newStatus *RenderingStatus) status.Error {
 	if oldStatus.Equals(newStatus) {
 		return nil
 	}
@@ -167,9 +173,9 @@ func (p *repoSyncStatusClient) SetRenderingStatus(ctx context.Context, oldStatus
 	return p.setRenderingStatusWithRetries(ctx, newStatus, defaultDenominator)
 }
 
-func (p *repoSyncStatusClient) setRenderingStatusWithRetries(ctx context.Context, newStatus *RenderingStatus, denominator int) error {
+func (p *repoSyncStatusClient) setRenderingStatusWithRetries(ctx context.Context, newStatus *RenderingStatus, denominator int) status.Error {
 	if denominator <= 0 {
-		return fmt.Errorf("The denominator must be a positive number")
+		return status.InternalErrorf("denominator must be positive: %d", denominator)
 	}
 	opts := p.options
 
@@ -219,8 +225,8 @@ func (p *repoSyncStatusClient) setRenderingStatusWithRetries(ctx context.Context
 	return nil
 }
 
-// ReconcilerStatusFromCluster gets the RepoSync sync status from the cluster.
-func (p *repoSyncStatusClient) ReconcilerStatusFromCluster(ctx context.Context) (*ReconcilerStatus, error) {
+// GetReconcilerStatus gets the RepoSync sync status from the cluster.
+func (p *repoSyncStatusClient) GetReconcilerStatus(ctx context.Context) (*ReconcilerStatus, status.Error) {
 	opts := p.options
 	rs := &v1beta1.RepoSync{}
 	if err := opts.Client.Get(ctx, reposync.ObjectKey(opts.Scope, opts.SyncName), rs); err != nil {
@@ -232,32 +238,30 @@ func (p *repoSyncStatusClient) ReconcilerStatusFromCluster(ctx context.Context) 
 
 	// Read Syncing condition
 	syncing := false
-	var syncingConditionLastUpdate metav1.Time
 	for _, condition := range rs.Status.Conditions {
 		if condition.Type == v1beta1.RepoSyncSyncing {
 			if condition.Status == metav1.ConditionTrue {
 				syncing = true
 			}
-			syncingConditionLastUpdate = condition.LastUpdateTime
 			break
 		}
 	}
 
-	return reconcilerStatusFromRSyncStatus(rs.Status.Status, opts.SourceType, syncing, syncingConditionLastUpdate), nil
+	return reconcilerStatusFromRSyncStatus(rs.Status.Status, opts.SourceType, syncing), nil
 }
 
 // SetSyncStatus implements the Parser interface
 // SetSyncStatus sets the RepoSync sync status.
 // `errs` includes the errors encountered during the apply step;
-func (p *repoSyncStatusClient) SetSyncStatus(ctx context.Context, newStatus *SyncStatus) error {
+func (p *repoSyncStatusClient) SetSyncStatus(ctx context.Context, newStatus *SyncStatus) status.Error {
 	p.mux.Lock()
 	defer p.mux.Unlock()
 	return p.setSyncStatusWithRetries(ctx, newStatus, defaultDenominator)
 }
 
-func (p *repoSyncStatusClient) setSyncStatusWithRetries(ctx context.Context, newStatus *SyncStatus, denominator int) error {
+func (p *repoSyncStatusClient) setSyncStatusWithRetries(ctx context.Context, newStatus *SyncStatus, denominator int) status.Error {
 	if denominator <= 0 {
-		return fmt.Errorf("The denominator must be a positive number")
+		return status.InternalErrorf("denominator must be positive: %d", denominator)
 	}
 	opts := p.options
 

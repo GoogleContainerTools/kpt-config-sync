@@ -16,42 +16,36 @@ package parse
 
 import (
 	"context"
-
-	"kpt.dev/configsync/pkg/status"
 )
 
-// Reconciler represents a parser that can be pointed at and continuously parse a source.
+// Reconciler reconciles the cluster with config from the source of truth.
 // TODO: Move to reconciler package; requires unwinding dependency cycles
 type Reconciler interface {
 	// Options returns the ReconcilerOptions used by this reconciler.
 	Options() *ReconcilerOptions
-	// SyncStatusClient returns the SyncStatusClient used by this reconciler.
-	SyncStatusClient() SyncStatusClient
-	// Parser returns the Parser used by this reconciler.
-	Parser() Parser
+
 	// ReconcilerState returns the current state of the parser/reconciler.
 	ReconcilerState() *ReconcilerState
 
-	// Read source manifests from the shared source volume.
-	// Waits for rendering, if enabled.
-	// Updates the RSync status (source, rendering, and syncing condition).
+	// Reconcile the cluster with the source config.
 	//
-	// Read is exposed for use by DefaultRunFunc.
-	Read(ctx context.Context, trigger string, sourceState *sourceState) status.MultiError
+	// Reconcile has multiple phases:
+	// - Fetch - Checks the shared filesystem for new source commits fetched by
+	//     one of the *-sync sidecars.
+	// - Render - Checks the shared filesystem for source rendered by the
+	//     hydration-controller sidecar using helm or kustomize, if required.
+	// - Read - Reads the fetch and render status from the shared filesystem and
+	//     lists the source config files.
+	// - Parse - Parses resource objects from the source config files, validates
+	//    them, and adds custom metadata.
+	// - Update (aka Sync) - Updates the cluster and remediator to reflect the
+	//     latest resource object manifests in the source.
+	Reconcile(ctx context.Context, trigger string) ReconcileResult
 
-	// ParseAndUpdate parses objects from the source manifests, validates them,
-	// and then syncs them to the cluster with the Updater.
-	//
-	// ParseAndUpdate is exposed for use by DefaultRunFunc.
-	ParseAndUpdate(ctx context.Context, trigger string) status.MultiError
-
-	// SetSyncStatus updates `.status.sync` and the Syncing condition, if needed,
-	// as well as `state.syncStatus` and `state.syncingConditionLastUpdate` if
-	// the update is successful.
-	//
-	// SetSyncStatus is exposed for use by the EventHandler, for periodic status
-	// updates.
-	SetSyncStatus(context.Context, *SyncStatus) error
+	// UpdateSyncStatus updates the RSync status to reflect asynchronous status
+	// changes made by the remediator between Reconcile calls.
+	// Returns an error if the status update failed or was cancelled.
+	UpdateSyncStatus(context.Context) error
 }
 
 // TODO: Move to reconciler package; requires unwinding dependency cycles
@@ -69,23 +63,14 @@ func (p *reconciler) Options() *ReconcilerOptions {
 	return p.options
 }
 
-// SyncStatusClient returns the SyncStatusClient used by this reconciler.
-func (p *reconciler) SyncStatusClient() SyncStatusClient {
-	return p.syncStatusClient
-}
-
-// ReconcilerState returns the current state of the reconciler.
-func (p *reconciler) Parser() Parser {
-	return p.parser
-}
-
 // ReconcilerState returns the current state of the reconciler.
 func (p *reconciler) ReconcilerState() *ReconcilerState {
 	return p.reconcilerState
 }
 
-// NewRootRunner creates a new runnable parser for parsing a Root repository.
-func NewRootRunner(recOpts *ReconcilerOptions, parseOpts *RootOptions) Reconciler {
+// NewRootSyncReconciler creates a new reconciler for reconciling cluster-scoped
+// and namespace-scoped resources configured with a RootSync.
+func NewRootSyncReconciler(recOpts *ReconcilerOptions, parseOpts *RootOptions) Reconciler {
 	return &reconciler{
 		options: recOpts,
 		reconcilerState: &ReconcilerState{
@@ -100,8 +85,9 @@ func NewRootRunner(recOpts *ReconcilerOptions, parseOpts *RootOptions) Reconcile
 	}
 }
 
-// NewNamespaceRunner creates a new runnable parser for parsing a Namespace repo.
-func NewNamespaceRunner(recOpts *ReconcilerOptions, parseOpts *Options) Reconciler {
+// NewRepoSyncReconciler creates a new reconciler for reconciling
+// namespace-scoped resources configured with a RepoSync.
+func NewRepoSyncReconciler(recOpts *ReconcilerOptions, parseOpts *Options) Reconciler {
 	return &reconciler{
 		options: recOpts,
 		reconcilerState: &ReconcilerState{

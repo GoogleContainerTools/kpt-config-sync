@@ -161,7 +161,7 @@ func (s *RetrySyncPublisher) Publish(subscriber Subscriber) Result {
 
 	retryDuration := s.currentBackoff.Step()
 	retries := s.retryLimit - s.currentBackoff.Steps
-	klog.Infof("a retry is triggered (retries: %v/%v)", retries, s.retryLimit)
+	klog.V(3).Infof("Sending retry event (step: %v/%v)", retries, s.retryLimit)
 
 	result := subscriber.Handle(Event{Type: s.EventType})
 

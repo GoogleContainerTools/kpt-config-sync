@@ -16,20 +16,22 @@ package parse
 
 import (
 	"context"
+
+	"kpt.dev/configsync/pkg/status"
 )
 
 // SyncStatusClient provides methods to read and write RSync object status.
 type SyncStatusClient interface {
-	// ReconcilerStatusFromCluster reads the status of the reconciler from the RSync status.
-	ReconcilerStatusFromCluster(ctx context.Context) (*ReconcilerStatus, error)
+	// GetReconcilerStatus reads the status of the reconciler from the RSync status.
+	GetReconcilerStatus(ctx context.Context) (*ReconcilerStatus, status.Error)
 	// SetSourceStatus sets the source status and syncing condition on the RSync.
-	SetSourceStatus(ctx context.Context, newStatus *SourceStatus) error
+	SetSourceStatus(ctx context.Context, newStatus *SourceStatus) status.Error
 	// SetRenderingStatus sets the rendering status and syncing condition on the RSync.
-	SetRenderingStatus(ctx context.Context, oldStatus, newStatus *RenderingStatus) error
+	SetRenderingStatus(ctx context.Context, oldStatus, newStatus *RenderingStatus) status.Error
 	// SetSyncStatus sets the sync status and syncing condition on the RSync.
-	SetSyncStatus(ctx context.Context, newStatus *SyncStatus) error
-	// SetRequiresRendering sets the requires-rendering annotation on the RSync.
-	SetRequiresRendering(ctx context.Context, renderingRequired bool) error
-	// SetSourceAnnotations sets the source annotations on the RSync.
-	SetSourceAnnotations(ctx context.Context, commit string) error
+	SetSyncStatus(ctx context.Context, newStatus *SyncStatus) status.Error
+	// SetRequiresRenderingAnnotation sets the requires-rendering annotation on the RSync.
+	SetRequiresRenderingAnnotation(ctx context.Context, renderingRequired bool) status.Error
+	// SetImageToSyncAnnotation sets the source annotations on the RSync.
+	SetImageToSyncAnnotation(ctx context.Context, commit string) status.Error
 }

@@ -103,7 +103,7 @@ func (u *Updater) update(ctx context.Context, cache *cacheForCommit) status.Mult
 	// After this, any objects removed from the declared resources will no
 	// longer be remediated, if they drift.
 	if !cache.declaredResourcesUpdated {
-		objs := filesystem.AsCoreObjects(cache.objsToApply)
+		objs := filesystem.AsCoreObjects(cache.parse.objsToApply)
 		_, err := u.declare(ctx, objs, cache.source.commit)
 		if err != nil {
 			return err
@@ -118,7 +118,7 @@ func (u *Updater) update(ctx context.Context, cache *cacheForCommit) status.Mult
 
 		// Only mark the declared resources as updated if there were no (non-blocking) parse errors.
 		// This ensures the update will be retried until parsing fully succeeds.
-		if cache.parserErrs == nil {
+		if cache.parse.parserErrs == nil {
 			cache.declaredResourcesUpdated = true
 		}
 	}
@@ -130,7 +130,7 @@ func (u *Updater) update(ctx context.Context, cache *cacheForCommit) status.Mult
 		}
 		// Only mark the commit as applied if there were no (non-blocking) parse errors.
 		// This ensures the apply will be retried until parsing fully succeeds.
-		if cache.parserErrs == nil {
+		if cache.parse.parserErrs == nil {
 			cache.applied = true
 		}
 	}
@@ -144,7 +144,7 @@ func (u *Updater) update(ctx context.Context, cache *cacheForCommit) status.Mult
 		}
 		// Only mark the watches as updated if there were no (non-blocking) parse errors.
 		// This ensures the update will be retried until parsing fully succeeds.
-		if cache.parserErrs == nil {
+		if cache.parse.parserErrs == nil {
 			cache.watchesUpdated = true
 		}
 	}

@@ -55,7 +55,7 @@ func TestRootReconciler(t *testing.T) {
 
 	logger := reconcilerKpt.log.WithValues("Controller", "Root")
 	ctx = context.WithValue(context.TODO(), contextRootControllerKey, logger)
-	resolver, err := typeresolver.NewTypeResolver(mgr, logger)
+	resolver, err := typeresolver.ForManager(mgr, logger)
 	assert.NoError(t, err)
 	reconcilerKpt.resolver = resolver
 

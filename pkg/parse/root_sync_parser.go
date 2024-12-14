@@ -50,11 +50,11 @@ func (p *rootSyncParser) ParseSource(ctx context.Context, state *sourceState) ([
 	if opts.SourceFormat == configsync.SourceFormatHierarchy {
 		// We're using hierarchical mode for the root repository, so ignore files
 		// outside of the allowed directories.
-		wantFiles = filesystem.FilterHierarchyFiles(state.syncDir, wantFiles)
+		wantFiles = filesystem.FilterHierarchyFiles(state.syncPath, wantFiles)
 	}
 
 	filePaths := reader.FilePaths{
-		RootDir:   state.syncDir,
+		RootDir:   state.syncPath,
 		PolicyDir: p.options.SyncDir,
 		Files:     wantFiles,
 	}
@@ -65,7 +65,7 @@ func (p *rootSyncParser) ParseSource(ctx context.Context, state *sourceState) ([
 	}
 	builder := discovery.ScoperBuilder(opts.DiscoveryClient)
 
-	klog.Infof("Parsing files from source dir: %s", state.syncDir.OSPath())
+	klog.Infof("Parsing files from source path: %s", state.syncPath.OSPath())
 	objs, err := opts.ConfigParser.Parse(filePaths)
 	if err != nil {
 		return nil, err

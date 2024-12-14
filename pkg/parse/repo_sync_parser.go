@@ -34,7 +34,7 @@ type repoSyncParser struct {
 func (p *repoSyncParser) ParseSource(ctx context.Context, state *sourceState) ([]ast.FileObject, status.MultiError) {
 	opts := p.options
 	filePaths := reader.FilePaths{
-		RootDir:   state.syncDir,
+		RootDir:   state.syncPath,
 		PolicyDir: opts.SyncDir,
 		Files:     state.files,
 	}
@@ -44,7 +44,7 @@ func (p *repoSyncParser) ParseSource(ctx context.Context, state *sourceState) ([
 	}
 	builder := utildiscovery.ScoperBuilder(opts.DiscoveryClient)
 
-	klog.Infof("Parsing files from source dir: %s", state.syncDir.OSPath())
+	klog.Infof("Parsing files from source path: %s", state.syncPath.OSPath())
 	objs, err := opts.ConfigParser.Parse(filePaths)
 	if err != nil {
 		return nil, err

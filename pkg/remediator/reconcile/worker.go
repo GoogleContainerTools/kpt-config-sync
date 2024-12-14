@@ -53,36 +53,36 @@ func NewWorker(scope declared.Scope, syncName string, a syncerreconcile.Applier,
 // Run starts the Worker pulling objects from its queue for remediation. This
 // call blocks until the given context is cancelled.
 func (w *Worker) Run(ctx context.Context) {
-	klog.V(1).Info("Worker starting...")
+	klog.V(1).Info("Remediator worker starting...")
 	ctx, cancel := context.WithCancel(ctx)
 	wait.UntilWithContext(ctx, func(ctx context.Context) {
 		// Attempt to drain the queue
 		for {
 			if err := w.processNextObject(ctx); err != nil {
 				if err == queue.ErrShutdown {
-					klog.Infof("Worker stopping: %v", err)
+					klog.Infof("Remediator worker stopping: %v", err)
 					cancel()
 					return
 				}
-				if err == context.Canceled || err == context.DeadlineExceeded {
-					klog.Infof("Worker stopping: %v", err)
+				if status.IsContextCanceledError(err) {
+					klog.Infof("Remediator worker stopping: %v", err)
 					return
 				}
-				klog.Errorf("Worker error (retry scheduled): %v", err)
+				klog.Errorf("Remediator worker failed (retry scheduled): %v", err)
 				return
 			}
 		}
 		// Once an attempt has been made for every object in the queue,
 		// sleep for ~1s before retrying.
 	}, 1*time.Second)
-	klog.V(3).Info("Worker stopped")
+	klog.V(3).Info("Remediator worker stopped")
 }
 
 // processNextObject remediates object received from the queue.
 // Returns an error if the context is cancelled, the queue is shut down, or
 // processing the item failed.
 func (w *Worker) processNextObject(ctx context.Context) error {
-	klog.V(3).Info("Worker waiting for new object...")
+	klog.V(3).Info("Remediator worker waiting for new object...")
 	obj, err := w.objectQueue.Get(ctx)
 	if err != nil {
 		return err
@@ -91,7 +91,7 @@ func (w *Worker) processNextObject(ctx context.Context) error {
 		return nil
 	}
 	defer w.objectQueue.Done(obj)
-	klog.V(3).Infof("Worker processing object %q (generation: %d)",
+	klog.V(3).Infof("Remediator worker processing object: %s (generation: %d)",
 		queue.GVKNNOf(obj), obj.GetGeneration())
 	return w.process(ctx, obj)
 }
@@ -110,7 +110,7 @@ func (w *Worker) process(ctx context.Context, obj client.Object) error {
 		if err != nil {
 			// Failed to confirm object state. Enqueue for retry.
 			w.objectQueue.Retry(obj)
-			return fmt.Errorf("failed to remediate %q: %w", id, err)
+			return fmt.Errorf("failed to remediate object: %s: %w", id, err)
 		}
 		if queue.WasDeleted(ctx, latestObj) {
 			// Confirmed not on the server.
@@ -136,14 +136,18 @@ func (w *Worker) process(ctx context.Context, obj client.Object) error {
 			// This means our cached version of the object isn't the same as the one
 			// on the cluster. We need to refresh the cached version.
 			if refreshErr := w.refresh(ctx, obj); refreshErr != nil {
-				klog.Errorf("Worker unable to update cached version of %q: %v", id, refreshErr)
+				if status.IsContextCanceledError(err) {
+					klog.Infof("Remediator worker failed to refresh the object cache: %s: %v", id, refreshErr)
+				} else {
+					klog.Errorf("Remediator worker failed to refresh the object cache: %s: %v", id, refreshErr)
+				}
 			}
 		}
 		w.objectQueue.Retry(obj)
-		return fmt.Errorf("failed to remediate %q: %w", id, err)
+		return fmt.Errorf("failed to remediate object: %s: %w", id, err)
 	}
 
-	klog.V(3).Infof("Worker reconciled %q", id)
+	klog.V(3).Infof("Remediator worker reconciled object: %s", id)
 	w.objectQueue.Forget(obj)
 	return nil
 }
@@ -171,7 +175,7 @@ func (w *Worker) getObject(ctx context.Context, obj client.Object) (client.Objec
 			return queue.MarkDeleted(ctx, obj), nil
 		}
 		// Surface any other errors
-		return uObj, status.APIServerError(err, "failed to get updated object for worker cache", obj)
+		return uObj, status.APIServerError(err, "failed to get updated object for remediator worker cache", obj)
 	}
 	return uObj, nil
 }

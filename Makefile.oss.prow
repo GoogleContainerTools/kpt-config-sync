@@ -81,11 +81,3 @@ KCC_MANAGED_PROJECT ?= cs-dev-hub
 set-up-kcc-configs:
 	GCP_PROJECT=$(GCP_PROJECT) KCC_MANAGED_PROJECT=$(KCC_MANAGED_PROJECT) \
 	./scripts/set-up-kcc-configs.sh
-
-.PHONY: set-up-workload-identity-test
-FLEET_HOST_PROJECT ?= cs-dev-hub
-PROW_PROJECT ?= oss-prow-build-kpt-config-sync
-set-up-workload-identity-test:
-	GCP_PROJECT=$(GCP_PROJECT) FLEET_HOST_PROJECT=$(FLEET_HOST_PROJECT) \
-	PROW_PROJECT=$(PROW_PROJECT) \
-	./scripts/set-up-workload-identity-configs.sh

@@ -77,11 +77,11 @@ type Options struct {
 	SyncName string
 	// ReconcilerName is the name of the Reconciler Deployment.
 	ReconcilerName string
-	// ResyncPeriod is the period of time between forced re-sync from source (even
-	// without a new commit).
-	ResyncPeriod time.Duration
-	// PollingPeriod is the period of time between checking the filesystem for
-	// source updates to sync.
+	// FullSyncPeriod is the period of time between forced re-sync from source
+	// (even without a new commit).
+	FullSyncPeriod time.Duration
+	// PollingPeriod is the period of time between checking the partial sync
+	// attempts that check the filesystem for source updates to sync.
 	PollingPeriod time.Duration
 	// RetryPeriod is the period of time between checking the filesystem for
 	// source updates to sync, after an error.
@@ -130,6 +130,8 @@ type Options struct {
 	// WebhookEnabled is indicates whether the Admission Webhook is currently
 	// installed and running
 	WebhookEnabled bool
+	// ReconcilerSignalsDir is the absolute path to the directory of ready-to-render file shared with hydration-controller
+	ReconcilerSignalsDir cmpath.Absolute
 }
 
 // RootOptions are the options specific to parsing Root repositories.
@@ -235,15 +237,16 @@ func Run(opts Options) {
 	// Configure the Parser.
 	var reconciler parse.Reconciler
 	fs := parse.FileSource{
-		SourceDir:    opts.SourceRoot,
-		RepoRoot:     opts.RepoRoot,
-		HydratedRoot: opts.HydratedRoot,
-		HydratedLink: opts.HydratedLink,
-		SyncDir:      opts.SyncDir,
-		SourceType:   opts.SourceType,
-		SourceRepo:   opts.SourceRepo,
-		SourceBranch: opts.SourceBranch,
-		SourceRev:    opts.SourceRev,
+		SourceDir:            opts.SourceRoot,
+		RepoRoot:             opts.RepoRoot,
+		HydratedRoot:         opts.HydratedRoot,
+		HydratedLink:         opts.HydratedLink,
+		SyncDir:              opts.SyncDir,
+		SourceType:           opts.SourceType,
+		SourceRepo:           opts.SourceRepo,
+		SourceBranch:         opts.SourceBranch,
+		SourceRev:            opts.SourceRev,
+		ReconcilerSignalsDir: opts.ReconcilerSignalsDir,
 	}
 
 	parseOpts := &parse.Options{
@@ -270,10 +273,13 @@ func Run(opts Options) {
 
 	// Use the builder to build a set of event publishers for parser.Run.
 	pgBuilder := &events.PublishingGroupBuilder{
-		Clock:                  parseOpts.Clock,
-		SyncPeriod:             opts.PollingPeriod,
-		SyncWithReimportPeriod: opts.ResyncPeriod,
-		StatusUpdatePeriod:     opts.StatusUpdatePeriod,
+		Clock: parseOpts.Clock,
+		// From the user's perspective, the polling period is how often the
+		// filesystem is checked for source changes, but a sync attempt includes
+		// a lot of other checks as well. So we call it a sync event/attempt,
+		// not a polling event/attempt.
+		SyncPeriod:         opts.PollingPeriod,
+		StatusUpdatePeriod: opts.StatusUpdatePeriod,
 		// TODO: Shouldn't this use opts.RetryPeriod as the initial duration?
 		// Limit to 12 retries, with no max retry duration.
 		RetryBackoff: util.BackoffWithDurationAndStepLimit(0, 12),
@@ -288,6 +294,7 @@ func Run(opts Options) {
 			Remediator:     rem,
 			SyncErrorCache: parse.NewSyncErrorCache(conflictHandler, fightHandler),
 		},
+		FullSyncPeriod:     opts.FullSyncPeriod,
 		StatusUpdatePeriod: opts.StatusUpdatePeriod,
 		RenderingEnabled:   opts.RenderingEnabled,
 	}
@@ -310,9 +317,9 @@ func Run(opts Options) {
 			// TODO: Trigger namespace events with a buffered channel from the NamespaceController
 			pgBuilder.NamespaceControllerPeriod = time.Second
 		}
-		reconciler = parse.NewRootRunner(reconcilerOpts, rootParseOpts)
+		reconciler = parse.NewRootSyncReconciler(reconcilerOpts, rootParseOpts)
 	} else {
-		reconciler = parse.NewNamespaceRunner(reconcilerOpts, parseOpts)
+		reconciler = parse.NewRepoSyncReconciler(reconcilerOpts, parseOpts)
 	}
 
 	// Start listening to signals
@@ -421,7 +428,7 @@ func Run(opts Options) {
 	funnel := &events.Funnel{
 		Publishers: pgBuilder.Build(),
 		// Wrap the parser with an event handler that triggers the RunFunc, as needed.
-		Subscriber: parse.NewEventHandler(ctx, reconciler, nsControllerState, parse.DefaultRunFunc),
+		Subscriber: parse.NewEventHandler(ctx, reconciler, nsControllerState),
 	}
 	doneChForParser := funnel.Start(ctx)
 

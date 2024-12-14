@@ -175,7 +175,7 @@ func TestSourceCommitAndDirWithRetry(t *testing.T) {
 			}()
 
 			t.Logf("start calling SourceCommitAndDirWithRetry at %v", time.Now())
-			srcCommit, srcSyncDir, err := SourceCommitAndDirWithRetry(backoff, configsync.GitSource, cmpath.Absolute(commitDir), cmpath.RelativeOS(tc.syncDir), "root-reconciler")
+			srcCommit, srcSyncDir, err := SourceCommitAndSyncPathWithRetry(backoff, configsync.GitSource, cmpath.Absolute(commitDir), cmpath.RelativeOS(tc.syncDir), "root-reconciler")
 			if tc.expectedErrMsg == "" {
 				assert.Nil(t, err, "got unexpected error %v", err)
 				assert.Equal(t, tc.expectedSourceCommit, srcCommit)
@@ -189,7 +189,6 @@ func TestSourceCommitAndDirWithRetry(t *testing.T) {
 			<-doneCh
 		})
 	}
-
 }
 
 func TestRunHydrate(t *testing.T) {
@@ -262,7 +261,7 @@ func TestRunHydrate(t *testing.T) {
 			}
 
 			absSourceDir := hydrator.SourceRoot.Join(cmpath.RelativeSlash(hydrator.SourceLink))
-			_, syncDir, err := SourceCommitAndDir(hydrator.SourceType, absSourceDir, hydrator.SyncDir, hydrator.ReconcilerName)
+			_, syncDir, err := SourceCommitAndSyncPath(hydrator.SourceType, absSourceDir, hydrator.SyncDir, hydrator.ReconcilerName)
 			if err != nil {
 				t.Fatal(fmt.Errorf("failed to get commit and sync directory from the source directory %s: %v", commitDir, err))
 			}

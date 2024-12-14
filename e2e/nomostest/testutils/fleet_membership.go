@@ -29,9 +29,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// TestCrossProjectFleetProjectID is the fleet host project.
-const TestCrossProjectFleetProjectID = "cs-dev-hub"
-
 // RegisterCluster registers a cluster in a fleet.
 func RegisterCluster(nt *nomostest.NT, fleetMembership, fleetProject, gkeURI string) error {
 	_, err := nt.Shell.ExecWithDebug("gcloud", "container", "fleet",

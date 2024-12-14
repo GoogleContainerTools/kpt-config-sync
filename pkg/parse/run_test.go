@@ -42,7 +42,7 @@ import (
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
-	"kpt.dev/configsync/pkg/importer/reader"
+	fsfake "kpt.dev/configsync/pkg/importer/filesystem/fake"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/remediator/conflict"
@@ -61,7 +61,7 @@ const (
 	symLink = "rev"
 )
 
-func newRootReconciler(t *testing.T, clock clock.Clock, fakeClient client.Client, fs FileSource, renderingEnabled bool) *reconciler {
+func newRootReconciler(t *testing.T, clock clock.Clock, fakeClient client.Client, parser filesystem.ConfigParser, fs FileSource, renderingEnabled bool) *reconciler {
 	converter, err := openapitest.ValueConverterForTest()
 	if err != nil {
 		t.Fatal(err)
@@ -71,7 +71,7 @@ func newRootReconciler(t *testing.T, clock clock.Clock, fakeClient client.Client
 	}
 	opts := &Options{
 		Clock:             clock,
-		ConfigParser:      filesystem.NewParser(&reader.File{}),
+		ConfigParser:      parser,
 		SyncName:          rootSyncName,
 		Scope:             declared.RootScope,
 		ReconcilerName:    rootReconcilerName,
@@ -98,6 +98,7 @@ func newRootReconciler(t *testing.T, clock clock.Clock, fakeClient client.Client
 			},
 			SyncErrorCache: state.syncErrorCache,
 		},
+		FullSyncPeriod:     configsync.DefaultReconcilerFullSyncPeriod,
 		StatusUpdatePeriod: configsync.DefaultReconcilerSyncStatusUpdatePeriod,
 		RenderingEnabled:   renderingEnabled,
 	}
@@ -182,7 +183,7 @@ func TestSplitObjects(t *testing.T) {
 	}
 }
 
-func TestRun(t *testing.T) {
+func TestReconciler_Reconcile(t *testing.T) {
 	fakeMetaTime := metav1.Now().Rfc3339Copy() // truncate to second precision
 	fakeTime := fakeMetaTime.Time
 	fakeClock := fakeclock.NewFakeClock(fakeTime)
@@ -196,7 +197,6 @@ func TestRun(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	sourceDir0 := filepath.Join(tempDir, "0", "source")
 
 	sourceCommit := "abcd123"
 
@@ -224,67 +224,34 @@ func TestRun(t *testing.T) {
 
 	testCases := []struct {
 		name                  string
+		trigger               string
+		reconcilerStateFunc   func(state *ReconcilerState, sourcePath string)
 		commit                string
 		renderingEnabled      bool
 		hasKustomization      bool
 		hydratedRootExist     bool
 		retryCap              time.Duration
 		srcRootCreateLatency  time.Duration
-		sourceError           string
+		gitError              string
 		hydratedError         string
 		hydrationDone         bool
+		imageVerified         bool
 		expectedSourceChanged bool
 		needRetry             bool
-		expectedRootSync      *v1beta1.RootSync
+		parseOutputs          []fsfake.ParserOutputs
+		expectedRootSyncFunc  func(sourcePath string) *v1beta1.RootSync
 	}{
 		{
-			name:                  "source commit directory isn't created within the retry cap",
-			retryCap:              5 * time.Millisecond,
-			srcRootCreateLatency:  10 * time.Millisecond,
-			expectedSourceChanged: false,
-			needRetry:             true,
-			expectedRootSync: func() *v1beta1.RootSync {
-				rs := rootSyncOutput.DeepCopy()
-				rs.ObjectMeta.ResourceVersion = "2" // Create + Update (source status)
-				rs.Status.Status.Source = v1beta1.SourceStatus{
-					Git: &v1beta1.GitStatus{
-						Repo:   fileSource.SourceRepo,
-						Branch: fileSource.SourceBranch,
-					},
-					Errors: status.ToCSE(
-						status.SourceError.Wrap(
-							util.NewRetriableError(
-								fmt.Errorf("failed to check the status of the source root directory %q: %w", sourceDir0,
-									&fs.PathError{Op: "stat", Path: sourceDir0, Err: syscall.Errno(2)}))).
-							Build(),
-					),
-					ErrorSummary: &v1beta1.ErrorSummary{TotalCount: 1, ErrorCountAfterTruncation: 1},
-					LastUpdate:   fakeMetaTime,
-				}
-				rs.Status.Conditions = []v1beta1.RootSyncCondition{
-					{
-						Type:               v1beta1.RootSyncSyncing,
-						Status:             metav1.ConditionFalse,
-						LastUpdateTime:     fakeMetaTime,
-						LastTransitionTime: fakeMetaTime,
-						Reason:             "Source",
-						Message:            "Source",
-						ErrorSourceRefs:    []v1beta1.ErrorSource{v1beta1.SourceError},
-						ErrorSummary:       &v1beta1.ErrorSummary{TotalCount: 1, ErrorCountAfterTruncation: 1},
-					},
-				}
-				return rs
-			}(),
-		},
-		{
-			name:                  "source commit directory created within the retry cap",
-			retryCap:              100 * time.Millisecond,
-			srcRootCreateLatency:  5 * time.Millisecond,
+			name:                  "reconcile success with existing source commit directory",
+			trigger:               triggerSync,
 			expectedSourceChanged: true,
 			needRetry:             false,
-			expectedRootSync: func() *v1beta1.RootSync {
+			parseOutputs: []fsfake.ParserOutputs{
+				{}, // parse should be called exactly once
+			},
+			expectedRootSyncFunc: func(_ string) *v1beta1.RootSync {
 				rs := rootSyncOutput.DeepCopy()
-				// Create + Update (source status) + Update (rendering status) + Update (sync status)
+				// Create + Update (fetch success) + Update (render skipped) + Update (sync success)
 				rs.ObjectMeta.ResourceVersion = "4"
 				rs.Status.Status.LastSyncedCommit = sourceCommit
 				rs.Status.Status.Source = v1beta1.SourceStatus{
@@ -328,16 +295,118 @@ func TestRun(t *testing.T) {
 					},
 				}
 				return rs
-			}(),
+			},
 		},
 		{
-			name:                  "source fetch error",
-			sourceError:           "git sync permission issue",
+			name:                  "reconcile success with delayed source commit directory creation",
+			trigger:               triggerSync,
+			retryCap:              100 * time.Millisecond,
+			srcRootCreateLatency:  5 * time.Millisecond,
+			expectedSourceChanged: true,
+			needRetry:             false,
+			parseOutputs: []fsfake.ParserOutputs{
+				{}, // parse should be called exactly once
+			},
+			expectedRootSyncFunc: func(_ string) *v1beta1.RootSync {
+				rs := rootSyncOutput.DeepCopy()
+				// Create + Update (fetch success) + Update (render skipped) + Update (sync success)
+				rs.ObjectMeta.ResourceVersion = "4"
+				rs.Status.Status.LastSyncedCommit = sourceCommit
+				rs.Status.Status.Source = v1beta1.SourceStatus{
+					Git: &v1beta1.GitStatus{
+						Repo:   fileSource.SourceRepo,
+						Branch: fileSource.SourceBranch,
+					},
+					Commit:       sourceCommit,
+					LastUpdate:   fakeMetaTime,
+					ErrorSummary: &v1beta1.ErrorSummary{},
+				}
+				rs.Status.Status.Rendering = v1beta1.RenderingStatus{
+					Git: &v1beta1.GitStatus{
+						Repo:   fileSource.SourceRepo,
+						Branch: fileSource.SourceBranch,
+					},
+					Commit:       sourceCommit,
+					Message:      RenderingSkipped,
+					LastUpdate:   fakeMetaTime,
+					ErrorSummary: &v1beta1.ErrorSummary{},
+				}
+				rs.Status.Status.Sync = v1beta1.SyncStatus{
+					Git: &v1beta1.GitStatus{
+						Repo:   fileSource.SourceRepo,
+						Branch: fileSource.SourceBranch,
+					},
+					Commit:       sourceCommit,
+					LastUpdate:   fakeMetaTime,
+					ErrorSummary: &v1beta1.ErrorSummary{},
+				}
+				rs.Status.Conditions = []v1beta1.RootSyncCondition{
+					{
+						Type:               v1beta1.RootSyncSyncing,
+						Status:             metav1.ConditionFalse,
+						LastUpdateTime:     fakeMetaTime,
+						LastTransitionTime: fakeMetaTime,
+						Reason:             "Sync",
+						Message:            "Sync Completed",
+						Commit:             sourceCommit,
+						ErrorSummary:       &v1beta1.ErrorSummary{},
+					},
+				}
+				return rs
+			},
+		},
+		{
+			name:                  "read retryable error because missing source commit directory",
+			trigger:               triggerSync,
+			retryCap:              5 * time.Millisecond,
+			srcRootCreateLatency:  10 * time.Millisecond,
 			expectedSourceChanged: false,
 			needRetry:             true,
-			expectedRootSync: func() *v1beta1.RootSync {
+			parseOutputs:          nil, // parse should not be called
+			expectedRootSyncFunc: func(sourcePath string) *v1beta1.RootSync {
 				rs := rootSyncOutput.DeepCopy()
-				// Create + Update (source status)
+				// Create + Update (fetch error)
+				rs.ObjectMeta.ResourceVersion = "2"
+				rs.Status.Status.Source = v1beta1.SourceStatus{
+					Git: &v1beta1.GitStatus{
+						Repo:   fileSource.SourceRepo,
+						Branch: fileSource.SourceBranch,
+					},
+					Errors: status.ToCSE(
+						status.SourceError.Wrap(
+							util.NewRetriableError(
+								fmt.Errorf("failed to check the status of the source root directory %q: %w", sourcePath,
+									&fs.PathError{Op: "stat", Path: sourcePath, Err: syscall.Errno(2)}))).
+							Build(),
+					),
+					ErrorSummary: &v1beta1.ErrorSummary{TotalCount: 1, ErrorCountAfterTruncation: 1},
+					LastUpdate:   fakeMetaTime,
+				}
+				rs.Status.Conditions = []v1beta1.RootSyncCondition{
+					{
+						Type:               v1beta1.RootSyncSyncing,
+						Status:             metav1.ConditionFalse,
+						LastUpdateTime:     fakeMetaTime,
+						LastTransitionTime: fakeMetaTime,
+						Reason:             "Source",
+						Message:            "Source",
+						ErrorSourceRefs:    []v1beta1.ErrorSource{v1beta1.SourceError},
+						ErrorSummary:       &v1beta1.ErrorSummary{TotalCount: 1, ErrorCountAfterTruncation: 1},
+					},
+				}
+				return rs
+			},
+		},
+		{
+			name:                  "fetch retriable error because git-sync error",
+			trigger:               triggerSync,
+			gitError:              "git sync permission issue",
+			expectedSourceChanged: false,
+			needRetry:             true,
+			parseOutputs:          nil, // parse should not be called
+			expectedRootSyncFunc: func(_ string) *v1beta1.RootSync {
+				rs := rootSyncOutput.DeepCopy()
+				// Create + Update (fetch error)
 				rs.ObjectMeta.ResourceVersion = "2"
 				rs.Status.Status.Source = v1beta1.SourceStatus{
 					Git: &v1beta1.GitStatus{
@@ -367,17 +436,20 @@ func TestRun(t *testing.T) {
 					},
 				}
 				return rs
-			}(),
+			},
 		},
 		{
-			name:                  "rendering in progress",
+			name:                  "render in progress",
+			trigger:               triggerSync,
 			renderingEnabled:      true,
 			hydratedRootExist:     true,
 			expectedSourceChanged: false,
 			needRetry:             true,
-			expectedRootSync: func() *v1beta1.RootSync {
+			imageVerified:         true,
+			parseOutputs:          nil, // parse should not be called
+			expectedRootSyncFunc: func(_ string) *v1beta1.RootSync {
 				rs := rootSyncOutput.DeepCopy()
-				// Create + Update (source status) + Update (rendering status)
+				// Create + Update (fetch success) + Update (render in-progress)
 				rs.ObjectMeta.ResourceVersion = "3"
 				rs.Status.Status.Source = v1beta1.SourceStatus{
 					Git: &v1beta1.GitStatus{
@@ -411,20 +483,23 @@ func TestRun(t *testing.T) {
 					},
 				}
 				return rs
-			}(),
+			},
 		},
 		{
-			name:                  "hydration error",
+			name:                  "render error because hydration failed",
+			trigger:               triggerSync,
 			renderingEnabled:      true,
 			hasKustomization:      true,
 			hydratedRootExist:     true,
 			hydrationDone:         true,
+			imageVerified:         true,
 			hydratedError:         `{"code": "1068", "error": "rendering error"}`,
 			expectedSourceChanged: false,
 			needRetry:             true,
-			expectedRootSync: func() *v1beta1.RootSync {
+			parseOutputs:          nil, // parse should not be called
+			expectedRootSyncFunc: func(_ string) *v1beta1.RootSync {
 				rs := rootSyncOutput.DeepCopy()
-				// Create + Update (source status) + Update (rendering status)
+				// Create + Update (fetch success) + Update (render error)
 				rs.ObjectMeta.ResourceVersion = "3"
 				rs.Status.Status.Source = v1beta1.SourceStatus{
 					Git: &v1beta1.GitStatus{
@@ -445,7 +520,7 @@ func TestRun(t *testing.T) {
 					Errors: status.ToCSE(
 						status.HydrationError(status.ActionableHydrationErrorCode, fmt.Errorf("rendering error")),
 					),
-					// TODO: Fix bug with rendering status not setting ErrorCountAfterTruncation = 1
+					// TODO: Fix bug with rendering status not setting ErrorCountAfterTruncation = 1 (b/379720690)
 					ErrorSummary: &v1beta1.ErrorSummary{TotalCount: 1, ErrorCountAfterTruncation: 0},
 					LastUpdate:   fakeMetaTime,
 				}
@@ -463,20 +538,208 @@ func TestRun(t *testing.T) {
 					},
 				}
 				return rs
-			}(),
+			},
 		},
-		// TODO: Add source parse error test case (with and without rendering)
 		{
-			name:                  "successful read",
+			name:                  "parse blocking error because missing name without rendering",
+			trigger:               triggerSync,
+			expectedSourceChanged: true,
+			needRetry:             true,
+			parseOutputs: []fsfake.ParserOutputs{
+				{
+					Errors: status.ResourceErrorBuilder.Wrap(
+						fmt.Errorf("missing field %q", "metadata.name")).
+						Build(),
+				},
+			},
+			expectedRootSyncFunc: func(_ string) *v1beta1.RootSync {
+				rs := rootSyncOutput.DeepCopy()
+				// Create + Update (fetch success) + Update (render skipped) + Update (parse error)
+				rs.ObjectMeta.ResourceVersion = "4"
+				rs.Status.Status.Source = v1beta1.SourceStatus{
+					Git: &v1beta1.GitStatus{
+						Repo:   fileSource.SourceRepo,
+						Branch: fileSource.SourceBranch,
+					},
+					Commit:     sourceCommit,
+					LastUpdate: fakeMetaTime,
+					Errors: status.ToCSE(
+						status.ResourceErrorBuilder.Wrap(
+							fmt.Errorf("missing field %q", "metadata.name")).
+							Build(),
+					),
+					ErrorSummary: &v1beta1.ErrorSummary{TotalCount: 1, ErrorCountAfterTruncation: 1},
+				}
+				rs.Status.Status.Rendering = v1beta1.RenderingStatus{
+					Git: &v1beta1.GitStatus{
+						Repo:   fileSource.SourceRepo,
+						Branch: fileSource.SourceBranch,
+					},
+					Commit:       sourceCommit,
+					Message:      RenderingSkipped,
+					ErrorSummary: &v1beta1.ErrorSummary{},
+					LastUpdate:   fakeMetaTime,
+				}
+				rs.Status.Conditions = []v1beta1.RootSyncCondition{
+					{
+						Type:               v1beta1.RootSyncSyncing,
+						Status:             metav1.ConditionFalse,
+						LastUpdateTime:     fakeMetaTime,
+						LastTransitionTime: fakeMetaTime,
+						Reason:             "Source",
+						Message:            "Source",
+						Commit:             sourceCommit,
+						ErrorSourceRefs:    []v1beta1.ErrorSource{v1beta1.SourceError},
+						ErrorSummary:       &v1beta1.ErrorSummary{TotalCount: 1, ErrorCountAfterTruncation: 1},
+					},
+				}
+				return rs
+			},
+		},
+		{
+			name:                  "parse blocking error because missing name with rendering",
+			trigger:               triggerSync,
+			renderingEnabled:      true,
+			hasKustomization:      true,
+			hydratedRootExist:     true,
+			hydrationDone:         true,
+			expectedSourceChanged: true,
+			needRetry:             true,
+			imageVerified:         true,
+			parseOutputs: []fsfake.ParserOutputs{
+				{
+					Errors: status.ResourceErrorBuilder.Wrap(
+						fmt.Errorf("missing field %q", "metadata.name")).
+						Build(),
+				},
+			},
+			expectedRootSyncFunc: func(_ string) *v1beta1.RootSync {
+				rs := rootSyncOutput.DeepCopy()
+				// Create + Update (fetch success) + Update (render success) + Update (parse error)
+				rs.ObjectMeta.ResourceVersion = "4"
+				rs.Status.Status.Source = v1beta1.SourceStatus{
+					Git: &v1beta1.GitStatus{
+						Repo:   fileSource.SourceRepo,
+						Branch: fileSource.SourceBranch,
+					},
+					Commit:     sourceCommit,
+					LastUpdate: fakeMetaTime,
+					Errors: status.ToCSE(
+						status.ResourceErrorBuilder.Wrap(
+							fmt.Errorf("missing field %q", "metadata.name")).
+							Build(),
+					),
+					ErrorSummary: &v1beta1.ErrorSummary{TotalCount: 1, ErrorCountAfterTruncation: 1},
+				}
+				rs.Status.Status.Rendering = v1beta1.RenderingStatus{
+					Git: &v1beta1.GitStatus{
+						Repo:   fileSource.SourceRepo,
+						Branch: fileSource.SourceBranch,
+					},
+					Commit:       sourceCommit,
+					Message:      RenderingSucceeded,
+					ErrorSummary: &v1beta1.ErrorSummary{},
+					LastUpdate:   fakeMetaTime,
+				}
+				rs.Status.Conditions = []v1beta1.RootSyncCondition{
+					{
+						Type:               v1beta1.RootSyncSyncing,
+						Status:             metav1.ConditionFalse,
+						LastUpdateTime:     fakeMetaTime,
+						LastTransitionTime: fakeMetaTime,
+						Reason:             "Source",
+						Message:            "Source",
+						Commit:             sourceCommit,
+						ErrorSourceRefs:    []v1beta1.ErrorSource{v1beta1.SourceError},
+						ErrorSummary:       &v1beta1.ErrorSummary{TotalCount: 1, ErrorCountAfterTruncation: 1},
+					},
+				}
+				return rs
+			},
+		},
+		{
+			name:                  "parse non-blocking error because unknown kind",
+			trigger:               triggerSync,
+			expectedSourceChanged: true,
+			needRetry:             true,
+			parseOutputs: []fsfake.ParserOutputs{
+				{
+					Errors: status.UnknownObjectKindError(
+						k8sobjects.Unstructured(kinds.Anvil(), core.Name("deploy"),
+							core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/obj.yaml"),
+						)),
+				},
+			},
+			expectedRootSyncFunc: func(_ string) *v1beta1.RootSync {
+				rs := rootSyncOutput.DeepCopy()
+				// Create + Update (fetch success) + Update (render skipped) + Update (parse error) + Update (sync success)
+				rs.ObjectMeta.ResourceVersion = "5"
+				rs.Status.Status.Source = v1beta1.SourceStatus{
+					Git: &v1beta1.GitStatus{
+						Repo:   fileSource.SourceRepo,
+						Branch: fileSource.SourceBranch,
+					},
+					Commit:     sourceCommit,
+					LastUpdate: fakeMetaTime,
+					Errors: status.ToCSE(
+						status.UnknownObjectKindError(
+							k8sobjects.Unstructured(kinds.Anvil(), core.Name("deploy"),
+								core.Annotation(metadata.SourcePathAnnotationKey, "namespaces/obj.yaml"),
+							)),
+					),
+					ErrorSummary: &v1beta1.ErrorSummary{TotalCount: 1, ErrorCountAfterTruncation: 1},
+				}
+				rs.Status.Status.Rendering = v1beta1.RenderingStatus{
+					Git: &v1beta1.GitStatus{
+						Repo:   fileSource.SourceRepo,
+						Branch: fileSource.SourceBranch,
+					},
+					Commit:       sourceCommit,
+					Message:      RenderingSkipped,
+					ErrorSummary: &v1beta1.ErrorSummary{},
+					LastUpdate:   fakeMetaTime,
+				}
+				rs.Status.Status.Sync = v1beta1.SyncStatus{
+					Git: &v1beta1.GitStatus{
+						Repo:   fileSource.SourceRepo,
+						Branch: fileSource.SourceBranch,
+					},
+					Commit:       sourceCommit,
+					LastUpdate:   fakeMetaTime,
+					ErrorSummary: &v1beta1.ErrorSummary{},
+				}
+				rs.Status.Conditions = []v1beta1.RootSyncCondition{
+					{
+						Type:               v1beta1.RootSyncSyncing,
+						Status:             metav1.ConditionFalse,
+						LastUpdateTime:     fakeMetaTime,
+						LastTransitionTime: fakeMetaTime,
+						Reason:             "Sync",
+						Message:            "Sync Completed",
+						Commit:             sourceCommit,
+						ErrorSourceRefs:    []v1beta1.ErrorSource{v1beta1.SourceError},
+						ErrorSummary:       &v1beta1.ErrorSummary{TotalCount: 1, ErrorCountAfterTruncation: 1},
+					},
+				}
+				return rs
+			},
+		},
+		{
+			name:                  "reconcile success with rendering",
+			trigger:               triggerSync,
 			renderingEnabled:      true,
 			hasKustomization:      true,
 			hydratedRootExist:     true,
 			hydrationDone:         true,
 			expectedSourceChanged: true,
 			needRetry:             false,
-			expectedRootSync: func() *v1beta1.RootSync {
+			imageVerified:         true,
+			parseOutputs: []fsfake.ParserOutputs{
+				{}, // parse should be called exactly once
+			},
+			expectedRootSyncFunc: func(_ string) *v1beta1.RootSync {
 				rs := rootSyncOutput.DeepCopy()
-				// Create + Update (source status) + Update (rendering status) + Update (sync status)
+				// Create + Update (fetch success) + Update (render success) + Update (sync success)
 				rs.ObjectMeta.ResourceVersion = "4"
 				rs.Status.Status.LastSyncedCommit = sourceCommit
 				rs.Status.Status.Source = v1beta1.SourceStatus{
@@ -520,17 +783,21 @@ func TestRun(t *testing.T) {
 					},
 				}
 				return rs
-			}(),
+			},
 		},
 		{
-			name:                  "successful read without hydration",
+			name:                  "reconcile success without rendering",
+			trigger:               triggerSync,
 			hydratedRootExist:     false,
 			hydrationDone:         false,
 			expectedSourceChanged: true,
 			needRetry:             false,
-			expectedRootSync: func() *v1beta1.RootSync {
+			parseOutputs: []fsfake.ParserOutputs{
+				{}, // parse should be called exactly once
+			},
+			expectedRootSyncFunc: func(_ string) *v1beta1.RootSync {
 				rs := rootSyncOutput.DeepCopy()
-				// Create + Update (source status) + Update (rendering status) + Update (sync status)
+				// Create + Update (fetch success) + Update (render skipped) + Update (sync success)
 				rs.ObjectMeta.ResourceVersion = "4"
 				rs.Status.Status.LastSyncedCommit = sourceCommit
 				rs.Status.Status.Source = v1beta1.SourceStatus{
@@ -574,20 +841,23 @@ func TestRun(t *testing.T) {
 					},
 				}
 				return rs
-			}(),
+			},
 		},
 		{
-			name:                  "error because hydration enabled with wet source",
+			name:                  "render transient error because hydration enabled with wet source",
+			trigger:               triggerSync,
 			renderingEnabled:      true,
 			hasKustomization:      false,
 			hydratedRootExist:     false,
 			hydrationDone:         true,
 			expectedSourceChanged: false,
 			needRetry:             true,
-			expectedRootSync: func() *v1beta1.RootSync {
+			imageVerified:         true,
+			parseOutputs:          nil, // parse should not be called
+			expectedRootSyncFunc: func(_ string) *v1beta1.RootSync {
 				rs := rootSyncOutput.DeepCopy()
-				// Create + Update (source status) + Update (rendering status)
-				rs.ObjectMeta.ResourceVersion = "4" // TODO: Why 4 and not just 3?
+				// Create + Update (fetch success) + Patch (requires-rendering annotation) + Update (render error)
+				rs.ObjectMeta.ResourceVersion = "4"
 				// Tell reconciler-manager to disable the hydration-controller container
 				core.SetAnnotation(rs, metadata.RequiresRenderingAnnotationKey, "false")
 				rs.Status.Status.Source = v1beta1.SourceStatus{
@@ -627,20 +897,22 @@ func TestRun(t *testing.T) {
 					},
 				}
 				return rs
-			}(),
+			},
 		},
 		{
-			name:                  "error because hydration disabled with dry source",
+			name:                  "render transient error because hydration disabled with dry source",
+			trigger:               triggerSync,
 			renderingEnabled:      false,
 			hasKustomization:      true,
 			hydratedRootExist:     true,
 			hydrationDone:         true,
 			expectedSourceChanged: false,
 			needRetry:             true,
-			expectedRootSync: func() *v1beta1.RootSync {
+			parseOutputs:          nil, // parse should not be called
+			expectedRootSyncFunc: func(_ string) *v1beta1.RootSync {
 				rs := rootSyncOutput.DeepCopy()
-				// Create + Update (source status) + Update (rendering status)
-				rs.ObjectMeta.ResourceVersion = "4" // TODO: Why 4 and not just 3?
+				// Create + Update (fetch success) + Patch (requires-rendering annotation) + Update (render error)
+				rs.ObjectMeta.ResourceVersion = "4"
 				// Tell reconciler-manager to enable the hydration-controller container
 				core.SetAnnotation(rs, metadata.RequiresRenderingAnnotationKey, "true")
 				rs.Status.Status.Source = v1beta1.SourceStatus{
@@ -680,7 +952,91 @@ func TestRun(t *testing.T) {
 					},
 				}
 				return rs
-			}(),
+			},
+		},
+		{
+			name:    "reconcile success with full-sync after apply error",
+			trigger: triggerSync,
+			reconcilerStateFunc: func(state *ReconcilerState, sourcePath string) {
+				// Set lastFullSyncTime old enough to trigger full-sync
+				state.lastFullSyncTime = metav1.Time{Time: fakeClock.Now().Add(-configsync.DefaultReconcilerFullSyncPeriod - time.Second)}
+				// Set checkpoint time of last error to slightly after the lastFullSyncTime
+				lastCheckpointTime := metav1.Time{Time: state.lastFullSyncTime.Add(time.Second)}
+				state.checkpoint = checkpoint{
+					lastUpdateTime:     lastCheckpointTime,
+					lastTransitionTime: lastCheckpointTime,
+				}
+				// Simulate fetch & parse success from current commit to ensure full-sync doesn't skip updating
+				state.cache = cacheForCommit{
+					source: &sourceState{
+						spec:     SourceSpecFromFileSource(fileSource, fileSource.SourceType, sourceCommit),
+						commit:   sourceCommit,
+						syncPath: cmpath.Absolute(filepath.Join(sourcePath, sourceCommit)),
+						files:    nil,
+					},
+					parse: &parseResult{
+						lastUpdateTime: lastCheckpointTime,
+					},
+					declaredResourcesUpdated: true,
+					applied:                  false,
+					watchesUpdated:           false,
+					needToRetry:              true,
+				}
+				// Simulate sync error
+				state.syncErrorCache.AddApplyError(status.InternalError("apply error"))
+			},
+			expectedSourceChanged: false, // source spec & commit did not change, but was re-parsed
+			needRetry:             false,
+			parseOutputs: []fsfake.ParserOutputs{
+				{}, // parse should be called exactly once
+			},
+			expectedRootSyncFunc: func(_ string) *v1beta1.RootSync {
+				rs := rootSyncOutput.DeepCopy()
+				// Create + Update (fetch success) + Update (render skipped) + Update (sync success)
+				rs.ObjectMeta.ResourceVersion = "4"
+				rs.Status.Status.LastSyncedCommit = sourceCommit
+				rs.Status.Status.Source = v1beta1.SourceStatus{
+					Git: &v1beta1.GitStatus{
+						Repo:   fileSource.SourceRepo,
+						Branch: fileSource.SourceBranch,
+					},
+					Commit:       sourceCommit,
+					LastUpdate:   fakeMetaTime,
+					ErrorSummary: &v1beta1.ErrorSummary{},
+				}
+				rs.Status.Status.Rendering = v1beta1.RenderingStatus{
+					Git: &v1beta1.GitStatus{
+						Repo:   fileSource.SourceRepo,
+						Branch: fileSource.SourceBranch,
+					},
+					Commit:       sourceCommit,
+					Message:      RenderingSkipped,
+					LastUpdate:   fakeMetaTime,
+					ErrorSummary: &v1beta1.ErrorSummary{},
+				}
+				rs.Status.Status.Sync = v1beta1.SyncStatus{
+					Git: &v1beta1.GitStatus{
+						Repo:   fileSource.SourceRepo,
+						Branch: fileSource.SourceBranch,
+					},
+					Commit:       sourceCommit,
+					LastUpdate:   fakeMetaTime,
+					ErrorSummary: &v1beta1.ErrorSummary{},
+				}
+				rs.Status.Conditions = []v1beta1.RootSyncCondition{
+					{
+						Type:               v1beta1.RootSyncSyncing,
+						Status:             metav1.ConditionFalse,
+						LastUpdateTime:     fakeMetaTime,
+						LastTransitionTime: fakeMetaTime,
+						Reason:             "Sync",
+						Message:            "Sync Completed",
+						Commit:             sourceCommit,
+						ErrorSummary:       &v1beta1.ErrorSummary{},
+					},
+				}
+				return rs
+			},
 		},
 	}
 
@@ -699,6 +1055,7 @@ func TestRun(t *testing.T) {
 			sourceRoot := filepath.Join(rootDir, "source")     // /repo/source
 			hydratedRoot := filepath.Join(rootDir, "hydrated") // /repo/hydrated
 			sourceDir := filepath.Join(sourceRoot, symLink)
+			reconcilerSignalDir := filepath.Join(rootDir, "reconciler-signals")
 
 			// Simulating the creation of source configs and errors in the background
 			doneCh := make(chan struct{})
@@ -728,9 +1085,8 @@ func TestRun(t *testing.T) {
 								return fmt.Errorf("failed to write kustomization file: %v", err)
 							}
 						}
-
-						if tc.sourceError != "" {
-							if err = writeFile(sourceRoot, hydrate.ErrorFile, tc.sourceError); err != nil {
+						if tc.gitError != "" {
+							if err = writeFile(sourceRoot, hydrate.ErrorFile, tc.gitError); err != nil {
 								return fmt.Errorf("failed to write source error file: %v", err)
 							}
 						}
@@ -749,6 +1105,9 @@ func TestRun(t *testing.T) {
 								return fmt.Errorf("failed to write hydrated error file: %v", err)
 							}
 						}
+						if err = createRootDir(reconcilerSignalDir, sourceCommit); err != nil {
+							return fmt.Errorf("failed to create reconciler-signals directory: %v", err)
+						}
 					}
 					return nil
 				}()
@@ -758,18 +1117,26 @@ func TestRun(t *testing.T) {
 			}()
 
 			fs := FileSource{
-				SourceDir:    cmpath.Absolute(sourceDir),
-				RepoRoot:     cmpath.Absolute(rootDir),
-				HydratedRoot: hydratedRoot,
-				HydratedLink: symLink,
-				SourceType:   fileSource.SourceType,
-				SourceRepo:   fileSource.SourceRepo,
-				SourceBranch: fileSource.SourceBranch,
+				SourceDir:            cmpath.Absolute(sourceDir),
+				RepoRoot:             cmpath.Absolute(rootDir),
+				HydratedRoot:         hydratedRoot,
+				HydratedLink:         symLink,
+				SourceType:           fileSource.SourceType,
+				SourceRepo:           fileSource.SourceRepo,
+				SourceBranch:         fileSource.SourceBranch,
+				ReconcilerSignalsDir: cmpath.Absolute(reconcilerSignalDir),
 			}
 			fakeClient := syncerFake.NewClient(t, core.Scheme, k8sobjects.RootSyncObjectV1Beta1(rootSyncName))
-			reconciler := newRootReconciler(t, fakeClock, fakeClient, fs, tc.renderingEnabled)
+			fakeConfigParser := &fsfake.ConfigParser{
+				Outputs: tc.parseOutputs,
+			}
+			reconciler := newRootReconciler(t, fakeClock, fakeClient, fakeConfigParser, fs, tc.renderingEnabled)
+			if tc.reconcilerStateFunc != nil {
+				// Mutate the ReconcilerState
+				tc.reconcilerStateFunc(reconciler.reconcilerState, sourceRoot)
+			}
 			t.Logf("start running test at %v", time.Now())
-			result := DefaultRunFunc(context.Background(), reconciler, triggerReimport)
+			result := reconciler.Reconcile(context.Background(), tc.trigger)
 
 			assert.Equal(t, tc.expectedSourceChanged, result.SourceChanged)
 			assert.Equal(t, tc.needRetry, reconciler.ReconcilerState().cache.needToRetry)
@@ -777,7 +1144,16 @@ func TestRun(t *testing.T) {
 			rs := &v1beta1.RootSync{}
 			err = fakeClient.Get(context.Background(), rootsync.ObjectKey(rootSyncName), rs)
 			require.NoError(t, err)
-			testutil.AssertEqual(t, tc.expectedRootSync, rs)
+			testutil.AssertEqual(t, tc.expectedRootSyncFunc(sourceRoot), rs)
+
+			if tc.imageVerified {
+				readyToRenderFilePath := filepath.Join(reconcilerSignalDir, "ready-to-render")
+				_, err = os.Stat(readyToRenderFilePath)
+				assert.NoError(t, err, fmt.Sprintf("ready-to-render file should exist at %s", readyToRenderFilePath))
+				commitWritten, err := hydrate.ExtractCommit(readyToRenderFilePath)
+				assert.NoError(t, err, "failed reading file ready-to-render")
+				assert.Equal(t, commitWritten, sourceCommit)
+			}
 
 			// Block and wait for the goroutine to complete.
 			<-doneCh

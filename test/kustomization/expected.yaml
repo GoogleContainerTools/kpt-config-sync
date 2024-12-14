@@ -5746,11 +5746,15 @@ data:
             - "--hydrated-root=hydrated"
             - "--source-link=rev"
             - "--hydrated-link=rev"
+            - "--reconciler-signals=/reconciler-signals"
             volumeMounts:
             - name: repo
               mountPath: /repo
             - name: service-account # This is needed to prevent any credentials from being exposed to malicious users.
               mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+              readOnly: true
+            - name: reconciler-signals
+              mountPath: /reconciler-signals
               readOnly: true
             imagePullPolicy: IfNotPresent
             securityContext:
@@ -5769,6 +5773,7 @@ data:
             - "--source-dir=/repo/source/rev"
             - "--hydrated-root=/repo/hydrated"
             - "--hydrated-link=rev"
+            - "--reconciler-signals=/reconciler-signals"
             env:
             - name: KUBECACHEDIR
               value: "/.kube/cache"
@@ -5778,6 +5783,8 @@ data:
               readOnly: true
             - name: kube
               mountPath: /.kube
+            - name: reconciler-signals
+              mountPath: /reconciler-signals
             securityContext:
               allowPrivilegeEscalation: false
               readOnlyRootFilesystem: true
@@ -5786,7 +5793,7 @@ data:
                 - ALL
             imagePullPolicy: IfNotPresent
           - name: git-sync
-            image: gcr.io/config-management-release/git-sync:v4.2.4-gke.8__linux_amd64
+            image: gcr.io/config-management-release/git-sync:placeholder
             args: ["--root=/repo/source", "--link=rev", "--max-failures=30", "--error-file=error.json"]
             volumeMounts:
             - name: repo
@@ -5846,7 +5853,7 @@ data:
                 - ALL
               runAsUser: 65533
           - name: otel-agent
-            image: gcr.io/config-management-release/otelcontribcol:v0.103.0-gke.4
+            image: gcr.io/config-management-release/otelcontribcol:placeholder
             command:
             - /otelcontribcol
             args:
@@ -5947,6 +5954,8 @@ data:
             emptyDir: {}
           - name: kube
             emptyDir: {}
+          - name: reconciler-signals
+            emptyDir: {}  # A shared volume that allows the reconciler to send signals to the hydration-controller
           - name: helm-creds
             secret:
               secretName: helm-creds
@@ -6106,7 +6115,7 @@ spec:
         - --feature-gates=-pkg.translator.prometheus.NormalizeName
         command:
         - /otelcontribcol
-        image: gcr.io/config-management-release/otelcontribcol:v0.103.0-gke.4
+        image: gcr.io/config-management-release/otelcontribcol:placeholder
         name: otel-collector
         ports:
         - containerPort: 55678
@@ -6318,7 +6327,7 @@ spec:
               fieldPath: metadata.labels['configsync.gke.io/deployment-name']
         - name: OTEL_RESOURCE_ATTRIBUTES
           value: k8s.pod.name=$(KUBE_POD_NAME),k8s.pod.namespace=$(KUBE_POD_NAMESPACE),k8s.pod.uid=$(KUBE_POD_UID),k8s.pod.ip=$(KUBE_POD_IP),k8s.node.name=$(KUBE_NODE_NAME),k8s.deployment.name=$(KUBE_DEPLOYMENT_NAME)
-        image: gcr.io/config-management-release/otelcontribcol:v0.103.0-gke.4
+        image: gcr.io/config-management-release/otelcontribcol:placeholder
         name: otel-agent
         ports:
         - containerPort: 55678
@@ -6441,7 +6450,7 @@ spec:
               fieldPath: metadata.labels['configsync.gke.io/deployment-name']
         - name: OTEL_RESOURCE_ATTRIBUTES
           value: k8s.pod.name=$(KUBE_POD_NAME),k8s.pod.namespace=$(KUBE_POD_NAMESPACE),k8s.pod.uid=$(KUBE_POD_UID),k8s.pod.ip=$(KUBE_POD_IP),k8s.node.name=$(KUBE_NODE_NAME),k8s.deployment.name=$(KUBE_DEPLOYMENT_NAME)
-        image: gcr.io/config-management-release/otelcontribcol:v0.103.0-gke.4
+        image: gcr.io/config-management-release/otelcontribcol:placeholder
         name: otel-agent
         ports:
         - containerPort: 55678

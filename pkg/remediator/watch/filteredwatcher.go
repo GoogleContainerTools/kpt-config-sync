@@ -240,7 +240,7 @@ func findStatusErrorCauseMessage(statusErr *apierrors.StatusError, causeType met
 // filters the event and pushes the object contained
 // in the event to the controller work queue.
 func (w *filteredWatcher) Run(ctx context.Context) status.Error {
-	klog.Infof("Watch started for %s", w.gvk)
+	klog.Infof("Remediator watch started for %s", w.gvk)
 	var resourceVersion string
 	var retriesForWatchError int
 	var runErr status.Error
@@ -261,7 +261,7 @@ Watcher:
 
 		eventCount := 0
 		ignoredEventCount := 0
-		klog.V(2).Infof("(Re)starting watch for %s at resource version %q", w.gvk, resourceVersion)
+		klog.V(2).Infof("Remediator (re)starting watch for %s at resource version %q", w.gvk, resourceVersion)
 		eventCh := w.base.ResultChan()
 	EventHandler:
 		for {
@@ -282,7 +282,7 @@ Watcher:
 					ignoredEventCount++
 				}
 				if err != nil {
-					if errors.Is(err, context.Canceled) || isContextCancelledStatusError(err) {
+					if status.IsContextCanceledError(err) || isContextCancelledStatusError(err) {
 						// The error wrappers are especially confusing for
 						// users, so just return context.Canceled.
 						runErr = status.InternalWrapf(context.Canceled, "remediator watch stopped for %s", w.gvk)
@@ -290,14 +290,14 @@ Watcher:
 						break Watcher
 					}
 					if isExpiredError(err) {
-						klog.Infof("Watch for %s at resource version %q closed with: %v", w.gvk, resourceVersion, err)
+						klog.Infof("Remediator watch for %s at resource version %q closed with: %v", w.gvk, resourceVersion, err)
 						// `w.handle` may fail because we try to watch an old resource version, setting
 						// a watch on an old resource version will always fail.
 						// Reset `resourceVersion` to an empty string here so that we can start a new
 						// watch at the most recent resource version.
 						resourceVersion = ""
 					} else if w.addError(watchEventErrorType + errorID(err)) {
-						klog.Errorf("Watch for %s at resource version %q ended with: %v", w.gvk, resourceVersion, err)
+						klog.Errorf("Remediator watch for %s at resource version %q ended with: %v", w.gvk, resourceVersion, err)
 					}
 					retriesForWatchError++
 					waitUntilNextRetry(retriesForWatchError)
@@ -310,10 +310,10 @@ Watcher:
 				}
 			}
 		}
-		klog.V(2).Infof("Ending watch for %s at resource version %q (total events: %d, ignored events: %d)",
+		klog.V(2).Infof("Remediator watch ending for %s at resource version %q (total events: %d, ignored events: %d)",
 			w.gvk, resourceVersion, eventCount, ignoredEventCount)
 	}
-	klog.Infof("Watch stopped for %s", w.gvk)
+	klog.Infof("Remediator watch stopped for %s", w.gvk)
 	return runErr
 }
 
@@ -343,7 +343,7 @@ func (w *filteredWatcher) start(ctx context.Context, resourceVersion string) (bo
 	base, err := w.startWatch(ctx, options)
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-			return false, status.InternalWrapf(err, "failed to start watch for %s", w.gvk)
+			return false, status.InternalWrapf(err, "failed to start remediator watch for %s", w.gvk)
 		} else if apierrors.IsNotFound(err) {
 			statusErr := syncerclient.ConflictWatchResourceDoesNotExist(err, w.gvk)
 			klog.Warningf("Remediator encountered a resource conflict: "+
@@ -352,7 +352,7 @@ func (w *filteredWatcher) start(ctx context.Context, resourceVersion string) (bo
 			metrics.RecordResourceConflict(ctx, w.getLatestCommit())
 			return false, statusErr
 		}
-		return false, status.APIServerErrorf(err, "failed to start watch for %s", w.gvk)
+		return false, status.APIServerErrorf(err, "failed to start remediator watch for %s", w.gvk)
 	}
 	w.base = base
 	return true, nil
@@ -385,7 +385,7 @@ func errorID(err error) string {
 // and an error indicating that a watch.Error event type is encountered and the
 // watch should be restarted.
 func (w *filteredWatcher) handle(ctx context.Context, event watch.Event) (string, bool, error) {
-	klog.Infof("Handling watch event %v %v", event.Type, w.gvk)
+	klog.Infof("Remediator handling watch event %v %v", event.Type, w.gvk)
 	var deleted bool
 	switch event.Type {
 	case watch.Added, watch.Modified:
@@ -398,7 +398,7 @@ func (w *filteredWatcher) handle(ctx context.Context, event watch.Event) (string
 			// For watch.Bookmark, only the ResourceVersion field of event.Object is set.
 			// Therefore, set the second argument of w.addError to watchEventBookmarkType.
 			if w.addError(watchEventBookmarkType) {
-				klog.Errorf("Unable to access metadata of Bookmark event: %v", event)
+				klog.Errorf("Remediator unable to access metadata of Bookmark event: %v", event)
 			}
 			return "", false, nil
 		}
@@ -408,7 +408,7 @@ func (w *filteredWatcher) handle(ctx context.Context, event watch.Event) (string
 	// Keep the default case to catch any new watch event types added in the future.
 	default:
 		if w.addError(watchEventUnsupportedType) {
-			klog.Errorf("Unsupported watch event: %#v", event)
+			klog.Errorf("Remediator encountered unsupported watch event: %#v", event)
 		}
 		return "", false, nil
 	}
@@ -416,32 +416,32 @@ func (w *filteredWatcher) handle(ctx context.Context, event watch.Event) (string
 	// get client.Object from the runtime object.
 	object, ok := event.Object.(client.Object)
 	if !ok {
-		klog.Warningf("Received non client.Object in watch event: %T", object)
+		klog.Warningf("Remediator received non client.Object in watch event: %T", object)
 		metrics.RecordInternalError(ctx, "remediator")
 		return "", false, nil
 	}
 
 	if klog.V(5).Enabled() {
-		klog.V(5).Infof("Received watch event for object: %q (generation: %d): %s",
+		klog.V(5).Infof("Remediator received watch event for object: %q (generation: %d): %s",
 			core.IDOf(object), object.GetGeneration(), log.AsJSON(object))
 	} else {
-		klog.V(3).Infof("Received watch event for object: %q (generation: %d)",
+		klog.V(3).Infof("Remediator received watch event for object: %q (generation: %d)",
 			core.IDOf(object), object.GetGeneration())
 	}
 
 	// filter objects.
 	if !w.shouldProcess(object) {
-		klog.V(4).Infof("Ignoring event for object: %q (generation: %d)",
+		klog.V(4).Infof("Remediator ignoring event for object: %q (generation: %d)",
 			core.IDOf(object), object.GetGeneration())
 		return object.GetResourceVersion(), true, nil
 	}
 
 	if deleted {
-		klog.V(2).Infof("Received watch event for deleted object %q (generation: %d)",
+		klog.V(2).Infof("Remediator received watch event for deleted object %q (generation: %d)",
 			core.IDOf(object), object.GetGeneration())
 		object = queue.MarkDeleted(ctx, object)
 	} else {
-		klog.V(2).Infof("Received watch event for created/updated object %q (generation: %d)",
+		klog.V(2).Infof("Remediator received watch event for created/updated object %q (generation: %d)",
 			core.IDOf(object), object.GetGeneration())
 	}
 
@@ -477,7 +477,7 @@ func (w *filteredWatcher) shouldProcess(object client.Object) bool {
 	currentGVK := object.GetObjectKind().GroupVersionKind()
 	declaredGVK := decl.GroupVersionKind()
 	if currentGVK != declaredGVK {
-		klog.V(5).Infof("Received a watch event for object %q with kind %s, which does not match the declared kind %s. ",
+		klog.V(5).Infof("Remediator received a watch event for object %q with kind %s, which does not match the declared kind %s. ",
 			id, currentGVK, declaredGVK)
 		return false
 	}

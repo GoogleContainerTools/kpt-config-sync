@@ -17,6 +17,8 @@ package parse
 import (
 	"sort"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
@@ -36,19 +38,8 @@ type cacheForCommit struct {
 	// This field is only set after the reconciler successfully reads all the source files.
 	source *sourceState
 
-	// hasParserResult indicates whether the cache includes the parser result.
-	hasParserResult bool
-
-	// objsSkipped contains the objects which will not be sent to the applier to apply.
-	// For example, the objects whose scope is unknown will not be sent to the applier since
-	// the kpt applier cannot handle unknown-scoped objects.
-	objsSkipped []ast.FileObject
-
-	// objsToApply contains the objects which will be sent to the applier to apply.
-	objsToApply []ast.FileObject
-
-	// parserErrs includes the parser errors.
-	parserErrs status.MultiError
+	// parse tracks the state of the parse stage.
+	parse *parseResult
 
 	// declaredResourcesUpdated indicates whether the resource declaration set
 	// has been updated.
@@ -66,20 +57,16 @@ type cacheForCommit struct {
 	needToRetry bool
 }
 
-func (c *cacheForCommit) setParserResult(objs []ast.FileObject, parserErrs status.MultiError) {
+// UpdateParseResult updates the object cache with the results from parsing from the
+// file cache.
+func (c *cacheForCommit) UpdateParseResult(objs []ast.FileObject, parserErrs status.MultiError, now metav1.Time) {
 	knownScopeObjs, unknownScopeObjs := splitObjects(objs)
-	c.objsSkipped = unknownScopeObjs
-	c.objsToApply = knownScopeObjs
-	c.parserErrs = parserErrs
-	c.hasParserResult = true
-}
-
-func (c *cacheForCommit) parserResultUpToDate() bool {
-	// If len(c.objsSkipped) > 0, it mean that some objects were skipped to be sent to
-	// the kpt applier. For example, the objects whose scope is unknown will not be sent
-	// to the applier since the kpt applier cannot handle unknown-scoped objects.
-	// Therefore, if len(c.objsSkipped) > 0, we would parse the configs from scratch.
-	return c.hasParserResult && len(c.objsSkipped) == 0 && c.parserErrs == nil
+	c.parse = &parseResult{
+		objsSkipped:    unknownScopeObjs,
+		objsToApply:    knownScopeObjs,
+		parserErrs:     parserErrs,
+		lastUpdateTime: now,
+	}
 }
 
 // splitObjects splits `objs` into two groups: the objects whose scope is known, and the objects whose scope is unknown.
@@ -99,4 +86,51 @@ func splitObjects(objs []ast.FileObject) ([]ast.FileObject, []ast.FileObject) {
 		klog.Infof("Skip sending %v unknown-scoped objects to the applier: %v", len(unknownScopeIDs), unknownScopeIDs)
 	}
 	return knownScopeObjs, unknownScopeObjs
+}
+
+type parseResult struct {
+	// objsSkipped contains the objects which will not be sent to the applier to apply.
+	// For example, the objects whose scope is unknown will not be sent to the applier since
+	// the kpt applier cannot handle unknown-scoped objects.
+	objsSkipped []ast.FileObject
+
+	// objsToApply contains the objects which will be sent to the applier to apply.
+	objsToApply []ast.FileObject
+
+	// parserErrs includes the parser errors.
+	parserErrs status.MultiError
+
+	// lastUpdateTime is the last time the parse result was updated.
+	lastUpdateTime metav1.Time
+}
+
+// IsUpdateRequired returns true if the parse result has not been updated since
+// the last reset, or there were errors, or there were skipped objects (due to
+// unknown scope).
+func (p *parseResult) IsUpdateRequired() bool {
+	return p == nil || p.lastUpdateTime.IsZero() || p.parserErrs != nil || len(p.objsSkipped) > 0
+}
+
+// GKVs returns the set of unique GVKs for all the parsed objects.
+func (p *parseResult) GKVs() []schema.GroupVersionKind {
+	seen := make(map[schema.GroupVersionKind]bool)
+	var gvks []schema.GroupVersionKind
+	for _, o := range p.fileObjects() {
+		gvk := o.GetObjectKind().GroupVersionKind()
+		if !seen[gvk] {
+			seen[gvk] = true
+			gvks = append(gvks, gvk)
+		}
+	}
+	// The order of GVKs is not deterministic, but we're using it for
+	// toWebhookConfiguration which does not require its input to be sorted.
+	return gvks
+}
+
+// fileObjects returns all the parsed objects.
+func (p *parseResult) fileObjects() []ast.FileObject {
+	objs := make([]ast.FileObject, 0, len(p.objsToApply)+len(p.objsSkipped))
+	objs = append(objs, p.objsToApply...)
+	objs = append(objs, p.objsSkipped...)
+	return objs
 }

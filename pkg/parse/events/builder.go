@@ -31,9 +31,6 @@ type PublishingGroupBuilder struct {
 	// SyncPeriod is the period of time between checking the filesystem
 	// for publisher updates to sync.
 	SyncPeriod time.Duration
-	// SyncWithReimportPeriod is the period of time between forced re-sync from
-	// publisher (even without a new commit).
-	SyncWithReimportPeriod time.Duration
 	// StatusUpdatePeriod is how long the Parser waits between updates of the
 	// sync status, to account for management conflict errors from the Remediator.
 	StatusUpdatePeriod time.Duration
@@ -51,17 +48,14 @@ func (t *PublishingGroupBuilder) Build() []Publisher {
 	if t.SyncPeriod > 0 {
 		publishers = append(publishers, NewResetOnRunAttemptPublisher(SyncEventType, t.Clock, t.SyncPeriod))
 	}
-	if t.SyncWithReimportPeriod > 0 {
-		publishers = append(publishers, NewTimeDelayPublisher(SyncWithReimportEventType, t.Clock, t.SyncWithReimportPeriod))
-	}
 	if t.NamespaceControllerPeriod > 0 {
-		publishers = append(publishers, NewTimeDelayPublisher(NamespaceResyncEventType, t.Clock, t.NamespaceControllerPeriod))
+		publishers = append(publishers, NewTimeDelayPublisher(NamespaceSyncEventType, t.Clock, t.NamespaceControllerPeriod))
 	}
 	if t.RetryBackoff.Duration > 0 {
 		publishers = append(publishers, NewRetrySyncPublisher(t.Clock, t.RetryBackoff))
 	}
 	if t.StatusUpdatePeriod > 0 {
-		publishers = append(publishers, NewResetOnRunAttemptPublisher(StatusEventType, t.Clock, t.StatusUpdatePeriod))
+		publishers = append(publishers, NewResetOnRunAttemptPublisher(StatusUpdateEventType, t.Clock, t.StatusUpdatePeriod))
 	}
 	return publishers
 }

@@ -61,18 +61,18 @@ func TestReadConfigFiles(t *testing.T) {
 				}
 			})
 
-			// mock the parser's syncDir that could change while program running
-			parserCommitDir := filepath.Join(tempRoot, tc.commit)
-			err := os.Mkdir(parserCommitDir, os.ModePerm)
+			// mock the parser's syncPath that could change while program running
+			parserCommitPath := filepath.Join(tempRoot, tc.commit)
+			err := os.Mkdir(parserCommitPath, os.ModePerm)
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			// mock the original sourceCommit that is passed by sourceState when
 			// running readConfigFiles
-			sourceCommitDir := filepath.Join(tempRoot, originCommit)
-			if _, err := os.Stat(sourceCommitDir); errors.Is(err, os.ErrNotExist) {
-				err = os.Mkdir(sourceCommitDir, os.ModePerm)
+			sourceCommitPath := filepath.Join(tempRoot, originCommit)
+			if _, err := os.Stat(sourceCommitPath); errors.Is(err, os.ErrNotExist) {
+				err = os.Mkdir(sourceCommitPath, os.ModePerm)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -81,7 +81,7 @@ func TestReadConfigFiles(t *testing.T) {
 			// create a symlink to point to the temporary directory
 			dir := ft.NewTestDir(t)
 			symDir := dir.Root().Join(cmpath.RelativeSlash("list-file-symlink"))
-			err = os.Symlink(parserCommitDir, symDir.OSPath())
+			err = os.Symlink(parserCommitPath, symDir.OSPath())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -93,10 +93,10 @@ func TestReadConfigFiles(t *testing.T) {
 			}()
 
 			srcState := &sourceState{
-				spec:    nil, // TODO: Add tests for behavior when spec is non-nil
-				commit:  originCommit,
-				syncDir: cmpath.Absolute(sourceCommitDir),
-				files:   nil,
+				spec:     nil, // TODO: Add tests for behavior when spec is non-nil
+				commit:   originCommit,
+				syncPath: cmpath.Absolute(sourceCommitPath),
+				files:    nil,
 			}
 
 			files := &Files{}
@@ -110,7 +110,7 @@ func TestReadConfigFiles(t *testing.T) {
 	}
 }
 
-func TestReadHydratedDirWithRetry(t *testing.T) {
+func TestReadHydratedPathWithRetry(t *testing.T) {
 	syncDir := "configs"
 	testCases := []struct {
 		name                 string
@@ -187,7 +187,7 @@ func TestReadHydratedDirWithRetry(t *testing.T) {
 				}
 			})
 			hydratedRoot := filepath.Join(tempRoot, "hydrated")
-			parserCommitDir := filepath.Join(hydratedRoot, tc.commit)
+			parserCommitPath := filepath.Join(hydratedRoot, tc.commit)
 			if err := os.Mkdir(hydratedRoot, os.ModePerm); err != nil {
 				t.Fatal(err)
 			}
@@ -212,26 +212,26 @@ func TestReadHydratedDirWithRetry(t *testing.T) {
 						time.Sleep(tc.symlinkCreateLatency)
 					}
 					if tc.symlinkCreateLatency <= tc.retryCap {
-						// mock the parser's syncDir that could change while program running
-						if err := os.Mkdir(parserCommitDir, os.ModePerm); err != nil {
-							return fmt.Errorf("failed to create the commit directory %q: %v", parserCommitDir, err)
+						// mock the parser's syncPath that could change while program running
+						if err := os.Mkdir(parserCommitPath, os.ModePerm); err != nil {
+							return fmt.Errorf("failed to create the commit directory %q: %v", parserCommitPath, err)
 						}
 
 						// Create the sync directory
 						if tc.syncDir == syncDir {
-							syncDirPath := filepath.Join(parserCommitDir, syncDir)
-							if err := os.Mkdir(syncDirPath, os.ModePerm); err != nil {
-								return fmt.Errorf("failed to create the sync directory %q: %v", syncDirPath, err)
+							syncPath := filepath.Join(parserCommitPath, syncDir)
+							if err := os.Mkdir(syncPath, os.ModePerm); err != nil {
+								return fmt.Errorf("failed to create the sync directory %q: %v", syncPath, err)
 							}
-							t.Logf("sync directory %q created at %v", syncDirPath, time.Now())
+							t.Logf("sync directory %q created at %v", syncPath, time.Now())
 						}
 
 						// create a symlink to point to the temporary directory
-						symDir := filepath.Join(hydratedRoot, symLink)
-						if err := os.Symlink(parserCommitDir, symDir); err != nil {
-							return fmt.Errorf("failed to create the symlink %q: %v", symDir, err)
+						logicalHydratedPath := filepath.Join(hydratedRoot, symLink)
+						if err := os.Symlink(parserCommitPath, logicalHydratedPath); err != nil {
+							return fmt.Errorf("failed to create the symlink %q: %v", logicalHydratedPath, err)
 						}
-						t.Logf("symlink %q created and linked to %q at %v", symDir, parserCommitDir, time.Now())
+						t.Logf("symlink %q created and linked to %q at %v", logicalHydratedPath, parserCommitPath, time.Now())
 					}
 					return nil
 				}()
@@ -254,12 +254,12 @@ func TestReadHydratedDirWithRetry(t *testing.T) {
 			}
 
 			wantState := &sourceState{
-				commit:  tc.commit,
-				syncDir: cmpath.Absolute(filepath.Join(parserCommitDir, syncDir)),
+				commit:   tc.commit,
+				syncPath: cmpath.Absolute(filepath.Join(parserCommitPath, syncDir)),
 			}
 
 			t.Logf("start calling readHydratedDirWithRetry at %v", time.Now())
-			hydrationState, hydrationErr := files.readHydratedDirWithRetry(backoff,
+			hydrationState, hydrationErr := files.readHydratedPathWithRetry(backoff,
 				cmpath.Absolute(hydratedRoot), "unused", srcState)
 
 			if tc.expectedErrMsg == "" {

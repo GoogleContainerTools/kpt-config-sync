@@ -72,7 +72,7 @@ var (
 	fightDetectionThreshold = flag.Float64(
 		"fight-detection-threshold", 5.0,
 		"The rate of updates per minute to an API Resource at which the Syncer logs warnings about too many updates to the resource.")
-	resyncPeriod = flag.Duration("resync-period", configsync.DefaultReconcilerResyncPeriod,
+	fullSyncPeriod = flag.Duration("full-sync-period", configsync.DefaultReconcilerFullSyncPeriod,
 		"Period of time between forced re-syncs from source (even without a new commit).")
 	workers = flag.Int("workers", 1,
 		"Number of concurrent remediator workers to run at once.")
@@ -102,27 +102,31 @@ var (
 
 	dynamicNSSelectorEnabled = flag.Bool("dynamic-ns-selector-enabled", util.EnvBool(reconcilermanager.DynamicNSSelectorEnabled, false), "")
 
-	webhookEnabled = flag.Bool("webhook-enabled", util.EnvBool(reconcilermanager.WebhookEnabled, false), "")
+	webhookEnabled       = flag.Bool("webhook-enabled", util.EnvBool(reconcilermanager.WebhookEnabled, false), "")
+	reconcilerSignalsDir = flag.String(flags.reconcilerSignalDir, "/reconciler-signals",
+		"The absolute path in the container that contains reconciler signals that unblock the rendering phase, for example, the latest image digest that is ready to render.")
 )
 
 var flags = struct {
-	sourceDir         string
-	repoRootDir       string
-	hydratedRootDir   string
-	clusterName       string
-	sourceFormat      string
-	statusMode        string
-	reconcileTimeout  string
-	namespaceStrategy string
+	sourceDir           string
+	repoRootDir         string
+	hydratedRootDir     string
+	reconcilerSignalDir string
+	clusterName         string
+	sourceFormat        string
+	statusMode          string
+	reconcileTimeout    string
+	namespaceStrategy   string
 }{
-	repoRootDir:       "repo-root",
-	sourceDir:         "source-dir",
-	hydratedRootDir:   "hydrated-root",
-	clusterName:       "cluster-name",
-	sourceFormat:      reconcilermanager.SourceFormat,
-	statusMode:        "status-mode",
-	reconcileTimeout:  "reconcile-timeout",
-	namespaceStrategy: "namespace-strategy",
+	repoRootDir:         "repo-root",
+	sourceDir:           "source-dir",
+	hydratedRootDir:     "hydrated-root",
+	reconcilerSignalDir: "reconciler-signals",
+	clusterName:         "cluster-name",
+	sourceFormat:        reconcilermanager.SourceFormat,
+	statusMode:          "status-mode",
+	reconcileTimeout:    "reconcile-timeout",
+	namespaceStrategy:   "namespace-strategy",
 }
 
 func main() {
@@ -156,6 +160,11 @@ func main() {
 		klog.Fatalf("%s must be an absolute path: %v", flags.repoRootDir, err)
 	}
 
+	absReconcilerSignalDir, err := cmpath.AbsoluteOS(*reconcilerSignalsDir)
+	if err != nil {
+		klog.Fatalf("%s must be an absolute path: %v", flags.reconcilerSignalDir, err)
+	}
+
 	// Normalize syncDirRelative.
 	// Some users specify the directory as if the root of the repository is "/".
 	// Strip this from the front of the passed directory so behavior is as
@@ -178,7 +187,7 @@ func main() {
 		FightDetectionThreshold:  *fightDetectionThreshold,
 		NumWorkers:               *workers,
 		ReconcilerScope:          scope,
-		ResyncPeriod:             *resyncPeriod,
+		FullSyncPeriod:           *fullSyncPeriod,
 		PollingPeriod:            *pollingPeriod,
 		RetryPeriod:              configsync.DefaultReconcilerRetryPeriod,
 		StatusUpdatePeriod:       configsync.DefaultReconcilerSyncStatusUpdatePeriod,
@@ -199,6 +208,7 @@ func main() {
 		RenderingEnabled:         *renderingEnabled,
 		DynamicNSSelectorEnabled: *dynamicNSSelectorEnabled,
 		WebhookEnabled:           *webhookEnabled,
+		ReconcilerSignalsDir:     absReconcilerSignalDir,
 	}
 
 	if scope == declared.RootScope {

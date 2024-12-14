@@ -16,16 +16,19 @@ package parse
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/clock"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/hydrate"
+	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
@@ -35,13 +38,21 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// Now, this is a story all about how
+// This code got flipped-turned upside down
+// And I'd like to take a minute
+// Just sit right there
+// I'll tell you how I changed all the trigger variable names without changing their string values...
+//
+// It turns out, the trigger string values are used as a ParserDuration metric label.
+// So we changed the variable names to make sense, without breaking customer metrics.
 const (
-	triggerResync             = "resync"
-	triggerReimport           = "reimport"
+	triggerFullSync           = "resync"
+	triggerSync               = "reimport"
 	triggerRetry              = "retry"
 	triggerManagementConflict = "managementConflict"
 	triggerWatchUpdate        = "watchUpdate"
-	namespaceEvent            = "namespaceEvent"
+	triggerNamespaceUpdate    = "namespaceEvent"
 )
 
 const (
@@ -65,115 +76,66 @@ const (
 	RenderingNotRequired string = "Rendering not required but is currently enabled"
 )
 
-// RunResult encapsulates the result of a RunFunc.
+// ReconcileResult encapsulates the result of a reconciler.Reconcile.
 // This simply allows explicitly naming return values in a way that makes the
 // implementation easier to read.
-type RunResult struct {
+type ReconcileResult struct {
 	SourceChanged bool
 	Success       bool
 }
 
-// RunFunc is the function signature of the function that starts the parse-apply-watch loop
-type RunFunc func(ctx context.Context, r Reconciler, trigger string) RunResult
-
-// DefaultRunFunc is the default implementation for RunOpts.RunFunc.
-func DefaultRunFunc(ctx context.Context, r Reconciler, trigger string) RunResult {
+// Reconcile the cluster with the source config.
+//
+// Reconcile has multiple phases:
+//   - Fetch - Checks the shared filesystem for new source commits fetched by
+//     one of the *-sync sidecars.
+//   - Render - Checks the shared filesystem for source rendered by the
+//     hydration-controller sidecar using helm or kustomize, if required.
+//   - Read - Reads the fetch and render status from the shared filesystem and
+//     lists the source config files.
+//   - Parse - Parses resource objects from the source config files, validates
+//     them, and adds custom metadata.
+//   - Update (aka Sync) - Updates the cluster and remediator to reflect the
+//     latest resource object manifests in the source.
+func (r *reconciler) Reconcile(ctx context.Context, trigger string) ReconcileResult {
+	result := ReconcileResult{}
 	opts := r.Options()
-	result := RunResult{}
 	state := r.ReconcilerState()
-	// Initialize status
-	// TODO: Populate status from RSync status
+	startTime := nowMeta(opts.Clock)
+
+	// Initialize ReconcilerStatus from RSync status
 	if state.status == nil {
-		reconcilerStatus, err := r.SyncStatusClient().ReconcilerStatusFromCluster(ctx)
+		klog.V(3).Infof("Initializing reconciler status from %s status", opts.Options.Scope.SyncKind())
+		reconcilerStatus, err := r.syncStatusClient.GetReconcilerStatus(ctx)
 		if err != nil {
-			state.invalidate(status.Append(nil, err))
+			state.RecordFailure(opts.Clock, err)
 			return result
 		}
 		state.status = reconcilerStatus
 	}
-	var syncDir cmpath.Absolute
-	gs := &SourceStatus{}
-	// pull the source commit and directory with retries within 5 minutes.
-	gs.Commit, syncDir, gs.Errs = hydrate.SourceCommitAndDirWithRetry(util.SourceRetryBackoff, opts.SourceType, opts.SourceDir, opts.SyncDir, opts.ReconcilerName)
 
-	// Add pre-sync annotations to the object.
-	// If updating the object fails, it's likely due to a signature verification error
-	// from the webhook. In this case, add the error as a source error.
-	if gs.Errs == nil {
-		err := r.SyncStatusClient().SetSourceAnnotations(ctx, gs.Commit)
-		if err != nil {
-			gs.Errs = status.Append(gs.Errs, status.SourceError.Wrap(err).Build())
-		}
+	// Perform full-sync, if required
+	if trigger == triggerSync && state.IsFullSyncRequired(startTime, opts.FullSyncPeriod) {
+		trigger = triggerFullSync
 	}
 
-	// Generate source spec from Reconciler config
-	gs.Spec = SourceSpecFromFileSource(opts.FileSource, opts.SourceType, gs.Commit)
+	klog.Infof("Starting sync attempt (trigger: %s)", trigger)
 
-	// Only update the source status if there are errors or the commit changed.
-	// Otherwise, parsing errors may be overwritten.
-	// TODO: Decouple fetch & parse stages to use different status fields
-	if gs.Errs != nil || state.status.SourceStatus == nil || gs.Commit != state.status.SourceStatus.Commit {
-		gs.LastUpdate = nowMeta(opts)
-		var setSourceStatusErr error
-		// Only update the source status if it changed
-		if state.status.needToSetSourceStatus(gs) {
-			klog.V(3).Info("Updating source status (after fetch)")
-			setSourceStatusErr = r.SyncStatusClient().SetSourceStatus(ctx, gs)
-			// If there were errors publishing the source status, stop, log them, and retry later
-			if setSourceStatusErr != nil {
-				// If there were fetch errors, log those too
-				state.invalidate(status.Append(gs.Errs, setSourceStatusErr))
-				return result
-			}
-			// Cache the latest source status in memory
-			state.status.SourceStatus = gs
-			state.status.SyncingConditionLastUpdate = gs.LastUpdate
-		}
-		// If there were fetch errors, stop, log them, and retry later
-		if gs.Errs != nil {
-			state.invalidate(gs.Errs)
-			return result
-		}
+	switch trigger {
+	case triggerFullSync, triggerManagementConflict, triggerNamespaceUpdate:
+		// Force parsing and updating, but skip fetch, render, and read unless required.
+		state.RecordFullSyncStart(startTime)
 	}
 
-	rs := &RenderingStatus{
-		Spec:   gs.Spec,
-		Commit: gs.Commit,
-	}
-	if state.status.RenderingStatus != nil {
-		rs.RequiresRendering = state.status.RenderingStatus.RequiresRendering
+	newSourceStatus, syncPath, errs := r.fetch(ctx)
+	if errs != nil {
+		state.RecordFailure(opts.Clock, errs)
+		return result
 	}
 
-	// set the rendering status by checking the done file.
 	if opts.RenderingEnabled {
-		doneFilePath := opts.RepoRoot.Join(cmpath.RelativeSlash(hydrate.DoneFile)).OSPath()
-		_, err := os.Stat(doneFilePath)
-		if os.IsNotExist(err) || (err == nil && hydrate.DoneCommit(doneFilePath) != gs.Commit) {
-			rs.Message = RenderingInProgress
-			rs.LastUpdate = nowMeta(opts)
-			klog.V(3).Info("Updating rendering status (before parse)")
-			setRenderingStatusErr := r.SyncStatusClient().SetRenderingStatus(ctx, state.status.RenderingStatus, rs)
-			if setRenderingStatusErr == nil {
-				state.reset()
-				state.status.RenderingStatus = rs
-				state.status.SyncingConditionLastUpdate = rs.LastUpdate
-			} else {
-				var m status.MultiError
-				state.invalidate(status.Append(m, setRenderingStatusErr))
-			}
-			return result
-		}
-		if err != nil {
-			rs.Message = RenderingFailed
-			rs.LastUpdate = nowMeta(opts)
-			rs.Errs = status.InternalHydrationError(err, "unable to read the done file: %s", doneFilePath)
-			klog.V(3).Info("Updating rendering status (before parse)")
-			setRenderingStatusErr := r.SyncStatusClient().SetRenderingStatus(ctx, state.status.RenderingStatus, rs)
-			if setRenderingStatusErr == nil {
-				state.status.RenderingStatus = rs
-				state.status.SyncingConditionLastUpdate = rs.LastUpdate
-			}
-			state.invalidate(status.Append(rs.Errs, setRenderingStatusErr))
+		if errs := r.render(ctx, newSourceStatus); errs != nil {
+			state.RecordFailure(opts.Clock, errs)
 			return result
 		}
 	}
@@ -184,135 +146,254 @@ func DefaultRunFunc(ctx context.Context, r Reconciler, trigger string) RunResult
 	}
 
 	// rendering is done, starts to read the source or hydrated configs.
-	oldSyncDir := state.cache.source.syncDir
-	// `read` is called no matter what the trigger is.
-	ps := &sourceState{
-		spec:    gs.Spec,
-		commit:  gs.Commit,
-		syncDir: syncDir,
-	}
-	if errs := r.Read(ctx, trigger, ps); errs != nil {
-		state.invalidate(errs)
+	oldSyncPath := state.cache.source.syncPath
+	if errs := r.read(ctx, trigger, newSourceStatus, syncPath); errs != nil {
+		state.RecordFailure(opts.Clock, errs)
 		return result
 	}
 
-	newSyncDir := state.cache.source.syncDir
+	newSyncPath := state.cache.source.syncPath
 
-	if newSyncDir != oldSyncDir {
-		// If the commit changed and parsing succeeded, trigger retries to start again, if stopped.
+	if newSyncPath != oldSyncPath {
+		// If the commit, branch, or sync dir changed and read succeeded,
+		// trigger retries to start again, if stopped.
 		result.SourceChanged = true
 	}
 
-	// The parse-apply-watch sequence will be skipped if the trigger type is `triggerReimport` and
-	// there is no new source changes. The reasons are:
-	//   * If a former parse-apply-watch sequence for syncDir succeeded, there is no need to run the sequence again;
-	//   * If all the former parse-apply-watch sequences for syncDir failed, the next retry will call the sequence.
-	if trigger == triggerReimport && oldSyncDir == newSyncDir {
+	// Skip parse-apply-watch if the trigger is `triggerSync` (aka "reimport")
+	// and there are no new source changes. The reasons are:
+	//   * If a former parse-apply-watch sequence for syncPath succeeded, there is no need to run the sequence again;
+	//   * If all the former parse-apply-watch sequences for syncPath failed, the next retry will call the sequence.
+	if trigger == triggerSync && oldSyncPath == newSyncPath {
 		return result
 	}
 
-	errs := r.ParseAndUpdate(ctx, trigger)
-	if errs != nil {
-		state.invalidate(errs)
+	parseErrs := r.parse(ctx, trigger)
+	// Fail if there are any blocking errors.
+	// Otherwise, continue to sync objects with known scope.
+	if status.HasBlockingErrors(parseErrs) {
+		state.RecordFailure(opts.Clock, parseErrs)
+		return result
+	}
+
+	if opts.WebhookEnabled {
+		err := webhookconfiguration.Update(ctx, opts.Client, opts.DiscoveryClient,
+			state.cache.parse.GKVs(), client.FieldOwner(configsync.FieldManager))
+		if err != nil {
+			// RBAC needs to be set up manually by the user to allow updating the webhook.
+			// TODO: Only continue if it's an authorization error, others should trigger retry
+			klog.Errorf("Failed to update admission webhook: %v", err)
+		}
+	}
+
+	updateErrs := r.update(ctx, trigger)
+	// Fail if there are any update errors or non-blocking parse errors.
+	if parseErrs != nil || updateErrs != nil {
+		state.RecordFailure(opts.Clock, status.Append(parseErrs, updateErrs))
 		return result
 	}
 
 	// Only checkpoint the state after *everything* succeeded, including status update.
-	state.checkpoint()
+	state.RecordSyncSuccess(opts.Clock)
 	result.Success = true
 	return result
 }
 
-// Read source manifests from the shared source volume.
-// Waits for rendering, if enabled.
-// Updates the RSync status (source, rendering, and syncing condition).
-func (r *reconciler) Read(ctx context.Context, trigger string, sourceState *sourceState) status.MultiError {
+// fetch waits for the *-sync sidecars to fetch the source manifests to the
+// shared source volume.
+// Updates the RSync status (source status and syncing condition).
+func (r *reconciler) fetch(ctx context.Context) (*SourceStatus, cmpath.Absolute, status.MultiError) {
 	opts := r.Options()
 	state := r.ReconcilerState()
-	hydrationStatus, sourceStatus := r.readFromSource(ctx, trigger, sourceState)
-	if opts.RenderingEnabled != hydrationStatus.RequiresRendering {
+	var syncPath cmpath.Absolute
+	newSourceStatus := &SourceStatus{}
+	readyToRenderFile := r.Options().ReconcilerSignalsDir.Join(cmpath.RelativeSlash(hydrate.ReadyToRenderFile)).OSPath()
+
+	// pull the source commit and directory with retries within 5 minutes.
+	newSourceStatus.Commit, syncPath, newSourceStatus.Errs = hydrate.SourceCommitAndSyncPathWithRetry(
+		util.SourceRetryBackoff, opts.SourceType, opts.SourceDir, opts.SyncDir, opts.ReconcilerName)
+
+	// Add pre-sync annotations to the object.
+	// If updating the object fails, it's likely due to a signature verification error
+	// from the webhook. In this case, add the error as a source error.
+	if newSourceStatus.Errs == nil {
+		if err := r.syncStatusClient.SetImageToSyncAnnotation(ctx, newSourceStatus.Commit); err != nil {
+			newSourceStatus.Errs = status.Append(newSourceStatus.Errs, err)
+			blockHydration(readyToRenderFile)
+		} else if opts.RenderingEnabled {
+			// write the commit into the ready-to-render file in reconciler-signals
+			if err := unblockHydration(newSourceStatus.Commit, readyToRenderFile); err != nil {
+				newSourceStatus.Errs = status.Append(newSourceStatus.Errs, err)
+			}
+		}
+	} else {
+		blockHydration(readyToRenderFile)
+	}
+
+	// Generate source spec from Reconciler config
+	newSourceStatus.Spec = SourceSpecFromFileSource(opts.FileSource, opts.SourceType, newSourceStatus.Commit)
+
+	// Only update the source status if there are errors or the commit changed.
+	// Otherwise, parsing errors may be overwritten.
+	// TODO: Decouple fetch & parse stages to use different status fields
+	if newSourceStatus.Errs != nil || state.status.SourceStatus == nil || newSourceStatus.Commit != state.status.SourceStatus.Commit {
+		newSourceStatus.LastUpdate = nowMeta(opts.Clock)
+		if state.status.needToSetSourceStatus(newSourceStatus) {
+			klog.V(3).Info("Updating source status (after fetch)")
+			if statusErr := r.syncStatusClient.SetSourceStatus(ctx, newSourceStatus); statusErr != nil {
+				return newSourceStatus, syncPath, status.Append(newSourceStatus.Errs, statusErr)
+			}
+			state.status.SourceStatus = newSourceStatus
+		}
+		// If there were fetch errors, stop, log them, and retry later
+		if newSourceStatus.Errs != nil {
+			return newSourceStatus, syncPath, newSourceStatus.Errs
+		}
+	}
+
+	// Fetch successful
+	return newSourceStatus, syncPath, nil
+}
+
+// render waits for the hydration-controller sidecar to render the source
+// manifests on the shared source volume.
+// Updates the RSync status (rendering status and syncing condition).
+func (r *reconciler) render(ctx context.Context, sourceStatus *SourceStatus) status.MultiError {
+	opts := r.Options()
+	state := r.ReconcilerState()
+	newRenderStatus := &RenderingStatus{
+		Spec:   sourceStatus.Spec,
+		Commit: sourceStatus.Commit,
+	}
+	if state.status.RenderingStatus != nil {
+		newRenderStatus.RequiresRendering = state.status.RenderingStatus.RequiresRendering
+	}
+	// Check the done file, created by the hydration-controller.
+	// It should contain the last rendered commit.
+	// ExtractCommit returns the empty string if the done file doesn't exist yet.
+	doneFilePath := opts.RepoRoot.Join(cmpath.RelativeSlash(hydrate.DoneFile)).OSPath()
+	renderedCommit, err := hydrate.ExtractCommit(doneFilePath)
+	if err != nil {
+		newRenderStatus.Message = RenderingFailed
+		newRenderStatus.LastUpdate = nowMeta(opts.Clock)
+		newRenderStatus.Errs = status.InternalHydrationError(err, RenderingFailed)
+		klog.V(3).Info("Updating rendering status (before read)")
+		if statusErr := r.syncStatusClient.SetRenderingStatus(ctx, state.status.RenderingStatus, newRenderStatus); statusErr != nil {
+			return status.Append(newRenderStatus.Errs, statusErr)
+		}
+		state.status.RenderingStatus = newRenderStatus
+		return newRenderStatus.Errs
+	}
+	if renderedCommit == "" || renderedCommit != sourceStatus.Commit {
+		newRenderStatus.Message = RenderingInProgress
+		newRenderStatus.LastUpdate = nowMeta(opts.Clock)
+		klog.V(3).Info("Updating rendering status (before read)")
+		if statusErr := r.syncStatusClient.SetRenderingStatus(ctx, state.status.RenderingStatus, newRenderStatus); statusErr != nil {
+			return statusErr
+		}
+		state.status.RenderingStatus = newRenderStatus
+		state.RecordRenderInProgress()
+		// Transient error will be logged as info, instead of error,
+		// but still trigger retry with backoff.
+		return status.TransientError(errors.New(RenderingInProgress))
+	}
+
+	// Render successful
+	return nil
+}
+
+// read source manifests from the shared source volume.
+// Waits for rendering, if enabled.
+// Updates the RSync status (source, rendering, and syncing condition).
+func (r *reconciler) read(ctx context.Context, trigger string, sourceStatus *SourceStatus, syncPath cmpath.Absolute) status.MultiError {
+	opts := r.Options()
+	state := r.ReconcilerState()
+	sourceState := &sourceState{
+		spec:     sourceStatus.Spec,
+		commit:   sourceStatus.Commit,
+		syncPath: syncPath,
+	}
+	newRenderStatus, newSourceStatus := r.readFromSource(ctx, trigger, sourceState)
+	if opts.RenderingEnabled != newRenderStatus.RequiresRendering {
 		// the reconciler is misconfigured. set the annotation so that the reconciler-manager
 		// will recreate this reconciler with the correct configuration.
-		if err := r.SyncStatusClient().SetRequiresRendering(ctx, hydrationStatus.RequiresRendering); err != nil {
-			hydrationStatus.Errs = status.Append(hydrationStatus.Errs,
-				status.InternalHydrationError(err, "error setting %s annotation", metadata.RequiresRenderingAnnotationKey))
+		if err := r.syncStatusClient.SetRequiresRenderingAnnotation(ctx, newRenderStatus.RequiresRendering); err != nil {
+			newRenderStatus.Errs = status.Append(newRenderStatus.Errs, err)
 		}
 	}
-	hydrationStatus.LastUpdate = nowMeta(opts)
+	newRenderStatus.LastUpdate = nowMeta(opts.Clock)
 	// update the rendering status before source status because the parser needs to
 	// read and parse the configs after rendering is done and there might have errors.
-	klog.V(3).Info("Updating rendering status (after parse)")
-	setRenderingStatusErr := r.SyncStatusClient().SetRenderingStatus(ctx, state.status.RenderingStatus, hydrationStatus)
-	if setRenderingStatusErr == nil {
-		state.status.RenderingStatus = hydrationStatus
-		state.status.SyncingConditionLastUpdate = hydrationStatus.LastUpdate
+	klog.V(3).Info("Updating rendering status (after read)")
+	if statusErr := r.syncStatusClient.SetRenderingStatus(ctx, state.status.RenderingStatus, newRenderStatus); statusErr != nil {
+		// Return both errors
+		return status.Append(newRenderStatus.Errs, statusErr)
 	}
-	renderingErrs := status.Append(hydrationStatus.Errs, setRenderingStatusErr)
-	if renderingErrs != nil {
-		return renderingErrs
-	}
-
-	if sourceStatus.Errs == nil {
-		return nil
+	state.status.RenderingStatus = newRenderStatus
+	if newRenderStatus.Errs != nil {
+		return newRenderStatus.Errs
 	}
 
-	// Only call `setSourceStatus` if `readFromSource` fails.
-	// If `readFromSource` succeeds, `parse` may still fail.
-	sourceStatus.LastUpdate = nowMeta(opts)
-	var setSourceStatusErr error
-	if state.status.needToSetSourceStatus(sourceStatus) {
-		klog.V(3).Info("Updating source status (after parse)")
-		setSourceStatusErr := r.SyncStatusClient().SetSourceStatus(ctx, sourceStatus)
-		if setSourceStatusErr == nil {
-			state.status.SourceStatus = sourceStatus
-			state.status.SyncingConditionLastUpdate = sourceStatus.LastUpdate
+	// Only call `SetSourceStatus` if `readFromSource` failed.
+	// If `readFromSource` succeeds, `parse` may still fail,
+	// and we don't want the source status flapping back and forth.
+	if newSourceStatus.Errs != nil {
+		newSourceStatus.LastUpdate = nowMeta(opts.Clock)
+		if state.status.needToSetSourceStatus(newSourceStatus) {
+			klog.V(3).Info("Updating source status (after read)")
+			if statusErr := r.syncStatusClient.SetSourceStatus(ctx, newSourceStatus); statusErr != nil {
+				return status.Append(newSourceStatus.Errs, statusErr)
+			}
+			state.status.SourceStatus = newSourceStatus
 		}
+		return newSourceStatus.Errs
 	}
 
-	return status.Append(sourceStatus.Errs, setSourceStatusErr)
+	// Read successful
+	return nil
 }
 
 // parseHydrationState reads from the file path which the hydration-controller
 // container writes to. It checks if the hydrated files are ready and returns
 // a renderingStatus.
-func (r *reconciler) parseHydrationState(srcState *sourceState, hydrationStatus *RenderingStatus) (*sourceState, *RenderingStatus) {
+func (r *reconciler) parseHydrationState(srcState *sourceState, newRenderStatus *RenderingStatus) (*sourceState, *RenderingStatus) {
 	opts := r.Options()
 	if !opts.RenderingEnabled {
-		hydrationStatus.Message = RenderingSkipped
-		return srcState, hydrationStatus
+		newRenderStatus.Message = RenderingSkipped
+		return srcState, newRenderStatus
 	}
 	// Check if the hydratedRoot directory exists.
 	// If exists, read the hydrated directory. Otherwise, fail.
 	absHydratedRoot, err := cmpath.AbsoluteOS(opts.HydratedRoot)
 	if err != nil {
-		hydrationStatus.Message = RenderingFailed
-		hydrationStatus.Errs = status.InternalHydrationError(err, "hydrated-dir must be an absolute path")
-		return srcState, hydrationStatus
+		newRenderStatus.Message = RenderingFailed
+		newRenderStatus.Errs = status.InternalHydrationError(err, "hydrated-dir must be an absolute path")
+		return srcState, newRenderStatus
 	}
 
 	var hydrationErr hydrate.HydrationError
 	if _, err := os.Stat(absHydratedRoot.OSPath()); err == nil {
 		// pull the hydrated commit and directory with retries within 1 minute.
-		srcState, hydrationErr = opts.readHydratedDirWithRetry(util.HydratedRetryBackoff, absHydratedRoot, opts.ReconcilerName, srcState)
+		srcState, hydrationErr = opts.readHydratedPathWithRetry(util.HydratedRetryBackoff, absHydratedRoot, opts.ReconcilerName, srcState)
 		if hydrationErr != nil {
-			hydrationStatus.Message = RenderingFailed
-			hydrationStatus.Errs = status.HydrationError(hydrationErr.Code(), hydrationErr)
-			return srcState, hydrationStatus
+			newRenderStatus.Message = RenderingFailed
+			newRenderStatus.Errs = status.HydrationError(hydrationErr.Code(), hydrationErr)
+			return srcState, newRenderStatus
 		}
-		hydrationStatus.Message = RenderingSucceeded
+		newRenderStatus.Message = RenderingSucceeded
 	} else if !os.IsNotExist(err) {
-		hydrationStatus.Message = RenderingFailed
-		hydrationStatus.Errs = status.InternalHydrationError(err, "unable to evaluate the hydrated path %s", absHydratedRoot.OSPath())
-		return srcState, hydrationStatus
+		newRenderStatus.Message = RenderingFailed
+		newRenderStatus.Errs = status.InternalHydrationError(err, "unable to evaluate the hydrated path %s", absHydratedRoot.OSPath())
+		return srcState, newRenderStatus
 	} else {
 		// Source of truth does not require hydration, but hydration-controller is running
-		hydrationStatus.Message = RenderingNotRequired
-		hydrationStatus.RequiresRendering = false
+		newRenderStatus.Message = RenderingNotRequired
+		newRenderStatus.RequiresRendering = false
 		err := hydrate.NewTransientError(fmt.Errorf("sync source contains only wet configs and hydration-controller is running"))
-		hydrationStatus.Errs = status.HydrationError(err.Code(), err)
-		return srcState, hydrationStatus
+		newRenderStatus.Errs = status.HydrationError(err.Code(), err)
+		return srcState, newRenderStatus
 	}
-	return srcState, hydrationStatus
+	return srcState, newRenderStatus
 }
 
 // readFromSource reads the source or hydrated configs, checks whether the sourceState in
@@ -323,126 +404,104 @@ func (r *reconciler) readFromSource(ctx context.Context, trigger string, srcStat
 	recState := r.ReconcilerState()
 	start := opts.Clock.Now()
 
-	hydrationStatus := &RenderingStatus{
+	newRenderStatus := &RenderingStatus{
 		Spec:              srcState.spec,
 		Commit:            srcState.commit,
 		RequiresRendering: opts.RenderingEnabled,
 	}
-	srcStatus := &SourceStatus{
+	newSourceStatus := &SourceStatus{
 		Spec:   srcState.spec,
 		Commit: srcState.commit,
 	}
 
-	srcState, hydrationStatus = r.parseHydrationState(srcState, hydrationStatus)
-	if hydrationStatus.Errs != nil {
-		return hydrationStatus, srcStatus
+	srcState, newRenderStatus = r.parseHydrationState(srcState, newRenderStatus)
+	if newRenderStatus.Errs != nil {
+		return newRenderStatus, newSourceStatus
 	}
 
-	if srcState.syncDir == recState.cache.source.syncDir {
-		return hydrationStatus, srcStatus
+	if srcState.syncPath == recState.cache.source.syncPath {
+		klog.V(4).Infof("Reconciler skipping listing source files; sync path unchanged: %s", srcState.syncPath.OSPath())
+		return newRenderStatus, newSourceStatus
 	}
+	klog.Infof("Reconciler listing source files from new sync path: %s", srcState.syncPath.OSPath())
 
-	// Read all the files under srcState.syncDir
-	srcStatus.Errs = opts.readConfigFiles(srcState)
+	// Read all the files under srcState.syncPath
+	newSourceStatus.Errs = opts.readConfigFiles(srcState)
 
 	if !opts.RenderingEnabled {
 		// Check if any kustomization Files exist
 		for _, fi := range srcState.files {
 			if hydrate.HasKustomization(path.Base(fi.OSPath())) {
 				// Source of truth requires hydration, but the hydration-controller is not running
-				hydrationStatus.Message = RenderingRequired
-				hydrationStatus.RequiresRendering = true
+				newRenderStatus.Message = RenderingRequired
+				newRenderStatus.RequiresRendering = true
 				err := hydrate.NewTransientError(fmt.Errorf("sync source contains dry configs and hydration-controller is not running"))
-				hydrationStatus.Errs = status.HydrationError(err.Code(), err)
-				return hydrationStatus, srcStatus
+				newRenderStatus.Errs = status.HydrationError(err.Code(), err)
+				return newRenderStatus, newSourceStatus
 			}
 		}
 	}
 
-	klog.Infof("New source changes (%s) detected, reset the cache", srcState.syncDir.OSPath())
-	// Reset the cache to make sure all the steps of a parse-apply-watch loop will run.
-	recState.resetCache()
-	if srcStatus.Errs == nil {
-		// Set `state.cache.source` after `readConfigFiles` succeeded
-		recState.cache.source = srcState
+	if newSourceStatus.Errs != nil {
+		recState.RecordReadFailure()
+	} else {
+		recState.RecordReadSuccess(srcState)
 	}
-	metrics.RecordParserDuration(ctx, trigger, "read", metrics.StatusTagKey(srcStatus.Errs), start)
-	return hydrationStatus, srcStatus
+	metrics.RecordParserDuration(ctx, trigger, "read", metrics.StatusTagKey(newSourceStatus.Errs), start)
+	return newRenderStatus, newSourceStatus
 }
 
-func (r *reconciler) parseSource(ctx context.Context, trigger string) status.MultiError {
-	state := r.ReconcilerState()
-	if state.cache.parserResultUpToDate() {
-		return nil
-	}
-
-	opts := r.Options()
-	start := opts.Clock.Now()
-	var sourceErrs status.MultiError
-
-	objs, errs := r.Parser().ParseSource(ctx, state.cache.source)
-	if !opts.WebhookEnabled {
-		klog.V(3).Infof("Removing %s annotation as Admission Webhook is disabled", metadata.DeclaredFieldsKey)
-		for _, obj := range objs {
-			core.RemoveAnnotations(obj, metadata.DeclaredFieldsKey)
-		}
-	}
-	sourceErrs = status.Append(sourceErrs, errs)
-	metrics.RecordParserDuration(ctx, trigger, "parse", metrics.StatusTagKey(sourceErrs), start)
-	state.cache.setParserResult(objs, sourceErrs)
-
-	if !status.HasBlockingErrors(sourceErrs) && opts.WebhookEnabled {
-		err := webhookconfiguration.Update(ctx, opts.Client, opts.DiscoveryClient, objs,
-			client.FieldOwner(configsync.FieldManager))
-		if err != nil {
-			// Don't block if updating the admission webhook fails.
-			// Return an error instead if we remove the remediator as otherwise we
-			// will simply never correct the type.
-			// This should be treated as a warning once we have
-			// that capability.
-			klog.Errorf("Failed to update admission webhook: %v", err)
-			// TODO: Handle case where multiple reconciler Pods try to
-			//  create or update the Configuration simultaneously.
-		}
-	}
-
-	return sourceErrs
-}
-
-// ParseAndUpdate parses objects from the source manifests, validates them, and
-// then syncs them to the cluster with the Updater.
-func (r *reconciler) ParseAndUpdate(ctx context.Context, trigger string) status.MultiError {
+// parse objects from the source files and perform scope validation.
+// If any objects have unknown scope, parse will return non-blocking errors.
+func (r *reconciler) parse(ctx context.Context, trigger string) status.MultiError {
 	opts := r.Options()
 	state := r.ReconcilerState()
-	klog.V(3).Info("Parser starting...")
-	sourceErrs := r.parseSource(ctx, trigger)
-	klog.V(3).Info("Parser stopped")
+
+	var parseErrs status.MultiError
+	if state.cache.parse.IsUpdateRequired() {
+		klog.V(3).Info("Parsing starting...")
+		start := opts.Clock.Now()
+		var objs []ast.FileObject
+		objs, parseErrs = r.parser.ParseSource(ctx, state.cache.source)
+		if !opts.WebhookEnabled {
+			klog.V(3).Infof("Removing %s annotation as Admission Webhook is disabled", metadata.DeclaredFieldsKey)
+			for _, obj := range objs {
+				core.RemoveAnnotations(obj, metadata.DeclaredFieldsKey)
+			}
+		}
+		metrics.RecordParserDuration(ctx, trigger, "parse", metrics.StatusTagKey(parseErrs), start)
+		state.cache.UpdateParseResult(objs, parseErrs, nowMeta(opts.Clock))
+		klog.V(3).Info("Parsing stopped")
+	} else {
+		klog.V(3).Info("Parsing skipped")
+	}
+
+	// Update the source status if the status has changed, whether there are any
+	// source errors or not. This confirms whether the fetch & parse stages
+	// succeeded, since they share the same RSync `status.source` fields.
 	newSourceStatus := &SourceStatus{
 		Spec:       state.cache.source.spec,
 		Commit:     state.cache.source.commit,
-		Errs:       sourceErrs,
-		LastUpdate: nowMeta(opts),
+		Errs:       parseErrs,
+		LastUpdate: nowMeta(opts.Clock),
 	}
 	if state.status.needToSetSourceStatus(newSourceStatus) {
 		klog.V(3).Info("Updating source status (after parse)")
-		if err := r.SyncStatusClient().SetSourceStatus(ctx, newSourceStatus); err != nil {
-			// If `r.SetSourceStatus` fails, we terminate the reconciliation.
-			// If we call `update` in this case and `update` succeeds, `Status.Source.Commit` would end up be older
-			// than `Status.Sync.Commit`.
-			return status.Append(sourceErrs, err)
+		if statusErr := r.syncStatusClient.SetSourceStatus(ctx, newSourceStatus); statusErr != nil {
+			return status.Append(parseErrs, statusErr)
 		}
 		state.status.SourceStatus = newSourceStatus
-		state.status.SyncingConditionLastUpdate = newSourceStatus.LastUpdate
 	}
+	return parseErrs
+}
 
-	if status.HasBlockingErrors(sourceErrs) {
-		return sourceErrs
-	}
+// update syncs the objects with known scope to the cluster.
+func (r *reconciler) update(ctx context.Context, trigger string) status.MultiError {
+	opts := r.Options()
+	state := r.ReconcilerState()
 
-	// Create a new context with its cancellation function.
-	ctxForUpdateSyncStatus, cancel := context.WithCancel(context.Background())
-
-	go r.updateSyncStatusPeriodically(ctxForUpdateSyncStatus)
+	asyncCtx, asyncCancel := context.WithCancel(ctx)
+	asyncDoneCh := r.startAsyncStatusUpdates(asyncCtx)
 
 	klog.V(3).Info("Updater starting...")
 	start := opts.Clock.Now()
@@ -450,41 +509,39 @@ func (r *reconciler) ParseAndUpdate(ctx context.Context, trigger string) status.
 	metrics.RecordParserDuration(ctx, trigger, "update", metrics.StatusTagKey(updateErrs), start)
 	klog.V(3).Info("Updater stopped")
 
-	// This is to terminate `updateSyncStatusPeriodically`.
-	cancel()
-	// TODO: Wait for periodic updates to stop
+	// Stop periodic updates
+	asyncCancel()
+	// Wait for periodic updates to stop
+	<-asyncDoneCh
 
 	// SyncErrors include errors from both the Updater and Remediator
 	klog.V(3).Info("Updating sync status (after sync)")
 	syncErrs := r.ReconcilerState().SyncErrors()
+
 	// Copy the spec and commit from the source status
 	syncStatus := &SyncStatus{
 		Spec:       state.status.SourceStatus.Spec,
 		Syncing:    false,
 		Commit:     state.cache.source.commit,
 		Errs:       syncErrs,
-		LastUpdate: nowMeta(opts),
+		LastUpdate: nowMeta(opts.Clock),
 	}
-	if err := r.SetSyncStatus(ctx, syncStatus); err != nil {
-		syncErrs = status.Append(syncErrs, err)
+	if statusErr := r.setSyncStatus(ctx, syncStatus); statusErr != nil {
+		return status.Append(syncErrs, statusErr)
 	}
-
-	// Return all the errors from the Parser, Updater, and Remediator
-	return status.Append(sourceErrs, syncErrs)
+	return syncErrs
 }
 
-// SetSyncStatus updates `.status.sync` and the Syncing condition, if needed,
-// as well as `state.syncStatus` and `state.syncingConditionLastUpdate` if
-// the update is successful.
-func (r *reconciler) SetSyncStatus(ctx context.Context, newSyncStatus *SyncStatus) error {
+// setSyncStatus updates `.status.sync` and the Syncing condition, if needed,
+// as well as `state.SyncStatus` if the update is successful.
+func (r *reconciler) setSyncStatus(ctx context.Context, newSyncStatus *SyncStatus) error {
 	state := r.ReconcilerState()
 	// Update the RSync status, if necessary
 	if state.status.needToSetSyncStatus(newSyncStatus) {
-		if err := r.SyncStatusClient().SetSyncStatus(ctx, newSyncStatus); err != nil {
-			return err
+		if statusErr := r.syncStatusClient.SetSyncStatus(ctx, newSyncStatus); statusErr != nil {
+			return statusErr
 		}
 		state.status.SyncStatus = newSyncStatus
-		state.status.SyncingConditionLastUpdate = newSyncStatus.LastUpdate
 	}
 
 	// Report conflict errors to the remote manager, if it's a RootSync.
@@ -495,39 +552,85 @@ func (r *reconciler) SetSyncStatus(ctx context.Context, newSyncStatus *SyncStatu
 	return nil
 }
 
-// updateSyncStatusPeriodically update the sync status periodically until the
-// cancellation function of the context is called.
-func (r *reconciler) updateSyncStatusPeriodically(ctx context.Context) {
-	opts := r.Options()
-	state := r.ReconcilerState()
-	klog.V(3).Info("Periodic sync status updates starting...")
-	updatePeriod := opts.StatusUpdatePeriod
-	updateTimer := opts.Clock.NewTimer(updatePeriod)
-	defer updateTimer.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			// ctx.Done() is closed when the cancellation function of the context is called.
-			klog.V(3).Info("Periodic sync status updates stopped")
-			return
+// startAsyncStatusUpdates starts a goroutine that updates the sync status
+// periodically until the context is cancelled. The caller should wait until the
+// done channel is closed to confirm the goroutine has exited.
+func (r *reconciler) startAsyncStatusUpdates(ctx context.Context) <-chan struct{} {
+	doneCh := make(chan struct{})
+	go func() {
+		defer close(doneCh)
+		opts := r.Options()
+		state := r.ReconcilerState()
+		klog.V(3).Info("Periodic sync status updates starting...")
+		updatePeriod := opts.StatusUpdatePeriod
+		updateTimer := opts.Clock.NewTimer(updatePeriod)
+		defer updateTimer.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				// ctx.Done() is closed when the cancellation function of the context is called.
+				klog.V(3).Info("Periodic sync status updates stopped")
+				return
 
-		case <-updateTimer.C():
-			klog.V(3).Info("Updating sync status (periodic while syncing)")
-			// Copy the spec and commit from the source status
-			syncStatus := &SyncStatus{
-				Spec:       state.status.SourceStatus.Spec,
-				Syncing:    true,
-				Commit:     state.cache.source.commit,
-				Errs:       r.ReconcilerState().SyncErrors(),
-				LastUpdate: nowMeta(opts),
-			}
-			if err := r.SetSyncStatus(ctx, syncStatus); err != nil {
-				klog.Warningf("failed to update sync status: %v", err)
-			}
+			case <-updateTimer.C():
+				klog.V(3).Info("Updating sync status (periodic while syncing)")
+				// Copy the spec and commit from the source status
+				syncStatus := &SyncStatus{
+					Spec:       state.status.SourceStatus.Spec,
+					Syncing:    true,
+					Commit:     state.cache.source.commit,
+					Errs:       state.SyncErrors(),
+					LastUpdate: nowMeta(opts.Clock),
+				}
+				if err := r.setSyncStatus(ctx, syncStatus); err != nil {
+					klog.Warningf("failed to update sync status: %v", err)
+				}
 
-			updateTimer.Reset(updatePeriod) // Schedule status update attempt
+				updateTimer.Reset(updatePeriod) // Schedule status update attempt
+			}
 		}
+	}()
+	return doneCh
+}
+
+// unblockHydration adds the image digest into the ready-to-render file under the
+// shared directory between reconciler and hydration-controller to inform the
+// hydration-controller to proceed rendering
+func unblockHydration(commit, signalFile string) status.Error {
+	klog.Infof("signaling the hydration-controller that commit %s is ready to render", commit)
+	// Overwrite the commit in the given signal file
+	file, err := os.OpenFile(signalFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
+	if err != nil {
+		return status.OSWrap(err)
 	}
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			klog.Errorf("failed to close file %s: %v", signalFile, closeErr)
+		}
+	}()
+
+	_, err = file.WriteString(commit)
+	if err != nil {
+		return status.OSWrap(err)
+	}
+	return nil
+}
+
+// blockHydration removes the ready-to-render file from the shared
+// directory and returns any error that occurs during the procedure except
+// "file not found". This function removes the ready-to-render file at its
+// best effort, since with source errors presenting, the ready-to-render
+// file will not be updated with the expected commit that is expected by
+// hydration-controller, thus rendering will be blocked.
+func blockHydration(signalFile string) {
+	err := os.Remove(signalFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			klog.V(3).Infof("signal file %s not found, no action needed", signalFile)
+		}
+		klog.Errorf("failed to remove signal file %s: %v", signalFile, err)
+	}
+	klog.Infof("removed signal file %s to block hydration", signalFile)
 }
 
 // reportRootSyncConflicts reports conflicts to the RootSync that manages the
@@ -561,6 +664,28 @@ func reportRootSyncConflicts(ctx context.Context, k8sClient client.Client, confl
 	return nil
 }
 
-func nowMeta(opts *ReconcilerOptions) metav1.Time {
-	return metav1.Time{Time: opts.Clock.Now()}
+// UpdateSyncStatus updates the RSync status to reflect asynchronous status
+// changes made by the remediator between Reconcile calls.
+func (r *reconciler) UpdateSyncStatus(ctx context.Context) error {
+	opts := r.Options()
+	// Skip updates if the remediator is not running yet, paused, or watches haven't been updated yet.
+	// This implies that this reconciler has successfully parsed, rendered, validated, and synced.
+	if !opts.Remediating() {
+		return nil
+	}
+	klog.V(3).Info("Updating sync status (periodic while not syncing)")
+	state := r.ReconcilerState()
+	// Don't update the sync spec or commit, just the errors and status.
+	syncStatus := &SyncStatus{
+		Spec:       state.status.SyncStatus.Spec,
+		Syncing:    false,
+		Commit:     state.status.SyncStatus.Commit,
+		Errs:       state.SyncErrors(),
+		LastUpdate: nowMeta(opts.Clock),
+	}
+	return r.setSyncStatus(ctx, syncStatus)
+}
+
+func nowMeta(c clock.Clock) metav1.Time {
+	return metav1.Time{Time: c.Now()}
 }

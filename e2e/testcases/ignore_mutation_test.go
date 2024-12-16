@@ -411,6 +411,7 @@ func TestDriftKubectlAnnotateDeleteManagedFieldsWithIgnoreMutationAnnotation(t *
 // TestAddIgnoreMutationAnnotationDirectly verifies the behavior of the applier when the
 // `client.lifecycle.config.k8s.io/mutation` annotation is added to a resource using kubectl
 func TestAddIgnoreMutationAnnotationDirectly(t *testing.T) {
+	rootSyncID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t, nomostesting.DriftControl,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
@@ -430,6 +431,14 @@ func TestAddIgnoreMutationAnnotationDirectly(t *testing.T) {
 
 	// Stop the Config Sync webhook to test the drift correction functionality
 	nomostest.StopWebhook(nt)
+	// Stopping the webhook causes the reconciler to restart. Wait so that we aren't
+	// racing with the applier and are actually testing the remediator.
+	nt.Must(nt.Watcher.WatchObject(kinds.Deployment(),
+		core.RootReconcilerName(rootSyncID.Name), configsync.ControllerNamespace,
+		testwatcher.WatchPredicates(
+			testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
+			testpredicates.DeploymentMissingEnvVar(reconcilermanager.Reconciler, reconcilermanager.WebhookEnabled),
+		)))
 
 	// Add the `client.lifecycle.config.k8s.io/mutation` annotation into the namespace object
 	ignoreMutation = fmt.Sprintf("%s=%s", metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation)

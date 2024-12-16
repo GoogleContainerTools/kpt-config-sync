@@ -29,7 +29,7 @@ data:
         endpoint: 0.0.0.0:55678
     exporters:
       prometheus:
-        endpoint: :8675
+        endpoint: 0.0.0.0:8675
         namespace: config_sync
         resource_to_telemetry_conversion:
           enabled: true
@@ -37,10 +37,8 @@ data:
       batch:
     extensions:
       health_check:
+        endpoint: "0.0.0.0:13133"
     service:
-      telemetry:
-        metrics:
-          address: 0.0.0.0:55678
       extensions: [health_check]
       pipelines:
         metrics:
@@ -70,6 +68,29 @@ spec:
     port: 8888
   - name: metrics # Prometheus exporter metrics.
     port: 8675
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-port-ingress
+  namespace: config-management-monitoring
+spec:
+  podSelector:
+    matchLabels:
+      app: opentelemetry
+      component: otel-collector
+  ingress:
+  - from:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 13133
+    - protocol: TCP
+      port: 55678
+    - protocol: TCP
+      port: 8675
+    - protocol: TCP
+      port: 8888
 ---
 apiVersion: apps/v1
 kind: Deployment

@@ -59,6 +59,27 @@ push-test-oci-images-public: "$(CRANE)"
 	cd $(KUSTOMIZE_COMPONENTS_DIR) && crane append -f <(tar -f - -c .) -t $(KUSTOMIZE_COMPONENTS_PUBLIC_GCR_IMAGE)
 	cd $(KUSTOMIZE_COMPONENTS_DIR) && crane append -f <(tar -f - -c .) -t $(KUSTOMIZE_COMPONENTS_PUBLIC_AR_IMAGE)
 
+# The e2e test expects both versions exist as public.
+# See `TestHelmVersionRange` and `rootSyncForWordpressHelmChart` in `e2e/testcases/helm_sync_test.go`.
+WORDPRESS_HELM_CHART_VERSIONS := 15.2.35 15.4.1
+WORDPRESS_HELM_CHART_SOURCE_REPO := oci://registry-1.docker.io/bitnamicharts/wordpress
+WORDPRESS_HELM_CHART_PUBLIC_AR_REPO := oci://$(LOCATION)-docker.pkg.dev/$(TEST_INFRA_PROJECT)/config-sync-test-public
+
+# This target is run as a singleton against the ci-artifacts project, since
+# these require for the registries to be public.
+.PHONY: push-test-helm-charts-public
+push-test-helm-charts-public: "$(HELM)"
+	$(foreach version, $(WORDPRESS_HELM_CHART_VERSIONS), \
+		helm pull $(WORDPRESS_HELM_CHART_PUBLIC_AR_REPO)/wordpress \
+			--version $(version) &> /dev/null || \
+			$(MAKE) __push-test-helm-chart-from-pull VERSION=$(version);)
+
+.PHONY: __push-test-helm-chart-from-pull
+__push-test-helm-chart-from-pull: "$(HELM)"
+	helm pull $(WORDPRESS_HELM_CHART_SOURCE_REPO) --version $(VERSION)
+	@gcloud auth print-access-token | helm registry login -u oauth2accesstoken --password-stdin https://$(LOCATION)-docker.pkg.dev
+	helm push wordpress-$(VERSION).tgz $(WORDPRESS_HELM_CHART_PUBLIC_AR_REPO)
+
 # The following targets are used to provision test resources in a prow environment
 
 # kustomize-components private images (per dev/prow env registry)

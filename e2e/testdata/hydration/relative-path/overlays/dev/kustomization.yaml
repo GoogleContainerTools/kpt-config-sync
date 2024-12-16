@@ -33,5 +33,8 @@ patches:
     - op: replace
       path: /subjects/0/name
       value: developers-all@foo-corp.com
-commonLabels:
-  environment: dev
+labels:
+  - pairs:
+      environment: dev
+    includeSelectors: true
+    includeTemplates: true

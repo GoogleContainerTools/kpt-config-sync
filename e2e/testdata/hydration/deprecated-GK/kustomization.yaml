@@ -18,5 +18,8 @@ helmCharts:
   version: 0.2.0
   releaseName: my-prometheus-operator
 
-commonLabels:
-  test-case: hydration
+labels:
+  - pairs:
+      test-case: hydration
+    includeSelectors: true
+    includeTemplates: true

@@ -150,3 +150,23 @@ spec:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-port-ingress
+  namespace: config-management-system
+spec:
+  podSelector:
+    matchLabels: {}
+  ingress:
+  - from:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 13133
+    - protocol: TCP
+      port: 55678
+    - protocol: TCP
+      port: 8888
+

@@ -37,7 +37,7 @@ const (
     endpoint: 0.0.0.0:55678
 exporters:
   prometheus:
-    endpoint: :8675
+    endpoint: 0.0.0.0:8675
     namespace: config_sync
     resource_to_telemetry_conversion:
       enabled: true
@@ -343,6 +343,7 @@ processors:
             aggregation_type: max
 extensions:
   health_check:
+    endpoint: "0.0.0.0:13133"
 service:
   extensions: [health_check]
   pipelines:

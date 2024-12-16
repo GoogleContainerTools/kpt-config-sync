@@ -169,6 +169,7 @@ data:
         detectors: [env, gcp]
     extensions:
       health_check:
+        endpoint: 0.0.0.0:13133
     service:
       extensions: [health_check]
       pipelines:
@@ -302,3 +303,23 @@ spec:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-port-ingress
+  namespace: resource-group-system
+spec:
+  podSelector:
+    matchLabels: {}
+  ingress:
+  - from:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 13133
+    - protocol: TCP
+      port: 55678
+    - protocol: TCP
+      port: 8888
+

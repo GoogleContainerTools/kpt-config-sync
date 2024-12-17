@@ -318,8 +318,4 @@ spec:
     ports:
     - protocol: TCP
       port: 13133
-    - protocol: TCP
-      port: 55678
-    - protocol: TCP
-      port: 8888
 

@@ -81,6 +81,7 @@ spec:
         ports:
         - containerPort: 55678 # Default OpenCensus receiver port.
         - containerPort: 8888  # Metrics.
+        - containerPort: 13133 # Health check
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true
@@ -150,18 +151,3 @@ spec:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-port-ingress
-  namespace: config-management-system
-spec:
-  podSelector:
-    matchLabels: {}
-  ingress:
-  - from:
-    - namespaceSelector: {}
-    ports:
-    - protocol: TCP
-      port: 13133

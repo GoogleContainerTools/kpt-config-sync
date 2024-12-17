@@ -274,6 +274,7 @@ spec:
         ports:
         - containerPort: 55678
         - containerPort: 8888
+        - containerPort: 13133
         readinessProbe:
           httpGet:
             path: /
@@ -303,19 +304,4 @@ spec:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-port-ingress
-  namespace: resource-group-system
-spec:
-  podSelector:
-    matchLabels: {}
-  ingress:
-  - from:
-    - namespaceSelector: {}
-    ports:
-    - protocol: TCP
-      port: 13133
 

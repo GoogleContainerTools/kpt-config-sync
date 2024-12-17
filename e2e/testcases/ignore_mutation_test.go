@@ -108,6 +108,46 @@ func TestDeclareIgnoreMutationForUnmanagedObject(t *testing.T) {
 			testpredicates.MissingAnnotation("season"))))
 }
 
+// TestDeclareUnmanagedObjectWithoutIgnoreAnnotation verifies that the `client.lifecycle.config.k8s.io/mutation` annotation
+// is removed when an unmanaged object is declared in the source repo
+func TestDeclareUnmanagedObjectWithoutIgnoreAnnotation(t *testing.T) {
+	nt := nomostest.New(t, nomostesting.DriftControl, ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
+
+	nt.T.Log("Add an unmanaged namespace with the ignore-mutation annotation using kubectl ")
+	nsObj := k8sobjects.NamespaceObject("bookstore",
+		core.Annotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation),
+	)
+
+	nt.T.Cleanup(func() {
+		if err := nt.KubeClient.Delete(nsObj); err != nil {
+			if !apierrors.IsNotFound(err) && !apierrors.IsForbidden(err) {
+				nt.T.Log(err)
+			}
+		}
+	})
+
+	nt.Must(nt.KubeClient.Apply(nsObj))
+
+	if err := nt.Validate(nsObj.Name, "", &corev1.Namespace{}); err != nil {
+		nt.T.Error(err)
+	}
+
+	nt.T.Log("Declare the namespace without the ignore mutation annotation")
+	namespace := k8sobjects.NamespaceObject(
+		nsObj.Name,
+		core.Annotation("season", "summer"))
+	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
+	nt.Must(rootSyncGitRepo.CommitAndPush("add a namespace"))
+	nt.Must(nt.WatchForAllSyncs())
+
+	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), nsObj.Name, "",
+		testwatcher.WatchPredicates(
+			testpredicates.HasAnnotation("season", "summer"),
+			testpredicates.MissingAnnotation(metadata.LifecycleMutationAnnotation),
+		)))
+}
+
 // TestMutationIgnoredObjectIsDeleted verifies that a mutation-ignored object is recreated based on
 // the source configs
 func TestMutationIgnoredObjectIsDeleted(t *testing.T) {
@@ -271,7 +311,6 @@ func TestAnnotationDrift(t *testing.T) {
 // managed field of a resource that has the
 // `client.lifecycle.config.k8s.io/mutation` annotation, and verifies that
 // Config Sync does not correct it.
-// TODO: Update this test when implementing the remediator changes to support the ignore mutation annotation
 func TestDriftKubectlAnnotateConfigSyncAnnotation(t *testing.T) {
 	rootSyncID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t, nomostesting.DriftControl,
@@ -303,16 +342,15 @@ func TestDriftKubectlAnnotateConfigSyncAnnotation(t *testing.T) {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore --overwrite %s=fall` error %v %s, want return nil", metadata.ResourceManagementKey, err, out)
 	}
 
-	// Remediator SHOULD NOT correct it
+	// Remediator SHOULD correct it
 	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
-		testwatcher.WatchPredicates(testpredicates.HasAnnotation(metadata.ResourceManagementKey, "fall"))))
+		testwatcher.WatchPredicates(testpredicates.HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled))))
 }
 
 // TestDriftKubectlAnnotateDeleteManagedFieldsWithIgnoreMutationAnnotation
 // deletes a managed field of a resource that has the
 // `client.lifecycle.config.k8s.io/mutation` annotation, and verifies that
 // Config Sync does not correct it.
-// TODO: Update this test when implementing the remediator changes to support the ignore mutation annotation
 func TestDriftKubectlAnnotateDeleteManagedFieldsWithIgnoreMutationAnnotation(t *testing.T) {
 	rootSyncID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t, nomostesting.DriftControl,
@@ -365,15 +403,15 @@ func TestDriftKubectlAnnotateDeleteManagedFieldsWithIgnoreMutationAnnotation(t *
 
 	time.Sleep(10 * time.Second)
 
-	// Remediator SHOULD NOT correct it
+	// Remediator SHOULD correct it
 	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
-		testwatcher.WatchPredicates(testpredicates.MissingAnnotation(metadata.ResourceManagementKey))))
+		testwatcher.WatchPredicates(testpredicates.HasAnnotationKey(metadata.ResourceManagementKey))))
 }
 
 // TestAddIgnoreMutationAnnotationDirectly verifies the behavior of the applier when the
 // `client.lifecycle.config.k8s.io/mutation` annotation is added to a resource using kubectl
-// TODO: Update this test when implementing the remediator changes to support the ignore mutation annotation
 func TestAddIgnoreMutationAnnotationDirectly(t *testing.T) {
+	rootSyncID := nomostest.DefaultRootSyncID
 	nt := nomostest.New(t, nomostesting.DriftControl,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
@@ -393,6 +431,14 @@ func TestAddIgnoreMutationAnnotationDirectly(t *testing.T) {
 
 	// Stop the Config Sync webhook to test the drift correction functionality
 	nomostest.StopWebhook(nt)
+	// Stopping the webhook causes the reconciler to restart. Wait so that we aren't
+	// racing with the applier and are actually testing the remediator.
+	nt.Must(nt.Watcher.WatchObject(kinds.Deployment(),
+		core.RootReconcilerName(rootSyncID.Name), configsync.ControllerNamespace,
+		testwatcher.WatchPredicates(
+			testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
+			testpredicates.DeploymentMissingEnvVar(reconcilermanager.Reconciler, reconcilermanager.WebhookEnabled),
+		)))
 
 	// Add the `client.lifecycle.config.k8s.io/mutation` annotation into the namespace object
 	ignoreMutation = fmt.Sprintf("%s=%s", metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation)
@@ -401,10 +447,10 @@ func TestAddIgnoreMutationAnnotationDirectly(t *testing.T) {
 		nt.T.Fatalf("got `kubectl annotate namespace bookstore %s` error %v %s, want return nil", ignoreMutation, err, out)
 	}
 
-	// Remediator SHOULD NOT remove this field
+	// Remediator SHOULD remove this field
 	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
 		testwatcher.WatchPredicates(
-			testpredicates.HasAnnotation(metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation),
+			testpredicates.MissingAnnotation(metadata.LifecycleMutationAnnotation),
 		),
 		testwatcher.WatchTimeout(30*time.Second)))
 }

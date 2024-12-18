@@ -325,8 +325,9 @@ func setRenderingStatusFields(rendering *v1beta1.RenderingStatus, newStatus *Ren
 	}
 	rendering.Message = newStatus.Message
 	errorSummary := &v1beta1.ErrorSummary{
-		TotalCount: len(cse),
-		Truncated:  denominator != 1,
+		TotalCount:                len(cse),
+		Truncated:                 denominator != 1,
+		ErrorCountAfterTruncation: len(cse) / denominator,
 	}
 	rendering.Errors = cse[0 : len(cse)/denominator]
 	rendering.ErrorSummary = errorSummary
@@ -549,8 +550,9 @@ func setSyncStatusFields(syncStatus *v1beta1.Status, newStatus *SyncStatus, deno
 
 func setSyncStatusErrors(syncStatus *v1beta1.Status, cse []v1beta1.ConfigSyncError, denominator int) {
 	syncStatus.Sync.ErrorSummary = &v1beta1.ErrorSummary{
-		TotalCount: len(cse),
-		Truncated:  denominator != 1,
+		TotalCount:                len(cse),
+		Truncated:                 denominator != 1,
+		ErrorCountAfterTruncation: len(cse) / denominator,
 	}
 	syncStatus.Sync.Errors = cse[0 : len(cse)/denominator]
 }

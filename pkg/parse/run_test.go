@@ -520,8 +520,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 					Errors: status.ToCSE(
 						status.HydrationError(status.ActionableHydrationErrorCode, fmt.Errorf("rendering error")),
 					),
-					// TODO: Fix bug with rendering status not setting ErrorCountAfterTruncation = 1 (b/379720690)
-					ErrorSummary: &v1beta1.ErrorSummary{TotalCount: 1, ErrorCountAfterTruncation: 0},
+					ErrorSummary: &v1beta1.ErrorSummary{TotalCount: 1, ErrorCountAfterTruncation: 1},
 					LastUpdate:   fakeMetaTime,
 				}
 				rs.Status.Conditions = []v1beta1.RootSyncCondition{
@@ -534,7 +533,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 						Message:            RenderingFailed,
 						Commit:             sourceCommit,
 						ErrorSourceRefs:    []v1beta1.ErrorSource{v1beta1.RenderingError},
-						ErrorSummary:       &v1beta1.ErrorSummary{TotalCount: 1, ErrorCountAfterTruncation: 0},
+						ErrorSummary:       &v1beta1.ErrorSummary{TotalCount: 1, ErrorCountAfterTruncation: 1},
 					},
 				}
 				return rs
@@ -879,8 +878,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 					Errors: status.ToCSE(
 						status.HydrationError(status.TransientErrorCode, fmt.Errorf("sync source contains only wet configs and hydration-controller is running")),
 					),
-					// TODO: Fix bug with rendering status not setting ErrorCountAfterTruncation = 1
-					ErrorSummary: &v1beta1.ErrorSummary{TotalCount: 1, ErrorCountAfterTruncation: 0},
+					ErrorSummary: &v1beta1.ErrorSummary{TotalCount: 1, ErrorCountAfterTruncation: 1},
 					LastUpdate:   fakeMetaTime,
 				}
 				rs.Status.Conditions = []v1beta1.RootSyncCondition{
@@ -893,7 +891,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 						Message:            RenderingNotRequired,
 						Commit:             sourceCommit,
 						ErrorSourceRefs:    []v1beta1.ErrorSource{v1beta1.RenderingError},
-						ErrorSummary:       &v1beta1.ErrorSummary{TotalCount: 1, ErrorCountAfterTruncation: 0},
+						ErrorSummary:       &v1beta1.ErrorSummary{TotalCount: 1, ErrorCountAfterTruncation: 1},
 					},
 				}
 				return rs
@@ -934,8 +932,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 					Errors: status.ToCSE(
 						status.HydrationError(status.TransientErrorCode, fmt.Errorf("sync source contains dry configs and hydration-controller is not running")),
 					),
-					// TODO: Fix bug with rendering status not setting ErrorCountAfterTruncation = 1
-					ErrorSummary: &v1beta1.ErrorSummary{TotalCount: 1, ErrorCountAfterTruncation: 0},
+					ErrorSummary: &v1beta1.ErrorSummary{TotalCount: 1, ErrorCountAfterTruncation: 1},
 					LastUpdate:   fakeMetaTime,
 				}
 				rs.Status.Conditions = []v1beta1.RootSyncCondition{
@@ -948,7 +945,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 						Message:            RenderingRequired,
 						Commit:             sourceCommit,
 						ErrorSourceRefs:    []v1beta1.ErrorSource{v1beta1.RenderingError},
-						ErrorSummary:       &v1beta1.ErrorSummary{TotalCount: 1, ErrorCountAfterTruncation: 0},
+						ErrorSummary:       &v1beta1.ErrorSummary{TotalCount: 1, ErrorCountAfterTruncation: 1},
 					},
 				}
 				return rs

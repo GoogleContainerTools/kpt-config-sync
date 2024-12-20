@@ -18,7 +18,7 @@ helmCharts:
   namespace: coredns
   valuesFile: https://raw.githubusercontent.com/config-sync-examples/helm-components/main/coredns-values.yaml
 - name: wordpress
-  repo: https://charts.bitnami.com/bitnami
+  repo: oci://us-docker.pkg.dev/kpt-config-sync-ci-artifacts/config-sync-test-public
   version: 15.2.35
   releaseName: my-wordpress
   namespace: wordpress
@@ -26,5 +26,8 @@ helmCharts:
     service:
       type: ClusterIP
 
-commonLabels:
-  test-case: hydration
+labels:
+  - pairs:
+      test-case: hydration
+    includeSelectors: true
+    includeTemplates: true

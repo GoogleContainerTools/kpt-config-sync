@@ -23,5 +23,8 @@ helmCharts:
 commonAnnotations:
   hydration-tool: kustomize
 
-commonLabels:
-  team: coredns
+labels:
+  - pairs:
+      team: coredns
+    includeSelectors: true
+    includeTemplates: true

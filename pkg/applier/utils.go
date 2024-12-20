@@ -15,12 +15,12 @@
 package applier
 
 import (
+	"context"
 	"encoding/json"
 	"sort"
 	"strings"
 
 	"github.com/GoogleContainerTools/kpt/pkg/live"
-	"golang.org/x/net/context"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kpt.dev/configsync/pkg/api/configsync"

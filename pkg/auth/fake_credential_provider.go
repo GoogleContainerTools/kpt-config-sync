@@ -15,8 +15,9 @@
 package auth
 
 import (
+	"context"
+
 	goauth "cloud.google.com/go/auth"
-	"golang.org/x/net/context"
 )
 
 // FakeCredentialProvider always provides the specified TokenProvider and Error.

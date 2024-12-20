@@ -18,12 +18,12 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
 
 	"go.uber.org/multierr"
-	"golang.org/x/exp/slices"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
 )

@@ -907,7 +907,7 @@ func rootSyncForWordpressHelmChart(nt *nomostest.NT, valuesMutator func(map[stri
 	rs.Spec.Helm = &v1beta1.HelmRootSync{
 		Namespace: "wordpress",
 		HelmBase: v1beta1.HelmBase{
-			Repo:        "https://charts.bitnami.com/bitnami",
+			Repo:        "oci://us-docker.pkg.dev/kpt-config-sync-ci-artifacts/config-sync-test-public",
 			Chart:       chartID.Name,
 			Version:     chartID.Version,
 			ReleaseName: "my-wordpress",

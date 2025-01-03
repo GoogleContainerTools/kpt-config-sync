@@ -17,5 +17,8 @@ resources:
 - role.yaml
 - networkpolicy.yaml
 
-commonLabels:
-  test-case: hydration
+labels:
+  - pairs:
+      test-case: hydration
+    includeSelectors: true
+    includeTemplates: true

@@ -16,6 +16,7 @@ package nomostest
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -892,43 +893,74 @@ func (nt *NT) detectGKEAutopilot(skipAutopilot bool) {
 	}
 }
 
+// GKECluster represents a partial json response from
+// `gcloud container clusters describe --format json`.
+type GKECluster struct {
+	Name                  string        `json:"name"`
+	Location              string        `json:"location"`
+	CurrentMasterVersion  string        `json:"currentMasterVersion"`
+	CurrentNodeVersion    string        `json:"currentNodeVersion"`
+	InitialClusterVersion string        `json:"initialClusterVersion"`
+	NodePools             []GKENodePool `json:"nodePools"`
+}
+
+// GKENodePool represents a partial json response of the `nodePools` from
+// `gcloud container clusters describe --format json`.
+type GKENodePool struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+}
+
 // Prerequisites for autopilot bursting:
-// - You originally created the cluster with GKE version 1.26 or later
-// - The cluster is running GKE version 1.30.2-gke.1394000 or later
+//   - You originally created the cluster with GKE version 1.26 or later (supported)
+//     OR you migrated to cgroupsv2 (not supported here)
+//   - The current cluster and nodes are using GKE version 1.30.2-gke.1394000 or later.
+//
 // See: https://cloud.google.com/kubernetes-engine/docs/how-to/pod-bursting-gke#availability-in-gke
 func (nt *NT) autopilotClusterSupportsBursting() (bool, error) {
 	args := []string{"container", "clusters", "describe", nt.ClusterName,
 		"--project", *e2e.GCPProject, "--location", *e2e.GCPRegion,
-		"--format", `value(initialClusterVersion)`}
+		"--format", "json"}
 	out, err := nt.Shell.Gcloud(args...)
 	if err != nil {
 		return false, err
 	}
-	initialClusterVersion, err := clusterversion.ParseClusterVersion(strings.TrimSpace(string(out)))
-	if err != nil {
-		return false, err
+	var cluster GKECluster
+	if err := json.Unmarshal(out, &cluster); err != nil {
+		return false, fmt.Errorf("parsing cluster describe json: %w", err)
 	}
+
 	minInitialVersion := clusterversion.ClusterVersion{Major: 1, Minor: 26}
+	minCurrentVersion := clusterversion.ClusterVersion{Major: 1, Minor: 30, Patch: 2, Suffix: "-gke.1394000"}
+
+	initialClusterVersion, err := clusterversion.ParseClusterVersion(cluster.InitialClusterVersion)
+	if err != nil {
+		return false, fmt.Errorf("parsing initialClusterVersion: %w", err)
+	}
+	nt.T.Logf("Initial Cluster Version: %s", initialClusterVersion)
 	if !initialClusterVersion.IsAtLeast(minInitialVersion) {
 		return false, nil
 	}
 
-	minCurrentVersion := clusterversion.ClusterVersion{Major: 1, Minor: 30, Patch: 2, Suffix: "-gke.1394000"}
-	args = []string{"get", "nodes", "-o", `jsonpath={.items[*].status.nodeInfo.kubeletVersion}`}
-	out, err = nt.Shell.Kubectl(args...)
+	currentMasterVersion, err := clusterversion.ParseClusterVersion(cluster.CurrentMasterVersion)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("parsing currentMasterVersion: %w", err)
 	}
-	versions := strings.Split(strings.TrimSpace(string(out)), " ")
-	for _, nodeVersion := range versions {
-		v, err := clusterversion.ParseClusterVersion(nodeVersion)
-		if err != nil {
-			return false, err
-		}
-		if !v.IsAtLeast(minCurrentVersion) {
-			return false, nil
-		}
+	nt.T.Logf("Current Master Version: %s", currentMasterVersion)
+	if !currentMasterVersion.IsAtLeast(minCurrentVersion) {
+		return false, nil
 	}
+
+	currentNodeVersion, err := clusterversion.ParseClusterVersion(cluster.CurrentNodeVersion)
+	if err != nil {
+		return false, fmt.Errorf("parsing currentNodeVersion: %w", err)
+	}
+	nt.T.Logf("Current Node Version: %s", currentNodeVersion)
+	if !currentNodeVersion.IsAtLeast(minCurrentVersion) {
+		return false, nil
+	}
+
+	// Cluster is new enough for bursting to be supported
 	return true, nil
 }
 

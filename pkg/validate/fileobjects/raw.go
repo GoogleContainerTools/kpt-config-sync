@@ -15,7 +15,8 @@
 package fileobjects
 
 import (
-	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
@@ -40,9 +41,10 @@ type Raw struct {
 	SyncName          string
 	PolicyDir         cmpath.Relative
 	Objects           []ast.FileObject
-	PreviousCRDs      []*v1beta1.CustomResourceDefinition
+	PreviousCRDs      []*apiextensionsv1.CustomResourceDefinition
 	BuildScoper       utildiscovery.BuildScoperFunc
 	Converter         *declared.ValueConverter
+	Scheme            *runtime.Scheme
 	AllowUnknownKinds bool
 	// AllowAPICall indicates whether the hydration process can send k8s API
 	// calls. Currently, only dynamic NamespaceSelector requires talking to
@@ -60,7 +62,7 @@ type Raw struct {
 
 // Scoped builds a Scoped collection of objects from the Raw objects.
 func (r *Raw) Scoped() (*Scoped, status.MultiError) {
-	declaredCRDs, errs := customresources.GetCRDs(r.Objects)
+	declaredCRDs, errs := customresources.GetCRDs(r.Objects, r.Scheme)
 	if errs != nil {
 		return nil, errs
 	}

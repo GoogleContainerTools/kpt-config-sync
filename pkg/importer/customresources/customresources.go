@@ -17,7 +17,8 @@ package customresources
 import (
 	"sort"
 
-	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/kinds"
@@ -26,15 +27,15 @@ import (
 )
 
 // GetCRDs will process all given objects into the resulting list of CRDs.
-func GetCRDs(fileObjects []ast.FileObject) ([]*v1beta1.CustomResourceDefinition, status.MultiError) {
+func GetCRDs(fileObjects []ast.FileObject, scheme *runtime.Scheme) ([]*apiextensionsv1.CustomResourceDefinition, status.MultiError) {
 	var errs status.MultiError
-	crdMap := map[schema.GroupKind]*v1beta1.CustomResourceDefinition{}
+	crdMap := map[schema.GroupKind]*apiextensionsv1.CustomResourceDefinition{}
 	for _, obj := range fileObjects {
 		if obj.GetObjectKind().GroupVersionKind().GroupKind() != kinds.CustomResourceDefinition() {
 			continue
 		}
 
-		crd, err := clusterconfig.AsCRD(obj.Unstructured)
+		crd, err := clusterconfig.ToCRD(obj.Unstructured, scheme)
 		if err != nil {
 			errs = status.Append(errs, err)
 			continue
@@ -43,7 +44,7 @@ func GetCRDs(fileObjects []ast.FileObject) ([]*v1beta1.CustomResourceDefinition,
 		crdMap[gk] = crd
 	}
 
-	var result []*v1beta1.CustomResourceDefinition
+	var result []*apiextensionsv1.CustomResourceDefinition
 	for _, crd := range crdMap {
 		result = append(result, crd)
 	}

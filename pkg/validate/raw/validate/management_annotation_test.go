@@ -57,7 +57,7 @@ func TestValidManagementAnnotation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			err := nonhierarchical.ValidManagementAnnotation(tc.obj)
 			if !errors.Is(err, tc.want) {
-				t.Errorf("got ValidateCRDName() error %v, want %v", err, tc.want)
+				t.Errorf("got ValidManagementAnnotation() error %v, want %v", err, tc.want)
 			}
 		})
 	}

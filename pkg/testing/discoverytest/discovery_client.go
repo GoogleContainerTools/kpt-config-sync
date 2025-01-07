@@ -17,7 +17,7 @@
 package discoverytest
 
 import (
-	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/restmapper"
@@ -289,7 +289,7 @@ func testDynamicResources(extraResources ...*restmapper.APIGroupResources) []*re
 //
 // As-is assumes each CRD is a different APIGroup. Don't bother fixing unless you need to test
 // a case where you need to sync multiple CRDs for the same APIGroup.
-func CRDsToAPIGroupResources(crds []*v1beta1.CustomResourceDefinition) []*restmapper.APIGroupResources {
+func CRDsToAPIGroupResources(crds []*apiextensionsv1.CustomResourceDefinition) []*restmapper.APIGroupResources {
 	var result []*restmapper.APIGroupResources
 	for _, syncedCRD := range crds {
 		extraResource := &restmapper.APIGroupResources{
@@ -313,7 +313,7 @@ func CRDsToAPIGroupResources(crds []*v1beta1.CustomResourceDefinition) []*restma
 				{
 					Name:         syncedCRD.Spec.Names.Plural,
 					SingularName: syncedCRD.Spec.Names.Singular,
-					Namespaced:   !(syncedCRD.Spec.Scope == v1beta1.ClusterScoped),
+					Namespaced:   !(syncedCRD.Spec.Scope == apiextensionsv1.ClusterScoped),
 					Group:        syncedCRD.Spec.Group,
 					Version:      version.Name,
 					Kind:         syncedCRD.Spec.Names.Kind,

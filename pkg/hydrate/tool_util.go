@@ -25,7 +25,8 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver"
-	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	clientdiscovery "k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
@@ -295,12 +296,14 @@ func ValidateOptions(ctx context.Context, rootDir cmpath.Absolute, apiServerTime
 
 	var serverResourcer discovery.ServerResourcer = discovery.NoOpServerResourcer{}
 
+	options.Scheme = core.Scheme
+
 	if !flags.SkipAPIServer {
 		cfg, err := restconfig.NewRestConfig(apiServerTimeout)
 		if err != nil {
 			return options, apiServerCheckError(err, "failed to create rest config")
 		}
-		c, err := newClientClient(cfg)
+		c, err := newClientClient(cfg, options.Scheme)
 		if err != nil {
 			return options, err
 		}
@@ -326,7 +329,7 @@ func ValidateOptions(ctx context.Context, rootDir cmpath.Absolute, apiServerTime
 	return options, nil
 }
 
-func newClientClient(cfg *rest.Config) (client.Client, error) {
+func newClientClient(cfg *rest.Config, scheme *runtime.Scheme) (client.Client, error) {
 	httpClient, err := rest.HTTPClientFor(cfg)
 	if err != nil {
 		return nil, apiServerCheckError(err, "failed to create HTTPClient")
@@ -336,7 +339,7 @@ func newClientClient(cfg *rest.Config) (client.Client, error) {
 		return nil, apiServerCheckError(err, "failed to create mapper")
 	}
 	c, err := client.New(cfg, client.Options{
-		Scheme: core.Scheme,
+		Scheme: scheme,
 		Mapper: mapper,
 	})
 	if err != nil {
@@ -364,7 +367,7 @@ func apiServerCheckError(err error, message string) status.Error {
 // getSyncedCRDs returns the CRDs synced to the cluster in the current context.
 //
 // Times out after 15 seconds.
-func getSyncedCRDs(ctx context.Context, c client.Client) ([]*v1beta1.CustomResourceDefinition, status.MultiError) {
+func getSyncedCRDs(ctx context.Context, c client.Client) ([]*apiextensionsv1.CustomResourceDefinition, status.MultiError) {
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 

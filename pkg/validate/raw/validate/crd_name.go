@@ -17,6 +17,7 @@ package validate
 import (
 	"fmt"
 
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/kinds"
@@ -32,7 +33,7 @@ func CRDName(obj ast.FileObject) status.Error {
 		return nil
 	}
 
-	crd, err := clusterconfig.AsCRD(obj.Unstructured)
+	crd, err := clusterconfig.ToCRD(obj.Unstructured, core.Scheme)
 	if err != nil {
 		return err
 	}

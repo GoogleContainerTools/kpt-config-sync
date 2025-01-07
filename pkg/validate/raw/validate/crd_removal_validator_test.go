@@ -18,9 +18,8 @@ import (
 	"errors"
 	"testing"
 
-	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
@@ -28,29 +27,6 @@ import (
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/validate/fileobjects"
 )
-
-func crd(gvk schema.GroupVersionKind) *v1beta1.CustomResourceDefinition {
-	return &v1beta1.CustomResourceDefinition{
-		Spec: v1beta1.CustomResourceDefinitionSpec{
-			Group: gvk.Group,
-			Names: v1beta1.CustomResourceDefinitionNames{
-				Kind: gvk.Kind,
-			},
-		},
-	}
-}
-
-func crdFileObject(t *testing.T, gvk schema.GroupVersionKind) ast.FileObject {
-	t.Helper()
-	u := k8sobjects.CustomResourceDefinitionV1Beta1Unstructured()
-	if err := unstructured.SetNestedField(u.Object, gvk.Group, "spec", "group"); err != nil {
-		t.Fatal(err)
-	}
-	if err := unstructured.SetNestedField(u.Object, gvk.Kind, "spec", "names", "kind"); err != nil {
-		t.Fatal(err)
-	}
-	return k8sobjects.FileObject(u, "crd.yaml")
-}
 
 func TestRemovedCRDs(t *testing.T) {
 	testCases := []struct {
@@ -70,28 +46,30 @@ func TestRemovedCRDs(t *testing.T) {
 			name: "add a CRD",
 			objs: &fileobjects.Raw{
 				Objects: []ast.FileObject{
-					crdFileObject(t, kinds.Anvil()),
+					k8sobjects.AnvilCRDv1AtPath("crd.yaml"),
 					k8sobjects.AnvilAtPath("anvil1.yaml"),
 				},
+				Scheme: core.Scheme,
 			},
 		},
 		{
 			name: "keep a CRD",
 			objs: &fileobjects.Raw{
-				PreviousCRDs: []*v1beta1.CustomResourceDefinition{
-					crd(kinds.Anvil()),
+				PreviousCRDs: []*apiextensionsv1.CustomResourceDefinition{
+					k8sobjects.CRDV1ObjectForGVK(kinds.Anvil(), apiextensionsv1.NamespaceScoped),
 				},
 				Objects: []ast.FileObject{
-					crdFileObject(t, kinds.Anvil()),
+					k8sobjects.AnvilCRDv1AtPath("crd.yaml"),
 					k8sobjects.AnvilAtPath("anvil1.yaml"),
 				},
+				Scheme: core.Scheme,
 			},
 		},
 		{
 			name: "remove an unused CRD",
 			objs: &fileobjects.Raw{
-				PreviousCRDs: []*v1beta1.CustomResourceDefinition{
-					crd(kinds.Anvil()),
+				PreviousCRDs: []*apiextensionsv1.CustomResourceDefinition{
+					k8sobjects.CRDV1ObjectForGVK(kinds.Anvil(), apiextensionsv1.NamespaceScoped),
 				},
 				Objects: []ast.FileObject{
 					k8sobjects.Role(),
@@ -101,8 +79,8 @@ func TestRemovedCRDs(t *testing.T) {
 		{
 			name: "remove an in-use CRD",
 			objs: &fileobjects.Raw{
-				PreviousCRDs: []*v1beta1.CustomResourceDefinition{
-					crd(kinds.Anvil()),
+				PreviousCRDs: []*apiextensionsv1.CustomResourceDefinition{
+					k8sobjects.CRDV1ObjectForGVK(kinds.Anvil(), apiextensionsv1.NamespaceScoped),
 				},
 				Objects: []ast.FileObject{
 					k8sobjects.AnvilAtPath("anvil1.yaml"),

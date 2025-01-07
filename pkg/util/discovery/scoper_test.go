@@ -19,10 +19,15 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	"github.com/stretchr/testify/require"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func TestScoper_GetScope(t *testing.T) {
@@ -80,134 +85,129 @@ func TestScoper_GetScope(t *testing.T) {
 	}
 }
 
-const (
-	group = "employees"
-	kind  = "Engineer"
-)
-
-var (
-	groupKind = schema.GroupKind{
-		Group: group,
-		Kind:  kind,
-	}
-
-	namespacedEngineer = []GroupKindScope{{groupKind, NamespaceScope}}
-	globalEngineer     = []GroupKindScope{{groupKind, ClusterScope}}
-)
-
-func crd(versions ...v1beta1.CustomResourceDefinitionVersion) *v1beta1.CustomResourceDefinition {
-	return &v1beta1.CustomResourceDefinition{
-		Spec: v1beta1.CustomResourceDefinitionSpec{
-			Group:    group,
-			Versions: versions,
-			Names: v1beta1.CustomResourceDefinitionNames{
-				Kind: kind,
-			},
-		},
+func crdV1Versions(versions []apiextensionsv1.CustomResourceDefinitionVersion) core.MetaMutator {
+	return func(obj client.Object) {
+		crd := obj.(*apiextensionsv1.CustomResourceDefinition)
+		crd.Spec.Versions = versions
 	}
 }
 
-func version(name string, served bool) v1beta1.CustomResourceDefinitionVersion {
-	return v1beta1.CustomResourceDefinitionVersion{
-		Name:   name,
-		Served: served,
+func crdV1Scope(scope apiextensionsv1.ResourceScope) core.MetaMutator {
+	return func(obj client.Object) {
+		crd := obj.(*apiextensionsv1.CustomResourceDefinition)
+		crd.Spec.Scope = scope
 	}
 }
 
 func TestScopesFromCRD(t *testing.T) {
+	namespaceScopedAnvilGKS := []GroupKindScope{{GroupKind: kinds.Anvil().GroupKind(), ScopeType: NamespaceScope}}
+	clusterScopedAnvilGKS := []GroupKindScope{{GroupKind: kinds.Anvil().GroupKind(), ScopeType: ClusterScope}}
 
 	testCases := []struct {
 		name     string
-		crd      *v1beta1.CustomResourceDefinition
+		crd      *apiextensionsv1.CustomResourceDefinition
 		expected []GroupKindScope
 	}{
 		// Trivial cases.
 		{
 			name: "no versions returns empty",
-			crd:  crd(),
+			crd: k8sobjects.CRDV1ObjectForGVK(kinds.Anvil(), apiextensionsv1.NamespaceScoped,
+				crdV1Versions(nil)),
 		},
 		// Test that scope is set correctly.
 		{
-			name: "with version returns scope",
-			crd: &v1beta1.CustomResourceDefinition{
-				Spec: v1beta1.CustomResourceDefinitionSpec{
-					Group:   group,
-					Version: "v1",
-					Scope:   v1beta1.NamespaceScoped,
-					Names: v1beta1.CustomResourceDefinitionNames{
-						Kind: kind,
-					},
-				},
-			},
-			expected: namespacedEngineer,
+			name:     "with version returns scope",
+			crd:      k8sobjects.CRDV1ObjectForGVK(kinds.Anvil(), apiextensionsv1.NamespaceScoped),
+			expected: namespaceScopedAnvilGKS,
 		},
 		{
 			name: "without scope defaults to Namespaced",
-			crd: &v1beta1.CustomResourceDefinition{
-				Spec: v1beta1.CustomResourceDefinitionSpec{
-					Group:   group,
-					Version: "v1",
-					Names: v1beta1.CustomResourceDefinitionNames{
-						Kind: kind,
-					},
-				},
-			},
-			expected: namespacedEngineer,
+			crd: k8sobjects.CRDV1ObjectForGVK(kinds.Anvil(), apiextensionsv1.NamespaceScoped,
+				crdV1Scope("")),
+			expected: namespaceScopedAnvilGKS,
 		},
 		{
-			name: "Cluster scope if specified",
-			crd: &v1beta1.CustomResourceDefinition{
-				Spec: v1beta1.CustomResourceDefinitionSpec{
-					Group:   group,
-					Version: "v1",
-					Scope:   v1beta1.ClusterScoped,
-					Names: v1beta1.CustomResourceDefinitionNames{
-						Kind: kind,
-					},
-				},
-			},
-			expected: globalEngineer,
+			name:     "Cluster scope if specified",
+			crd:      k8sobjects.CRDV1ObjectForGVK(kinds.Anvil(), apiextensionsv1.ClusterScoped),
+			expected: clusterScopedAnvilGKS,
 		},
 		// Served version conditions.
 		{
 			name: "with unserved version returns empty",
-			crd:  crd(version("v1beta1", false)),
+			crd: k8sobjects.CRDV1ObjectForGVK(kinds.Anvil(), apiextensionsv1.NamespaceScoped,
+				crdV1Versions([]apiextensionsv1.CustomResourceDefinitionVersion{
+					{Name: "v1", Served: false},
+				})),
 		},
 		{
-			name:     "with served version returns nonempty",
-			crd:      crd(version("v1beta1", true)),
-			expected: namespacedEngineer,
+			name: "with served version returns nonempty",
+			crd: k8sobjects.CRDV1ObjectForGVK(kinds.Anvil(), apiextensionsv1.NamespaceScoped,
+				crdV1Versions([]apiextensionsv1.CustomResourceDefinitionVersion{
+					{Name: "v1", Served: true},
+				})),
+			expected: namespaceScopedAnvilGKS,
 		},
 		{
 			name: "with no served versions returns empty",
-			crd:  crd(version("v1beta1", false), version("v1", false)),
+			crd: k8sobjects.CRDV1ObjectForGVK(kinds.Anvil(), apiextensionsv1.NamespaceScoped,
+				crdV1Versions([]apiextensionsv1.CustomResourceDefinitionVersion{
+					{Name: "v1beta1", Served: false},
+					{Name: "v1", Served: false},
+				})),
 		},
 		{
-			name:     "with first version served returns nonempty",
-			crd:      crd(version("v1beta1", true), version("v1", false)),
-			expected: namespacedEngineer,
+			name: "with first version served returns nonempty",
+			crd: k8sobjects.CRDV1ObjectForGVK(kinds.Anvil(), apiextensionsv1.NamespaceScoped,
+				crdV1Versions([]apiextensionsv1.CustomResourceDefinitionVersion{
+					{Name: "v1beta1", Served: true},
+					{Name: "v1", Served: false},
+				})),
+			expected: namespaceScopedAnvilGKS,
 		},
 		{
-			name:     "with second served version returns nonempty",
-			crd:      crd(version("v1beta1", false), version("v1", true)),
-			expected: namespacedEngineer,
+			name: "with second served version returns nonempty",
+			crd: k8sobjects.CRDV1ObjectForGVK(kinds.Anvil(), apiextensionsv1.NamespaceScoped,
+				crdV1Versions([]apiextensionsv1.CustomResourceDefinitionVersion{
+					{Name: "v1beta1", Served: false},
+					{Name: "v1", Served: true},
+				})),
+			expected: namespaceScopedAnvilGKS,
 		},
 		{
-			name:     "with two served versions returns nonempty",
-			crd:      crd(version("v1beta1", true), version("v1", true)),
-			expected: namespacedEngineer,
+			name: "with two served versions returns nonempty",
+			crd: k8sobjects.CRDV1ObjectForGVK(kinds.Anvil(), apiextensionsv1.NamespaceScoped,
+				crdV1Versions([]apiextensionsv1.CustomResourceDefinitionVersion{
+					{Name: "v1beta1", Served: true},
+					{Name: "v1", Served: true},
+				})),
+			expected: namespaceScopedAnvilGKS,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual := scopesFromCRDs([]*v1beta1.CustomResourceDefinition{tc.crd})
+			actual := scopesFromCRDs([]*apiextensionsv1.CustomResourceDefinition{tc.crd})
 
 			if diff := cmp.Diff(tc.expected, actual); diff != "" {
 				t.Fatal(diff)
 			}
 		})
 	}
+}
+
+// TestScopesFromCRDv1beta1 validates that a v1beta1.CustomResourceDefinition
+// converted to a v1.CustomResourceDefinition can still be used with
+// scopesFromCRDs. This confirms that scheme-based conversion handles converting
+// v1beta1 spec.version field to the newer spec.versions list, and sets
+// served=true.
+func TestScopesFromCRDv1beta1(t *testing.T) {
+	crdV1beta1 := k8sobjects.CRDV1Beta1ObjectForGVK(kinds.Anvil(), apiextensionsv1beta1.NamespaceScoped)
+	crdV1Unstructured, err := kinds.ToTypedWithVersion(crdV1beta1, kinds.CustomResourceDefinitionV1(), core.Scheme)
+	require.NoError(t, err)
+	crdV1 := crdV1Unstructured.(*apiextensionsv1.CustomResourceDefinition)
+	actual := scopesFromCRDs([]*apiextensionsv1.CustomResourceDefinition{crdV1})
+	expected := []GroupKindScope{{GroupKind: kinds.Anvil().GroupKind(), ScopeType: NamespaceScope}}
+	require.Equal(t, expected, actual)
 }
 
 func TestNilScoper(t *testing.T) {

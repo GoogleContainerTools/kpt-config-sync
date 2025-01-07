@@ -32,6 +32,8 @@ type Decoder interface {
 	// resources and returns a slice of all the resources grouped by their
 	// respective GroupVersionKind.
 	DecodeResources(genericResources []v1.GenericResources) (map[schema.GroupVersionKind][]*unstructured.Unstructured, error)
+	// Scheme used for decoding.
+	Scheme() *runtime.Scheme
 }
 
 var _ Decoder = &genericResourceDecoder{}
@@ -50,6 +52,11 @@ func NewGenericResourceDecoder(scheme *runtime.Scheme) Decoder {
 		decoder:               serializer.NewCodecFactory(scheme).UniversalDeserializer(),
 		unstructuredConverter: runtime.DefaultUnstructuredConverter,
 	}
+}
+
+// Scheme used for decoding.
+func (d *genericResourceDecoder) Scheme() *runtime.Scheme {
+	return d.scheme
 }
 
 // DecodeResources implements Decoder.

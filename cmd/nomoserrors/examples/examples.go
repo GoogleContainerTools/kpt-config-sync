@@ -228,8 +228,8 @@ func Generate() AllExamples {
 	result.add(hierarchyconfig.IllegalHierarchyModeError(k8sobjects.HierarchyConfig(), kinds.Role().GroupKind(), "invalid"))
 
 	// 1043
-	result.add(nonhierarchical.UnsupportedObjectError(k8sobjects.CustomResourceDefinitionV1Beta1()))
-	result.add(nonhierarchical.UnsupportedObjectError(k8sobjects.CustomResourceDefinitionV1()))
+	result.add(nonhierarchical.UnsupportedObjectError(k8sobjects.CustomResourceDefinitionV1Beta1Object()))
+	result.add(nonhierarchical.UnsupportedObjectError(k8sobjects.CustomResourceDefinitionV1Object()))
 
 	// 1044
 	result.add(semantic.UnsyncableResourcesInLeaf(node("namespaces/foo")))
@@ -242,10 +242,10 @@ func Generate() AllExamples {
 	result.add(hierarchyconfig.ClusterScopedResourceInHierarchyConfigError(k8sobjects.HierarchyConfig(), kinds.ClusterRole().GroupKind()))
 
 	// 1047
-	result.add(nonhierarchical.UnsupportedCRDRemovalError(k8sobjects.CustomResourceDefinitionV1Beta1()))
+	result.add(nonhierarchical.UnsupportedCRDRemovalError(k8sobjects.CustomResourceDefinitionV1Object()))
 
 	// 1048
-	result.add(nonhierarchical.InvalidCRDNameError(k8sobjects.CustomResourceDefinitionV1Beta1(), "default-names.apiextensions.k8s.io"))
+	result.add(nonhierarchical.InvalidCRDNameError(k8sobjects.CustomResourceDefinitionV1Object(), "anvils.acme.com"))
 
 	// 1049 is Deprecated.
 	result.markDeprecated("1049")

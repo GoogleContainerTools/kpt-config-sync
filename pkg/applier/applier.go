@@ -584,7 +584,7 @@ func (s *supervisor) applyInner(ctx context.Context, eventHandler func(Event), d
 	// Builds a map of id -> resource
 	resourceMap := make(map[core.ID]client.Object)
 	for _, obj := range resources {
-		resourceMap[idFrom(ObjMetaFromObject(obj))] = obj
+		resourceMap[idFrom(ObjMetaFromUnstructured(obj))] = obj
 	}
 
 	events := s.clientSet.KptApplier.Run(ctx, s.inventory, object.UnstructuredSet(resources), options)

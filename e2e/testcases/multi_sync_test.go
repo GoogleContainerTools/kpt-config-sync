@@ -169,7 +169,7 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	nt.T.Logf("Add RepoSync %s to RootSync %s", repoSync3Key, configsync.RootSyncName)
 	nrs3 := nomostest.RepoSyncObjectV1Alpha1FromNonRootRepo(nt, repoSync3Key)
 	// Ensure the RoleBinding is deleted after the RepoSync
-	nt.Must(nomostest.SetDependencies(nrs3, nrb3))
+	nt.Must(nomostest.SetDependencies(nrs3, nt.Scheme, nrb3))
 	nt.Must(rootSync0GitRepo.Add(fmt.Sprintf("acme/reposyncs/%s.yaml", repoSync3Key.Name), nrs3))
 	nt.Must(rootSync0GitRepo.Add(fmt.Sprintf("acme/namespaces/%s/rb-%s.yaml", testNs, repoSync3Key.Name), nrb3))
 	nt.Must(rootSync0GitRepo.CommitAndPush("Adding RepoSync: " + repoSync3Key.String()))
@@ -190,7 +190,7 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 	nt.T.Logf("Add RepoSync %s to RootSync %s", repoSync5Key, rootSync1ID.Name)
 	nrs5 := nomostest.RepoSyncObjectV1Beta1FromNonRootRepo(nt, repoSync5Key)
 	// Ensure the RoleBinding is deleted after the RepoSync
-	nt.Must(nomostest.SetDependencies(nrs5, nrb5))
+	nt.Must(nomostest.SetDependencies(nrs5, nt.Scheme, nrb5))
 	nt.Must(rootSync1GitRepo.Add(fmt.Sprintf("acme/reposyncs/%s.yaml", repoSync5Key.Name), nrs5))
 	nt.Must(rootSync1GitRepo.Add(fmt.Sprintf("acme/namespaces/%s/rb-%s.yaml", testNs, repoSync5Key.Name), nrb5))
 	nt.Must(rootSync1GitRepo.CommitAndPush("Adding RepoSync: " + repoSync5Key.String()))

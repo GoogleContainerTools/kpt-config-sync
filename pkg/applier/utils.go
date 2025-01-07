@@ -17,15 +17,18 @@ package applier
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sort"
 	"strings"
 
 	"github.com/GoogleContainerTools/kpt/pkg/live"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
+	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/remediator/queue"
 	"kpt.dev/configsync/pkg/status"
@@ -86,7 +89,23 @@ func toUnstructured(objs []client.Object) ([]*unstructured.Unstructured, status.
 }
 
 // ObjMetaFromObject constructs an ObjMetadata representing the Object.
-func ObjMetaFromObject(obj client.Object) object.ObjMetadata {
+//
+// Errors if the GroupKind is not set and not registered in core.Scheme.
+func ObjMetaFromObject(obj client.Object, scheme *runtime.Scheme) (object.ObjMetadata, error) {
+	gvk, err := kinds.Lookup(obj, scheme)
+	if err != nil {
+		return object.ObjMetadata{},
+			fmt.Errorf("ObjMetaFromObject: failed to lookup GroupKind of %T: %w", obj, err)
+	}
+	return object.ObjMetadata{
+		Namespace: obj.GetNamespace(),
+		Name:      obj.GetName(),
+		GroupKind: gvk.GroupKind(),
+	}, nil
+}
+
+// ObjMetaFromUnstructured constructs an ObjMetadata representing the Object.
+func ObjMetaFromUnstructured(obj *unstructured.Unstructured) object.ObjMetadata {
 	return object.ObjMetadata{
 		Namespace: obj.GetNamespace(),
 		Name:      obj.GetName(),

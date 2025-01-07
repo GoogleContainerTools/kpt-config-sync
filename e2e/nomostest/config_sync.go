@@ -31,6 +31,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
@@ -1346,17 +1347,21 @@ func SetRepoSyncDependencies(nt *NT, rs client.Object) error {
 		nt.RepoSyncClusterRole(),
 		RepoSyncRoleBinding(rsNN),
 	}
-	return SetDependencies(rs, dependencies...)
+	return SetDependencies(rs, nt.Scheme, dependencies...)
 }
 
 // SetDependencies sets the specified objects as dependencies of the first object.
-func SetDependencies(obj client.Object, dependencies ...client.Object) error {
+func SetDependencies(obj client.Object, scheme *runtime.Scheme, dependencies ...client.Object) error {
 	var deps dependson.DependencySet
 	for _, dep := range dependencies {
-		deps = append(deps, applier.ObjMetaFromObject(dep))
+		objMeta, err := applier.ObjMetaFromObject(dep, scheme)
+		if err != nil {
+			return fmt.Errorf("failed to set dependencies on %s: %w", kinds.ObjectSummary(obj), err)
+		}
+		deps = append(deps, objMeta)
 	}
 	if err := setDependsOnAnnotation(obj, deps); err != nil {
-		return fmt.Errorf("failed to set dependencies on %T %s: %w", obj, client.ObjectKeyFromObject(obj), err)
+		return fmt.Errorf("failed to set dependencies on %s: %w", kinds.ObjectSummary(obj), err)
 	}
 	return nil
 }

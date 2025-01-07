@@ -141,7 +141,7 @@ func TestComposition(t *testing.T) {
 	// and RootSync level-1 is manage by RootSync root-sync (level-0),
 	// we need to make RepoSync level-1 depend on both RoleBindings,
 	// so the RoleBindings are deleted after both RepoSyncs.
-	nt.Must(nomostest.SetDependencies(lvl1Sync, lvl2RB, lvl3RB))
+	nt.Must(nomostest.SetDependencies(lvl1Sync, nt.Scheme, lvl2RB, lvl3RB))
 	lvl1Path := filepath.Join(lvl0SubDir, fmt.Sprintf("rootsync-%s.yaml", lvl1NN.Name))
 	nt.T.Logf("Adding RootSync %s to the shared repository: %s", lvl1NN.Name, lvl1Path)
 	nt.Must(lvl0Repo.Add(lvl1Path, lvl1Sync))

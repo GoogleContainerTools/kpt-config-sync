@@ -90,7 +90,7 @@ func TestObjMetaFrom(t *testing.T) {
 			Kind:  "Deployment",
 		},
 	}
-	actual := ObjMetaFromObject(d)
+	actual := mustObjMetaFromObject(t, d)
 	if actual != expected {
 		t.Errorf("expected %v but got %v", expected, actual)
 	}
@@ -98,7 +98,7 @@ func TestObjMetaFrom(t *testing.T) {
 
 func TestIDFrom(t *testing.T) {
 	d := k8sobjects.DeploymentObject(core.Name("deploy"), core.Namespace("default"))
-	meta := ObjMetaFromObject(d)
+	meta := mustObjMetaFromObject(t, d)
 	id := idFrom(meta)
 	if id != core.IDOf(d) {
 		t.Errorf("expected %v but got %v", core.IDOf(d), id)
@@ -115,47 +115,47 @@ func TestRemoveFrom(t *testing.T) {
 		{
 			name: "toRemove is empty",
 			allObjMeta: []object.ObjMetadata{
-				ObjMetaFromObject(k8sobjects.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
-				ObjMetaFromObject(k8sobjects.ServiceObject(core.Name("service"), core.Namespace("default"))),
+				mustObjMetaFromObject(t, k8sobjects.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
+				mustObjMetaFromObject(t, k8sobjects.ServiceObject(core.Name("service"), core.Namespace("default"))),
 			},
 			objs: nil,
 			expected: []object.ObjMetadata{
-				ObjMetaFromObject(k8sobjects.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
-				ObjMetaFromObject(k8sobjects.ServiceObject(core.Name("service"), core.Namespace("default"))),
+				mustObjMetaFromObject(t, k8sobjects.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
+				mustObjMetaFromObject(t, k8sobjects.ServiceObject(core.Name("service"), core.Namespace("default"))),
 			},
 		},
 		{
 			name: "all toRemove are in the original list",
 			allObjMeta: []object.ObjMetadata{
-				ObjMetaFromObject(k8sobjects.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
-				ObjMetaFromObject(k8sobjects.ServiceObject(core.Name("service"), core.Namespace("default"))),
+				mustObjMetaFromObject(t, k8sobjects.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
+				mustObjMetaFromObject(t, k8sobjects.ServiceObject(core.Name("service"), core.Namespace("default"))),
 			},
 			objs: []client.Object{
 				k8sobjects.ServiceObject(core.Name("service"), core.Namespace("default")),
 			},
 			expected: []object.ObjMetadata{
-				ObjMetaFromObject(k8sobjects.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
+				mustObjMetaFromObject(t, k8sobjects.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
 			},
 		},
 		{
 			name: "some toRemove are not in the original list",
 			allObjMeta: []object.ObjMetadata{
-				ObjMetaFromObject(k8sobjects.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
-				ObjMetaFromObject(k8sobjects.ServiceObject(core.Name("service"), core.Namespace("default"))),
+				mustObjMetaFromObject(t, k8sobjects.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
+				mustObjMetaFromObject(t, k8sobjects.ServiceObject(core.Name("service"), core.Namespace("default"))),
 			},
 			objs: []client.Object{
 				k8sobjects.ServiceObject(core.Name("service"), core.Namespace("default")),
 				k8sobjects.ConfigMapObject(core.Name("cm"), core.Namespace("default")),
 			},
 			expected: []object.ObjMetadata{
-				ObjMetaFromObject(k8sobjects.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
+				mustObjMetaFromObject(t, k8sobjects.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
 			},
 		},
 		{
 			name: "toRemove are the same as original objects",
 			allObjMeta: []object.ObjMetadata{
-				ObjMetaFromObject(k8sobjects.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
-				ObjMetaFromObject(k8sobjects.ServiceObject(core.Name("service"), core.Namespace("default"))),
+				mustObjMetaFromObject(t, k8sobjects.DeploymentObject(core.Name("deploy"), core.Namespace("default"))),
+				mustObjMetaFromObject(t, k8sobjects.ServiceObject(core.Name("service"), core.Namespace("default"))),
 			},
 			objs: []client.Object{
 				k8sobjects.DeploymentObject(core.Name("deploy"), core.Namespace("default")),
@@ -306,4 +306,15 @@ func TestHandleIgnoredObjects(t *testing.T) {
 			testutil.AssertEqual(t, tc.expectedObjs, allObjs)
 		})
 	}
+}
+
+// mustObjMetaFromObject constructs an ObjMetadata representing the Object.
+//
+// Fails the test if the GroupKind is not set and not registered in core.Scheme.
+func mustObjMetaFromObject(t *testing.T, obj client.Object) object.ObjMetadata {
+	objMeta, err := ObjMetaFromObject(obj, core.Scheme)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return objMeta
 }

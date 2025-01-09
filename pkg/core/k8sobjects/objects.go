@@ -15,7 +15,6 @@
 package k8sobjects
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -23,7 +22,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	rbacv1beta1 "k8s.io/api/rbac/v1beta1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -229,89 +228,33 @@ func RepoSyncV1Beta1(ns, name string, opts ...core.MetaMutator) ast.FileObject {
 	return FileObject(uObj, fmt.Sprintf("namespaces/%s/%s.yaml", ns, name))
 }
 
-// CustomResourceDefinitionV1Beta1Object returns an initialized CustomResourceDefinition.
-func CustomResourceDefinitionV1Beta1Object(opts ...core.MetaMutator) *v1beta1.CustomResourceDefinition {
-	result := &v1beta1.CustomResourceDefinition{
+// CustomResourceDefinitionV1Beta1Object returns a v1beta1.CustomResourceDefinition.
+func CustomResourceDefinitionV1Beta1Object(opts ...core.MetaMutator) *apiextensionsv1beta1.CustomResourceDefinition {
+	result := &apiextensionsv1beta1.CustomResourceDefinition{
 		TypeMeta: ToTypeMeta(kinds.CustomResourceDefinitionV1Beta1()),
 	}
 	defaultMutate(result)
 	mutate(result, opts...)
-
 	return result
 }
 
-// CustomResourceDefinitionV1Beta1 returns a FileObject containing a
-// CustomResourceDefinition at a default path.
-func CustomResourceDefinitionV1Beta1(opts ...core.MetaMutator) ast.FileObject {
-	return FileObject(CustomResourceDefinitionV1Beta1Object(opts...), "cluster/crd.yaml")
-}
-
-// CustomResourceDefinitionV1Beta1Unstructured returns a v1Beta1 CRD as an unstructured
-func CustomResourceDefinitionV1Beta1Unstructured(opts ...core.MetaMutator) *unstructured.Unstructured {
-	o := CustomResourceDefinitionV1Beta1Object(opts...)
-	jsn, err := json.Marshal(o)
-	if err != nil {
-		// Should be impossible, and this is test-only code so it's fine.
-		panic(err)
-	}
-	u := &unstructured.Unstructured{}
-	err = json.Unmarshal(jsn, u)
-	u.SetGroupVersionKind(kinds.CustomResourceDefinitionV1Beta1())
-	if err != nil {
-		// Should be impossible, and this is test-only code so it's fine.
-		panic(err)
-	}
-	normalizeUnstructured(u)
-	return u
-}
-
-// CustomResourceDefinitionV1Object returns an initialized CustomResourceDefinition.
+// CustomResourceDefinitionV1Object returns a v1.CustomResourceDefinition.
 func CustomResourceDefinitionV1Object(opts ...core.MetaMutator) *apiextensionsv1.CustomResourceDefinition {
 	result := &apiextensionsv1.CustomResourceDefinition{
 		TypeMeta: ToTypeMeta(kinds.CustomResourceDefinitionV1()),
 	}
 	defaultMutate(result)
 	mutate(result, opts...)
-
 	return result
-}
-
-// CustomResourceDefinitionV1 returns a FileObject containing a
-// CustomResourceDefinition at a default path.
-func CustomResourceDefinitionV1(opts ...core.MetaMutator) ast.FileObject {
-	return FileObject(CustomResourceDefinitionV1Object(opts...), "cluster/crd.yaml")
-}
-
-// CustomResourceDefinitionV1Unstructured returns a v1 CRD as an unstructured
-func CustomResourceDefinitionV1Unstructured(opts ...core.MetaMutator) *unstructured.Unstructured {
-	o := CustomResourceDefinitionV1Object(opts...)
-	jsn, err := json.Marshal(o)
-	if err != nil {
-		// Should be impossible, and this is test-only code so it's fine.
-		panic(err)
-	}
-	u := &unstructured.Unstructured{}
-	err = json.Unmarshal(jsn, u)
-	u.SetGroupVersionKind(kinds.CustomResourceDefinitionV1())
-	if err != nil {
-		// Should be impossible, and this is test-only code so it's fine.
-		panic(err)
-	}
-	normalizeUnstructured(u)
-	return u
 }
 
 // AnvilAtPath returns an Anvil Custom Resource.
 func AnvilAtPath(path string, opts ...core.MetaMutator) ast.FileObject {
-	obj := &v1beta1.CustomResourceDefinition{
-		TypeMeta: ToTypeMeta(kinds.Anvil()),
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "anvil",
-		},
-	}
+	obj := &unstructured.Unstructured{}
+	obj.SetGroupVersionKind(kinds.Anvil())
 	defaultMutate(obj)
+	obj.SetName("anvil")
 	mutate(obj, opts...)
-
 	return FileObject(obj, path)
 }
 

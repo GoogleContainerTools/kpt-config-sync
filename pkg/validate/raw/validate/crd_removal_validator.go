@@ -15,7 +15,7 @@
 package validate
 
 import (
-	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/importer/customresources"
@@ -26,7 +26,7 @@ import (
 // RemovedCRDs verifies that the Raw objects do not remove any CRDs that still
 // have CRs using them.
 func RemovedCRDs(objs *fileobjects.Raw) status.MultiError {
-	current, errs := customresources.GetCRDs(objs.Objects)
+	current, errs := customresources.GetCRDs(objs.Objects, objs.Scheme)
 	if errs != nil {
 		return errs
 	}
@@ -41,7 +41,7 @@ func RemovedCRDs(objs *fileobjects.Raw) status.MultiError {
 
 type removedGKs map[schema.GroupKind]bool
 
-func removedGroupKinds(previous, current []*v1beta1.CustomResourceDefinition) removedGKs {
+func removedGroupKinds(previous, current []*apiextensionsv1.CustomResourceDefinition) removedGKs {
 	removed := make(map[schema.GroupKind]bool)
 	for _, crd := range previous {
 		gk := schema.GroupKind{Group: crd.Spec.Group, Kind: crd.Spec.Names.Kind}

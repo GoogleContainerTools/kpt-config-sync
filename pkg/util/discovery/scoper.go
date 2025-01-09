@@ -17,7 +17,7 @@ package discovery
 import (
 	"fmt"
 
-	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
@@ -82,7 +82,7 @@ func (s *Scoper) HasScopesFor(objects []ast.FileObject) bool {
 // AddCustomResources updates Scoper with custom resource metadata from the
 // provided CustomResourceDefinitions.  It replaces any existing scopes for the
 // GroupKinds of the CRDs.
-func (s *Scoper) AddCustomResources(crds []*v1beta1.CustomResourceDefinition) {
+func (s *Scoper) AddCustomResources(crds []*apiextensionsv1.CustomResourceDefinition) {
 	gkss := scopesFromCRDs(crds)
 	s.add(gkss)
 }
@@ -177,7 +177,7 @@ type GroupKindScope struct {
 }
 
 // scopesFromCRDs extracts the scopes declared in all passed CRDs.
-func scopesFromCRDs(crds []*v1beta1.CustomResourceDefinition) []GroupKindScope {
+func scopesFromCRDs(crds []*apiextensionsv1.CustomResourceDefinition) []GroupKindScope {
 	var result []GroupKindScope
 	for _, crd := range crds {
 		if !isServed(crd) {
@@ -190,10 +190,15 @@ func scopesFromCRDs(crds []*v1beta1.CustomResourceDefinition) []GroupKindScope {
 }
 
 // isServed returns true if the CRD declares a version servable by the APIServer.
-func isServed(crd *v1beta1.CustomResourceDefinition) bool {
-	if crd.Spec.Version != "" {
-		return true
-	}
+func isServed(crd *apiextensionsv1.CustomResourceDefinition) bool {
+	// v1beta1 has a spec.version field, but this field was removed in v1.
+	// In order for this check to work, v1beta1 objects will need to have been
+	// converted to v1 using scheme-driven conversion, not just json marshal &
+	// unmarshal.
+	//
+	// if crd.Spec.Version != "" {
+	// 	return true
+	// }
 	for _, version := range crd.Spec.Versions {
 		if version.Served {
 			return true
@@ -202,10 +207,10 @@ func isServed(crd *v1beta1.CustomResourceDefinition) bool {
 	return false
 }
 
-func scopeFromCRD(crd *v1beta1.CustomResourceDefinition) GroupKindScope {
+func scopeFromCRD(crd *apiextensionsv1.CustomResourceDefinition) GroupKindScope {
 	// CRD Scope defaults to Namespaced
 	scope := NamespaceScope
-	if crd.Spec.Scope == v1beta1.ClusterScoped {
+	if crd.Spec.Scope == apiextensionsv1.ClusterScoped {
 		scope = ClusterScope
 	}
 

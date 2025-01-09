@@ -18,16 +18,14 @@ import (
 	"context"
 	"errors"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
-	apiextensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/pkg/api/configmanagement"
@@ -102,60 +100,10 @@ func namespaceSelector(name, key, value, mode string) *v1.NamespaceSelector {
 	return ns
 }
 
-func crdUnstructured(t *testing.T, gvk schema.GroupVersionKind, opts ...core.MetaMutator) *unstructured.Unstructured {
-	t.Helper()
-	u := k8sobjects.CustomResourceDefinitionV1Beta1Unstructured()
-	pluralKind := strings.ToLower(gvk.Kind) + "s"
-	u.SetName(pluralKind + "." + gvk.Group)
-	if err := unstructured.SetNestedField(u.Object, gvk.Group, "spec", "group"); err != nil {
-		t.Fatal(err)
-	}
-	if err := unstructured.SetNestedField(u.Object, gvk.Kind, "spec", "names", "kind"); err != nil {
-		t.Fatal(err)
-	}
-	if err := unstructured.SetNestedField(u.Object, pluralKind, "spec", "names", "plural"); err != nil {
-		t.Fatal(err)
-	}
-	if err := unstructured.SetNestedField(u.Object, string(apiextensionsv1beta1.NamespaceScoped), "spec", "scope"); err != nil {
-		t.Fatal(err)
-	}
-	versions := []interface{}{
-		map[string]interface{}{
-			"name":   gvk.Version,
-			"served": true,
-		},
-	}
-	if err := unstructured.SetNestedSlice(u.Object, versions, "spec", "versions"); err != nil {
-		t.Fatal(err)
-	}
-	for _, opt := range opts {
-		opt(u)
-	}
-	return u
-}
-
-func crdObject(gvk schema.GroupVersionKind, opts ...core.MetaMutator) *apiextensionsv1beta1.CustomResourceDefinition {
-	o := k8sobjects.CustomResourceDefinitionV1Beta1Object()
-	o.Spec.Names.Plural = strings.ToLower(gvk.Kind) + "s"
-	o.SetName(o.Spec.Names.Plural + "." + gvk.Group)
-	o.Spec.Group = gvk.Group
-	o.Spec.Names.Kind = gvk.Kind
-	o.Spec.Versions = append(o.Spec.Versions,
-		apiextensionsv1beta1.CustomResourceDefinitionVersion{Name: gvk.Version, Served: true},
-	)
-	o.Spec.Scope = apiextensionsv1beta1.ClusterScoped
-
-	for _, opt := range opts {
-		opt(o)
-	}
-
-	return o
-}
-
 func TestHierarchical(t *testing.T) {
 	testCases := []struct {
 		name          string
-		discoveryCRDs []*apiextensionsv1beta1.CustomResourceDefinition
+		discoveryCRDs []*apiextensionsv1.CustomResourceDefinition
 		options       Options
 		objs          []ast.FileObject
 		want          []ast.FileObject
@@ -230,18 +178,48 @@ func TestHierarchical(t *testing.T) {
 			},
 		},
 		{
-			name: "CRD and CR",
+			name: "CRD v1 and CR",
+			options: Options{
+				Scheme: core.Scheme,
+			},
 			objs: []ast.FileObject{
 				k8sobjects.Repo(),
-				k8sobjects.FileObject(crdUnstructured(t, kinds.Anvil()), "cluster/crd.yaml"),
+				k8sobjects.AnvilCRDv1AtPath("cluster/crd.yaml"),
 				k8sobjects.Namespace("namespaces/foo"),
 				k8sobjects.AnvilAtPath("namespaces/foo/anvil.yaml",
 					core.Namespace("foo")),
 			},
 			want: []ast.FileObject{
-				k8sobjects.FileObject(crdUnstructured(t, kinds.Anvil(),
+				k8sobjects.AnvilCRDv1AtPath("cluster/crd.yaml",
+					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
+					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/cluster/crd.yaml")),
+				k8sobjects.Namespace("namespaces/foo",
+					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
+					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/namespaces/foo/namespace.yaml"),
+					core.Annotation(csmetadata.HNCManagedBy, csmetadata.ManagedByValue),
+					core.Label("foo.tree.hnc.x-k8s.io/depth", "0")),
+				k8sobjects.AnvilAtPath("namespaces/foo/anvil.yaml",
+					core.Namespace("foo"),
+					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
+					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/namespaces/foo/anvil.yaml")),
+			},
+		},
+		{
+			name: "CRD v1beta1 and CR",
+			options: Options{
+				Scheme: core.Scheme,
+			},
+			objs: []ast.FileObject{
+				k8sobjects.Repo(),
+				k8sobjects.AnvilCRDv1beta1AtPath("cluster/crd.yaml"),
+				k8sobjects.Namespace("namespaces/foo"),
+				k8sobjects.AnvilAtPath("namespaces/foo/anvil.yaml",
+					core.Namespace("foo")),
+			},
+			want: []ast.FileObject{
+				k8sobjects.AnvilCRDv1beta1AtPath("cluster/crd.yaml",
 					core.Label(csmetadata.DeclaredVersionLabel, "v1beta1"),
-					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/cluster/crd.yaml")), "cluster/crd.yaml"),
+					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/cluster/crd.yaml")),
 				k8sobjects.Namespace("namespaces/foo",
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/namespaces/foo/namespace.yaml"),
@@ -255,15 +233,15 @@ func TestHierarchical(t *testing.T) {
 		},
 		{
 			name: "CR in repo and CRD on API server",
-			discoveryCRDs: []*apiextensionsv1beta1.CustomResourceDefinition{
-				crdObject(kinds.Anvil()),
+			discoveryCRDs: []*apiextensionsv1.CustomResourceDefinition{
+				k8sobjects.CRDV1ObjectForGVK(kinds.Anvil(), apiextensionsv1.ClusterScoped),
 			},
 			objs: []ast.FileObject{
 				k8sobjects.Repo(),
-				k8sobjects.AnvilAtPath("cluster/anvil.yaml"),
+				k8sobjects.AnvilAtPath("cluster/anvil.yaml", core.Namespace("")),
 			},
 			want: []ast.FileObject{
-				k8sobjects.AnvilAtPath("cluster/anvil.yaml",
+				k8sobjects.AnvilAtPath("cluster/anvil.yaml", core.Namespace(""),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/cluster/anvil.yaml")),
 			},
@@ -853,6 +831,9 @@ func TestHierarchical(t *testing.T) {
 		},
 		{
 			name: "HierarchyConfigs with invalid resource kinds fails",
+			options: Options{
+				Scheme: core.Scheme,
+			},
 			objs: []ast.FileObject{
 				k8sobjects.Repo(),
 				k8sobjects.HierarchyConfig(
@@ -867,7 +848,7 @@ func TestHierarchical(t *testing.T) {
 					k8sobjects.HierarchyConfigResource(v1.HierarchyModeInherit,
 						kinds.Sync().GroupVersion(), kinds.Sync().Kind),
 					core.Name("sync-hc")),
-				k8sobjects.FileObject(crdUnstructured(t, kinds.Anvil()), "cluster/crd.yaml"),
+				k8sobjects.AnvilCRDv1AtPath("cluster/crd.yaml"),
 				k8sobjects.Namespace("namespaces/foo"),
 			},
 			wantErrs: status.FakeMultiError(
@@ -958,7 +939,7 @@ func TestHierarchical(t *testing.T) {
 func TestUnstructured(t *testing.T) {
 	testCases := []struct {
 		name                                   string
-		discoveryCRDs                          []*apiextensionsv1beta1.CustomResourceDefinition
+		discoveryCRDs                          []*apiextensionsv1.CustomResourceDefinition
 		options                                Options
 		objs                                   []ast.FileObject
 		onClusterObjects                       []client.Object
@@ -1003,16 +984,39 @@ func TestUnstructured(t *testing.T) {
 			},
 		},
 		{
-			name:    "CRD and CR",
-			options: Options{Scope: declared.RootScope},
+			name: "CRD v1 and CR",
+			options: Options{
+				Scope:  declared.RootScope,
+				Scheme: core.Scheme,
+			},
 			objs: []ast.FileObject{
-				k8sobjects.FileObject(crdUnstructured(t, kinds.Anvil()), "crd.yaml"),
+				k8sobjects.AnvilCRDv1AtPath("crd.yaml"),
 				k8sobjects.AnvilAtPath("anvil.yaml"),
 			},
 			want: []ast.FileObject{
-				k8sobjects.FileObject(crdUnstructured(t, kinds.Anvil(),
+				k8sobjects.AnvilCRDv1AtPath("crd.yaml",
+					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
+					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/crd.yaml")),
+				k8sobjects.AnvilAtPath("anvil.yaml",
+					core.Namespace(metav1.NamespaceDefault),
+					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
+					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/anvil.yaml")),
+			},
+		},
+		{
+			name: "CRD v1beta1 and CR",
+			options: Options{
+				Scope:  declared.RootScope,
+				Scheme: core.Scheme,
+			},
+			objs: []ast.FileObject{
+				k8sobjects.AnvilCRDv1beta1AtPath("crd.yaml"),
+				k8sobjects.AnvilAtPath("anvil.yaml"),
+			},
+			want: []ast.FileObject{
+				k8sobjects.AnvilCRDv1beta1AtPath("crd.yaml",
 					core.Label(csmetadata.DeclaredVersionLabel, "v1beta1"),
-					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/crd.yaml")), "crd.yaml"),
+					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/crd.yaml")),
 				k8sobjects.AnvilAtPath("anvil.yaml",
 					core.Namespace(metav1.NamespaceDefault),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1"),
@@ -1265,8 +1269,8 @@ func TestUnstructured(t *testing.T) {
 		{
 			name: "removing CRD while in-use fails",
 			options: Options{
-				PreviousCRDs: []*apiextensionsv1beta1.CustomResourceDefinition{
-					crdObject(kinds.Anvil()),
+				PreviousCRDs: []*apiextensionsv1.CustomResourceDefinition{
+					k8sobjects.CRDV1ObjectForGVK(kinds.Anvil(), apiextensionsv1.ClusterScoped),
 				},
 				Scope: declared.RootScope,
 			},

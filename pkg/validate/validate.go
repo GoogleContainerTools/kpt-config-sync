@@ -17,7 +17,8 @@ package validate
 import (
 	"context"
 
-	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
@@ -55,7 +56,7 @@ type Options struct {
 	// PreviousCRDs is a list of the CRDs that were declared in the previous set
 	// of FileObjects that were validated. This is used to validate that we only
 	// remove a CRD if all of its CRs are gone as well.
-	PreviousCRDs []*v1beta1.CustomResourceDefinition
+	PreviousCRDs []*apiextensionsv1.CustomResourceDefinition
 	// BuildScoper is a function that builds a Scoper to identify which objects
 	// are cluster-scoped or namespace-scoped.
 	BuildScoper discovery.BuildScoperFunc
@@ -63,6 +64,8 @@ type Options struct {
 	// annotation on that object so that the validating admission webhook can
 	// prevent those fields from being changed.
 	Converter *declared.ValueConverter
+	// Scheme used to convert between types.
+	Scheme *runtime.Scheme
 	// AllowUnknownKinds is a flag to determine if we should throw an error or
 	// proceed when the Scoper is unable to determine the scope of an object
 	// kind. We only set this to true if a tool is running in offline mode (eg we
@@ -106,6 +109,7 @@ func Hierarchical(objs []ast.FileObject, opts Options) ([]ast.FileObject, status
 		PreviousCRDs:      opts.PreviousCRDs,
 		BuildScoper:       opts.BuildScoper,
 		Converter:         opts.Converter,
+		Scheme:            opts.Scheme,
 		AllowUnknownKinds: opts.AllowUnknownKinds,
 		WebhookEnabled:    opts.WebhookEnabled,
 	}
@@ -188,6 +192,7 @@ func Unstructured(ctx context.Context, c client.Client, objs []ast.FileObject, o
 		PreviousCRDs:             opts.PreviousCRDs,
 		BuildScoper:              opts.BuildScoper,
 		Converter:                opts.Converter,
+		Scheme:                   opts.Scheme,
 		AllowUnknownKinds:        opts.AllowUnknownKinds,
 		AllowAPICall:             opts.AllowAPICall,
 		DynamicNSSelectorEnabled: opts.DynamicNSSelectorEnabled,

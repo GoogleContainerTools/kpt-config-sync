@@ -50,28 +50,29 @@ func TestGetCRDs(t *testing.T) {
 	testCases := []struct {
 		name string
 		objs []client.Object
-		want []*apiextensionsv1beta1.CustomResourceDefinition
+		want []*apiextensionsv1.CustomResourceDefinition
 	}{
 		{
 			name: "No CRDs",
-			want: []*apiextensionsv1beta1.CustomResourceDefinition{},
+			want: []*apiextensionsv1.CustomResourceDefinition{},
 		},
 		{
 			name: "v1Beta1 CRD",
 			objs: []client.Object{
-				k8sobjects.CustomResourceDefinitionV1Beta1Unstructured(),
+				k8sobjects.CRDV1beta1UnstructuredForGVK(kinds.Anvil(), apiextensionsv1.NamespaceScoped),
 			},
-			want: []*apiextensionsv1beta1.CustomResourceDefinition{
-				k8sobjects.CustomResourceDefinitionV1Beta1Object(),
+			want: []*apiextensionsv1.CustomResourceDefinition{
+				k8sobjects.CRDV1ObjectForGVK(kinds.Anvil(), apiextensionsv1.NamespaceScoped),
 			},
 		},
 		{
 			name: "v1 CRD",
 			objs: []client.Object{
-				k8sobjects.CustomResourceDefinitionV1Object(),
+				k8sobjects.CRDV1UnstructuredForGVK(kinds.Anvil(), apiextensionsv1.NamespaceScoped),
 			},
-			want: []*apiextensionsv1beta1.CustomResourceDefinition{
-				k8sobjects.CustomResourceDefinitionV1Beta1Object(preserveUnknownFields(t, false)),
+			want: []*apiextensionsv1.CustomResourceDefinition{
+				k8sobjects.CRDV1ObjectForGVK(kinds.Anvil(), apiextensionsv1.NamespaceScoped,
+					preserveUnknownFields(t, false)),
 			},
 		},
 	}
@@ -86,8 +87,11 @@ func TestGetCRDs(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if diff := cmp.Diff(tc.want, actual, cmpopts.EquateEmpty(),
-				cmpopts.IgnoreFields(apiextensionsv1beta1.CustomResourceDefinition{}, "TypeMeta")); diff != "" {
+			opts := []cmp.Option{
+				cmpopts.EquateEmpty(),
+				cmpopts.IgnoreFields(apiextensionsv1.CustomResourceDefinition{}, "TypeMeta"),
+			}
+			if diff := cmp.Diff(tc.want, actual, opts...); diff != "" {
 				t.Error(diff)
 			}
 		})
@@ -108,7 +112,7 @@ func clusterConfig(objects ...client.Object) *v1.ClusterConfig {
 }
 
 func generateMalformedCRD(t *testing.T) *unstructured.Unstructured {
-	u := k8sobjects.CustomResourceDefinitionV1Beta1Unstructured()
+	u := k8sobjects.CRDV1beta1UnstructuredForGVK(kinds.Anvil(), apiextensionsv1.NamespaceScoped)
 
 	// the `spec.group` field should be a string
 	// set it to a bool to construct a malformed CRD
@@ -118,7 +122,7 @@ func generateMalformedCRD(t *testing.T) *unstructured.Unstructured {
 	return u
 }
 
-func TestAsCRD(t *testing.T) {
+func TestToCRD(t *testing.T) {
 	testCases := []struct {
 		name    string
 		obj     *unstructured.Unstructured
@@ -126,12 +130,12 @@ func TestAsCRD(t *testing.T) {
 	}{
 		{
 			name:    "well-formed v1beta1 CRD",
-			obj:     k8sobjects.CustomResourceDefinitionV1Beta1Unstructured(),
+			obj:     k8sobjects.CRDV1beta1UnstructuredForGVK(kinds.Anvil(), apiextensionsv1.NamespaceScoped),
 			wantErr: nil,
 		},
 		{
 			name:    "well-formed v1 CRD",
-			obj:     k8sobjects.CustomResourceDefinitionV1Unstructured(),
+			obj:     k8sobjects.CRDV1UnstructuredForGVK(kinds.Anvil(), apiextensionsv1.NamespaceScoped),
 			wantErr: nil,
 		},
 		{
@@ -147,7 +151,7 @@ func TestAsCRD(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := AsCRD(tc.obj)
+			_, err := ToCRD(tc.obj, core.Scheme)
 			testerrors.AssertEqual(t, tc.wantErr, err)
 		})
 	}

@@ -59,7 +59,7 @@ func (p *rootSyncParser) ParseSource(ctx context.Context, state *sourceState) ([
 		Files:     wantFiles,
 	}
 
-	crds, err := opts.DeclaredResources.DeclaredCRDs()
+	crds, err := opts.DeclaredResources.DeclaredCRDs(p.options.Client.Scheme())
 	if err != nil {
 		return nil, err
 	}
@@ -78,6 +78,7 @@ func (p *rootSyncParser) ParseSource(ctx context.Context, state *sourceState) ([
 		PreviousCRDs: crds,
 		BuildScoper:  builder,
 		Converter:    opts.Converter,
+		Scheme:       opts.Client.Scheme(),
 		// Enable API call so NamespaceSelector can talk to k8s-api-server.
 		AllowAPICall:             true,
 		DynamicNSSelectorEnabled: opts.DynamicNSSelectorEnabled,

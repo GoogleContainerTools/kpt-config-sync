@@ -76,8 +76,8 @@ func TestClusterSelectorsForHierarchical(t *testing.T) {
 			objs: &fileobjects.Raw{
 				Objects: []ast.FileObject{
 					k8sobjects.ClusterRole(),
-					k8sobjects.CustomResourceDefinitionV1(),
-					k8sobjects.CustomResourceDefinitionV1Beta1(),
+					k8sobjects.AnvilCRDv1AtPath("crd.yaml"),
+					k8sobjects.AnvilCRDv1beta1AtPath("crd.yaml"),
 				},
 			},
 		},
@@ -86,8 +86,8 @@ func TestClusterSelectorsForHierarchical(t *testing.T) {
 			objs: &fileobjects.Raw{
 				Objects: []ast.FileObject{
 					k8sobjects.ClusterRole(legacyClusterSelectorAnnotation),
-					k8sobjects.CustomResourceDefinitionV1(legacyClusterSelectorAnnotation),
-					k8sobjects.CustomResourceDefinitionV1Beta1(legacyClusterSelectorAnnotation),
+					k8sobjects.AnvilCRDv1AtPath("crd.yaml", legacyClusterSelectorAnnotation),
+					k8sobjects.AnvilCRDv1beta1AtPath("crd.yaml", legacyClusterSelectorAnnotation),
 				},
 			},
 		},
@@ -96,8 +96,8 @@ func TestClusterSelectorsForHierarchical(t *testing.T) {
 			objs: &fileobjects.Raw{
 				Objects: []ast.FileObject{
 					k8sobjects.ClusterRole(inlineClusterSelectorAnnotation),
-					k8sobjects.CustomResourceDefinitionV1(inlineClusterSelectorAnnotation),
-					k8sobjects.CustomResourceDefinitionV1Beta1(inlineClusterSelectorAnnotation),
+					k8sobjects.AnvilCRDv1AtPath("crd.yaml", inlineClusterSelectorAnnotation),
+					k8sobjects.AnvilCRDv1beta1AtPath("crd.yaml", inlineClusterSelectorAnnotation),
 				},
 			},
 		},

@@ -38,7 +38,7 @@ func (p *repoSyncParser) ParseSource(ctx context.Context, state *sourceState) ([
 		PolicyDir: opts.SyncDir,
 		Files:     state.files,
 	}
-	crds, err := opts.DeclaredResources.DeclaredCRDs()
+	crds, err := opts.DeclaredResources.DeclaredCRDs(p.options.Client.Scheme())
 	if err != nil {
 		return nil, err
 	}
@@ -57,6 +57,7 @@ func (p *repoSyncParser) ParseSource(ctx context.Context, state *sourceState) ([
 		PreviousCRDs: crds,
 		BuildScoper:  builder,
 		Converter:    opts.Converter,
+		Scheme:       opts.Client.Scheme(),
 		// Namespaces and NamespaceSelectors should not be declared in a namespace repo.
 		// So disable the API call and dynamic mode of NamespaceSelector.
 		AllowAPICall:             false,

@@ -17,6 +17,7 @@ package validate
 import (
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/kinds"
@@ -36,7 +37,7 @@ func IllegalCRD(obj ast.FileObject) status.Error {
 		return nil
 	}
 
-	crd, err := clusterconfig.AsCRD(obj.Unstructured)
+	crd, err := clusterconfig.ToCRD(obj.Unstructured, core.Scheme)
 	if err != nil {
 		return err
 	}

@@ -18,6 +18,9 @@ import (
 	"errors"
 	"testing"
 
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/kinds"
@@ -32,26 +35,36 @@ func TestIllegalCRD(t *testing.T) {
 	}{
 		{
 			name: "Anvil v1beta1 CRD",
-			obj:  crdv1beta1("crd", kinds.Anvil()),
+			obj: k8sobjects.FileObject(k8sobjects.CRDV1UnstructuredForGVK(
+				kinds.Anvil(), apiextensionsv1.NamespaceScoped, core.Name("crd")),
+				"crd.yaml"),
 		},
 		{
-			name:    "ClusterConfig v1beta1 CRD",
-			obj:     crdv1beta1("crd", kinds.ClusterConfig()),
+			name: "ClusterConfig v1beta1 CRD",
+			obj: k8sobjects.FileObject(k8sobjects.CRDV1beta1UnstructuredForGVK(
+				kinds.ClusterConfig(), apiextensionsv1.ClusterScoped, core.Name("crd")),
+				"crd.yaml"),
 			wantErr: status.FakeError(nonhierarchical.UnsupportedObjectErrorCode),
 		},
 		{
-			name:    "ClusterConfig v1 CRD",
-			obj:     crdv1("crd", kinds.ClusterConfig()),
+			name: "ClusterConfig v1 CRD",
+			obj: k8sobjects.FileObject(k8sobjects.CRDV1UnstructuredForGVK(
+				kinds.ClusterConfig(), apiextensionsv1.ClusterScoped, core.Name("crd")),
+				"crd.yaml"),
 			wantErr: status.FakeError(nonhierarchical.UnsupportedObjectErrorCode),
 		},
 		{
-			name:    "RepoSync v1beta1 CRD",
-			obj:     crdv1beta1("crd", kinds.RepoSyncV1Beta1()),
+			name: "RepoSync v1beta1 CRD",
+			obj: k8sobjects.FileObject(k8sobjects.CRDV1beta1UnstructuredForGVK(
+				kinds.RepoSyncV1Beta1(), apiextensionsv1.NamespaceScoped, core.Name("crd")),
+				"crd.yaml"),
 			wantErr: status.FakeError(nonhierarchical.UnsupportedObjectErrorCode),
 		},
 		{
-			name:    "RepoSync v1 CRD",
-			obj:     crdv1("crd", kinds.RepoSyncV1Beta1()),
+			name: "RepoSync v1 CRD",
+			obj: k8sobjects.FileObject(k8sobjects.CRDV1UnstructuredForGVK(
+				kinds.RepoSyncV1Beta1(), apiextensionsv1.NamespaceScoped, core.Name("crd")),
+				"crd.yaml"),
 			wantErr: status.FakeError(nonhierarchical.UnsupportedObjectErrorCode),
 		},
 	}

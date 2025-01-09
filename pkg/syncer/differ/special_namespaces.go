@@ -17,6 +17,7 @@ package differ
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/policycontroller"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -38,7 +39,13 @@ var SpecialNamespaces = map[string]bool{
 
 // IsManageableSystemNamespace returns if the input namespace is a manageable system namespace.
 func IsManageableSystemNamespace(o client.Object) bool {
-	if o.GetObjectKind().GroupVersionKind().GroupKind() != kinds.Namespace().GroupKind() {
+	switch t := o.(type) {
+	case *corev1.Namespace:
+	case *unstructured.Unstructured:
+		if t.GroupVersionKind().GroupKind() != kinds.Namespace().GroupKind() {
+			return false
+		}
+	default:
 		return false
 	}
 	return SpecialNamespaces[o.GetName()]

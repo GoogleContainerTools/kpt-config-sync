@@ -46,6 +46,8 @@ type PublishingGroupBuilder struct {
 func (t *PublishingGroupBuilder) Build() []Publisher {
 	var publishers []Publisher
 	if t.SyncPeriod > 0 {
+		// ResetOnRunAttemptPublisher makes it so that the sync timer is reset whenever
+		// a reconcile occurs due to one of the other event types.
 		publishers = append(publishers, NewResetOnRunAttemptPublisher(SyncEventType, t.Clock, t.SyncPeriod))
 	}
 	if t.NamespaceControllerPeriod > 0 {
@@ -55,7 +57,10 @@ func (t *PublishingGroupBuilder) Build() []Publisher {
 		publishers = append(publishers, NewRetrySyncPublisher(t.Clock, t.RetryBackoff))
 	}
 	if t.StatusUpdatePeriod > 0 {
-		publishers = append(publishers, NewResetOnRunAttemptPublisher(StatusUpdateEventType, t.Clock, t.StatusUpdatePeriod))
+		// Status updates are on an independent timer from the sync event, and thus
+		// could run immediately after a sync event. The status updater performs a
+		// diff before making API calls so this should be low cost.
+		publishers = append(publishers, NewTimeDelayPublisher(StatusUpdateEventType, t.Clock, t.StatusUpdatePeriod))
 	}
 	return publishers
 }

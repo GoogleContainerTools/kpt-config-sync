@@ -71,23 +71,6 @@ spec:
   - name: health-check
     port: 13133
 ---
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-port-ingress
-  namespace: config-management-monitoring
-spec:
-  podSelector:
-    matchLabels:
-      app: opentelemetry
-      component: otel-collector
-  ingress:
-  - from:
-    - namespaceSelector: {}
-    ports:
-    - protocol: TCP
-      port: 55678
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:

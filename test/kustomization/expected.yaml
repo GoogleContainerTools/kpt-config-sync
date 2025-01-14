@@ -6538,23 +6538,6 @@ spec:
           name: resource-group-otel-agent
         name: otel-agent-config-vol
 ---
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-port-ingress
-  namespace: config-management-monitoring
-spec:
-  ingress:
-  - from:
-    - namespaceSelector: {}
-    ports:
-    - port: 55678
-      protocol: TCP
-  podSelector:
-    matchLabels:
-      app: opentelemetry
-      component: otel-collector
----
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:

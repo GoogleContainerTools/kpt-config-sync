@@ -185,9 +185,7 @@ processors:
         new_name: current_declared_resources
         operations:
           - action: aggregate_labels
-            # Using a no_op_label to get around issue in the upstream
-            # https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/34430
-            label_set: [no_op_label]
+            label_set: []
             aggregation_type: max
       - include: kcc_resource_count
         action: update
@@ -258,18 +256,14 @@ processors:
         new_name: resource_conflicts_count
         operations:
           - action: aggregate_labels
-            # Using a no_op_label to get around issue in the upstream
-            # https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/34430
-            label_set: [no_op_label]
+            label_set: []
             aggregation_type: max
       - include: internal_errors_total
         action: update
         new_name: internal_errors_count
         operations:
           - action: aggregate_labels
-            # Using a no_op_label to get around issue in the upstream
-            # https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/34430
-            label_set: [no_op_label]
+            label_set: []
             aggregation_type: max
       - include: remediate_duration_seconds
         action: update
@@ -329,21 +323,17 @@ processors:
         action: update
         operations:
           - action: aggregate_labels
-            # Using a no_op_label to get around issue in the upstream
-            # https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/34430
-            label_set: [no_op_label]
+            label_set: []
             aggregation_type: max
       - include: kustomize_build_latency
         action: update
         operations:
           - action: aggregate_labels
-            # Using a no_op_label to get around issue in the upstream
-            # https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/34430
-            label_set: [no_op_label]
+            label_set: []
             aggregation_type: max
 extensions:
   health_check:
-    endpoint: "0.0.0.0:13133"
+    endpoint: 0.0.0.0:13133
 service:
   extensions: [health_check]
   pipelines:

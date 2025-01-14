@@ -25,7 +25,7 @@
 // - SyncEvent             - ResetOnRunAttemptPublisher (SyncPeriod)
 // - NamespaceResyncEvent  - TimeDelayPublisher (NamespaceControllerPeriod)
 // - RetrySyncEvent        - RetrySyncPublisher (RetryBackoff)
-// - StatusEvent           - ResetOnRunAttemptPublisher (StatusUpdatePeriod)
+// - StatusEvent           - TimeDelayPublisher (StatusUpdatePeriod)
 //
 // EventResult flags:
 // - ResetRetryBackoff - Set after a sync succeeds or the source changed (spec or commit).

@@ -255,7 +255,7 @@ func (nt *NT) WaitForRootSyncSourceError(rsName, code string, message string, op
 // WaitForRootSyncSyncError waits until the given error (code and message) is present on the RootSync resource
 func (nt *NT) WaitForRootSyncSyncError(rsName, code string, message string, resources []v1beta1.ResourceRef, opts ...WaitOption) {
 	nt.T.Helper()
-	Wait(nt.T, fmt.Sprintf("RootSync %s rendering error code %s", rsName, code), nt.DefaultWaitTimeout,
+	Wait(nt.T, fmt.Sprintf("RootSync %s sync error code %s", rsName, code), nt.DefaultWaitTimeout,
 		func() error {
 			nt.T.Helper()
 			rs := k8sobjects.RootSyncObjectV1Beta1(rsName)
@@ -276,7 +276,7 @@ func (nt *NT) WaitForRootSyncSyncError(rsName, code string, message string, reso
 // WaitForRepoSyncSyncError waits until the given error (code and message) is present on the RepoSync resource
 func (nt *NT) WaitForRepoSyncSyncError(ns, rsName, code string, message string, resources []v1beta1.ResourceRef, opts ...WaitOption) {
 	nt.T.Helper()
-	Wait(nt.T, fmt.Sprintf("RepoSync %s/%s rendering error code %s", ns, rsName, code), nt.DefaultWaitTimeout,
+	Wait(nt.T, fmt.Sprintf("RepoSync %s/%s sync error code %s", ns, rsName, code), nt.DefaultWaitTimeout,
 		func() error {
 			nt.T.Helper()
 			rs := k8sobjects.RepoSyncObjectV1Beta1(ns, rsName)

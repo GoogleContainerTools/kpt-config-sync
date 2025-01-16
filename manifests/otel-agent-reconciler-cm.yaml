@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# This ConfigMap is used in the reconciler pod.
+# It contains the OpenTelemetry (OTEL) agent configuration for metrics and resource detection, with sync specific attributes.
+
 apiVersion: v1
 kind: ConfigMap
 metadata:

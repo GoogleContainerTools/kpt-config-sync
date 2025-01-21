@@ -20,17 +20,25 @@ import (
 	"kpt.dev/configsync/pkg/validate/final/validate"
 )
 
-type finalValidator func(objs []ast.FileObject) status.MultiError
+// Options used to configure the Validate function
+type Options struct {
+	// MaxObjectCount is the maximum number of objects allowed in a single
+	// inventory. Optional. Set to a non-zero value to enable.
+	MaxObjectCount int
+}
 
-// Validation performs final validation checks against the given FileObjects.
+type validator func(objs []ast.FileObject) status.MultiError
+
+// Validate performs final validation checks against the given FileObjects.
 // This should be called after all hydration steps are complete so that it can
 // validate the final state of the repo.
-func Validation(objs []ast.FileObject) status.MultiError {
+func Validate(objs []ast.FileObject, opts Options) status.MultiError {
 	var errs status.MultiError
 	// See the note about ordering in raw.Hierarchical().
-	validators := []finalValidator{
+	validators := []validator{
 		validate.DuplicateNames,
 		validate.UnmanagedNamespaces,
+		validate.MaxObjectCount(opts.MaxObjectCount),
 	}
 	for _, validator := range validators {
 		errs = status.Append(errs, validator(objs))

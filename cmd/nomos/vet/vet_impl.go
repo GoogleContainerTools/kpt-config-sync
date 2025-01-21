@@ -37,6 +37,13 @@ import (
 	"kpt.dev/configsync/pkg/status"
 )
 
+type vetOptions struct {
+	Namespace        string
+	SourceFormat     configsync.SourceFormat
+	APIServerTimeout time.Duration
+	MaxObjectCount   int
+}
+
 // vet runs nomos vet with the specified options.
 //
 // root is the OS-specific path to the Nomos policy root.
@@ -52,7 +59,9 @@ import (
 // clusters is the set of clusters we are checking.
 //
 // Only used if allClusters is false.
-func runVet(ctx context.Context, namespace string, sourceFormat configsync.SourceFormat, apiServerTimeout time.Duration) error {
+func runVet(ctx context.Context, opts vetOptions) error {
+	namespace := opts.Namespace
+	sourceFormat := opts.SourceFormat
 	if sourceFormat == "" {
 		if namespace == "" {
 			// Default to hierarchical if --namespace is not provided.
@@ -86,11 +95,12 @@ func runVet(ctx context.Context, namespace string, sourceFormat configsync.Sourc
 
 	parser := filesystem.NewParser(&reader.File{})
 
-	validateOpts, err := hydrate.ValidateOptions(ctx, rootDir, apiServerTimeout)
+	validateOpts, err := hydrate.ValidateOptions(ctx, rootDir, opts.APIServerTimeout)
 	if err != nil {
 		return err
 	}
 	validateOpts.FieldManager = util.FieldManager
+	validateOpts.MaxObjectCount = opts.MaxObjectCount
 
 	switch sourceFormat {
 	case configsync.SourceFormatHierarchy:

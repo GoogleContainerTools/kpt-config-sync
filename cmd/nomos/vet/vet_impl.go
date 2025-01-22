@@ -38,10 +38,11 @@ import (
 )
 
 type vetOptions struct {
-	Namespace        string
-	SourceFormat     configsync.SourceFormat
-	APIServerTimeout time.Duration
-	MaxObjectCount   int
+	Namespace             string
+	SourceFormat          configsync.SourceFormat
+	APIServerTimeout      time.Duration
+	MaxObjectCount        int
+	MaxInventorySizeBytes int
 }
 
 // vet runs nomos vet with the specified options.
@@ -101,6 +102,7 @@ func runVet(ctx context.Context, opts vetOptions) error {
 	}
 	validateOpts.FieldManager = util.FieldManager
 	validateOpts.MaxObjectCount = opts.MaxObjectCount
+	validateOpts.MaxInventorySizeBytes = opts.MaxInventorySizeBytes
 
 	switch sourceFormat {
 	case configsync.SourceFormatHierarchy:

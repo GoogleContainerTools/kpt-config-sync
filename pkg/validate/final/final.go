@@ -25,6 +25,9 @@ type Options struct {
 	// MaxObjectCount is the maximum number of objects allowed in a single
 	// inventory. Optional. Set to a non-zero value to enable.
 	MaxObjectCount int
+	// MaxInventorySizeBytes is the maximum number of JSON bytes allowed for a
+	// single inventory object. Optional. Set to a non-zero value to enable.
+	MaxInventorySizeBytes int
 }
 
 type validator func(objs []ast.FileObject) status.MultiError
@@ -39,6 +42,7 @@ func Validate(objs []ast.FileObject, opts Options) status.MultiError {
 		validate.DuplicateNames,
 		validate.UnmanagedNamespaces,
 		validate.MaxObjectCount(opts.MaxObjectCount),
+		validate.MaxInventorySize(opts.MaxInventorySizeBytes),
 	}
 	for _, validator := range validators {
 		errs = status.Append(errs, validator(objs))

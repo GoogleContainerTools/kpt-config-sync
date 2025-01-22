@@ -24,10 +24,11 @@ import (
 )
 
 var (
-	namespaceValue string
-	keepOutput     bool
-	maxObjectCount int
-	outPath        string
+	namespaceValue        string
+	keepOutput            bool
+	maxObjectCount        int
+	maxInventorySizeBytes int
+	outPath               string
 )
 
 func init() {
@@ -47,6 +48,9 @@ func init() {
 
 	Cmd.Flags().IntVar(&maxObjectCount, "max-object-count", system.DefaultMaxObjectCount,
 		`If greater than zero, error if any repository contains more than the specified number of objects`)
+
+	Cmd.Flags().IntVar(&maxInventorySizeBytes, "max-inventory-size", system.DefaultMaxInventorySizeBytes,
+		`If greater than zero, error if any repository contains enough objects such that the inventory object would exceed the specified number of bytes when serialized as JSON`)
 
 	Cmd.Flags().StringVar(&outPath, "output", flags.DefaultHydrationOutput,
 		`Location of the hydrated output`)
@@ -70,10 +74,11 @@ returns a non-zero error code if any issues are found.
 		cmd.SilenceUsage = true
 
 		return runVet(cmd.Context(), vetOptions{
-			Namespace:        namespaceValue,
-			SourceFormat:     configsync.SourceFormat(flags.SourceFormat),
-			APIServerTimeout: flags.APIServerTimeout,
-			MaxObjectCount:   maxObjectCount,
+			Namespace:             namespaceValue,
+			SourceFormat:          configsync.SourceFormat(flags.SourceFormat),
+			APIServerTimeout:      flags.APIServerTimeout,
+			MaxObjectCount:        maxObjectCount,
+			MaxInventorySizeBytes: maxInventorySizeBytes,
 		})
 	},
 }

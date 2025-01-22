@@ -38,10 +38,7 @@ var maxObjectCountErrorBuilder = status.NewErrorBuilder(MaxObjectCountCode)
 func MaxObjectCountError(max, found int) status.Error {
 	return maxObjectCountErrorBuilder.
 		Sprintf(`Maximum number of objects exceeded. Found %d, but expected no more than %d. `+
-			`Reduce the number of objects being synced to this cluster in your source of truth `+
-			`to prevent your ResourceGroup inventory object from exceeding the etcd object size limit. `+
-			`For instructions on how to break up a repository into multiple repositories, see `+
-			`https://cloud.google.com/kubernetes-engine/enterprise/config-sync/docs/how-to/breaking-up-repo`,
+			`To fix, split the resources across multiple repositories.`,
 			found, max).
 		Build()
 }

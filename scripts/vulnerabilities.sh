@@ -46,7 +46,7 @@ echo -n "Scanning" >&2
 for image in "${images[@]}"; do
   echo -n "."
   results=$(gcloud beta container images describe --show-package-vulnerability --format json --verbosity error "${image}")
-  status=$(echo "${results}" | jq -r '.discovery_summary.discovery[] | select(.noteName == "projects/goog-analysis/notes/PACKAGE_VULNERABILITY") | .discovery.analysisStatus')
+  status=$(echo "${results}" | jq -r '.discovery_summary.discovery[] | select(.noteName == "projects/goog-analysis/locations/us/notes/PACKAGE_VULNERABILITY") | .discovery.analysisStatus')
   if [[ "${status}" != "FINISHED_SUCCESS" ]]; then
     vuln_map[${image}]="${status}"
     scan_failure_total=$((scan_failure_total + 1))

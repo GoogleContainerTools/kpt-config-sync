@@ -28,8 +28,9 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/util/retry"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
+	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/handler"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/metrics"
@@ -100,20 +101,39 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, nil
 	}
 
-	newStatus := r.startReconcilingStatus(rgObj.Status)
-	if err := r.updateStatusKptGroup(ctx, rgObj, newStatus); err != nil {
-		r.Logger(ctx).Error(err, "failed to update ResourceGroup to start reconciling")
-		return ctrl.Result{Requeue: true}, err
+	// Special gated behavior for ResourceGroups managed by Config Sync.
+	// This way the ResourceGroupController still works with kpt managed ResourceGroups.
+	if isManagedByConfigSync(rgObj) {
+		// Skip ResourceGroup status updates if the applier hasn't updated the
+		// status to reflect the spec yet. This usually happens back to back in the
+		// inventory client, and will trigger another watch event. Otherwise, if we
+		// update the status first, the status update in the applier may fail due to
+		// ResourceVersion conflict
+		if rgObj.Status.ObservedGenerations.Reconciler != rgObj.Generation {
+			r.Logger(ctx).V(3).Info("Skipping ResourceGroup status update: ResourceGroup status update pending by Reconciler")
+			return ctrl.Result{}, nil
+		}
 	}
 
+	// Since this controller doesn't perform any writes in any external systems,
+	// it doesn't need to set the Reconciling condition status to True before
+	// building the new status, because there are no possible side-effects that
+	// the user might need to know about when reconciling fails.
+	// So skip initializing the Reconciling & Stalled conditions and only set
+	// them when reconciling succeeds or fails.
+
 	id := getInventoryID(rgObj.Labels)
-	newStatus = r.endReconcilingStatus(ctx, id, req.NamespacedName, rgObj.Spec, rgObj.Status, rgObj.Generation)
+	newStatus := r.endReconcilingStatus(ctx, id, req.NamespacedName, rgObj.Spec, rgObj.Status, rgObj.Generation)
 	if err := r.updateStatusKptGroup(ctx, rgObj, newStatus); err != nil {
-		r.Logger(ctx).Error(err, "failed to update ResourceGroup to finish reconciling")
+		r.Logger(ctx).Error(err, "failed to update ResourceGroup")
 		return ctrl.Result{Requeue: true}, err
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func isManagedByConfigSync(obj client.Object) bool {
+	return core.GetLabel(obj, metadata.ManagedByKey) == metadata.ManagedByValue
 }
 
 // currentStatusCount counts the number of `Current` statuses.
@@ -153,29 +173,23 @@ func updateResourceMetrics(ctx context.Context, nn types.NamespacedName, statuse
 	metrics.RecordKCCResourceCount(ctx, nn, int64(kccCount))
 }
 
-func (r *reconciler) updateStatusKptGroup(ctx context.Context, resgroup *v1alpha1.ResourceGroup, newStatus v1alpha1.ResourceGroupStatus) error {
+func (r *reconciler) updateStatusKptGroup(ctx context.Context, rgObj *v1alpha1.ResourceGroup, newStatus v1alpha1.ResourceGroupStatus) error {
+	// Sort the conditions
 	newStatus.Conditions = adjustConditionOrder(newStatus.Conditions)
-	return retry.RetryOnConflict(retry.DefaultBackoff, func() error {
-		if apiequality.Semantic.DeepEqual(resgroup.Status, newStatus) {
-			return nil
-		}
-		resgroup.Status = newStatus
-		// Use `r.Status().Update()` here instead of `r.Update()` to update only resgroup.Status.
-		return r.client.Status().Update(ctx, resgroup, client.FieldOwner(FieldManager))
-	})
-}
 
-func (r *reconciler) startReconcilingStatus(status v1alpha1.ResourceGroupStatus) v1alpha1.ResourceGroupStatus {
-	newStatus := v1alpha1.ResourceGroupStatus{
-		ObservedGeneration: status.ObservedGeneration,
-		ResourceStatuses:   status.ResourceStatuses,
-		SubgroupStatuses:   status.SubgroupStatuses,
-		Conditions: []v1alpha1.Condition{
-			newReconcilingCondition(v1alpha1.TrueConditionStatus, StartReconciling, startReconcilingMsg),
-			newStalledCondition(v1alpha1.FalseConditionStatus, "", ""),
-		},
+	// Skip API call if no status changes
+	if apiequality.Semantic.DeepEqual(rgObj.Status, newStatus) {
+		return nil
 	}
-	return newStatus
+
+	// Keep the current metadata & spec, but update the status.
+	rgObj.Status = newStatus
+
+	// Use `r.Status().Update()` here instead of `r.Update()` to update only resgroup.Status.
+	// Don't retry here on conflict!
+	// Let the controller-manager handle retry with backoff to make sure all the
+	// early-exit checks are performed and the spec & metadata are up to date.
+	return r.client.Status().Update(ctx, rgObj, client.FieldOwner(FieldManager))
 }
 
 func (r *reconciler) endReconcilingStatus(
@@ -186,33 +200,40 @@ func (r *reconciler) endReconcilingStatus(
 	status v1alpha1.ResourceGroupStatus,
 	generation int64,
 ) v1alpha1.ResourceGroupStatus {
-	// reset newStatus to make sure the former setting of newStatus does not carry over
-	newStatus := v1alpha1.ResourceGroupStatus{}
+	// Preserve existing status and only update fields that need to change.
+	// This avoids repeatedly updating the status just to update a timestamp.
+	// It also prevents fighting with other controllers updating the status.
+	newStatus := *status.DeepCopy()
 	startTime := time.Now()
 	reconcileTimeout := getReconcileTimeOut(len(spec.Subgroups) + len(spec.Resources))
 
 	finish := make(chan struct{})
 	go func() {
+		defer close(finish)
 		newStatus.ResourceStatuses = r.computeResourceStatuses(ctx, id, status, spec.Resources, namespacedName)
 		newStatus.SubgroupStatuses = r.computeSubGroupStatuses(ctx, id, status, spec.Subgroups, namespacedName)
-		close(finish)
 	}()
 	select {
 	case <-finish:
-		newStatus.ObservedGeneration = generation
-		newStatus.Conditions = []v1alpha1.Condition{
-			newReconcilingCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg),
-			aggregateResourceStatuses(newStatus.ResourceStatuses),
-		}
+		// Update conditions, if they've changed
+		newStatus.Conditions = updateCondition(newStatus.Conditions,
+			newReconcilingCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg))
+		newStatus.Conditions = updateCondition(newStatus.Conditions,
+			aggregateResourceStatuses(newStatus.ResourceStatuses))
 	case <-time.After(reconcileTimeout):
-		newStatus.ObservedGeneration = status.ObservedGeneration
-		newStatus.ResourceStatuses = status.ResourceStatuses
-		newStatus.SubgroupStatuses = status.SubgroupStatuses
-		newStatus.Conditions = []v1alpha1.Condition{
-			newReconcilingCondition(v1alpha1.FalseConditionStatus, ExceedTimeout, exceedTimeoutMsg),
-			newStalledCondition(v1alpha1.TrueConditionStatus, ExceedTimeout, exceedTimeoutMsg),
-		}
+		// Update conditions, if they've changed
+		newStatus.Conditions = updateCondition(newStatus.Conditions,
+			newReconcilingCondition(v1alpha1.FalseConditionStatus, ExceedTimeout, exceedTimeoutMsg))
+		newStatus.Conditions = updateCondition(newStatus.Conditions,
+			newStalledCondition(v1alpha1.TrueConditionStatus, ExceedTimeout, exceedTimeoutMsg))
 	}
+
+	// Always update this controller's ObservedGenerations entry
+	newStatus.ObservedGenerations.ResourceGroupController = generation
+	// It's also safe to always update the aggregate ObservedGeneration,
+	// because we know all the other controllers already updated theirs,
+	// due to checks in the Reconcile method.
+	newStatus.ObservedGeneration = generation
 
 	metrics.RecordReconcileDuration(ctx, newStatus.Conditions[1].Reason, startTime)
 	updateResourceMetrics(ctx, namespacedName, newStatus.ResourceStatuses)
@@ -322,17 +343,19 @@ func (r *reconciler) computeStatus(
 			hasErr = true
 		}
 
-		// Update the legacy status field based on the actuation, strategy and reconcile
-		// statuses set by cli-utils. If the actuation is not successful, update the legacy
-		// status field to be of unknown status.
-		aStatus, exists := actuationStatuses[resStatus.ObjMetadata]
-		if exists {
-			resStatus.Actuation = aStatus.Actuation
+		// If the inventory status was already populated...
+		if aStatus, exists := actuationStatuses[resStatus.ObjMetadata]; exists {
+			// Start with the existing status values
 			resStatus.Strategy = aStatus.Strategy
+			resStatus.Actuation = aStatus.Actuation
 			resStatus.Reconcile = aStatus.Reconcile
 
-			resStatus.Status = ActuationStatusToLegacy(resStatus)
+			// Update the reconcile status based on the existing Strategy and
+			// Actuation status and latest kstatus.
+			resStatus.Reconcile = KstatusToReconcileStatus(resStatus)
 		}
+
+		log.V(5).Info("Resource object status computed", "status", resStatus)
 
 		// add the resource status into resgroup
 		statuses = append(statuses, resStatus)
@@ -345,23 +368,67 @@ func (r *reconciler) computeStatus(
 	return statuses
 }
 
-// ActuationStatusToLegacy contains the logic/rules to convert from the actuation statuses
-// to the legacy status field. If conversion is not needed, the original status field is returned
-// instead.
-func ActuationStatusToLegacy(s v1alpha1.ResourceStatus) v1alpha1.Status {
-	if s.Status == v1alpha1.NotFound {
-		return v1alpha1.NotFound
-	}
+// KstatusToReconcileStatus uses the current Strategy and Actuation status from
+// the applier and the newly computed kstatus to compute the Reconcile status.
+func KstatusToReconcileStatus(status v1alpha1.ResourceStatus) v1alpha1.Reconcile {
+	switch status.Strategy {
+	case v1alpha1.Apply:
+		switch status.Actuation {
+		case v1alpha1.ActuationSucceeded:
+			switch status.Status {
+			case v1alpha1.Current:
+				return v1alpha1.ReconcileSucceeded
+			case v1alpha1.InProgress:
+				return v1alpha1.ReconcilePending
+			case v1alpha1.Failed:
+				return v1alpha1.ReconcileFailed
+			case v1alpha1.Terminating:
+				return v1alpha1.ReconcileFailed
+			case v1alpha1.NotFound:
+				return v1alpha1.ReconcileFailed
+			default: // Invalid kstatus
+				return status.Reconcile // Keep the old Reconcile status
+			}
+		case v1alpha1.ActuationPending:
+			return v1alpha1.ReconcilePending
+		case v1alpha1.ActuationSkipped:
+			return v1alpha1.ReconcileSkipped
+		case v1alpha1.ActuationFailed:
+			return v1alpha1.ReconcileSkipped
+		default: // Invalid Actuation status
+			return "" // Unknown Reconcile status
+		}
 
-	if s.Actuation != "" &&
-		s.Actuation != v1alpha1.ActuationSucceeded {
-		return v1alpha1.Unknown
-	}
+	case v1alpha1.Delete:
+		switch status.Actuation {
+		case v1alpha1.ActuationSucceeded:
+			switch status.Status {
+			case v1alpha1.Current:
+				return v1alpha1.ReconcileFailed
+			case v1alpha1.InProgress:
+				return v1alpha1.ReconcileFailed
+			case v1alpha1.Failed:
+				return v1alpha1.ReconcileFailed
+			case v1alpha1.Terminating:
+				return v1alpha1.ReconcilePending
+			case v1alpha1.NotFound:
+				return v1alpha1.ReconcileSucceeded
+			default: // Invalid kstatus
+				return status.Reconcile // Keep the old Reconcile status
+			}
+		case v1alpha1.ActuationPending:
+			return v1alpha1.ReconcilePending
+		case v1alpha1.ActuationSkipped:
+			return v1alpha1.ReconcileSkipped
+		case v1alpha1.ActuationFailed:
+			return v1alpha1.ReconcileSkipped
+		default: // Invalid Actuation status
+			return "" // Unknown Reconcile status
+		}
 
-	if s.Actuation == v1alpha1.ActuationSucceeded && s.Reconcile == v1alpha1.ReconcileSucceeded {
-		return v1alpha1.Current
+	default: // Invalid Strategy
+		return "" // Unknown Reconcile status
 	}
-	return s.Status
 }
 
 // setResStatus updates a resource status struct using values within the cached status struct.

@@ -66,7 +66,6 @@ func NewTestLogger(t *testing.T) logr.Logger {
 func StartTestManager(t *testing.T, mgr manager.Manager) func() {
 	// TODO: replace with `ctx := t.Context()` in Go 1.24.0+
 	ctx := context.Background()
-
 	ctx, cancel := context.WithCancel(ctx)
 	doneCh := make(chan struct{})
 	go func() {

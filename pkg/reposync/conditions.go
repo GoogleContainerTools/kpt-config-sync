@@ -122,6 +122,21 @@ func SetSyncing(rs *v1beta1.RepoSync, status bool, reason, message, commit strin
 	return setCondition(rs, v1beta1.RepoSyncSyncing, conditionStatus, reason, message, commit, nil, errorSources, errorSummary, timestamp)
 }
 
+// SetStabilizing sets the Stabilizing condition.
+// Returns whether the condition was updated (any change) or transitioned
+// (status change).
+func SetStabilizing(rs *v1beta1.RepoSync, status metav1.ConditionStatus, reason, message, commit string, errs []v1beta1.ConfigSyncError, timestamp metav1.Time) (updated, transitioned bool) {
+	var errorSummary *v1beta1.ErrorSummary
+	if len(errs) > 0 {
+		errorSummary = &v1beta1.ErrorSummary{
+			TotalCount:                len(errs),
+			Truncated:                 false,
+			ErrorCountAfterTruncation: len(errs),
+		}
+	}
+	return setCondition(rs, v1beta1.RepoSyncStabilizing, status, reason, message, commit, errs, nil, errorSummary, timestamp)
+}
+
 // SetReconcilerFinalizing sets the ReconcilerFinalizing condition to True.
 // Use RemoveCondition to remove this condition. It should never be set to False.
 func SetReconcilerFinalizing(rs *v1beta1.RepoSync, reason, message string) (updated bool) {

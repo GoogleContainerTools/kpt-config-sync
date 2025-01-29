@@ -150,6 +150,12 @@ const (
 	// This annotation is set by Config Sync on the RootSync/RepoSync object
 	// to indicate the exact image that should be synced.
 	ImageToSyncAnnotationKey = configsync.ConfigSyncPrefix + "image-to-sync"
+
+	// SourceCommitAnnotationKey is the annotation key that stores the commit of
+	// the source used to sync from. For Git, it's the commit. For OCI, it's the
+	// image checksum. For Helm, it's the chart version.
+	// This annotation is set by Config Sync on ResourceGroup inventory objects.
+	SourceCommitAnnotationKey = configsync.ConfigSyncPrefix + "source-commit"
 )
 
 // Lifecycle annotations

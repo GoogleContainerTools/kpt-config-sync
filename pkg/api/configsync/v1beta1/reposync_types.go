@@ -110,6 +110,8 @@ const (
 	RepoSyncStalled RepoSyncConditionType = "Stalled"
 	// RepoSyncSyncing means that the namespace reconciler is processing a hash (git commit hash or OCI image digest).
 	RepoSyncSyncing RepoSyncConditionType = "Syncing"
+	// RootSyncStabilizing means that the namespace reconciler is waiting for all the synced resources to reconcile.
+	RepoSyncStabilizing RepoSyncConditionType = "Stabilizing"
 	// RepoSyncReconcilerFinalizing means that the namespace reconciler finalizer is processing deletion of managed resources.
 	RepoSyncReconcilerFinalizing RepoSyncConditionType = "ReconcilerFinalizing"
 	// RepoSyncReconcilerFinalizerFailure means that the namespace reconciler finalizer has errored, blocking deletion.

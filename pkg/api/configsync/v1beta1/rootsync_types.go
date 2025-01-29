@@ -110,6 +110,8 @@ const (
 	RootSyncStalled RootSyncConditionType = "Stalled"
 	// RootSyncSyncing means that the root reconciler is processing a hash (git commit hash or OCI image digest).
 	RootSyncSyncing RootSyncConditionType = "Syncing"
+	// RootSyncStabilizing means that the root reconciler is waiting for all the synced resources to reconcile.
+	RootSyncStabilizing RootSyncConditionType = "Stabilizing"
 	// RootSyncReconcilerFinalizing means that the root reconciler finalizer is processing deletion of managed resources.
 	RootSyncReconcilerFinalizing RootSyncConditionType = "ReconcilerFinalizing"
 	// RootSyncReconcilerFinalizerFailure means that the root reconciler finalizer has errored, blocking deletion.

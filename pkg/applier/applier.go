@@ -587,6 +587,11 @@ func (s *supervisor) applyInner(ctx context.Context, eventHandler func(Event), d
 		resourceMap[idFrom(ObjMetaFromUnstructured(obj))] = obj
 	}
 
+	// Update the source-commit annotation on the inventory.
+	// This is used by the StabilizingController.
+	core.SetAnnotation(s.inventory,
+		metadata.SourceCommitAnnotationKey, declaredResources.GetCommit())
+
 	events := s.clientSet.KptApplier.Run(ctx, s.inventory, object.UnstructuredSet(resources), options)
 	for e := range events {
 		switch e.Type {

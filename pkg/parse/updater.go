@@ -102,16 +102,18 @@ func (u *Updater) update(ctx context.Context, cache *cacheForCommit) status.Mult
 	// Update the declared resources (source of truth for the Remediator).
 	// After this, any objects removed from the declared resources will no
 	// longer be remediated, if they drift.
+	var declaredCommit string
 	if !cache.declaredResourcesUpdated {
 		objs := filesystem.AsCoreObjects(cache.parse.objsToApply)
-		_, err := u.declare(ctx, objs, cache.source.commit)
+		declaredCommit = cache.source.commit
+		_, err := u.declare(ctx, objs, declaredCommit)
 		if err != nil {
 			return err
 		}
 		// Add new resources to the watch list, without removing old ones.
 		// This ensures controller conflicts are caught while the applier is running.
 		declaredGVKs, _ := u.Resources.DeclaredGVKs()
-		err = u.addWatches(ctx, declaredGVKs, cache.source.commit)
+		err = u.addWatches(ctx, declaredGVKs, declaredCommit)
 		if err != nil {
 			return err
 		}
@@ -121,11 +123,13 @@ func (u *Updater) update(ctx context.Context, cache *cacheForCommit) status.Mult
 		if cache.parse.parserErrs == nil {
 			cache.declaredResourcesUpdated = true
 		}
+	} else {
+		declaredCommit = u.Resources.GetCommit()
 	}
 
 	// Apply the declared resources
 	if !cache.applied {
-		if err := u.apply(ctx, cache.source.commit); err != nil {
+		if err := u.apply(ctx, declaredCommit); err != nil {
 			return err
 		}
 		// Only mark the commit as applied if there were no (non-blocking) parse errors.
@@ -138,7 +142,7 @@ func (u *Updater) update(ctx context.Context, cache *cacheForCommit) status.Mult
 	// Update the resource watches (triggers for the Remediator).
 	if !cache.watchesUpdated {
 		declaredGVKs, _ := u.Resources.DeclaredGVKs()
-		err := u.updateWatches(ctx, declaredGVKs, cache.source.commit)
+		err := u.updateWatches(ctx, declaredGVKs, declaredCommit)
 		if err != nil {
 			return err
 		}

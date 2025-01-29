@@ -27,6 +27,11 @@ const (
 	// This avoids conflicts between the reconciler and reconciler-manager.
 	FieldManager = GroupName
 
+	// StabilizingFieldManager is the field manager name used by the
+	// StabilizingController. It's deliberately unique to allow it to apply the
+	// Stabilizing condition independently from the other conditions.
+	StabilizingFieldManager = ConfigSyncPrefix + "stabilizing-controller"
+
 	// ControllerNamespace is the Namespace used for Nomos controllers
 	ControllerNamespace = "config-management-system"
 )

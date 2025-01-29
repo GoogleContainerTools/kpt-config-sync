@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -256,18 +257,26 @@ func (p *repoSyncStatusClient) GetReconcilerStatus(ctx context.Context) (*Reconc
 func (p *repoSyncStatusClient) SetSyncStatus(ctx context.Context, newStatus *SyncStatus) status.Error {
 	p.mux.Lock()
 	defer p.mux.Unlock()
-	return p.setSyncStatusWithRetries(ctx, newStatus, defaultDenominator)
+	err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		return p.setSyncStatusWithRetries(ctx, newStatus, defaultDenominator)
+	})
+	if err != nil {
+		// setSyncStatusWithRetries only returns API errors
+		return status.APIServerErrorWrap(err)
+	}
+	return nil
 }
 
-func (p *repoSyncStatusClient) setSyncStatusWithRetries(ctx context.Context, newStatus *SyncStatus, denominator int) status.Error {
+func (p *repoSyncStatusClient) setSyncStatusWithRetries(ctx context.Context, newStatus *SyncStatus, denominator int) error {
 	if denominator <= 0 {
-		return status.InternalErrorf("denominator must be positive: %d", denominator)
+		klog.Fatalf("denominator must be positive: %d", denominator)
 	}
 	opts := p.options
 
+	rsKey := reposync.ObjectKey(opts.Scope, opts.SyncName)
 	rs := &v1beta1.RepoSync{}
-	if err := opts.Client.Get(ctx, reposync.ObjectKey(opts.Scope, opts.SyncName), rs); err != nil {
-		return status.APIServerError(err, fmt.Sprintf("failed to get the RepoSync object for the %v namespace", opts.Scope))
+	if err := opts.Client.Get(ctx, rsKey, rs); err != nil {
+		return fmt.Errorf("failed to get RepoSync %s: %w", rsKey, err)
 	}
 
 	currentRS := rs.DeepCopy()
@@ -294,7 +303,7 @@ func (p *repoSyncStatusClient) setSyncStatusWithRetries(ctx context.Context, new
 
 	// Avoid unnecessary status updates.
 	if !currentRS.Status.Sync.LastUpdate.IsZero() && cmp.Equal(currentRS.Status, rs.Status, compare.IgnoreTimestampUpdates) {
-		klog.V(5).Infof("Skipping status update for RepoSync %s/%s", rs.Namespace, rs.Name)
+		klog.V(5).Infof("Skipping status update for RepoSync %s", rsKey)
 		return nil
 	}
 
@@ -302,8 +311,7 @@ func (p *repoSyncStatusClient) setSyncStatusWithRetries(ctx context.Context, new
 	metrics.RecordReconcilerErrors(ctx, "sync", csErrs)
 	metrics.RecordPipelineError(ctx, configsync.RepoSyncName, "sync", len(csErrs))
 	if len(csErrs) > 0 {
-		klog.Infof("New sync errors for RepoSync %s/%s: %+v",
-			rs.Namespace, rs.Name, csErrs)
+		klog.Infof("New sync errors for RepoSync %s: %+v", rsKey, csErrs)
 	}
 	// Only update the LastSyncTimestamp metric immediately after a sync attempt
 	if !newStatus.Syncing && rs.Status.Sync.Commit != "" && lastSyncStatus != "" {
@@ -311,17 +319,18 @@ func (p *repoSyncStatusClient) setSyncStatusWithRetries(ctx context.Context, new
 	}
 
 	if klog.V(5).Enabled() {
-		klog.V(5).Infof("Updating sync status:\nDiff (- Removed, + Added):\n%s",
-			cmp.Diff(currentRS.Status, rs.Status))
+		klog.V(5).Infof("Updating RepoSync %s sync status:\nDiff (- Removed, + Added):\n%s",
+			rsKey, cmp.Diff(currentRS.Status, rs.Status))
 	}
 
 	if err := opts.Client.Status().Update(ctx, rs, client.FieldOwner(configsync.FieldManager)); err != nil {
 		// If the update failure was caused by the size of the RepoSync object, we would truncate the errors and retry.
 		if isRequestTooLargeError(err) {
-			klog.Infof("Failed to update RepoSync sync status (total error count: %d, denominator: %d): %s.", rs.Status.Sync.ErrorSummary.TotalCount, denominator, err)
+			klog.Infof("Failed to update RepoSync %s sync status (total error count: %d, denominator: %d): %s.",
+				rsKey, rs.Status.Sync.ErrorSummary.TotalCount, denominator, err)
 			return p.setSyncStatusWithRetries(ctx, newStatus, denominator*2)
 		}
-		return status.APIServerError(err, fmt.Sprintf("failed to update the RepoSync sync status for the %v namespace", opts.Scope))
+		return fmt.Errorf("failed to update the RepoSync %s sync status: %w", rsKey, err)
 	}
 	return nil
 }

@@ -26,7 +26,6 @@ import (
 	"k8s.io/utils/clock"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
-	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/hydrate"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
@@ -544,11 +543,6 @@ func (r *reconciler) setSyncStatus(ctx context.Context, newSyncStatus *SyncStatu
 		state.status.SyncStatus = newSyncStatus
 	}
 
-	// Report conflict errors to the remote manager, if it's a RootSync.
-	opts := r.Options()
-	if err := reportRootSyncConflicts(ctx, opts.Client, opts.ManagementConflicts()); err != nil {
-		return fmt.Errorf("failed to report remote conflicts: %w", err)
-	}
 	return nil
 }
 
@@ -631,37 +625,6 @@ func blockHydration(signalFile string) {
 		klog.Errorf("failed to remove signal file %s: %v", signalFile, err)
 	}
 	klog.Infof("removed signal file %s to block hydration", signalFile)
-}
-
-// reportRootSyncConflicts reports conflicts to the RootSync that manages the
-// conflicting resources.
-func reportRootSyncConflicts(ctx context.Context, k8sClient client.Client, conflictErrs []status.ManagementConflictError) error {
-	if len(conflictErrs) == 0 {
-		return nil
-	}
-	conflictingManagerErrors := map[string][]status.ManagementConflictError{}
-	for _, conflictError := range conflictErrs {
-		conflictingManager := conflictError.CurrentManager()
-		conflictingManagerErrors[conflictingManager] = append(conflictingManagerErrors[conflictingManager], conflictError)
-	}
-
-	for conflictingManager, conflictErrors := range conflictingManagerErrors {
-		scope, name := declared.ManagerScopeAndName(conflictingManager)
-		if scope == declared.RootScope {
-			// RootSync applier uses PolicyAdoptAll.
-			// So it may fight, if the webhook is disabled.
-			// Report the conflict to the other RootSync to make it easier to detect.
-			klog.Infof("Detected conflict with RootSync manager %q", conflictingManager)
-			if err := prependRootSyncRemediatorStatus(ctx, k8sClient, name, conflictErrors, defaultDenominator); err != nil {
-				return fmt.Errorf("failed to update RootSync %q to prepend remediator conflicts: %w", name, err)
-			}
-		} else {
-			// RepoSync applier uses PolicyAdoptIfNoInventory.
-			// So it won't fight, even if the webhook is disabled.
-			klog.Infof("Detected conflict with RepoSync manager %q", conflictingManager)
-		}
-	}
-	return nil
 }
 
 // UpdateSyncStatus updates the RSync status to reflect asynchronous status

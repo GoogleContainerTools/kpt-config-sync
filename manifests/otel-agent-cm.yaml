@@ -37,8 +37,6 @@ data:
           insecure: true
     processors:
       batch:
-      # Populate resource attributes from OTEL_RESOURCE_ATTRIBUTES env var and
-      # the GCE metadata service, if available.
       resourcedetection:
         detectors: [env, gcp]
     extensions:

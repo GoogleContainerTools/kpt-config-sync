@@ -116,15 +116,15 @@ type yamlDiffStringer struct {
 // The primary use is for comparing two Kubernetes objects, but should also work
 // with other types, like Go structs.
 // Does not do any object type or version conversion.
-func AsYAMLDiff(old, new interface{}) fmt.Stringer {
-	return &yamlDiffStringer{Old: old, New: new}
+func AsYAMLDiff(oldString, newString interface{}) fmt.Stringer {
+	return &yamlDiffStringer{Old: oldString, New: newString}
 }
 
 // AsYAMLDiffWithScheme is similar to AsYAMLDiff, except it allows specifying
 // which scheme to use to encode the objects, instead of defaulting to the
 // global `core.Scheme`.
-func AsYAMLDiffWithScheme(old, new runtime.Object, scheme *runtime.Scheme) fmt.Stringer {
-	return &yamlDiffStringer{Old: old, New: new, Scheme: scheme}
+func AsYAMLDiffWithScheme(oldObject, newObject runtime.Object, scheme *runtime.Scheme) fmt.Stringer {
+	return &yamlDiffStringer{Old: oldObject, New: newObject, Scheme: scheme}
 }
 
 // String returns a diff (- Removed, + Added) of the objects as yaml, or the

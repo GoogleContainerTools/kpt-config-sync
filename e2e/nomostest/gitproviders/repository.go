@@ -603,14 +603,14 @@ func (g *ReadWriteRepository) CheckoutBranch(branch string) error {
 
 // RenameBranch renames the current branch with a new one both locally and remotely.
 // The old branch will be deleted from remote.
-func (g *ReadWriteRepository) RenameBranch(current, new string) error {
-	if _, err := g.Git("branch", "-m", current, new); err != nil {
+func (g *ReadWriteRepository) RenameBranch(currentBranch, newBranch string) error {
+	if _, err := g.Git("branch", "-m", currentBranch, newBranch); err != nil {
 		return err
 	}
-	if err := g.Push(new); err != nil {
+	if err := g.Push(newBranch); err != nil {
 		return err
 	}
-	return g.Push(current, "--delete")
+	return g.Push(currentBranch, "--delete")
 }
 
 // CurrentBranch returns the name of the current branch.

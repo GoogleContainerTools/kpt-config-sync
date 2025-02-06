@@ -16,15 +16,19 @@ package applier
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
-	"github.com/GoogleContainerTools/kpt/pkg/live"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/klog/v2"
 	"k8s.io/kubectl/pkg/cmd/util"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/metadata"
+	"sigs.k8s.io/cli-utils/pkg/apis/actuation"
 	"sigs.k8s.io/cli-utils/pkg/apply"
 	"sigs.k8s.io/cli-utils/pkg/apply/event"
 	"sigs.k8s.io/cli-utils/pkg/inventory"
@@ -57,6 +61,124 @@ type ClientSet struct {
 	ApplySetID   string
 }
 
+func inventoryFromUnstructured(obj *unstructured.Unstructured) (*inventory.UnstructuredInventory, error) {
+	if obj == nil {
+		return nil, fmt.Errorf("unstructured ResourceGroup object is nil")
+	}
+	unstructuredInventory := &inventory.UnstructuredInventory{
+		ClusterObj: obj,
+	}
+	klog.V(4).Infof("converting ResourceGroup to InternalInventory")
+	resources, exists, err := unstructured.NestedSlice(obj.Object, "spec", "resources")
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		klog.V(4).Infof("Inventory (spec.resources) is empty")
+		return unstructuredInventory, nil
+	}
+	klog.V(4).Infof("processing %d inventory items", len(resources))
+	for _, r := range resources {
+		resource := r.(map[string]interface{})
+		namespace, _, err := unstructured.NestedString(resource, "namespace")
+		if err != nil {
+			return nil, err
+		}
+		name, _, err := unstructured.NestedString(resource, "name")
+		if err != nil {
+			return nil, err
+		}
+		group, _, err := unstructured.NestedString(resource, "group")
+		if err != nil {
+			return nil, err
+		}
+		kind, _, err := unstructured.NestedString(resource, "kind")
+		if err != nil {
+			return nil, err
+		}
+		objMetadata := object.ObjMetadata{
+			Name:      name,
+			Namespace: namespace,
+			GroupKind: schema.GroupKind{
+				Group: strings.TrimSpace(group),
+				Kind:  strings.TrimSpace(kind),
+			},
+		}
+		klog.V(4).Infof("converting to ObjMetadata: %s", objMetadata)
+		unstructuredInventory.Objs = append(unstructuredInventory.Objs, objMetadata)
+	}
+	return unstructuredInventory, nil
+}
+
+func inventoryToUnstructured(inv *inventory.UnstructuredInventory) (*unstructured.Unstructured, error) {
+	if inv == nil {
+		return nil, fmt.Errorf("UnstructuredInventory object is nil")
+	}
+	objStatusMap := map[object.ObjMetadata]actuation.ObjectStatus{}
+	for _, s := range inv.ObjectStatuses() {
+		objStatusMap[inventory.ObjMetadataFromObjectReference(s.ObjectReference)] = s
+	}
+	klog.V(4).Infof("converting UnstructuredInventory to ResourceGroup object")
+	klog.V(4).Infof("creating list of %d resources", len(inv.Objects()))
+	var objs []interface{}
+	for _, objMeta := range inv.Objects() {
+		klog.V(4).Infof("converting to object reference: %s", objMeta)
+		objs = append(objs, map[string]interface{}{
+			"group":     objMeta.GroupKind.Group,
+			"kind":      objMeta.GroupKind.Kind,
+			"namespace": objMeta.Namespace,
+			"name":      objMeta.Name,
+		})
+	}
+	klog.V(4).Infof("Creating list of %d resource statuses", len(inv.Objects()))
+	var objStatus []interface{}
+	for _, objMeta := range inv.Objects() {
+		status, found := objStatusMap[objMeta]
+		if found {
+			klog.V(4).Infof("converting to object status: %s", objMeta)
+			objStatus = append(objStatus, map[string]interface{}{
+				"group":     objMeta.GroupKind.Group,
+				"kind":      objMeta.GroupKind.Kind,
+				"namespace": objMeta.Namespace,
+				"name":      objMeta.Name,
+				"status":    "Unknown",
+				"strategy":  status.Strategy.String(),
+				"actuation": status.Actuation.String(),
+				"reconcile": status.Reconcile.String(),
+			})
+		}
+	}
+
+	invCopy := inv.ClusterObj.DeepCopy()
+	if len(objs) == 0 {
+		klog.V(4).Infoln("clearing inventory resources")
+		unstructured.RemoveNestedField(invCopy.UnstructuredContent(),
+			"spec", "resources")
+		unstructured.RemoveNestedField(invCopy.UnstructuredContent(),
+			"status", "resourceStatuses")
+	} else {
+		klog.V(4).Infof("storing inventory (%d) resources", len(objs))
+		err := unstructured.SetNestedSlice(invCopy.UnstructuredContent(),
+			objs, "spec", "resources")
+		if err != nil {
+			return nil, err
+		}
+		err = unstructured.SetNestedSlice(invCopy.UnstructuredContent(),
+			objStatus, "status", "resourceStatuses")
+		if err != nil {
+			return nil, err
+		}
+		generation := invCopy.GetGeneration()
+		klog.V(4).Infof("setting observedGeneration %d: ", generation)
+		err = unstructured.SetNestedField(invCopy.UnstructuredContent(),
+			generation, "status", "observedGeneration")
+		if err != nil {
+			return nil, err
+		}
+	}
+	return invCopy, nil
+}
+
 // NewClientSet constructs a new ClientSet.
 func NewClientSet(c client.Client, configFlags *genericclioptions.ConfigFlags, statusMode, applySetID string) (*ClientSet, error) {
 	matchVersionKubeConfigFlags := util.NewMatchVersionFlags(configFlags)
@@ -70,8 +192,9 @@ func NewClientSet(c client.Client, configFlags *genericclioptions.ConfigFlags, s
 		klog.Infof("Disabled status reporting")
 		statusPolicy = inventory.StatusPolicyNone
 	}
-	invClient, err := inventory.NewClient(f, live.WrapInventoryObj,
-		live.InvToUnstructuredFunc, statusPolicy, v1alpha1.SchemeGroupVersionKind())
+	invClient, err := inventory.NewUnstructuredClient(f,
+		inventoryFromUnstructured, inventoryToUnstructured,
+		v1alpha1.SchemeGroupVersionKind(), statusPolicy)
 	if err != nil {
 		return nil, err
 	}

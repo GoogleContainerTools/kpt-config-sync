@@ -234,17 +234,13 @@ func (p *Pruner) removeInventoryAnnotation(obj *unstructured.Unstructured) (*uns
 // objects minus the set of currently applied objects. Returns an error
 // if one occurs.
 func (p *Pruner) GetPruneObjs(
-	inv inventory.Info,
+	inv inventory.Inventory,
 	objs object.UnstructuredSet,
 	opts Options,
 ) (object.UnstructuredSet, error) {
 	ids := object.UnstructuredSetToObjMetadataSet(objs)
-	invIDs, err := p.InvClient.GetClusterObjs(inv)
-	if err != nil {
-		return nil, err
-	}
 	// only return objects that were in the inventory but not in the object set
-	ids = invIDs.Diff(ids)
+	ids = inv.Objects().Diff(ids)
 	objs = object.UnstructuredSet{}
 	for _, id := range ids {
 		pruneObj, err := p.getObject(id)

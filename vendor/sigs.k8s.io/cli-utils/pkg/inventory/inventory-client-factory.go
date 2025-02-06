@@ -22,5 +22,5 @@ type ClusterClientFactory struct {
 }
 
 func (ccf ClusterClientFactory) NewClient(factory cmdutil.Factory) (Client, error) {
-	return NewClient(factory, WrapInventoryObj, InvInfoToConfigMap, ccf.StatusPolicy, ConfigMapGVK)
+	return NewUnstructuredClient(factory, configMapToInventory, inventoryToConfigMap, ConfigMapGVK, StatusPolicyNone)
 }

@@ -33,13 +33,13 @@ func (ipaf InventoryPolicyApplyFilter) Name() string {
 
 // Filter returns an inventory.PolicyPreventedActuationError if the object
 // apply should be skipped.
-func (ipaf InventoryPolicyApplyFilter) Filter(obj *unstructured.Unstructured) error {
+func (ipaf InventoryPolicyApplyFilter) Filter(ctx context.Context, obj *unstructured.Unstructured) error {
 	// optimization to avoid unnecessary API calls
 	if ipaf.InvPolicy == inventory.PolicyAdoptAll {
 		return nil
 	}
 	// Object must be retrieved from the cluster to get the inventory id.
-	clusterObj, err := ipaf.getObject(object.UnstructuredToObjMetadata(obj))
+	clusterObj, err := ipaf.getObject(ctx, object.UnstructuredToObjMetadata(obj))
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			// This simply means the object hasn't been created yet.
@@ -55,7 +55,7 @@ func (ipaf InventoryPolicyApplyFilter) Filter(obj *unstructured.Unstructured) er
 }
 
 // getObject retrieves the passed object from the cluster, or an error if one occurred.
-func (ipaf InventoryPolicyApplyFilter) getObject(id object.ObjMetadata) (*unstructured.Unstructured, error) {
+func (ipaf InventoryPolicyApplyFilter) getObject(ctx context.Context, id object.ObjMetadata) (*unstructured.Unstructured, error) {
 	mapping, err := ipaf.Mapper.RESTMapping(id.GroupKind)
 	if err != nil {
 		return nil, err
@@ -64,5 +64,5 @@ func (ipaf InventoryPolicyApplyFilter) getObject(id object.ObjMetadata) (*unstru
 	if err != nil {
 		return nil, err
 	}
-	return namespacedClient.Get(context.TODO(), id.Name, metav1.GetOptions{})
+	return namespacedClient.Get(ctx, id.Name, metav1.GetOptions{})
 }

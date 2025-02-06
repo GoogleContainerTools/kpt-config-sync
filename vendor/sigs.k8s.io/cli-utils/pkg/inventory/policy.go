@@ -89,7 +89,7 @@ func IDMatch(inv Info, obj *unstructured.Unstructured) IDMatchStatus {
 	if !found {
 		return Empty
 	}
-	if value == inv.ID() {
+	if value == inv.GetID().String() {
 		return Match
 	}
 	return NoMatch
@@ -141,11 +141,11 @@ func CanPrune(inv Info, obj *unstructured.Unstructured, policy Policy) (bool, er
 	}
 }
 
-func AddInventoryIDAnnotation(obj *unstructured.Unstructured, inv Info) {
+func AddInventoryIDAnnotation(obj *unstructured.Unstructured, inventoryID ID) {
 	annotations := obj.GetAnnotations()
 	if annotations == nil {
 		annotations = make(map[string]string)
 	}
-	annotations[OwningInventoryKey] = inv.ID()
+	annotations[OwningInventoryKey] = inventoryID.String()
 	obj.SetAnnotations(annotations)
 }

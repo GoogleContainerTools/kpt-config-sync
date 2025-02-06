@@ -87,9 +87,9 @@ type Options struct {
 //	taskName - name of the parent task group, for events
 //	opts - options for dry-run
 func (p *Pruner) Prune(
+	taskContext *taskrunner.TaskContext,
 	objs object.UnstructuredSet,
 	pruneFilters []filter.ValidationFilter,
-	taskContext *taskrunner.TaskContext,
 	taskName string,
 	opts Options,
 ) error {
@@ -117,7 +117,7 @@ func (p *Pruner) Prune(
 		var filterErr error
 		for _, pruneFilter := range pruneFilters {
 			klog.V(6).Infof("prune filter evaluating (filter: %s, object: %s)", pruneFilter.Name(), id)
-			filterErr = pruneFilter.Filter(obj)
+			filterErr = pruneFilter.Filter(taskContext.Context(), obj)
 			if filterErr != nil {
 				var fatalErr *filter.FatalError
 				if errors.As(filterErr, &fatalErr) {
@@ -137,7 +137,7 @@ func (p *Pruner) Prune(
 				if errors.As(filterErr, &abandonErr) {
 					if !opts.DryRunStrategy.ClientOrServerDryRun() {
 						var err error
-						obj, err = p.removeInventoryAnnotation(obj)
+						obj, err = p.removeInventoryAnnotation(taskContext.Context(), obj)
 						if err != nil {
 							if klog.V(4).Enabled() {
 								// only log event emitted errors if the verbosity > 4
@@ -177,7 +177,7 @@ func (p *Pruner) Prune(
 		// Filters passed--actually delete object if not dry run.
 		if !opts.DryRunStrategy.ClientOrServerDryRun() {
 			klog.V(4).Infof("deleting object (object: %q)", id)
-			err := p.deleteObject(id, metav1.DeleteOptions{
+			err := p.deleteObject(taskContext.Context(), id, metav1.DeleteOptions{
 				// Only delete the resource if it hasn't already been deleted
 				// and recreated since the last GET. Otherwise error.
 				Preconditions: &metav1.Preconditions{
@@ -207,7 +207,7 @@ func (p *Pruner) Prune(
 }
 
 // removeInventoryAnnotation removes the `config.k8s.io/owning-inventory` annotation from pruneObj.
-func (p *Pruner) removeInventoryAnnotation(obj *unstructured.Unstructured) (*unstructured.Unstructured, error) {
+func (p *Pruner) removeInventoryAnnotation(ctx context.Context, obj *unstructured.Unstructured) (*unstructured.Unstructured, error) {
 	// Make a copy of the input object to avoid modifying the input.
 	// This prevents race conditions when writing to the underlying map.
 	obj = obj.DeepCopy()
@@ -222,7 +222,7 @@ func (p *Pruner) removeInventoryAnnotation(obj *unstructured.Unstructured) (*uns
 			if err != nil {
 				return obj, err
 			}
-			_, err = namespacedClient.Update(context.TODO(), obj, metav1.UpdateOptions{})
+			_, err = namespacedClient.Update(ctx, obj, metav1.UpdateOptions{})
 			return obj, err
 		}
 	}
@@ -234,20 +234,17 @@ func (p *Pruner) removeInventoryAnnotation(obj *unstructured.Unstructured) (*uns
 // objects minus the set of currently applied objects. Returns an error
 // if one occurs.
 func (p *Pruner) GetPruneObjs(
-	inv inventory.Info,
+	ctx context.Context,
+	inv inventory.Inventory,
 	objs object.UnstructuredSet,
 	opts Options,
 ) (object.UnstructuredSet, error) {
 	ids := object.UnstructuredSetToObjMetadataSet(objs)
-	invIDs, err := p.InvClient.GetClusterObjs(inv)
-	if err != nil {
-		return nil, err
-	}
 	// only return objects that were in the inventory but not in the object set
-	ids = invIDs.Diff(ids)
+	ids = inv.GetObjectRefs().Diff(ids)
 	objs = object.UnstructuredSet{}
 	for _, id := range ids {
-		pruneObj, err := p.getObject(id)
+		pruneObj, err := p.getObject(ctx, id)
 		if err != nil {
 			if meta.IsNoMatchError(err) {
 				klog.V(4).Infof("skip pruning (object: %q): resource type not registered", id)
@@ -264,20 +261,20 @@ func (p *Pruner) GetPruneObjs(
 	return objs, nil
 }
 
-func (p *Pruner) getObject(id object.ObjMetadata) (*unstructured.Unstructured, error) {
+func (p *Pruner) getObject(ctx context.Context, id object.ObjMetadata) (*unstructured.Unstructured, error) {
 	namespacedClient, err := p.namespacedClient(id)
 	if err != nil {
 		return nil, err
 	}
-	return namespacedClient.Get(context.TODO(), id.Name, metav1.GetOptions{})
+	return namespacedClient.Get(ctx, id.Name, metav1.GetOptions{})
 }
 
-func (p *Pruner) deleteObject(id object.ObjMetadata, opts metav1.DeleteOptions) error {
+func (p *Pruner) deleteObject(ctx context.Context, id object.ObjMetadata, opts metav1.DeleteOptions) error {
 	namespacedClient, err := p.namespacedClient(id)
 	if err != nil {
 		return err
 	}
-	return namespacedClient.Delete(context.TODO(), id.Name, opts)
+	return namespacedClient.Delete(ctx, id.Name, opts)
 }
 
 func (p *Pruner) namespacedClient(id object.ObjMetadata) (dynamic.ResourceInterface, error) {

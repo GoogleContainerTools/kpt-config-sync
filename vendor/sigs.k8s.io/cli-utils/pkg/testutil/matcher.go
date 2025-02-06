@@ -47,8 +47,8 @@ func (cm *EqualMatcher) NegatedFailureMessage(actual interface{}) string {
 		"\nDiff (- Expected, + Actual):\n" + indent(cm.explanation.Error(), 1)
 }
 
-func indent(in string, indentation uint) string {
-	indent := strings.Repeat(format.Indent, int(indentation))
+func indent(in string, indentation int) string {
+	indent := strings.Repeat(format.Indent, indentation)
 	lines := strings.Split(in, "\n")
 	return indent + strings.Join(lines, fmt.Sprintf("\n%s", indent))
 }

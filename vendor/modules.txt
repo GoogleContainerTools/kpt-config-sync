@@ -42,18 +42,6 @@ github.com/Azure/go-ansiterm/winterm
 ## explicit; go 1.18
 github.com/BurntSushi/toml
 github.com/BurntSushi/toml/internal
-# github.com/GoogleContainerTools/kpt v1.0.0-beta.46 => ./internal/third_party/github.com/GoogleContainerTools/kpt
-## explicit; go 1.21
-github.com/GoogleContainerTools/kpt/internal/errors
-github.com/GoogleContainerTools/kpt/internal/pkg
-github.com/GoogleContainerTools/kpt/internal/types
-github.com/GoogleContainerTools/kpt/internal/util/git
-github.com/GoogleContainerTools/kpt/internal/util/pathutil
-github.com/GoogleContainerTools/kpt/internal/util/strings
-github.com/GoogleContainerTools/kpt/pkg/api/kptfile/v1
-github.com/GoogleContainerTools/kpt/pkg/api/resourcegroup/v1alpha1
-github.com/GoogleContainerTools/kpt/pkg/live
-github.com/GoogleContainerTools/kpt/pkg/status
 # github.com/GoogleContainerTools/kpt-functions-catalog/functions/go/set-namespace v0.4.1-0.20220713210718-d955e7d3a800
 ## explicit; go 1.17
 github.com/GoogleContainerTools/kpt-functions-catalog/functions/go/set-namespace/transformer
@@ -1497,8 +1485,8 @@ k8s.io/utils/net
 k8s.io/utils/pointer
 k8s.io/utils/ptr
 k8s.io/utils/trace
-# sigs.k8s.io/cli-utils v0.37.2
-## explicit; go 1.22.0
+# sigs.k8s.io/cli-utils v0.37.3-0.20250325022231-3e7dc15c47fa
+## explicit; go 1.23.0
 sigs.k8s.io/cli-utils/pkg/apis/actuation
 sigs.k8s.io/cli-utils/pkg/apply
 sigs.k8s.io/cli-utils/pkg/apply/cache
@@ -1515,15 +1503,12 @@ sigs.k8s.io/cli-utils/pkg/common
 sigs.k8s.io/cli-utils/pkg/flowcontrol
 sigs.k8s.io/cli-utils/pkg/inventory
 sigs.k8s.io/cli-utils/pkg/jsonpath
-sigs.k8s.io/cli-utils/pkg/kstatus/polling
 sigs.k8s.io/cli-utils/pkg/kstatus/polling/clusterreader
-sigs.k8s.io/cli-utils/pkg/kstatus/polling/clusterreader/fake
 sigs.k8s.io/cli-utils/pkg/kstatus/polling/engine
 sigs.k8s.io/cli-utils/pkg/kstatus/polling/event
 sigs.k8s.io/cli-utils/pkg/kstatus/polling/statusreaders
 sigs.k8s.io/cli-utils/pkg/kstatus/status
 sigs.k8s.io/cli-utils/pkg/kstatus/watcher
-sigs.k8s.io/cli-utils/pkg/manifestreader
 sigs.k8s.io/cli-utils/pkg/multierror
 sigs.k8s.io/cli-utils/pkg/object
 sigs.k8s.io/cli-utils/pkg/object/dependson
@@ -1771,4 +1756,3 @@ sigs.k8s.io/structured-merge-diff/v4/value
 sigs.k8s.io/yaml
 sigs.k8s.io/yaml/goyaml.v2
 sigs.k8s.io/yaml/goyaml.v3
-# github.com/GoogleContainerTools/kpt => ./internal/third_party/github.com/GoogleContainerTools/kpt

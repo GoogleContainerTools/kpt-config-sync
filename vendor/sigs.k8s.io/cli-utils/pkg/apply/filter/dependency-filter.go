@@ -4,6 +4,7 @@
 package filter
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -50,7 +51,7 @@ func (dnrf DependencyFilter) Name() string {
 // Typed Errors:
 // - DependencyPreventedActuationError
 // - DependencyActuationMismatchError
-func (dnrf DependencyFilter) Filter(obj *unstructured.Unstructured) error {
+func (dnrf DependencyFilter) Filter(_ context.Context, obj *unstructured.Unstructured) error {
 	id := object.UnstructuredToObjMetadata(obj)
 
 	switch dnrf.ActuationStrategy {

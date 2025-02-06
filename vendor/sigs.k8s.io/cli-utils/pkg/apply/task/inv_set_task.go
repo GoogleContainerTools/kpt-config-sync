@@ -4,6 +4,8 @@
 package task
 
 import (
+	"context"
+
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/cli-utils/pkg/apply/event"
@@ -16,11 +18,10 @@ import (
 // DeleteOrUpdateInvTask encapsulates structures necessary to set the
 // inventory references at the end of the apply/prune.
 type DeleteOrUpdateInvTask struct {
-	TaskName      string
-	InvClient     inventory.Client
-	InvInfo       inventory.Info
-	PrevInventory object.ObjMetadataSet
-	DryRun        common.DryRunStrategy
+	TaskName  string
+	Inventory inventory.Inventory
+	InvClient inventory.WriteClient
+	DryRun    common.DryRunStrategy
 	// if Destroy is set, the inventory will be deleted if all objects were successfully pruned
 	Destroy bool
 }
@@ -49,7 +50,7 @@ func (i *DeleteOrUpdateInvTask) Start(taskContext *taskrunner.TaskContext) {
 	go func() {
 		var err error
 		if i.Destroy && i.destroySuccessful(taskContext) {
-			err = i.deleteInventory()
+			err = i.deleteInventory(taskContext.Context())
 		} else {
 			err = i.updateInventory(taskContext)
 		}
@@ -95,12 +96,13 @@ func (i *DeleteOrUpdateInvTask) updateInventory(taskContext *taskrunner.TaskCont
 	klog.V(4).Infof("set inventory %d successful applies", len(appliedObjs))
 	invObjs = invObjs.Union(appliedObjs)
 
+	prevInventory := i.Inventory.GetObjectRefs()
 	// If an object failed to apply and was previously stored in the inventory,
 	// then keep it in the inventory so it can be applied/pruned next time.
 	// This will remove new resources that failed to apply from the inventory,
 	// because even tho they were added by InvAddTask, the PrevInventory
 	// represents the inventory before the pipeline has run.
-	applyFailures := i.PrevInventory.Intersection(im.FailedApplies())
+	applyFailures := prevInventory.Intersection(im.FailedApplies())
 	klog.V(4).Infof("keep in inventory %d failed applies", len(applyFailures))
 	invObjs = invObjs.Union(applyFailures)
 
@@ -109,7 +111,7 @@ func (i *DeleteOrUpdateInvTask) updateInventory(taskContext *taskrunner.TaskCont
 	// It's likely that all the skipped applies are already in the inventory,
 	// because the apply filters all currently depend on cluster state,
 	// but we're doing the intersection anyway just to be sure.
-	applySkips := i.PrevInventory.Intersection(im.SkippedApplies())
+	applySkips := prevInventory.Intersection(im.SkippedApplies())
 	klog.V(4).Infof("keep in inventory %d skipped applies", len(applySkips))
 	invObjs = invObjs.Union(applySkips)
 
@@ -118,7 +120,7 @@ func (i *DeleteOrUpdateInvTask) updateInventory(taskContext *taskrunner.TaskCont
 	// It's likely that all the delete failures are already in the inventory,
 	// because the set of resources to prune comes from the inventory,
 	// but we're doing the intersection anyway just to be sure.
-	pruneFailures := i.PrevInventory.Intersection(im.FailedDeletes())
+	pruneFailures := prevInventory.Intersection(im.FailedDeletes())
 	klog.V(4).Infof("set inventory %d failed prunes", len(pruneFailures))
 	invObjs = invObjs.Union(pruneFailures)
 
@@ -127,19 +129,19 @@ func (i *DeleteOrUpdateInvTask) updateInventory(taskContext *taskrunner.TaskCont
 	// It's likely that all the skipped deletes are already in the inventory,
 	// because the set of resources to prune comes from the inventory,
 	// but we're doing the intersection anyway just to be sure.
-	pruneSkips := i.PrevInventory.Intersection(im.SkippedDeletes())
+	pruneSkips := prevInventory.Intersection(im.SkippedDeletes())
 	klog.V(4).Infof("keep in inventory %d skipped prunes", len(pruneSkips))
 	invObjs = invObjs.Union(pruneSkips)
 
 	// If an object failed to reconcile and was previously stored in the inventory,
 	// then keep it in the inventory so it can be waited on next time.
-	reconcileFailures := i.PrevInventory.Intersection(im.FailedReconciles())
+	reconcileFailures := prevInventory.Intersection(im.FailedReconciles())
 	klog.V(4).Infof("set inventory %d failed reconciles", len(reconcileFailures))
 	invObjs = invObjs.Union(reconcileFailures)
 
 	// If an object timed out reconciling and was previously stored in the inventory,
 	// then keep it in the inventory so it can be waited on next time.
-	reconcileTimeouts := i.PrevInventory.Intersection(im.TimeoutReconciles())
+	reconcileTimeouts := prevInventory.Intersection(im.TimeoutReconciles())
 	klog.V(4).Infof("keep in inventory %d timeout reconciles", len(reconcileTimeouts))
 	invObjs = invObjs.Union(reconcileTimeouts)
 
@@ -150,24 +152,38 @@ func (i *DeleteOrUpdateInvTask) updateInventory(taskContext *taskrunner.TaskCont
 
 	// If an object is invalid and was previously stored in the inventory,
 	// then keep it in the inventory so it can be applied/pruned next time.
-	invalidObjects := i.PrevInventory.Intersection(taskContext.InvalidObjects())
+	invalidObjects := prevInventory.Intersection(taskContext.InvalidObjects())
 	klog.V(4).Infof("keep in inventory %d invalid objects", len(invalidObjects))
 	invObjs = invObjs.Union(invalidObjects)
 
 	klog.V(4).Infof("get the apply status for %d objects", len(invObjs))
-	objStatus := taskContext.InventoryManager().Inventory().Status.Objects
+	objStatus := taskContext.InventoryManager().Inventory().ObjectStatuses
 
 	klog.V(4).Infof("set inventory %d total objects", len(invObjs))
-	err := i.InvClient.Replace(i.InvInfo, invObjs, objStatus, i.DryRun)
+	// Exit before updating the inventory, but after logging the above changes
+	if i.DryRun.ClientOrServerDryRun() {
+		klog.V(4).Infoln("dry-run replace inventory object: not applied")
+		return nil
+	}
+
+	i.Inventory.SetObjectRefs(invObjs)
+	i.Inventory.SetObjectStatuses(objStatus)
+	if err := i.InvClient.CreateOrUpdate(taskContext.Context(), i.Inventory, inventory.UpdateOptions{}); err != nil {
+		return err
+	}
 
 	klog.V(2).Infof("inventory set task completing (name: %q)", i.TaskName)
-	return err
+	return nil
 }
 
 // deleteInventory deletes the inventory object from the cluster.
-func (i *DeleteOrUpdateInvTask) deleteInventory() error {
+func (i *DeleteOrUpdateInvTask) deleteInventory(ctx context.Context) error {
 	klog.V(2).Infof("delete inventory task starting (name: %q)", i.Name())
-	err := i.InvClient.DeleteInventoryObj(i.InvInfo, i.DryRun)
+	if i.DryRun.ClientOrServerDryRun() {
+		klog.V(4).Infoln("dry-run delete inventory object: not deleted")
+		return nil
+	}
+	err := i.InvClient.Delete(ctx, i.Inventory.Info(), inventory.DeleteOptions{})
 	// Not found is not error, since this means it was already deleted.
 	if apierrors.IsNotFound(err) {
 		err = nil

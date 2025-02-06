@@ -4,6 +4,7 @@
 package filter
 
 import (
+	"context"
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -25,7 +26,7 @@ func (prf PreventRemoveFilter) Name() string {
 
 // Filter returns a AnnotationPreventedDeletionError if the object prune/delete
 // should be skipped.
-func (prf PreventRemoveFilter) Filter(obj *unstructured.Unstructured) error {
+func (prf PreventRemoveFilter) Filter(_ context.Context, obj *unstructured.Unstructured) error {
 	for annotation, value := range obj.GetAnnotations() {
 		if common.NoDeletion(annotation, value) {
 			return &AnnotationPreventedDeletionError{

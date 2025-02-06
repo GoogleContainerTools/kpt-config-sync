@@ -21,13 +21,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GoogleContainerTools/kpt/pkg/live"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
-	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/applier/stats"
 	"kpt.dev/configsync/pkg/core"
@@ -48,7 +47,6 @@ import (
 	"sigs.k8s.io/cli-utils/pkg/apply/filter"
 	"sigs.k8s.io/cli-utils/pkg/common"
 	"sigs.k8s.io/cli-utils/pkg/inventory"
-	"sigs.k8s.io/cli-utils/pkg/object"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -129,8 +127,8 @@ type Supervisor interface {
 type supervisor struct {
 	// inventory policy for configuring the inventory status
 	policy inventory.Policy
-	// inventory ResourceGroup used to track managed objects
-	inventory *live.InventoryResourceGroup
+	// invInfo is the metadata for the ResourceGroup used to track managed objects
+	invInfo *inventory.SingleObjectInfo
 	// clientSet wraps multiple API server clients
 	clientSet *ClientSet
 	// syncKind is the Kind of the RSync object: RootSync or RepoSync
@@ -163,7 +161,8 @@ func NewSupervisor(cs *ClientSet, scope declared.Scope, syncName string, reconci
 // objects in a single namespace.
 func NewNamespaceSupervisor(cs *ClientSet, namespace declared.Scope, syncName string, reconcileTimeout time.Duration) (Supervisor, error) {
 	syncKind := configsync.RepoSyncKind
-	invObj := newInventoryUnstructured(syncKind, syncName, string(namespace), cs.StatusMode)
+	syncNamespace := namespace.SyncNamespace()
+	invObj := newInventoryUnstructured(syncName, syncNamespace)
 	// If the ResourceGroup object exists, annotate the status mode on the
 	// existing object.
 	if err := annotateStatusMode(context.TODO(), cs.Client, invObj, cs.StatusMode); err != nil {
@@ -171,17 +170,20 @@ func NewNamespaceSupervisor(cs *ClientSet, namespace declared.Scope, syncName st
 		return nil, err
 	}
 	klog.Infof("successfully annotate the ResourceGroup object with the status mode %s", cs.StatusMode)
-	inv, err := wrapInventoryObj(invObj)
-	if err != nil {
-		return nil, err
-	}
+	invInfo := inventory.NewSingleObjectInfo(
+		inventory.ID(InventoryID(syncName, syncNamespace)),
+		types.NamespacedName{
+			Name:      syncName,
+			Namespace: syncNamespace,
+		},
+	)
 	a := &supervisor{
-		inventory:        inv,
+		invInfo:          invInfo,
 		clientSet:        cs,
 		policy:           inventory.PolicyAdoptIfNoInventory,
 		syncKind:         syncKind,
 		syncName:         syncName,
-		syncNamespace:    string(namespace),
+		syncNamespace:    syncNamespace,
 		reconcileTimeout: reconcileTimeout,
 	}
 	klog.V(4).Infof("Namespace Supervisor %s/%s is initialized", namespace, syncName)
@@ -192,7 +194,8 @@ func NewNamespaceSupervisor(cs *ClientSet, namespace declared.Scope, syncName st
 // and namespace-level resource objects in a single cluster.
 func NewRootSupervisor(cs *ClientSet, syncName string, reconcileTimeout time.Duration) (Supervisor, error) {
 	syncKind := configsync.RootSyncKind
-	u := newInventoryUnstructured(syncKind, syncName, configmanagement.ControllerNamespace, cs.StatusMode)
+	syncNamespace := configsync.ControllerNamespace
+	u := newInventoryUnstructured(syncName, syncNamespace)
 	// If the ResourceGroup object exists, annotate the status mode on the
 	// existing object.
 	if err := annotateStatusMode(context.TODO(), cs.Client, u, cs.StatusMode); err != nil {
@@ -200,29 +203,24 @@ func NewRootSupervisor(cs *ClientSet, syncName string, reconcileTimeout time.Dur
 		return nil, err
 	}
 	klog.Infof("successfully annotate the ResourceGroup object with the status mode %s", cs.StatusMode)
-	inv, err := wrapInventoryObj(u)
-	if err != nil {
-		return nil, err
-	}
+	invInfo := inventory.NewSingleObjectInfo(
+		inventory.ID(InventoryID(syncName, syncNamespace)),
+		types.NamespacedName{
+			Name:      syncName,
+			Namespace: syncNamespace,
+		},
+	)
 	a := &supervisor{
-		inventory:        inv,
+		invInfo:          invInfo,
 		clientSet:        cs,
 		policy:           inventory.PolicyAdoptAll,
 		syncKind:         syncKind,
 		syncName:         syncName,
-		syncNamespace:    string(configmanagement.ControllerNamespace),
+		syncNamespace:    syncNamespace,
 		reconcileTimeout: reconcileTimeout,
 	}
 	klog.V(4).Infof("Root Supervisor %s is initialized and synced with the API server", syncName)
 	return a, nil
-}
-
-func wrapInventoryObj(obj *unstructured.Unstructured) (*live.InventoryResourceGroup, error) {
-	inv, ok := live.WrapInventoryObj(obj).(*live.InventoryResourceGroup)
-	if !ok {
-		return nil, errors.New("failed to create an ResourceGroup object")
-	}
-	return inv, nil
 }
 
 func (s *supervisor) processApplyEvent(ctx context.Context, e event.ApplyEvent, syncStats *stats.ApplyEventStats, objectStatusMap ObjectStatusMap, unknownTypeResources map[core.ID]struct{}, resourceMap map[core.ID]client.Object) status.Error {
@@ -495,7 +493,7 @@ func handleMetrics(ctx context.Context, operation string, err error) {
 // checkInventoryObjectSize checks the inventory object size limit.
 // If it is close to the size limit 1M, log a warning.
 func (s *supervisor) checkInventoryObjectSize(ctx context.Context, c client.Client) {
-	u := newInventoryUnstructured(s.syncKind, s.syncName, s.syncNamespace, s.clientSet.StatusMode)
+	u := newInventoryUnstructured(s.syncName, s.syncNamespace)
 	err := c.Get(ctx, client.ObjectKey{Namespace: s.syncNamespace, Name: s.syncName}, u)
 	if err == nil {
 		size, err := getObjectSize(u)
@@ -533,7 +531,7 @@ func (s *supervisor) applyInner(ctx context.Context, eventHandler func(Event), d
 	enabledObjs, disabledObjs := partitionObjs(objs)
 	if len(disabledObjs) > 0 {
 		klog.Infof("%v objects to be disabled: %v", len(disabledObjs), core.GKNNs(disabledObjs))
-		disabledCount, err := s.handleDisabledObjects(ctx, s.inventory, disabledObjs)
+		disabledCount, err := s.handleDisabledObjects(ctx, disabledObjs)
 		if err != nil {
 			sendErrorEvent(err, eventHandler)
 			return objStatusMap, syncStats
@@ -587,7 +585,7 @@ func (s *supervisor) applyInner(ctx context.Context, eventHandler func(Event), d
 		resourceMap[idFrom(ObjMetaFromUnstructured(obj))] = obj
 	}
 
-	events := s.clientSet.KptApplier.Run(ctx, s.inventory, object.UnstructuredSet(resources), options)
+	events := s.clientSet.KptApplier.Run(ctx, s.invInfo, resources, options)
 	for e := range events {
 		switch e.Type {
 		case event.InitType:
@@ -600,7 +598,7 @@ func (s *supervisor) applyInner(ctx context.Context, eventHandler func(Event), d
 			klog.Info(e.ErrorEvent)
 			err := e.ErrorEvent.Err
 			if util.IsRequestTooLargeError(err) {
-				err = largeResourceGroupError(err, idFromInventory(s.inventory))
+				err = largeResourceGroupError(err, coreIDFromInventoryInfo(s.invInfo))
 			}
 			sendErrorEvent(err, eventHandler)
 			syncStats.ErrorTypeEvents++
@@ -677,7 +675,7 @@ func (s *supervisor) destroyInner(ctx context.Context, eventHandler func(Event))
 	// This allows for picking up CRD changes.
 	meta.MaybeResetRESTMapper(s.clientSet.Mapper)
 
-	events := s.clientSet.KptDestroyer.Run(ctx, s.inventory, options)
+	events := s.clientSet.KptDestroyer.Run(ctx, s.invInfo, options)
 	for e := range events {
 		switch e.Type {
 		case event.InitType:
@@ -690,7 +688,7 @@ func (s *supervisor) destroyInner(ctx context.Context, eventHandler func(Event))
 			klog.Info(e.ErrorEvent)
 			err := e.ErrorEvent.Err
 			if util.IsRequestTooLargeError(err) {
-				err = largeResourceGroupError(err, idFromInventory(s.inventory))
+				err = largeResourceGroupError(err, coreIDFromInventoryInfo(s.invInfo))
 			}
 			sendErrorEvent(err, eventHandler)
 			syncStats.ErrorTypeEvents++
@@ -742,15 +740,9 @@ func (s *supervisor) Destroy(ctx context.Context, eventHandler func(Event)) (Obj
 }
 
 // newInventoryUnstructured creates an inventory object as an unstructured.
-func newInventoryUnstructured(kind, name, namespace, statusMode string) *unstructured.Unstructured {
+func newInventoryUnstructured(name, namespace string) *unstructured.Unstructured {
 	id := InventoryID(name, namespace)
 	u := resourcegroup.Unstructured(name, namespace, id)
-	core.SetLabel(u, metadata.ManagedByKey, metadata.ManagedByValue)
-	core.SetLabel(u, metadata.SyncNamespaceLabel, namespace)
-	core.SetLabel(u, metadata.SyncNameLabel, name)
-	core.SetLabel(u, metadata.SyncKindLabel, kind)
-	core.SetAnnotation(u, metadata.ResourceManagementKey, metadata.ResourceManagementEnabled)
-	core.SetAnnotation(u, metadata.StatusModeKey, statusMode)
 	return u
 }
 
@@ -765,13 +757,13 @@ func InventoryID(name, namespace string) string {
 // then disables them, one by one, by removing the ConfigSync metadata.
 // Returns the number of objects which are disabled successfully, and any errors
 // encountered.
-func (s *supervisor) handleDisabledObjects(ctx context.Context, rg *live.InventoryResourceGroup, objs []client.Object) (uint64, status.MultiError) {
+func (s *supervisor) handleDisabledObjects(ctx context.Context, objs []client.Object) (uint64, status.MultiError) {
 	// disabledCount tracks the number of objects which are disabled successfully
 	var disabledCount uint64
-	err := s.removeFromInventory(rg, objs)
+	err := s.removeFromInventory(ctx, objs)
 	if err != nil {
 		if nomosutil.IsRequestTooLargeError(err) {
-			return disabledCount, largeResourceGroupError(err, idFromInventory(rg))
+			return disabledCount, largeResourceGroupError(err, coreIDFromInventoryInfo(s.invInfo))
 		}
 		return disabledCount, Error(err)
 	}
@@ -796,29 +788,16 @@ func (s *supervisor) handleDisabledObjects(ctx context.Context, rg *live.Invento
 
 // removeFromInventory removes the specified objects from the inventory, if it
 // exists.
-func (s *supervisor) removeFromInventory(rg *live.InventoryResourceGroup, objs []client.Object) error {
-	clusterInv, err := s.clientSet.InvClient.GetClusterInventoryInfo(rg)
-	if err != nil {
-		return err
-	}
-	if clusterInv == nil {
-		// If inventory does not exist, there is nothing to remove
+func (s *supervisor) removeFromInventory(ctx context.Context, objs []client.Object) error {
+	inv, err := s.clientSet.InvClient.Get(ctx, s.invInfo, inventory.GetOptions{})
+	if apierrors.IsNotFound(err) {
 		return nil
-	}
-	wrappedInv, err := wrapInventoryObj(clusterInv)
-	if err != nil {
+	} else if err != nil {
 		return err
 	}
-	oldObjs, err := wrappedInv.Load()
-	if err != nil {
-		return err
-	}
-	newObjs := removeFrom(oldObjs, objs)
-	err = rg.Store(newObjs, nil)
-	if err != nil {
-		return err
-	}
-	return s.clientSet.InvClient.Replace(rg, newObjs, nil, common.DryRunNone)
+	newObjs := removeFrom(inv.GetObjectRefs(), objs)
+	inv.SetObjectRefs(newObjs)
+	return s.clientSet.InvClient.CreateOrUpdate(ctx, inv, inventory.UpdateOptions{})
 }
 
 // abandonObject removes ConfigSync labels and annotations from an object,

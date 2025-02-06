@@ -63,7 +63,7 @@ func NoDeletion(key, value string) bool {
 	return false
 }
 
-var Strategies = []DryRunStrategy{DryRunClient, DryRunServer}
+var Strategies = []DryRunStrategy{DryRunNone, DryRunClient, DryRunServer}
 
 //go:generate stringer -type=DryRunStrategy
 type DryRunStrategy int

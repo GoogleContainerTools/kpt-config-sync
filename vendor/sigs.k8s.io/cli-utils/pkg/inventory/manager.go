@@ -14,18 +14,18 @@ import (
 
 // Manager wraps an Inventory with convenience methods that use ObjMetadata.
 type Manager struct {
-	inventory *actuation.Inventory
+	inventory InventoryContents
 }
 
 // NewManager returns a new manager instance.
 func NewManager() *Manager {
 	return &Manager{
-		inventory: &actuation.Inventory{},
+		inventory: InventoryContents{},
 	}
 }
 
 // Inventory returns the in-memory version of the managed inventory.
-func (tc *Manager) Inventory() *actuation.Inventory {
+func (tc *Manager) Inventory() InventoryContents {
 	return tc.inventory
 }
 
@@ -33,9 +33,9 @@ func (tc *Manager) Inventory() *actuation.Inventory {
 // The returned status is a pointer and can be updated in-place for efficiency.
 func (tc *Manager) ObjectStatus(id object.ObjMetadata) (*actuation.ObjectStatus, bool) {
 	ref := ObjectReferenceFromObjMetadata(id)
-	for i, objStatus := range tc.inventory.Status.Objects {
+	for i, objStatus := range tc.inventory.ObjectStatuses {
 		if objStatus.ObjectReference == ref {
-			return &(tc.inventory.Status.Objects[i]), true
+			return &(tc.inventory.ObjectStatuses[i]), true
 		}
 	}
 	return nil, false
@@ -45,7 +45,7 @@ func (tc *Manager) ObjectStatus(id object.ObjMetadata) (*actuation.ObjectStatus,
 // specified actuation strategy and status.
 func (tc *Manager) ObjectsWithActuationStatus(strategy actuation.ActuationStrategy, status actuation.ActuationStatus) object.ObjMetadataSet {
 	var ids object.ObjMetadataSet
-	for _, objStatus := range tc.inventory.Status.Objects {
+	for _, objStatus := range tc.inventory.ObjectStatuses {
 		if objStatus.Strategy == strategy && objStatus.Actuation == status {
 			ids = append(ids, ObjMetadataFromObjectReference(objStatus.ObjectReference))
 		}
@@ -57,7 +57,7 @@ func (tc *Manager) ObjectsWithActuationStatus(strategy actuation.ActuationStrate
 // specified reconcile status, regardless of actuation strategy.
 func (tc *Manager) ObjectsWithReconcileStatus(status actuation.ReconcileStatus) object.ObjMetadataSet {
 	var ids object.ObjMetadataSet
-	for _, objStatus := range tc.inventory.Status.Objects {
+	for _, objStatus := range tc.inventory.ObjectStatuses {
 		if objStatus.Reconcile == status {
 			ids = append(ids, ObjMetadataFromObjectReference(objStatus.ObjectReference))
 		}
@@ -67,13 +67,13 @@ func (tc *Manager) ObjectsWithReconcileStatus(status actuation.ReconcileStatus) 
 
 // SetObjectStatus updates or adds an ObjectStatus record to the inventory.
 func (tc *Manager) SetObjectStatus(newObjStatus actuation.ObjectStatus) {
-	for i, oldObjStatus := range tc.inventory.Status.Objects {
+	for i, oldObjStatus := range tc.inventory.ObjectStatuses {
 		if oldObjStatus.ObjectReference == newObjStatus.ObjectReference {
-			tc.inventory.Status.Objects[i] = newObjStatus
+			tc.inventory.ObjectStatuses[i] = newObjStatus
 			return
 		}
 	}
-	tc.inventory.Status.Objects = append(tc.inventory.Status.Objects, newObjStatus)
+	tc.inventory.ObjectStatuses = append(tc.inventory.ObjectStatuses, newObjStatus)
 }
 
 // IsSuccessfulApply returns true if the object apply was successful
@@ -119,7 +119,7 @@ func (tc *Manager) AppliedResourceUID(id object.ObjMetadata) (types.UID, bool) {
 // successfully applied resources.
 func (tc *Manager) AppliedResourceUIDs() sets.String { // nolint:staticcheck
 	uids := sets.NewString()
-	for _, objStatus := range tc.inventory.Status.Objects {
+	for _, objStatus := range tc.inventory.ObjectStatuses {
 		if objStatus.Strategy == actuation.ActuationStrategyApply &&
 			objStatus.Actuation == actuation.ActuationSucceeded {
 			if objStatus.UID != "" {

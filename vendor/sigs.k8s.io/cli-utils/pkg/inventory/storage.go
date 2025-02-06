@@ -15,46 +15,14 @@ import (
 	"fmt"
 	"strings"
 
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/client-go/dynamic"
 	"k8s.io/klog/v2"
-	"sigs.k8s.io/cli-utils/pkg/apis/actuation"
 	"sigs.k8s.io/cli-utils/pkg/common"
 	"sigs.k8s.io/cli-utils/pkg/object"
 )
 
 // The default inventory name stored in the inventory template.
 const legacyInvName = "inventory"
-
-// Storage describes methods necessary for an object which
-// can persist the object metadata for pruning and other group
-// operations.
-type Storage interface {
-	// Load retrieves the set of object metadata from the inventory object
-	Load() (object.ObjMetadataSet, error)
-	// Store the set of object metadata in the inventory object. This will
-	// replace the metadata, spec and status.
-	Store(objs object.ObjMetadataSet, status []actuation.ObjectStatus) error
-	// GetObject returns the object that stores the inventory
-	GetObject() (*unstructured.Unstructured, error)
-	// Apply applies the inventory object. This utility function is used
-	// in InventoryClient.Merge and merges the metadata, spec and status.
-	Apply(dynamic.Interface, meta.RESTMapper, StatusPolicy) error
-	// ApplyWithPrune applies the inventory object with a set of pruneIDs of
-	// objects to be pruned (object.ObjMetadataSet). This function is used in
-	// InventoryClient.Replace. pruneIDs are required for enabling custom logic
-	// handling of multiple ResourceGroup inventories.
-	ApplyWithPrune(dynamic.Interface, meta.RESTMapper, StatusPolicy, object.ObjMetadataSet) error
-}
-
-// StorageFactoryFunc creates the object which implements the Inventory
-// interface from the passed info object.
-type StorageFactoryFunc func(*unstructured.Unstructured) Storage
-
-// ToUnstructuredFunc returns the unstructured object for the
-// given Info.
-type ToUnstructuredFunc func(Info) *unstructured.Unstructured
 
 // FindInventoryObj returns the "Inventory" object (ConfigMap with
 // inventory label) if it exists, or nil if it does not exist.

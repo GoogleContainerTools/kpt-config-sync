@@ -44,6 +44,7 @@ func (b *DestroyerBuilder) Build() (*Destroyer, error) {
 		client:        bx.client,
 		openAPIGetter: bx.discoClient,
 		infoHelper:    info.NewHelper(bx.mapper, bx.unstructuredClientForMapping),
+		statusPolicy:  bx.statusPolicy,
 	}, nil
 }
 
@@ -89,5 +90,10 @@ func (b *DestroyerBuilder) WithStatusWatcher(statusWatcher watcher.StatusWatcher
 
 func (b *DestroyerBuilder) WithStatusWatcherFilters(filters *watcher.Filters) *DestroyerBuilder {
 	b.statusWatcherFilters = filters
+	return b
+}
+
+func (b *DestroyerBuilder) WithStatusPolicy(statusPolicy inventory.StatusPolicy) *DestroyerBuilder {
+	b.statusPolicy = statusPolicy
 	return b
 }

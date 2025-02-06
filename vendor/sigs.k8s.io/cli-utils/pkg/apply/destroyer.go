@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/discovery"
@@ -38,6 +39,7 @@ type Destroyer struct {
 	client        dynamic.Interface
 	openAPIGetter discovery.OpenAPISchemaInterface
 	infoHelper    info.Helper
+	statusPolicy  inventory.StatusPolicy
 }
 
 type DestroyerOptions struct {
@@ -79,10 +81,23 @@ func (d *Destroyer) Run(ctx context.Context, invInfo inventory.Info, options Des
 	setDestroyerDefaults(&options)
 	go func() {
 		defer close(eventChannel)
+		clusterInventory, err := d.invClient.Get(ctx, invInfo, inventory.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			clusterInventory = invInfo.NewEmptyInventory()
+		} else if err != nil {
+			handleError(eventChannel, err)
+			return
+		}
+		if clusterInventory.ID() != invInfo.ID() {
+			handleError(eventChannel, fmt.Errorf("expected inventory object to have inventory-id %q but got %q",
+				invInfo.ID(), clusterInventory.ID()))
+			return
+		}
+
 		// Retrieve the objects to be deleted from the cluster. Second parameter is empty
 		// because no local objects returns all inventory objects for deletion.
 		emptyLocalObjs := object.UnstructuredSet{}
-		deleteObjs, err := d.pruner.GetPruneObjs(invInfo, emptyLocalObjs, prune.Options{
+		deleteObjs, err := d.pruner.GetPruneObjs(ctx, clusterInventory, emptyLocalObjs, prune.Options{
 			DryRunStrategy: options.DryRunStrategy,
 		})
 		if err != nil {
@@ -101,7 +116,7 @@ func (d *Destroyer) Run(ctx context.Context, invInfo inventory.Info, options Des
 
 		// Build a TaskContext for passing info between tasks
 		resourceCache := cache.NewResourceCacheMap()
-		taskContext := taskrunner.NewTaskContext(eventChannel, resourceCache)
+		taskContext := taskrunner.NewTaskContext(ctx, eventChannel, resourceCache)
 
 		klog.V(4).Infoln("destroyer building task queue...")
 		deleteFilters := []filter.ValidationFilter{
@@ -123,8 +138,10 @@ func (d *Destroyer) Run(ctx context.Context, invInfo inventory.Info, options Des
 			InfoHelper:    d.infoHelper,
 			Mapper:        d.mapper,
 			InvClient:     d.invClient,
+			Inventory:     clusterInventory,
 			Collector:     vCollector,
 			PruneFilters:  deleteFilters,
+			StatusPolicy:  d.statusPolicy,
 		}
 		opts := solver.Options{
 			Destroy:                true,
@@ -138,11 +155,10 @@ func (d *Destroyer) Run(ctx context.Context, invInfo inventory.Info, options Des
 		// Build the ordered set of tasks to execute.
 		taskQueue := taskBuilder.
 			WithPruneObjects(deleteObjs).
-			WithInventory(invInfo).
 			Build(taskContext, opts)
 
 		klog.V(4).Infof("validation errors: %d", len(vCollector.Errors))
-		klog.V(4).Infof("invalid objects: %d", len(vCollector.InvalidIds))
+		klog.V(4).Infof("invalid objects: %d", len(vCollector.InvalidIDs))
 
 		// Handle validation errors
 		switch options.ValidationPolicy {
@@ -162,7 +178,7 @@ func (d *Destroyer) Run(ctx context.Context, invInfo inventory.Info, options Des
 		}
 
 		// Register invalid objects to be retained in the inventory, if present.
-		for _, id := range vCollector.InvalidIds {
+		for _, id := range vCollector.InvalidIDs {
 			taskContext.AddInvalidObject(id)
 		}
 
@@ -176,13 +192,13 @@ func (d *Destroyer) Run(ctx context.Context, invInfo inventory.Info, options Des
 		}
 		// Create a new TaskStatusRunner to execute the taskQueue.
 		klog.V(4).Infoln("destroyer building TaskStatusRunner...")
-		deleteIds := object.UnstructuredSetToObjMetadataSet(deleteObjs)
+		deleteIDs := object.UnstructuredSetToObjMetadataSet(deleteObjs)
 		statusWatcher := d.statusWatcher
 		// Disable watcher for dry runs
 		if opts.DryRunStrategy.ClientOrServerDryRun() {
 			statusWatcher = watcher.BlindStatusWatcher{}
 		}
-		runner := taskrunner.NewTaskStatusRunner(deleteIds, statusWatcher)
+		runner := taskrunner.NewTaskStatusRunner(deleteIDs, statusWatcher)
 		klog.V(4).Infoln("destroyer running TaskStatusRunner...")
 		err = runner.Run(ctx, taskContext, taskQueue.ToChannel(), taskrunner.Options{
 			EmitStatusEvents: options.EmitStatusEvents,

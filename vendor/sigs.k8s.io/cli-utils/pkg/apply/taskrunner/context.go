@@ -4,6 +4,8 @@
 package taskrunner
 
 import (
+	"context"
+
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/cli-utils/pkg/apply/cache"
 	"sigs.k8s.io/cli-utils/pkg/apply/event"
@@ -13,8 +15,9 @@ import (
 )
 
 // NewTaskContext returns a new TaskContext
-func NewTaskContext(eventChannel chan event.Event, resourceCache cache.ResourceCache) *TaskContext {
+func NewTaskContext(ctx context.Context, eventChannel chan event.Event, resourceCache cache.ResourceCache) *TaskContext {
 	return &TaskContext{
+		context:          ctx,
 		taskChannel:      make(chan TaskResult),
 		eventChannel:     eventChannel,
 		resourceCache:    resourceCache,
@@ -28,6 +31,7 @@ func NewTaskContext(eventChannel chan event.Event, resourceCache cache.ResourceC
 // TaskContext defines a context that is passed between all
 // the tasks that is in a taskqueue.
 type TaskContext struct {
+	context          context.Context
 	taskChannel      chan TaskResult
 	eventChannel     chan event.Event
 	resourceCache    cache.ResourceCache
@@ -35,6 +39,10 @@ type TaskContext struct {
 	abandonedObjects map[object.ObjMetadata]struct{}
 	invalidObjects   map[object.ObjMetadata]struct{}
 	graph            *graph.Graph
+}
+
+func (tc *TaskContext) Context() context.Context {
+	return tc.context
 }
 
 func (tc *TaskContext) TaskChannel() chan TaskResult {

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/google"
@@ -68,13 +69,17 @@ func verifyImageSignature(ctx context.Context, image string) error {
 		return fmt.Errorf("error loading public key: %v", err)
 	}
 
-	googleAuth, err := google.NewEnvAuthenticator(ctx)
-	if err != nil {
-		return err
+	var registryClientOpts []ociremote.Option
+	if os.Getenv("USE_GOOGLE_AUTHENTICATOR") == "true" {
+		googleAuth, err := google.NewEnvAuthenticator(ctx)
+		if err != nil {
+			return err
+		}
+		registryClientOpts = append(registryClientOpts, ociremote.WithRemoteOptions(remote.WithAuth(googleAuth)))
 	}
 
 	opts := &cosign.CheckOpts{
-		RegistryClientOpts: []ociremote.Option{ociremote.WithRemoteOptions(remote.WithAuth(googleAuth))},
+		RegistryClientOpts: registryClientOpts,
 		SigVerifier:        pubKey,
 		IgnoreTlog:         true,
 	}

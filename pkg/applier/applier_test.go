@@ -21,7 +21,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GoogleContainerTools/kpt/pkg/live"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/applier/stats"
 	"kpt.dev/configsync/pkg/applyset"
 	"kpt.dev/configsync/pkg/core"
@@ -128,7 +128,7 @@ func TestApply(t *testing.T) {
 	namespaceObjID := core.IDOf(namespaceObj)
 
 	inventoryID := core.ID{
-		GroupKind: live.ResourceGroupGVK.GroupKind(),
+		GroupKind: v1alpha1.SchemeGroupVersionKind().GroupKind(),
 		ObjectKey: client.ObjectKey{
 			Name:      syncName,
 			Namespace: syncScope.SyncNamespace(),

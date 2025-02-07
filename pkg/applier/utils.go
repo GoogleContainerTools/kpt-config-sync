@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/kinds"
@@ -133,7 +134,7 @@ func idFrom(identifier object.ObjMetadata) core.ID {
 
 func idFromInventory(rg *live.InventoryResourceGroup) core.ID {
 	return core.ID{
-		GroupKind: live.ResourceGroupGVK.GroupKind(),
+		GroupKind: v1alpha1.SchemeGroupVersionKind().GroupKind(),
 		ObjectKey: client.ObjectKey{
 			Name:      rg.Name(),
 			Namespace: rg.Namespace(),

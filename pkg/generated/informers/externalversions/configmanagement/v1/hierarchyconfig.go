@@ -3,24 +3,24 @@
 package v1
 
 import (
-	"context"
+	context "context"
 	time "time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
 	cache "k8s.io/client-go/tools/cache"
-	configmanagementv1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	apiconfigmanagementv1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	versioned "kpt.dev/configsync/pkg/generated/clientset/versioned"
 	internalinterfaces "kpt.dev/configsync/pkg/generated/informers/externalversions/internalinterfaces"
-	v1 "kpt.dev/configsync/pkg/generated/listers/configmanagement/v1"
+	configmanagementv1 "kpt.dev/configsync/pkg/generated/listers/configmanagement/v1"
 )
 
 // HierarchyConfigInformer provides access to a shared informer and lister for
 // HierarchyConfigs.
 type HierarchyConfigInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1.HierarchyConfigLister
+	Lister() configmanagementv1.HierarchyConfigLister
 }
 
 type hierarchyConfigInformer struct {
@@ -54,7 +54,7 @@ func NewFilteredHierarchyConfigInformer(client versioned.Interface, resyncPeriod
 				return client.ConfigmanagementV1().HierarchyConfigs().Watch(context.TODO(), options)
 			},
 		},
-		&configmanagementv1.HierarchyConfig{},
+		&apiconfigmanagementv1.HierarchyConfig{},
 		resyncPeriod,
 		indexers,
 	)
@@ -65,9 +65,9 @@ func (f *hierarchyConfigInformer) defaultInformer(client versioned.Interface, re
 }
 
 func (f *hierarchyConfigInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&configmanagementv1.HierarchyConfig{}, f.defaultInformer)
+	return f.factory.InformerFor(&apiconfigmanagementv1.HierarchyConfig{}, f.defaultInformer)
 }
 
-func (f *hierarchyConfigInformer) Lister() v1.HierarchyConfigLister {
-	return v1.NewHierarchyConfigLister(f.Informer().GetIndexer())
+func (f *hierarchyConfigInformer) Lister() configmanagementv1.HierarchyConfigLister {
+	return configmanagementv1.NewHierarchyConfigLister(f.Informer().GetIndexer())
 }

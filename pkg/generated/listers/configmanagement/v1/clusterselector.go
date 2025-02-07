@@ -3,10 +3,10 @@
 package v1
 
 import (
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
+	configmanagementv1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 )
 
 // ClusterSelectorLister helps list ClusterSelectors.
@@ -14,39 +14,19 @@ import (
 type ClusterSelectorLister interface {
 	// List lists all ClusterSelectors in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1.ClusterSelector, err error)
+	List(selector labels.Selector) (ret []*configmanagementv1.ClusterSelector, err error)
 	// Get retrieves the ClusterSelector from the index for a given name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v1.ClusterSelector, error)
+	Get(name string) (*configmanagementv1.ClusterSelector, error)
 	ClusterSelectorListerExpansion
 }
 
 // clusterSelectorLister implements the ClusterSelectorLister interface.
 type clusterSelectorLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*configmanagementv1.ClusterSelector]
 }
 
 // NewClusterSelectorLister returns a new ClusterSelectorLister.
 func NewClusterSelectorLister(indexer cache.Indexer) ClusterSelectorLister {
-	return &clusterSelectorLister{indexer: indexer}
-}
-
-// List lists all ClusterSelectors in the indexer.
-func (s *clusterSelectorLister) List(selector labels.Selector) (ret []*v1.ClusterSelector, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1.ClusterSelector))
-	})
-	return ret, err
-}
-
-// Get retrieves the ClusterSelector from the index for a given name.
-func (s *clusterSelectorLister) Get(name string) (*v1.ClusterSelector, error) {
-	obj, exists, err := s.indexer.GetByKey(name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1.Resource("clusterselector"), name)
-	}
-	return obj.(*v1.ClusterSelector), nil
+	return &clusterSelectorLister{listers.New[*configmanagementv1.ClusterSelector](indexer, configmanagementv1.Resource("clusterselector"))}
 }

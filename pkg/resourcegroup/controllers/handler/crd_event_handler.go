@@ -25,6 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 // CRDEventHandler pushes an event to ResourceGroup event channel
@@ -38,25 +39,25 @@ type CRDEventHandler struct {
 var _ handler.EventHandler = &CRDEventHandler{}
 
 // Create implements EventHandler
-func (h *CRDEventHandler) Create(_ context.Context, e event.CreateEvent, _ workqueue.RateLimitingInterface) {
+func (h *CRDEventHandler) Create(_ context.Context, e event.CreateEvent, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 	h.Log.V(5).Info("received a create event")
 	h.enqueueEvent(e.Object)
 }
 
 // Update implements EventHandler
-func (h *CRDEventHandler) Update(_ context.Context, e event.UpdateEvent, _ workqueue.RateLimitingInterface) {
+func (h *CRDEventHandler) Update(_ context.Context, e event.UpdateEvent, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 	h.Log.V(5).Info("received an update event")
 	h.enqueueEvent(e.ObjectNew)
 }
 
 // Delete implements EventHandler
-func (h *CRDEventHandler) Delete(_ context.Context, e event.DeleteEvent, _ workqueue.RateLimitingInterface) {
+func (h *CRDEventHandler) Delete(_ context.Context, e event.DeleteEvent, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 	h.Log.V(5).Info("received a delete event")
 	h.enqueueEvent(e.Object)
 }
 
 // Generic implements EventHandler
-func (h *CRDEventHandler) Generic(_ context.Context, e event.GenericEvent, _ workqueue.RateLimitingInterface) {
+func (h *CRDEventHandler) Generic(_ context.Context, e event.GenericEvent, _ workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 	h.Log.V(5).Info("received a generic event")
 	h.enqueueEvent(e.Object)
 }

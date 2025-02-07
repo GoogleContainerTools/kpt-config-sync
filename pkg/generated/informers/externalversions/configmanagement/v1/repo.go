@@ -3,24 +3,24 @@
 package v1
 
 import (
-	"context"
+	context "context"
 	time "time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
 	cache "k8s.io/client-go/tools/cache"
-	configmanagementv1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	apiconfigmanagementv1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	versioned "kpt.dev/configsync/pkg/generated/clientset/versioned"
 	internalinterfaces "kpt.dev/configsync/pkg/generated/informers/externalversions/internalinterfaces"
-	v1 "kpt.dev/configsync/pkg/generated/listers/configmanagement/v1"
+	configmanagementv1 "kpt.dev/configsync/pkg/generated/listers/configmanagement/v1"
 )
 
 // RepoInformer provides access to a shared informer and lister for
 // Repos.
 type RepoInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1.RepoLister
+	Lister() configmanagementv1.RepoLister
 }
 
 type repoInformer struct {
@@ -54,7 +54,7 @@ func NewFilteredRepoInformer(client versioned.Interface, resyncPeriod time.Durat
 				return client.ConfigmanagementV1().Repos().Watch(context.TODO(), options)
 			},
 		},
-		&configmanagementv1.Repo{},
+		&apiconfigmanagementv1.Repo{},
 		resyncPeriod,
 		indexers,
 	)
@@ -65,9 +65,9 @@ func (f *repoInformer) defaultInformer(client versioned.Interface, resyncPeriod 
 }
 
 func (f *repoInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&configmanagementv1.Repo{}, f.defaultInformer)
+	return f.factory.InformerFor(&apiconfigmanagementv1.Repo{}, f.defaultInformer)
 }
 
-func (f *repoInformer) Lister() v1.RepoLister {
-	return v1.NewRepoLister(f.Informer().GetIndexer())
+func (f *repoInformer) Lister() configmanagementv1.RepoLister {
+	return configmanagementv1.NewRepoLister(f.Informer().GetIndexer())
 }

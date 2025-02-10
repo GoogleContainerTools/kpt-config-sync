@@ -60,6 +60,11 @@ func (c *GKECluster) Delete() error {
 	return deleteGKECluster(c.T, c.Name)
 }
 
+// WaitForReady waits until the GKE cluster is ready
+func (c *GKECluster) WaitForReady() error {
+	return waitForReadyGKECluster(c.T, c.Name, 30*time.Minute)
+}
+
 // Connect to the GKE cluster
 func (c *GKECluster) Connect() error {
 	return getGKECredentials(c.T, c.Name, c.KubeConfigPath)
@@ -260,6 +265,33 @@ func createGKECluster(t testing.NTB, name string) error {
 	return listAndWaitForOperations(context.Background(), t, name)
 }
 
+func waitForReadyGKECluster(t testing.NTB, clusterName string, timeout time.Duration) error {
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeoutCause(ctx, timeout,
+		fmt.Errorf("timed out (%v) waiting for cluster %q to be running", timeout, clusterName))
+	defer cancel()
+	if err := listAndWaitForOperations(ctx, t, clusterName); err != nil {
+		return err
+	}
+	elapsed, err := retry.WithContext(ctx, func() error {
+		status, err := clusterStatusGKE(t, clusterName)
+		if err != nil {
+			return err
+		}
+		if status != statusRunning {
+			t.Log("Waiting 1s for cluster to be RUNNING...")
+			return fmt.Errorf("expected cluster %q to have status %q, but got %q",
+				clusterName, statusRunning, status)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	t.Log("Waited %v for cluster to be RUNNING", elapsed)
+	return nil
+}
+
 // getGKECredentials fetches GKE credentials at the specified kubeconfig path.
 func getGKECredentials(t testing.NTB, clusterName, kubeconfig string) error {
 	args := []string{
@@ -318,6 +350,38 @@ func clusterExistsGKE(t testing.NTB, clusterName string) (bool, error) {
 		return true, nil
 	}
 	return false, nil
+}
+
+const (
+	statusRunning = "RUNNING"
+	statusUnknown = "UNKNOWN"
+)
+
+func clusterStatusGKE(t testing.NTB, clusterName string) (string, error) {
+	args := []string{
+		"container", "clusters", "list",
+		"--project", *e2e.GCPProject,
+		"--filter", fmt.Sprintf("name ~ ^%s$", clusterName),
+		"--format", "value(status)",
+	}
+	if *e2e.GCPZone != "" {
+		args = append(args, "--zone", *e2e.GCPZone)
+	}
+	if *e2e.GCPRegion != "" {
+		args = append(args, "--region", *e2e.GCPRegion)
+	}
+	t.Logf("gcloud %s", strings.Join(args, " "))
+	cmd := exec.Command("gcloud", args...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return statusUnknown, fmt.Errorf("failed to list cluster (%s): %v\nstdout/stderr:\n%s",
+			clusterName, err, string(out))
+	}
+	statuses := strings.Fields(strings.TrimSpace(string(out)))
+	if len(statuses) == 1 {
+		return statuses[0], nil
+	}
+	return statusUnknown, nil
 }
 
 // getClusterHash fetches GKE cluster hash

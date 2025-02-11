@@ -108,6 +108,11 @@ func (r *Reconciler) reconcileKptGroup(ctx context.Context, logger logr.Logger, 
 		return ctrl.Result{}, err
 	}
 
+	// Applier is still running for this ResourceGroup
+	if val, ok := resgroup.Annotations[metadata.ApplierRunning]; ok && val == "true" {
+		return ctrl.Result{}, nil
+	}
+
 	// ResourceGroup CR is created from ConfigSync and set to disable the status
 	if isStatusDisabled(resgroup) {
 		return r.reconcileDisabledResourceGroup(ctx, req, resgroup)
@@ -252,6 +257,11 @@ func (ResourceGroupPredicate) Update(e event.UpdateEvent) bool {
 	}
 	rgOld, ok := e.ObjectOld.(*v1alpha1.ResourceGroup)
 	if !ok {
+		return false
+	}
+
+	// Applier is still running for this ResourceGroup
+	if val, ok := rgNew.Annotations[metadata.ApplierRunning]; ok && val == "true" {
 		return false
 	}
 

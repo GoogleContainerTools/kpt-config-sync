@@ -150,6 +150,9 @@ const (
 	// This annotation is set by Config Sync on the RootSync/RepoSync object
 	// to indicate the exact image that should be synced.
 	ImageToSyncAnnotationKey = configsync.ConfigSyncPrefix + "image-to-sync"
+
+	// ApplierRunning indicates on the ResourceGroup that the applier is currently running.
+	ApplierRunning = configsync.ConfigSyncPrefix + "applier-running"
 )
 
 // Lifecycle annotations

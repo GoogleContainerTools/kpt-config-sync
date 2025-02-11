@@ -209,6 +209,7 @@ func setupRootReconciler(t *testing.T, objs ...client.Object) (*syncerFake.Clien
 		controllerruntime.Log.WithName("controllers").WithName(configsync.RootSyncKind),
 		cs.Client.Scheme(),
 	)
+	testReconciler.controllerName = t.Name()
 	return cs.Client, cs.DynamicClient, testReconciler
 }
 

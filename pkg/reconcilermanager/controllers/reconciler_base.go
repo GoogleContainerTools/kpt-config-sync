@@ -105,6 +105,9 @@ type reconcilerBase struct {
 
 	// syncKind is the kind of the sync object: RootSync or RepoSync.
 	syncKind string
+
+	// controllerName is used by tests to de-dupe controllers
+	controllerName string
 }
 
 func (r *reconcilerBase) serviceAccountSubject(reconcilerRef types.NamespacedName) rbacv1.Subject {

@@ -27,7 +27,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GoogleContainerTools/kpt/pkg/live"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -44,6 +43,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/client/restconfig"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
@@ -378,8 +378,8 @@ func (b *BugReporter) FetchResources(ctx context.Context) []Readable {
 	rd = append(rd, cmReadables...)
 
 	namespaceGVs := []schema.GroupVersion{
-		v1beta1.SchemeGroupVersion,           // namespace-scoped configsync resources
-		live.ResourceGroupGVK.GroupVersion(), // namespace-scoped resourcegroup resources
+		v1beta1.SchemeGroupVersion,                       // namespace-scoped configsync resources
+		v1alpha1.SchemeGroupVersionKind().GroupVersion(), // namespace-scoped resourcegroup resources
 	}
 	for _, gv := range namespaceGVs {
 		readables := b.fetchResources(ctx, gv, namespacedResourceToReadables)

@@ -35,3 +35,12 @@ var (
 	// AddToScheme adds the types in this group-version to the given scheme.
 	AddToScheme = SchemeBuilder.AddToScheme
 )
+
+// SchemeGroupVersionKind is the GVK of the ResourceGroup custom resource
+func SchemeGroupVersionKind() schema.GroupVersionKind {
+	return schema.GroupVersionKind{
+		Group:   SchemeGroupVersion.Group,
+		Version: SchemeGroupVersion.Version,
+		Kind:    ResourceGroupKind,
+	}
+}

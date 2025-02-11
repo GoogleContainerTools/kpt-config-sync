@@ -20,9 +20,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GoogleContainerTools/kpt/pkg/live"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/applier/stats"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
@@ -85,7 +85,7 @@ func TestDestroy(t *testing.T) {
 	namespaceObjID := core.IDOf(namespaceObj)
 
 	inventoryID := core.ID{
-		GroupKind: live.ResourceGroupGVK.GroupKind(),
+		GroupKind: v1alpha1.SchemeGroupVersionKind().GroupKind(),
 		ObjectKey: client.ObjectKey{
 			Name:      "rs",
 			Namespace: "test-namespace",

@@ -23,6 +23,7 @@ import (
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/klog/v2"
 	"k8s.io/kubectl/pkg/cmd/util"
+	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/metadata"
 	"sigs.k8s.io/cli-utils/pkg/apply"
 	"sigs.k8s.io/cli-utils/pkg/apply/event"
@@ -70,7 +71,7 @@ func NewClientSet(c client.Client, configFlags *genericclioptions.ConfigFlags, s
 		statusPolicy = inventory.StatusPolicyNone
 	}
 	invClient, err := inventory.NewClient(f, live.WrapInventoryObj,
-		live.InvToUnstructuredFunc, statusPolicy, live.ResourceGroupGVK)
+		live.InvToUnstructuredFunc, statusPolicy, v1alpha1.SchemeGroupVersionKind())
 	if err != nil {
 		return nil, err
 	}

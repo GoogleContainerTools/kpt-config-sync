@@ -23,7 +23,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/GoogleContainerTools/kpt/pkg/live"
 	"github.com/Masterminds/semver"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -38,6 +37,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/client/restconfig"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/generated/clientset/versioned"
@@ -113,7 +113,7 @@ func (c *ClusterClient) repoSyncs(ctx context.Context, ns string) ([]*v1beta1.Re
 }
 
 func (c *ClusterClient) resourceGroups(ctx context.Context, ns string, nsAndNames []types.NamespacedName) ([]*unstructured.Unstructured, error) {
-	rgl := kinds.NewUnstructuredListForItemGVK(live.ResourceGroupGVK)
+	rgl := kinds.NewUnstructuredListForItemGVK(v1alpha1.SchemeGroupVersionKind())
 	if ns == "" {
 		if err := c.Client.List(ctx, rgl); err != nil {
 			return nil, err

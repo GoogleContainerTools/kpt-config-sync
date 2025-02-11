@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -50,7 +51,7 @@ const testOCISignatureVerificationSAName = "oci-signature-verification-sa"
 const testImageValidationWebhook = "image-verification-webhook"
 
 // testOCISignatureVerificationServerImage is the container image used for the OCI signature verification server.
-const testOCISignatureVerificationServerImage = testing.TestInfraArtifactRepositoryAddress + "/oci-signature-verification-server:v1.0.0-20f75766"
+const testOCISignatureVerificationServerImage = testing.TestInfraArtifactRepositoryAddress + "/oci-signature-verification-server:v1.0.0-a4a46a5ef"
 
 // SetupOCISignatureVerification sets up the OCI signature verification environment, including the namespace, service account,
 // OCI signature verification server, and validating webhook configuration.
@@ -260,6 +261,10 @@ func testOCISignatureVerificationDeployment() *appsv1.Deployment {
 						VolumeMounts: volumeMounts,
 						Env: []corev1.EnvVar{
 							{Name: reconcilermanager.OciCACert, Value: "/etc/ssl/ca-certs/cert"},
+							{
+								Name:  "USE_GOOGLE_AUTHENTICATOR",
+								Value: strconv.FormatBool(*e2e.OCIProvider == e2e.ArtifactRegistry && *e2e.TestCluster == e2e.GKE),
+							},
 						},
 						ImagePullPolicy: corev1.PullAlways,
 						LivenessProbe: &corev1.Probe{

@@ -16,7 +16,6 @@ package reader
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,7 +26,6 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/importer"
-	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 )
 
@@ -129,24 +127,6 @@ func parseJSONFile(contents []byte) ([]*unstructured.Unstructured, error) {
 		return nil, err
 	}
 	return filterLocalConfigUnstructured([]*unstructured.Unstructured{&u}), nil
-}
-
-func parseKptfile(contents []byte) ([]*unstructured.Unstructured, error) {
-	unstructs, err := parseYAMLFile(contents)
-	if err != nil {
-		return nil, err
-	}
-	switch len(unstructs) {
-	case 0:
-		return nil, nil
-	case 1:
-		if unstructs[0].GroupVersionKind().GroupKind() != kinds.KptFile().GroupKind() {
-			return nil, fmt.Errorf("only one resource of type Kptfile allowed in Kptfile")
-		}
-		return unstructs, nil
-	default:
-		return nil, fmt.Errorf("only one resource of type Kptfile allowed in Kptfile")
-	}
 }
 
 func hasStatusField(u runtime.Unstructured) bool {

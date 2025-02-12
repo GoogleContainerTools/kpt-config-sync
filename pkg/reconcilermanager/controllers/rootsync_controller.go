@@ -841,9 +841,23 @@ func (r *RootSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 	return result
 }
 
+// This check surfaces the RootSync name length constraint earlier as a validation error.
+func validateRootSyncName(rs *v1beta1.RootSync) error {
+	nameLength := len(rs.Name)
+	if nameLength > reconcilermanager.MaxRootSyncNameLength {
+		return fmt.Errorf("maximum RootSync name length is %d, but found %d",
+			reconcilermanager.MaxRootSyncNameLength, nameLength)
+	}
+	return nil
+}
+
 func (r *RootSyncReconciler) validateRootSync(ctx context.Context, rs *v1beta1.RootSync, reconcilerName string) error {
 	if rs.Namespace != configsync.ControllerNamespace {
 		return fmt.Errorf("RootSync objects are only allowed in the %s namespace, not in %s", configsync.ControllerNamespace, rs.Namespace)
+	}
+
+	if err := validateRootSyncName(rs); err != nil {
+		return err
 	}
 
 	if err := validation.IsDNS1123Subdomain(reconcilerName); err != nil {

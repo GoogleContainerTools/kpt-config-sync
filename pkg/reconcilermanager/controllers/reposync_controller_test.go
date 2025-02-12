@@ -4602,6 +4602,33 @@ For more information, see https://g.co/cloud/acm-errors#knv1061`))
 	}
 }
 
+func TestValidateRepoSyncName(t *testing.T) {
+	testCases := map[string]struct {
+		name      string
+		namespace string
+		expectErr error
+	}{
+		"valid name/namespace": {
+			name:      strings.Repeat("x", 30),
+			namespace: strings.Repeat("n", 15),
+			expectErr: nil,
+		},
+		"invalid name/namespace": {
+			name:      strings.Repeat("x", 30),
+			namespace: strings.Repeat("n", 16),
+			expectErr: fmt.Errorf("maximum combined length of RepoSync name and namespace is 45, but found 46"),
+		},
+	}
+	for testName, tc := range testCases {
+		t.Run(testName, func(t *testing.T) {
+			rs := &v1beta1.RepoSync{}
+			rs.Name = tc.name
+			rs.Namespace = tc.namespace
+			require.Equal(t, tc.expectErr, validateRepoSyncName(rs))
+		})
+	}
+}
+
 func validateRepoSyncStatus(t *testing.T, want *v1beta1.RepoSync, fakeClient *syncerFake.Client) {
 	t.Helper()
 

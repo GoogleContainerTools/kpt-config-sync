@@ -188,3 +188,14 @@ const (
 	// HelmCACert is the OS env variable key for the Helm sync CA cert file path.
 	HelmCACert = "HELM_CA_CERT"
 )
+
+const (
+	// MaxRepoSyncNNLength length is the maximum number of characters for a RepoSync name + namespace.
+	// The ns-reconciler deployment label is constructed as "ns-reconciler-<ns>-<name>-<len(name)>"
+	// Thus, the max length name + namespace for a RepoSync is 45 characters.
+	MaxRepoSyncNNLength = 45
+	// MaxRootSyncNameLength length is the maximum number of characters for a RootSync name.
+	// The name max length is 63 - len("config-management-system_") due to the inventory-id label.
+	// Thus, the max length name for a RootSync is 38 characters.
+	MaxRootSyncNameLength = 38
+)

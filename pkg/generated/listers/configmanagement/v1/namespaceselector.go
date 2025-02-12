@@ -3,10 +3,10 @@
 package v1
 
 import (
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
+	configmanagementv1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 )
 
 // NamespaceSelectorLister helps list NamespaceSelectors.
@@ -14,39 +14,19 @@ import (
 type NamespaceSelectorLister interface {
 	// List lists all NamespaceSelectors in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1.NamespaceSelector, err error)
+	List(selector labels.Selector) (ret []*configmanagementv1.NamespaceSelector, err error)
 	// Get retrieves the NamespaceSelector from the index for a given name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v1.NamespaceSelector, error)
+	Get(name string) (*configmanagementv1.NamespaceSelector, error)
 	NamespaceSelectorListerExpansion
 }
 
 // namespaceSelectorLister implements the NamespaceSelectorLister interface.
 type namespaceSelectorLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*configmanagementv1.NamespaceSelector]
 }
 
 // NewNamespaceSelectorLister returns a new NamespaceSelectorLister.
 func NewNamespaceSelectorLister(indexer cache.Indexer) NamespaceSelectorLister {
-	return &namespaceSelectorLister{indexer: indexer}
-}
-
-// List lists all NamespaceSelectors in the indexer.
-func (s *namespaceSelectorLister) List(selector labels.Selector) (ret []*v1.NamespaceSelector, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1.NamespaceSelector))
-	})
-	return ret, err
-}
-
-// Get retrieves the NamespaceSelector from the index for a given name.
-func (s *namespaceSelectorLister) Get(name string) (*v1.NamespaceSelector, error) {
-	obj, exists, err := s.indexer.GetByKey(name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1.Resource("namespaceselector"), name)
-	}
-	return obj.(*v1.NamespaceSelector), nil
+	return &namespaceSelectorLister{listers.New[*configmanagementv1.NamespaceSelector](indexer, configmanagementv1.Resource("namespaceselector"))}
 }

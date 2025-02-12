@@ -3,11 +3,11 @@
 package v1beta1
 
 import (
-	"net/http"
+	http "net/http"
 
 	rest "k8s.io/client-go/rest"
-	v1beta1 "kpt.dev/configsync/pkg/api/configsync/v1beta1"
-	"kpt.dev/configsync/pkg/generated/clientset/versioned/scheme"
+	configsyncv1beta1 "kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	scheme "kpt.dev/configsync/pkg/generated/clientset/versioned/scheme"
 )
 
 type ConfigsyncV1beta1Interface interface {
@@ -64,10 +64,10 @@ func New(c rest.Interface) *ConfigsyncV1beta1Client {
 }
 
 func setConfigDefaults(config *rest.Config) error {
-	gv := v1beta1.SchemeGroupVersion
+	gv := configsyncv1beta1.SchemeGroupVersion
 	config.GroupVersion = &gv
 	config.APIPath = "/apis"
-	config.NegotiatedSerializer = scheme.Codecs.WithoutConversion()
+	config.NegotiatedSerializer = rest.CodecFactoryForGeneratedClient(scheme.Scheme, scheme.Codecs).WithoutConversion()
 
 	if config.UserAgent == "" {
 		config.UserAgent = rest.DefaultKubernetesUserAgent()

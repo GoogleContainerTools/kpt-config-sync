@@ -3,114 +3,32 @@
 package fake
 
 import (
-	"context"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	labels "k8s.io/apimachinery/pkg/labels"
-	types "k8s.io/apimachinery/pkg/types"
-	watch "k8s.io/apimachinery/pkg/watch"
-	testing "k8s.io/client-go/testing"
+	gentype "k8s.io/client-go/gentype"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	configmanagementv1 "kpt.dev/configsync/pkg/generated/clientset/versioned/typed/configmanagement/v1"
 )
 
-// FakeNamespaceConfigs implements NamespaceConfigInterface
-type FakeNamespaceConfigs struct {
+// fakeNamespaceConfigs implements NamespaceConfigInterface
+type fakeNamespaceConfigs struct {
+	*gentype.FakeClientWithList[*v1.NamespaceConfig, *v1.NamespaceConfigList]
 	Fake *FakeConfigmanagementV1
 }
 
-var namespaceconfigsResource = v1.SchemeGroupVersion.WithResource("namespaceconfigs")
-
-var namespaceconfigsKind = v1.SchemeGroupVersion.WithKind("NamespaceConfig")
-
-// Get takes name of the namespaceConfig, and returns the corresponding namespaceConfig object, and an error if there is any.
-func (c *FakeNamespaceConfigs) Get(ctx context.Context, name string, options metav1.GetOptions) (result *v1.NamespaceConfig, err error) {
-	obj, err := c.Fake.
-		Invokes(testing.NewRootGetAction(namespaceconfigsResource, name), &v1.NamespaceConfig{})
-	if obj == nil {
-		return nil, err
+func newFakeNamespaceConfigs(fake *FakeConfigmanagementV1) configmanagementv1.NamespaceConfigInterface {
+	return &fakeNamespaceConfigs{
+		gentype.NewFakeClientWithList[*v1.NamespaceConfig, *v1.NamespaceConfigList](
+			fake.Fake,
+			"",
+			v1.SchemeGroupVersion.WithResource("namespaceconfigs"),
+			v1.SchemeGroupVersion.WithKind("NamespaceConfig"),
+			func() *v1.NamespaceConfig { return &v1.NamespaceConfig{} },
+			func() *v1.NamespaceConfigList { return &v1.NamespaceConfigList{} },
+			func(dst, src *v1.NamespaceConfigList) { dst.ListMeta = src.ListMeta },
+			func(list *v1.NamespaceConfigList) []*v1.NamespaceConfig { return gentype.ToPointerSlice(list.Items) },
+			func(list *v1.NamespaceConfigList, items []*v1.NamespaceConfig) {
+				list.Items = gentype.FromPointerSlice(items)
+			},
+		),
+		fake,
 	}
-	return obj.(*v1.NamespaceConfig), err
-}
-
-// List takes label and field selectors, and returns the list of NamespaceConfigs that match those selectors.
-func (c *FakeNamespaceConfigs) List(ctx context.Context, opts metav1.ListOptions) (result *v1.NamespaceConfigList, err error) {
-	obj, err := c.Fake.
-		Invokes(testing.NewRootListAction(namespaceconfigsResource, namespaceconfigsKind, opts), &v1.NamespaceConfigList{})
-	if obj == nil {
-		return nil, err
-	}
-
-	label, _, _ := testing.ExtractFromListOptions(opts)
-	if label == nil {
-		label = labels.Everything()
-	}
-	list := &v1.NamespaceConfigList{ListMeta: obj.(*v1.NamespaceConfigList).ListMeta}
-	for _, item := range obj.(*v1.NamespaceConfigList).Items {
-		if label.Matches(labels.Set(item.Labels)) {
-			list.Items = append(list.Items, item)
-		}
-	}
-	return list, err
-}
-
-// Watch returns a watch.Interface that watches the requested namespaceConfigs.
-func (c *FakeNamespaceConfigs) Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error) {
-	return c.Fake.
-		InvokesWatch(testing.NewRootWatchAction(namespaceconfigsResource, opts))
-}
-
-// Create takes the representation of a namespaceConfig and creates it.  Returns the server's representation of the namespaceConfig, and an error, if there is any.
-func (c *FakeNamespaceConfigs) Create(ctx context.Context, namespaceConfig *v1.NamespaceConfig, opts metav1.CreateOptions) (result *v1.NamespaceConfig, err error) {
-	obj, err := c.Fake.
-		Invokes(testing.NewRootCreateAction(namespaceconfigsResource, namespaceConfig), &v1.NamespaceConfig{})
-	if obj == nil {
-		return nil, err
-	}
-	return obj.(*v1.NamespaceConfig), err
-}
-
-// Update takes the representation of a namespaceConfig and updates it. Returns the server's representation of the namespaceConfig, and an error, if there is any.
-func (c *FakeNamespaceConfigs) Update(ctx context.Context, namespaceConfig *v1.NamespaceConfig, opts metav1.UpdateOptions) (result *v1.NamespaceConfig, err error) {
-	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateAction(namespaceconfigsResource, namespaceConfig), &v1.NamespaceConfig{})
-	if obj == nil {
-		return nil, err
-	}
-	return obj.(*v1.NamespaceConfig), err
-}
-
-// UpdateStatus was generated because the type contains a Status member.
-// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeNamespaceConfigs) UpdateStatus(ctx context.Context, namespaceConfig *v1.NamespaceConfig, opts metav1.UpdateOptions) (*v1.NamespaceConfig, error) {
-	obj, err := c.Fake.
-		Invokes(testing.NewRootUpdateSubresourceAction(namespaceconfigsResource, "status", namespaceConfig), &v1.NamespaceConfig{})
-	if obj == nil {
-		return nil, err
-	}
-	return obj.(*v1.NamespaceConfig), err
-}
-
-// Delete takes name of the namespaceConfig and deletes it. Returns an error if one occurs.
-func (c *FakeNamespaceConfigs) Delete(ctx context.Context, name string, opts metav1.DeleteOptions) error {
-	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteActionWithOptions(namespaceconfigsResource, name, opts), &v1.NamespaceConfig{})
-	return err
-}
-
-// DeleteCollection deletes a collection of objects.
-func (c *FakeNamespaceConfigs) DeleteCollection(ctx context.Context, opts metav1.DeleteOptions, listOpts metav1.ListOptions) error {
-	action := testing.NewRootDeleteCollectionAction(namespaceconfigsResource, listOpts)
-
-	_, err := c.Fake.Invokes(action, &v1.NamespaceConfigList{})
-	return err
-}
-
-// Patch applies the patch and returns the patched namespaceConfig.
-func (c *FakeNamespaceConfigs) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts metav1.PatchOptions, subresources ...string) (result *v1.NamespaceConfig, err error) {
-	obj, err := c.Fake.
-		Invokes(testing.NewRootPatchSubresourceAction(namespaceconfigsResource, name, pt, data, subresources...), &v1.NamespaceConfig{})
-	if obj == nil {
-		return nil, err
-	}
-	return obj.(*v1.NamespaceConfig), err
 }

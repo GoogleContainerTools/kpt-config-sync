@@ -3,10 +3,10 @@
 package v1
 
 import (
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
+	configmanagementv1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 )
 
 // HierarchyConfigLister helps list HierarchyConfigs.
@@ -14,39 +14,19 @@ import (
 type HierarchyConfigLister interface {
 	// List lists all HierarchyConfigs in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1.HierarchyConfig, err error)
+	List(selector labels.Selector) (ret []*configmanagementv1.HierarchyConfig, err error)
 	// Get retrieves the HierarchyConfig from the index for a given name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v1.HierarchyConfig, error)
+	Get(name string) (*configmanagementv1.HierarchyConfig, error)
 	HierarchyConfigListerExpansion
 }
 
 // hierarchyConfigLister implements the HierarchyConfigLister interface.
 type hierarchyConfigLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*configmanagementv1.HierarchyConfig]
 }
 
 // NewHierarchyConfigLister returns a new HierarchyConfigLister.
 func NewHierarchyConfigLister(indexer cache.Indexer) HierarchyConfigLister {
-	return &hierarchyConfigLister{indexer: indexer}
-}
-
-// List lists all HierarchyConfigs in the indexer.
-func (s *hierarchyConfigLister) List(selector labels.Selector) (ret []*v1.HierarchyConfig, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1.HierarchyConfig))
-	})
-	return ret, err
-}
-
-// Get retrieves the HierarchyConfig from the index for a given name.
-func (s *hierarchyConfigLister) Get(name string) (*v1.HierarchyConfig, error) {
-	obj, exists, err := s.indexer.GetByKey(name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1.Resource("hierarchyconfig"), name)
-	}
-	return obj.(*v1.HierarchyConfig), nil
+	return &hierarchyConfigLister{listers.New[*configmanagementv1.HierarchyConfig](indexer, configmanagementv1.Resource("hierarchyconfig"))}
 }

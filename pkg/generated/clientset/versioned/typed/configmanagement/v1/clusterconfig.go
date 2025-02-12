@@ -3,14 +3,13 @@
 package v1
 
 import (
-	"context"
-	"time"
+	context "context"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
-	rest "k8s.io/client-go/rest"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	gentype "k8s.io/client-go/gentype"
+	configmanagementv1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	scheme "kpt.dev/configsync/pkg/generated/clientset/versioned/scheme"
 )
 
@@ -22,147 +21,34 @@ type ClusterConfigsGetter interface {
 
 // ClusterConfigInterface has methods to work with ClusterConfig resources.
 type ClusterConfigInterface interface {
-	Create(ctx context.Context, clusterConfig *v1.ClusterConfig, opts metav1.CreateOptions) (*v1.ClusterConfig, error)
-	Update(ctx context.Context, clusterConfig *v1.ClusterConfig, opts metav1.UpdateOptions) (*v1.ClusterConfig, error)
-	UpdateStatus(ctx context.Context, clusterConfig *v1.ClusterConfig, opts metav1.UpdateOptions) (*v1.ClusterConfig, error)
+	Create(ctx context.Context, clusterConfig *configmanagementv1.ClusterConfig, opts metav1.CreateOptions) (*configmanagementv1.ClusterConfig, error)
+	Update(ctx context.Context, clusterConfig *configmanagementv1.ClusterConfig, opts metav1.UpdateOptions) (*configmanagementv1.ClusterConfig, error)
+	// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
+	UpdateStatus(ctx context.Context, clusterConfig *configmanagementv1.ClusterConfig, opts metav1.UpdateOptions) (*configmanagementv1.ClusterConfig, error)
 	Delete(ctx context.Context, name string, opts metav1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts metav1.DeleteOptions, listOpts metav1.ListOptions) error
-	Get(ctx context.Context, name string, opts metav1.GetOptions) (*v1.ClusterConfig, error)
-	List(ctx context.Context, opts metav1.ListOptions) (*v1.ClusterConfigList, error)
+	Get(ctx context.Context, name string, opts metav1.GetOptions) (*configmanagementv1.ClusterConfig, error)
+	List(ctx context.Context, opts metav1.ListOptions) (*configmanagementv1.ClusterConfigList, error)
 	Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts metav1.PatchOptions, subresources ...string) (result *v1.ClusterConfig, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts metav1.PatchOptions, subresources ...string) (result *configmanagementv1.ClusterConfig, err error)
 	ClusterConfigExpansion
 }
 
 // clusterConfigs implements ClusterConfigInterface
 type clusterConfigs struct {
-	client rest.Interface
+	*gentype.ClientWithList[*configmanagementv1.ClusterConfig, *configmanagementv1.ClusterConfigList]
 }
 
 // newClusterConfigs returns a ClusterConfigs
 func newClusterConfigs(c *ConfigmanagementV1Client) *clusterConfigs {
 	return &clusterConfigs{
-		client: c.RESTClient(),
+		gentype.NewClientWithList[*configmanagementv1.ClusterConfig, *configmanagementv1.ClusterConfigList](
+			"clusterconfigs",
+			c.RESTClient(),
+			scheme.ParameterCodec,
+			"",
+			func() *configmanagementv1.ClusterConfig { return &configmanagementv1.ClusterConfig{} },
+			func() *configmanagementv1.ClusterConfigList { return &configmanagementv1.ClusterConfigList{} },
+		),
 	}
-}
-
-// Get takes name of the clusterConfig, and returns the corresponding clusterConfig object, and an error if there is any.
-func (c *clusterConfigs) Get(ctx context.Context, name string, options metav1.GetOptions) (result *v1.ClusterConfig, err error) {
-	result = &v1.ClusterConfig{}
-	err = c.client.Get().
-		Resource("clusterconfigs").
-		Name(name).
-		VersionedParams(&options, scheme.ParameterCodec).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// List takes label and field selectors, and returns the list of ClusterConfigs that match those selectors.
-func (c *clusterConfigs) List(ctx context.Context, opts metav1.ListOptions) (result *v1.ClusterConfigList, err error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
-	result = &v1.ClusterConfigList{}
-	err = c.client.Get().
-		Resource("clusterconfigs").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Watch returns a watch.Interface that watches the requested clusterConfigs.
-func (c *clusterConfigs) Watch(ctx context.Context, opts metav1.ListOptions) (watch.Interface, error) {
-	var timeout time.Duration
-	if opts.TimeoutSeconds != nil {
-		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
-	}
-	opts.Watch = true
-	return c.client.Get().
-		Resource("clusterconfigs").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Watch(ctx)
-}
-
-// Create takes the representation of a clusterConfig and creates it.  Returns the server's representation of the clusterConfig, and an error, if there is any.
-func (c *clusterConfigs) Create(ctx context.Context, clusterConfig *v1.ClusterConfig, opts metav1.CreateOptions) (result *v1.ClusterConfig, err error) {
-	result = &v1.ClusterConfig{}
-	err = c.client.Post().
-		Resource("clusterconfigs").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(clusterConfig).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Update takes the representation of a clusterConfig and updates it. Returns the server's representation of the clusterConfig, and an error, if there is any.
-func (c *clusterConfigs) Update(ctx context.Context, clusterConfig *v1.ClusterConfig, opts metav1.UpdateOptions) (result *v1.ClusterConfig, err error) {
-	result = &v1.ClusterConfig{}
-	err = c.client.Put().
-		Resource("clusterconfigs").
-		Name(clusterConfig.Name).
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(clusterConfig).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// UpdateStatus was generated because the type contains a Status member.
-// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *clusterConfigs) UpdateStatus(ctx context.Context, clusterConfig *v1.ClusterConfig, opts metav1.UpdateOptions) (result *v1.ClusterConfig, err error) {
-	result = &v1.ClusterConfig{}
-	err = c.client.Put().
-		Resource("clusterconfigs").
-		Name(clusterConfig.Name).
-		SubResource("status").
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(clusterConfig).
-		Do(ctx).
-		Into(result)
-	return
-}
-
-// Delete takes name of the clusterConfig and deletes it. Returns an error if one occurs.
-func (c *clusterConfigs) Delete(ctx context.Context, name string, opts metav1.DeleteOptions) error {
-	return c.client.Delete().
-		Resource("clusterconfigs").
-		Name(name).
-		Body(&opts).
-		Do(ctx).
-		Error()
-}
-
-// DeleteCollection deletes a collection of objects.
-func (c *clusterConfigs) DeleteCollection(ctx context.Context, opts metav1.DeleteOptions, listOpts metav1.ListOptions) error {
-	var timeout time.Duration
-	if listOpts.TimeoutSeconds != nil {
-		timeout = time.Duration(*listOpts.TimeoutSeconds) * time.Second
-	}
-	return c.client.Delete().
-		Resource("clusterconfigs").
-		VersionedParams(&listOpts, scheme.ParameterCodec).
-		Timeout(timeout).
-		Body(&opts).
-		Do(ctx).
-		Error()
-}
-
-// Patch applies the patch and returns the patched clusterConfig.
-func (c *clusterConfigs) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts metav1.PatchOptions, subresources ...string) (result *v1.ClusterConfig, err error) {
-	result = &v1.ClusterConfig{}
-	err = c.client.Patch(pt).
-		Resource("clusterconfigs").
-		Name(name).
-		SubResource(subresources...).
-		VersionedParams(&opts, scheme.ParameterCodec).
-		Body(data).
-		Do(ctx).
-		Into(result)
-	return
 }

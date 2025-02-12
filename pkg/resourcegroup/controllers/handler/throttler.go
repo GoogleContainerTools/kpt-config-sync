@@ -52,20 +52,20 @@ func NewThrottler(d time.Duration) *Throttler {
 }
 
 // Create implements EventHandler. All create events are ignored.
-func (e *Throttler) Create(context.Context, event.CreateEvent, workqueue.RateLimitingInterface) {
+func (e *Throttler) Create(context.Context, event.CreateEvent, workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 }
 
 // Update implements EventHandler. All update events are ignored.
-func (e *Throttler) Update(context.Context, event.UpdateEvent, workqueue.RateLimitingInterface) {
+func (e *Throttler) Update(context.Context, event.UpdateEvent, workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 }
 
 // Delete implements EventHandler. All delete events are ignored.
-func (e *Throttler) Delete(context.Context, event.DeleteEvent, workqueue.RateLimitingInterface) {
+func (e *Throttler) Delete(context.Context, event.DeleteEvent, workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 }
 
 // Generic implements EventHandler.
 // It pushes at most one event for the same object to the queue during duration.
-func (e *Throttler) Generic(_ context.Context, evt event.GenericEvent, q workqueue.RateLimitingInterface) {
+func (e *Throttler) Generic(_ context.Context, evt event.GenericEvent, q workqueue.TypedRateLimitingInterface[reconcile.Request]) {
 	if evt.Object == nil {
 		return
 	}

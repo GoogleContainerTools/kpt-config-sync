@@ -120,7 +120,7 @@ func validateRepoSyncRBAC(nt *nomostest.NT, ns string, nsRepo *gitproviders.Read
 	nt.T.Log("Add 'list' permission")
 	configureRBAC(nt, ns, []string{"list"})
 	nt.WaitForRepoSyncSyncError(ns, configsync.RepoSyncName, applier.ApplierErrorCode,
-		`polling for status failed: unknown`, nil)
+		`polling for status failed: deployments.apps is forbidden: User "system:serviceaccount:config-management-system:ns-reconciler-bookstore" cannot watch resource "deployments" in API group "apps" in the namespace "bookstore"`, nil)
 
 	// The unknown error is caused by missing `watch` permission and should be fixed upstream with more details.
 	nt.T.Log("Add 'watch' permission")

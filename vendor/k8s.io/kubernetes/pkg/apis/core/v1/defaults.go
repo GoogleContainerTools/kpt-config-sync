@@ -19,14 +19,16 @@ package v1
 import (
 	"time"
 
+	"k8s.io/utils/ptr"
+
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	resourcehelper "k8s.io/component-helpers/resource"
 	"k8s.io/kubernetes/pkg/api/v1/service"
 	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/util/parsers"
-	"k8s.io/utils/pointer"
 )
 
 func addDefaultingFuncs(scheme *runtime.Scheme) error {
@@ -64,9 +66,18 @@ func SetDefaults_ReplicationController(obj *v1.ReplicationController) {
 	}
 }
 func SetDefaults_Volume(obj *v1.Volume) {
-	if pointer.AllPtrFieldsNil(&obj.VolumeSource) {
+	if ptr.AllPtrFieldsNil(&obj.VolumeSource) {
 		obj.VolumeSource = v1.VolumeSource{
 			EmptyDir: &v1.EmptyDirVolumeSource{},
+		}
+	}
+	if utilfeature.DefaultFeatureGate.Enabled(features.ImageVolume) && obj.Image != nil && obj.Image.PullPolicy == "" {
+		// PullPolicy defaults to Always if :latest tag is specified, or IfNotPresent otherwise.
+		_, tag, _, _ := parsers.ParseImageName(obj.Image.Reference)
+		if tag == "latest" {
+			obj.Image.PullPolicy = v1.PullAlways
+		} else {
+			obj.Image.PullPolicy = v1.PullIfNotPresent
 		}
 	}
 }
@@ -138,7 +149,7 @@ func SetDefaults_Service(obj *v1.Service) {
 
 	if obj.Spec.Type == v1.ServiceTypeLoadBalancer {
 		if obj.Spec.AllocateLoadBalancerNodePorts == nil {
-			obj.Spec.AllocateLoadBalancerNodePorts = pointer.Bool(true)
+			obj.Spec.AllocateLoadBalancerNodePorts = ptr.To(true)
 		}
 	}
 
@@ -207,6 +218,13 @@ func SetDefaults_Pod(obj *v1.Pod) {
 			}
 		}
 	}
+
+	// Pod Requests default values must be applied after container-level default values
+	// have been populated.
+	if utilfeature.DefaultFeatureGate.Enabled(features.PodLevelResources) {
+		defaultPodRequests(obj)
+	}
+
 	if obj.Spec.EnableServiceLinks == nil {
 		enableServiceLinks := v1.DefaultEnableServiceLinks
 		obj.Spec.EnableServiceLinks = &enableServiceLinks
@@ -227,12 +245,6 @@ func SetDefaults_PodSpec(obj *v1.PodSpec) {
 	}
 	if obj.RestartPolicy == "" {
 		obj.RestartPolicy = v1.RestartPolicyAlways
-	}
-	if utilfeature.DefaultFeatureGate.Enabled(features.DefaultHostNetworkHostPortsInPodTemplates) {
-		if obj.HostNetwork {
-			defaultHostNetworkPorts(&obj.Containers)
-			defaultHostNetworkPorts(&obj.InitContainers)
-		}
 	}
 	if obj.SecurityContext == nil {
 		obj.SecurityContext = &v1.PodSecurityContext{}
@@ -315,34 +327,6 @@ func SetDefaults_PersistentVolumeClaimSpec(obj *v1.PersistentVolumeClaimSpec) {
 	if obj.VolumeMode == nil {
 		obj.VolumeMode = new(v1.PersistentVolumeMode)
 		*obj.VolumeMode = v1.PersistentVolumeFilesystem
-	}
-}
-func SetDefaults_ISCSIVolumeSource(obj *v1.ISCSIVolumeSource) {
-	if obj.ISCSIInterface == "" {
-		obj.ISCSIInterface = "default"
-	}
-}
-func SetDefaults_ISCSIPersistentVolumeSource(obj *v1.ISCSIPersistentVolumeSource) {
-	if obj.ISCSIInterface == "" {
-		obj.ISCSIInterface = "default"
-	}
-}
-func SetDefaults_AzureDiskVolumeSource(obj *v1.AzureDiskVolumeSource) {
-	if obj.CachingMode == nil {
-		obj.CachingMode = new(v1.AzureDataDiskCachingMode)
-		*obj.CachingMode = v1.AzureDataDiskCachingReadWrite
-	}
-	if obj.Kind == nil {
-		obj.Kind = new(v1.AzureDataDiskKind)
-		*obj.Kind = v1.AzureSharedBlobDisk
-	}
-	if obj.FSType == nil {
-		obj.FSType = new(string)
-		*obj.FSType = "ext4"
-	}
-	if obj.ReadOnly == nil {
-		obj.ReadOnly = new(bool)
-		*obj.ReadOnly = false
 	}
 }
 func SetDefaults_Endpoints(obj *v1.Endpoints) {
@@ -448,51 +432,70 @@ func defaultHostNetworkPorts(containers *[]v1.Container) {
 	}
 }
 
-func SetDefaults_RBDVolumeSource(obj *v1.RBDVolumeSource) {
-	if obj.RBDPool == "" {
-		obj.RBDPool = "rbd"
-	}
-	if obj.RadosUser == "" {
-		obj.RadosUser = "admin"
-	}
-	if obj.Keyring == "" {
-		obj.Keyring = "/etc/ceph/keyring"
-	}
-}
-
-func SetDefaults_RBDPersistentVolumeSource(obj *v1.RBDPersistentVolumeSource) {
-	if obj.RBDPool == "" {
-		obj.RBDPool = "rbd"
-	}
-	if obj.RadosUser == "" {
-		obj.RadosUser = "admin"
-	}
-	if obj.Keyring == "" {
-		obj.Keyring = "/etc/ceph/keyring"
-	}
-}
-
-func SetDefaults_ScaleIOVolumeSource(obj *v1.ScaleIOVolumeSource) {
-	if obj.StorageMode == "" {
-		obj.StorageMode = "ThinProvisioned"
-	}
-	if obj.FSType == "" {
-		obj.FSType = "xfs"
-	}
-}
-
-func SetDefaults_ScaleIOPersistentVolumeSource(obj *v1.ScaleIOPersistentVolumeSource) {
-	if obj.StorageMode == "" {
-		obj.StorageMode = "ThinProvisioned"
-	}
-	if obj.FSType == "" {
-		obj.FSType = "xfs"
-	}
-}
-
 func SetDefaults_HostPathVolumeSource(obj *v1.HostPathVolumeSource) {
 	typeVol := v1.HostPathUnset
 	if obj.Type == nil {
 		obj.Type = &typeVol
+	}
+}
+
+func SetDefaults_PodLogOptions(obj *v1.PodLogOptions) {
+	if utilfeature.DefaultFeatureGate.Enabled(features.PodLogsQuerySplitStreams) {
+		if obj.Stream == nil {
+			obj.Stream = ptr.To(v1.LogStreamAll)
+		}
+	}
+}
+
+// defaultPodRequests applies default values for pod-level requests, only when
+// pod-level limits are set, in following scenarios:
+// 1. When at least one container (regular, init or sidecar) has requests set:
+// The pod-level requests become equal to the effective requests of all containers
+// in the pod.
+// 2. When no containers have requests set: The pod-level requests become equal to
+// pod-level limits.
+// This defaulting behavior ensures consistent resource accounting at the pod-level
+// while maintaining compatibility with the container-level specifications, as detailed
+// in KEP-2837: https://github.com/kubernetes/enhancements/blob/master/keps/sig-node/2837-pod-level-resource-spec/README.md#proposed-validation--defaulting-rules
+func defaultPodRequests(obj *v1.Pod) {
+	// We only populate defaults when the pod-level resources are partly specified already.
+	if obj.Spec.Resources == nil {
+		return
+	}
+
+	if len(obj.Spec.Resources.Limits) == 0 {
+		return
+	}
+
+	var podReqs v1.ResourceList
+	podReqs = obj.Spec.Resources.Requests
+	if podReqs == nil {
+		podReqs = make(v1.ResourceList)
+	}
+
+	aggrCtrReqs := resourcehelper.AggregateContainerRequests(obj, resourcehelper.PodResourcesOptions{})
+
+	// When containers specify requests for a resource (supported by
+	// PodLevelResources feature) and pod-level requests are not set, the pod-level requests
+	// default to the effective requests of all the containers for that resource.
+	for key, aggrCtrLim := range aggrCtrReqs {
+		if _, exists := podReqs[key]; !exists && resourcehelper.IsSupportedPodLevelResource(key) {
+			podReqs[key] = aggrCtrLim.DeepCopy()
+		}
+	}
+
+	// When no containers specify requests for a resource, the pod-level requests
+	// will default to match the pod-level limits, if pod-level
+	// limits exist for that resource.
+	for key, podLim := range obj.Spec.Resources.Limits {
+		if _, exists := podReqs[key]; !exists && resourcehelper.IsSupportedPodLevelResource(key) {
+			podReqs[key] = podLim.DeepCopy()
+		}
+	}
+
+	// Only set pod-level resource requests in the PodSpec if the requirements map
+	// contains entries after collecting container-level requests and pod-level limits.
+	if len(podReqs) > 0 {
+		obj.Spec.Resources.Requests = podReqs
 	}
 }

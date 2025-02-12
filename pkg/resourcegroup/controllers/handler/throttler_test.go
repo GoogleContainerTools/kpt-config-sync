@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 )
@@ -39,7 +40,7 @@ func TestThrottler(t *testing.T) {
 
 	t.Log("Add one event")
 	throttler := NewThrottler(time.Second)
-	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
+	queue := workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[reconcile.Request]())
 
 	throttler.Generic(context.Background(), genericE, queue)
 
@@ -71,7 +72,7 @@ func TestThrottlerMultipleEvents(t *testing.T) {
 
 	// Set the duration to 5 seconds
 	throttler := NewThrottler(5 * time.Second)
-	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
+	queue := workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[reconcile.Request]())
 
 	ctx := context.Background()
 
@@ -122,7 +123,7 @@ func TestThrottlerMultipleObjects(t *testing.T) {
 
 	// Set the duration to 5 seconds
 	throttler := NewThrottler(5 * time.Second)
-	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
+	queue := workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[reconcile.Request]())
 
 	ctx := context.Background()
 	// Call the event handler to push two events

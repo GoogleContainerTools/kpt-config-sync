@@ -3,24 +3,24 @@
 package v1
 
 import (
-	"context"
+	context "context"
 	time "time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
 	cache "k8s.io/client-go/tools/cache"
-	configmanagementv1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	apiconfigmanagementv1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	versioned "kpt.dev/configsync/pkg/generated/clientset/versioned"
 	internalinterfaces "kpt.dev/configsync/pkg/generated/informers/externalversions/internalinterfaces"
-	v1 "kpt.dev/configsync/pkg/generated/listers/configmanagement/v1"
+	configmanagementv1 "kpt.dev/configsync/pkg/generated/listers/configmanagement/v1"
 )
 
 // ClusterSelectorInformer provides access to a shared informer and lister for
 // ClusterSelectors.
 type ClusterSelectorInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1.ClusterSelectorLister
+	Lister() configmanagementv1.ClusterSelectorLister
 }
 
 type clusterSelectorInformer struct {
@@ -54,7 +54,7 @@ func NewFilteredClusterSelectorInformer(client versioned.Interface, resyncPeriod
 				return client.ConfigmanagementV1().ClusterSelectors().Watch(context.TODO(), options)
 			},
 		},
-		&configmanagementv1.ClusterSelector{},
+		&apiconfigmanagementv1.ClusterSelector{},
 		resyncPeriod,
 		indexers,
 	)
@@ -65,9 +65,9 @@ func (f *clusterSelectorInformer) defaultInformer(client versioned.Interface, re
 }
 
 func (f *clusterSelectorInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&configmanagementv1.ClusterSelector{}, f.defaultInformer)
+	return f.factory.InformerFor(&apiconfigmanagementv1.ClusterSelector{}, f.defaultInformer)
 }
 
-func (f *clusterSelectorInformer) Lister() v1.ClusterSelectorLister {
-	return v1.NewClusterSelectorLister(f.Informer().GetIndexer())
+func (f *clusterSelectorInformer) Lister() configmanagementv1.ClusterSelectorLister {
+	return configmanagementv1.NewClusterSelectorLister(f.Informer().GetIndexer())
 }

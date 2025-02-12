@@ -268,6 +268,7 @@ func k8sMetadataCount(k *types.Kustomization) map[string]int {
 	if k.Namespace != "" {
 		result["Namespace"] = 1
 	}
+	//nolint:staticcheck // allow deprecated field for backwards compatibility
 	if len(k.CommonLabels) > 0 {
 		result["CommonLabels"] = len(k.CommonLabels)
 	}

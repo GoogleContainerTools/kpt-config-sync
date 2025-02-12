@@ -42,7 +42,11 @@ func TestThrottler(t *testing.T) {
 	throttler := NewThrottler(time.Second)
 	queue := workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[reconcile.Request]())
 
-	throttler.Generic(context.Background(), genericE, queue)
+	// TODO: replace with `ctx := t.Context()` in Go 1.24.0+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	throttler.Generic(ctx, genericE, queue)
 
 	_, found := throttler.mapping[types.NamespacedName{
 		Name:      "group",
@@ -74,7 +78,9 @@ func TestThrottlerMultipleEvents(t *testing.T) {
 	throttler := NewThrottler(5 * time.Second)
 	queue := workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[reconcile.Request]())
 
-	ctx := context.Background()
+	// TODO: replace with `ctx := t.Context()` in Go 1.24.0+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// Call the event handler three times for the same event
 	throttler.Generic(ctx, genericE, queue)
@@ -125,7 +131,10 @@ func TestThrottlerMultipleObjects(t *testing.T) {
 	throttler := NewThrottler(5 * time.Second)
 	queue := workqueue.NewTypedRateLimitingQueue(workqueue.DefaultTypedControllerRateLimiter[reconcile.Request]())
 
-	ctx := context.Background()
+	// TODO: replace with `ctx := t.Context()` in Go 1.24.0+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// Call the event handler to push two events
 	throttler.Generic(ctx, genericE, queue)
 	throttler.Generic(ctx, genericE2, queue)

@@ -16,109 +16,127 @@ package resourcegroup
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
-	"k8s.io/klog/v2/textlogger"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/resourcemap"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/typeresolver"
 	"kpt.dev/configsync/pkg/syncer/syncertest/fake"
+	"kpt.dev/configsync/pkg/testing/testcontroller"
+	"kpt.dev/configsync/pkg/testing/testwatch"
+	"kpt.dev/configsync/pkg/util/log"
 	"sigs.k8s.io/cli-utils/pkg/common"
+	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 )
 
-const contextResourceGroupControllerKey = contextKey("resourcegroup-controller")
-
-var c client.Client
-var ctx context.Context
+const (
+	rgName      = "group0"
+	rgNamespace = metav1.NamespaceDefault
+	inventoryID = rgNamespace + "_" + rgName
+)
 
 func TestReconcile(t *testing.T) {
 	var channelKpt chan event.GenericEvent
-	var namespace = metav1.NamespaceDefault
+
+	// Configure controller-manager to log to the test logger
+	testLogger := testcontroller.NewTestLogger(t)
+	controllerruntime.SetLogger(testLogger)
 
 	// Setup the Manager
 	mgr, err := manager.New(cfg, manager.Options{
-		Metrics: metricsserver.Options{
-			BindAddress: "0",
+		// Disable metrics
+		Metrics: metricsserver.Options{BindAddress: "0"},
+		Logger:  testLogger.WithName("controller-manager"),
+		// Use a client.WithWatch, instead of just a client.Client
+		NewClient: func(cfg *rest.Config, opts client.Options) (client.Client, error) {
+			return client.NewWithWatch(cfg, opts)
 		},
 	})
-	assert.NoError(t, err)
-	c = mgr.GetClient()
+	require.NoError(t, err)
+	// Get the watch client built by the manager
+	c := mgr.GetClient().(client.WithWatch)
 
-	klog.InitFlags(nil)
-	logger := textlogger.NewLogger(textlogger.NewConfig()).WithName("controllers").WithName(v1alpha1.ResourceGroupKind)
+	// TODO: replace with `ctx := t.Context()` in Go 1.24.0+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	ctx = context.WithValue(context.TODO(), contextResourceGroupControllerKey, logger)
-
-	// Setup the controller
+	// Setup the controllers
+	logger := testLogger.WithName("controllers")
 	channelKpt = make(chan event.GenericEvent)
-	resolver, err := typeresolver.ForManager(mgr, logger)
-	assert.NoError(t, err)
+	resolver, err := typeresolver.ForManager(mgr, logger.WithName("typeresolver"))
+	require.NoError(t, err)
 	resMap := resourcemap.NewResourceMap()
-	err = NewRGController(mgr, channelKpt, logger, resolver, resMap, 0)
-	assert.NoError(t, err)
+	err = NewRGController(mgr, channelKpt, logger.WithName("resourcegroup"), resolver, resMap, 0)
+	require.NoError(t, err)
 
 	// Start the manager
-	StartTestManager(t, mgr)
-	time.Sleep(10 * time.Second)
+	stopTestManager := testcontroller.StartTestManager(t, mgr)
+	// Block test cleanup until manager is fully stopped
+	defer stopTestManager()
 
 	resources := []v1alpha1.ObjMetadata{}
 
 	// Create a ResourceGroup object which does not include any resources
-	resgroupName := "group0"
-	resgroupNamespacedName := types.NamespacedName{
-		Name:      resgroupName,
-		Namespace: namespace,
+	rgKey := client.ObjectKey{
+		Name:      rgName,
+		Namespace: rgNamespace,
 	}
 	resgroupKpt := &v1alpha1.ResourceGroup{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      resgroupName,
-			Namespace: namespace,
+			Name:      rgName,
+			Namespace: rgNamespace,
 			Labels: map[string]string{
-				common.InventoryLabel: "group0",
+				common.InventoryLabel: inventoryID,
 			},
 		},
 		Spec: v1alpha1.ResourceGroupSpec{
 			Resources: resources,
 		},
 	}
-	err = c.Create(ctx, resgroupKpt, client.FieldOwner(fake.FieldManager))
-	assert.NoError(t, err)
-	// Wait 5 seconds before querying resgroup from API server
-	time.Sleep(5 * time.Second)
+	expectedStatus := v1alpha1.ResourceGroupStatus{
+		ObservedGeneration: 0,
+	}
 
-	// Verify the ResourceGroup was created successfully
-	updatedResgroupKpt := &v1alpha1.ResourceGroup{}
-	err = c.Get(ctx, resgroupNamespacedName, updatedResgroupKpt)
-	assert.NoError(t, err)
-	verifyClusterResourceGroup(t, updatedResgroupKpt, 1, 0, v1alpha1.ResourceGroupStatus{})
+	// Create the ResourceGroup spec (simulating InventoryResourceGroup.Apply)
+	err = c.Create(ctx, resgroupKpt, client.FieldOwner(fake.FieldManager))
+	require.NoError(t, err)
+	resgroupKpt = waitForResourceGroupStatus(t, ctx, c, rgKey, 1, 0, expectedStatus)
+
+	// Update the ResourceGroup status (simulating InventoryResourceGroup.Apply)
+	resgroupKpt.Status.ObservedGeneration = resgroupKpt.Generation
+	err = c.Status().Update(ctx, resgroupKpt, client.FieldOwner(fake.FieldManager))
+	require.NoError(t, err)
+	expectedStatus.ObservedGeneration = 1
+	resgroupKpt = waitForResourceGroupStatus(t, ctx, c, rgKey, 1, 0, expectedStatus)
 
 	// Push an event to the channel, which will cause trigger a reconciliation for resgroup
 	channelKpt <- event.GenericEvent{Object: resgroupKpt}
-	time.Sleep(5 * time.Second)
 
 	// Verify that the reconciliation modifies the ResourceGroupStatus field correctly
-	err = c.Get(ctx, resgroupNamespacedName, updatedResgroupKpt)
-	assert.NoError(t, err)
-	expectedStatus := v1alpha1.ResourceGroupStatus{
-		ObservedGeneration: 1,
-		Conditions: []v1alpha1.Condition{
-			newReconcilingCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg),
-			newStalledCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg),
-		},
+	expectedStatus.ObservedGeneration = 1
+	expectedStatus.Conditions = []v1alpha1.Condition{
+		newReconcilingCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg),
+		newStalledCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg),
 	}
-	verifyClusterResourceGroup(t, updatedResgroupKpt, 1, 0, expectedStatus)
+	resgroupKpt = waitForResourceGroupStatus(t, ctx, c, rgKey, 1, 0, expectedStatus)
 	// Add two non-existing resources
 	res1 := v1alpha1.ObjMetadata{
 		Name:      "ns1",
@@ -130,45 +148,48 @@ func TestReconcile(t *testing.T) {
 	}
 	res2 := v1alpha1.ObjMetadata{
 		Name:      "pod1",
-		Namespace: namespace,
+		Namespace: rgNamespace,
 		GroupKind: v1alpha1.GroupKind{
 			Group: "",
 			Kind:  "Pod",
 		},
 	}
 	resources = []v1alpha1.ObjMetadata{res1, res2}
-	updatedResgroupKpt.Spec = v1alpha1.ResourceGroupSpec{
+	resgroupKpt.Spec = v1alpha1.ResourceGroupSpec{
 		Resources: resources,
 	}
 
-	err = c.Update(ctx, updatedResgroupKpt, client.FieldOwner(fake.FieldManager))
-	assert.NoError(t, err)
-	time.Sleep(5 * time.Second)
+	// Update the ResourceGroup spec (simulating InventoryResourceGroup.Apply)
+	err = c.Update(ctx, resgroupKpt, client.FieldOwner(fake.FieldManager))
+	require.NoError(t, err)
+	resgroupKpt = waitForResourceGroupStatus(t, ctx, c, rgKey, 2, 2, expectedStatus)
+
+	// Update the ResourceGroup status (simulating InventoryResourceGroup.Apply)
+	resgroupKpt.Status.ObservedGeneration = resgroupKpt.Generation
+	err = c.Status().Update(ctx, resgroupKpt, client.FieldOwner(fake.FieldManager))
+	require.NoError(t, err)
+	expectedStatus.ObservedGeneration = 2
+	resgroupKpt = waitForResourceGroupStatus(t, ctx, c, rgKey, 2, 2, expectedStatus)
 
 	channelKpt <- event.GenericEvent{Object: resgroupKpt}
-	time.Sleep(5 * time.Second)
 
 	// Verify that the reconciliation modifies the ResourceGroupStatus field correctly
-	err = c.Get(ctx, resgroupNamespacedName, updatedResgroupKpt)
-	assert.NoError(t, err)
-	expectedStatus = v1alpha1.ResourceGroupStatus{
-		ObservedGeneration: 2,
-		ResourceStatuses: []v1alpha1.ResourceStatus{
-			{
-				ObjMetadata: res1,
-				Status:      v1alpha1.NotFound,
-			},
-			{
-				ObjMetadata: res2,
-				Status:      v1alpha1.NotFound,
-			},
+	expectedStatus.ResourceStatuses = []v1alpha1.ResourceStatus{
+		{
+			ObjMetadata: res1,
+			Status:      v1alpha1.NotFound,
 		},
-		Conditions: []v1alpha1.Condition{
-			newReconcilingCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg),
-			newStalledCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg),
+		{
+			ObjMetadata: res2,
+			Status:      v1alpha1.NotFound,
 		},
 	}
-	verifyClusterResourceGroup(t, updatedResgroupKpt, 2, 2, expectedStatus)
+	expectedStatus.ObservedGeneration = 2
+	expectedStatus.Conditions = []v1alpha1.Condition{
+		newReconcilingCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg),
+		newStalledCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg),
+	}
+	resgroupKpt = waitForResourceGroupStatus(t, ctx, c, rgKey, 2, 2, expectedStatus)
 
 	// Create res2
 	pod2 := &corev1.Pod{
@@ -190,123 +211,157 @@ func TestReconcile(t *testing.T) {
 	}
 
 	err = c.Create(ctx, pod2, client.FieldOwner(fake.FieldManager))
-	assert.NoError(t, err)
-	time.Sleep(5 * time.Second)
+	require.NoError(t, err)
 
 	updatedPod := &corev1.Pod{}
 	err = c.Get(ctx, types.NamespacedName{Name: res2.Name, Namespace: res2.Namespace}, updatedPod)
-	assert.NoError(t, err)
-	assert.Equal(t, corev1.PodPending, updatedPod.Status.Phase)
+	require.NoError(t, err)
+	require.Equal(t, corev1.PodPending, updatedPod.Status.Phase)
 
 	// Create res1
 	ns1 := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: res1.Name,
 			Annotations: map[string]string{
-				owningInventoryKey: "group0",
+				owningInventoryKey: inventoryID,
 			},
 		},
 	}
 	err = c.Create(ctx, ns1, client.FieldOwner(fake.FieldManager))
-	assert.NoError(t, err)
-	time.Sleep(2 * time.Second)
+	require.NoError(t, err)
 
 	updatedNS := &corev1.Namespace{}
 	err = c.Get(ctx, types.NamespacedName{Name: res1.Name, Namespace: ""}, updatedNS)
-	assert.NoError(t, err)
-	assert.Equal(t, corev1.NamespaceActive, updatedNS.Status.Phase)
+	require.NoError(t, err)
+	require.Equal(t, corev1.NamespaceActive, updatedNS.Status.Phase)
 
 	channelKpt <- event.GenericEvent{Object: resgroupKpt}
-	time.Sleep(5 * time.Second)
 
 	// Verify that the reconciliation modifies the ResourceGroupStatus field correctly
-	err = c.Get(ctx, resgroupNamespacedName, updatedResgroupKpt)
-	assert.NoError(t, err)
-	expectedStatus = v1alpha1.ResourceGroupStatus{
-		ObservedGeneration: 2,
-		ResourceStatuses: []v1alpha1.ResourceStatus{
-			{
-				ObjMetadata: res1,
-				Status:      v1alpha1.Current,
-			},
-			{
-				ObjMetadata: res2,
-				Status:      v1alpha1.InProgress,
-				Conditions: []v1alpha1.Condition{
-					{
-						Type:    v1alpha1.Ownership,
-						Status:  v1alpha1.TrueConditionStatus,
-						Reason:  v1alpha1.OwnershipUnmatch,
-						Message: "This object is owned by another inventory object with id other",
-					},
+	expectedStatus.ResourceStatuses = []v1alpha1.ResourceStatus{
+		{
+			ObjMetadata: res1,
+			Status:      v1alpha1.Current,
+		},
+		{
+			ObjMetadata: res2,
+			Status:      v1alpha1.InProgress,
+			Conditions: []v1alpha1.Condition{
+				{
+					Type:   v1alpha1.Ownership,
+					Status: v1alpha1.TrueConditionStatus,
+					Reason: v1alpha1.OwnershipUnmatch,
+					Message: "This resource is owned by another ResourceGroup other. " +
+						"The status only reflects the specification for the current object in ResourceGroup other.",
 				},
 			},
 		},
-		Conditions: []v1alpha1.Condition{
-			newReconcilingCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg),
-			newStalledCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg),
-		},
 	}
-	verifyClusterResourceGroup(t, updatedResgroupKpt, 2, 2, expectedStatus)
+	expectedStatus.Conditions = []v1alpha1.Condition{
+		newReconcilingCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg),
+		newStalledCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg),
+	}
+	resgroupKpt = waitForResourceGroupStatus(t, ctx, c, rgKey, 2, 2, expectedStatus)
 
 	// Set the resources to be {res1}
 	resources = []v1alpha1.ObjMetadata{res1}
-	assert.NoError(t, err)
-	updatedResgroupKpt.Spec = v1alpha1.ResourceGroupSpec{
+	require.NoError(t, err)
+	resgroupKpt.Spec = v1alpha1.ResourceGroupSpec{
 		Resources: resources,
 	}
-	err = c.Update(ctx, updatedResgroupKpt, client.FieldOwner(fake.FieldManager))
-	assert.NoError(t, err)
-	time.Sleep(5 * time.Second)
 
-	err = c.Get(ctx, resgroupNamespacedName, updatedResgroupKpt)
-	assert.NoError(t, err)
+	// Update the ResourceGroup spec (simulating InventoryResourceGroup.Apply)
+	err = c.Update(ctx, resgroupKpt, client.FieldOwner(fake.FieldManager))
+	require.NoError(t, err)
+	resgroupKpt = waitForResourceGroupStatus(t, ctx, c, rgKey, 3, 1, expectedStatus)
 
-	verifyClusterResourceGroup(t, updatedResgroupKpt, 3, 1, expectedStatus)
+	// Update the ResourceGroup status (simulating InventoryResourceGroup.Apply)
+	resgroupKpt.Status.ObservedGeneration = resgroupKpt.Generation
+	err = c.Status().Update(ctx, resgroupKpt, client.FieldOwner(fake.FieldManager))
+	require.NoError(t, err)
+	expectedStatus.ObservedGeneration = 3
+	resgroupKpt = waitForResourceGroupStatus(t, ctx, c, rgKey, 3, 1, expectedStatus)
 
 	channelKpt <- event.GenericEvent{Object: resgroupKpt}
-	time.Sleep(5 * time.Second)
 
 	// Verify that the reconciliation modifies the ResourceGroupStatus field correctly
-	err = c.Get(ctx, resgroupNamespacedName, updatedResgroupKpt)
-	assert.NoError(t, err)
-	expectedStatus = v1alpha1.ResourceGroupStatus{
-		ObservedGeneration: 3,
-		ResourceStatuses: []v1alpha1.ResourceStatus{
-			{
-				ObjMetadata: res1,
-				Status:      v1alpha1.Current,
-			},
-		},
-		Conditions: []v1alpha1.Condition{
-			newReconcilingCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg),
-			newStalledCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg),
+	expectedStatus.ResourceStatuses = []v1alpha1.ResourceStatus{
+		{
+			ObjMetadata: res1,
+			Status:      v1alpha1.Current,
 		},
 	}
-	verifyClusterResourceGroup(t, updatedResgroupKpt, 3, 1, expectedStatus)
+	expectedStatus.ObservedGeneration = 3
+	expectedStatus.Conditions = []v1alpha1.Condition{
+		newReconcilingCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg),
+		newStalledCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg),
+	}
+	_ = waitForResourceGroupStatus(t, ctx, c, rgKey, 3, 1, expectedStatus)
 }
 
-func verifyClusterResourceGroup(t *testing.T, rg runtime.Object, gen int, num int, status v1alpha1.ResourceGroupStatus) {
-	var generation int64
-	var resourceNum int
-	var actualStatus v1alpha1.ResourceGroupStatus
-	rgConfigSync, ok := rg.(*v1alpha1.ResourceGroup)
-	assert.True(t, ok)
-	generation = rgConfigSync.Generation
-	resourceNum = len(rgConfigSync.Spec.Resources)
-	actualStatus = rgConfigSync.Status
-	assert.Equal(t, int64(gen), generation)
-	assert.Equal(t, num, resourceNum)
-	assert.Equal(t, status.ObservedGeneration, actualStatus.ObservedGeneration)
-	assert.Equal(t, len(status.ResourceStatuses), len(actualStatus.ResourceStatuses))
-	for i, r := range actualStatus.ResourceStatuses {
-		assert.Equal(t, status.ResourceStatuses[i].Status, r.Status)
+//nolint:revive // testing.T before context.Context
+func waitForResourceGroupStatus(t *testing.T, ctx context.Context, c client.WithWatch, key client.ObjectKey, expectedGeneration, expectedResourceCount int, expectedStatus v1alpha1.ResourceGroupStatus) *v1alpha1.ResourceGroup {
+	watcher, err := testwatch.WatchObject(ctx, c, &v1alpha1.ResourceGroupList{})
+	require.NoError(t, err)
+	// Cache the last known ResourceGroup
+	var rgObj *v1alpha1.ResourceGroup
+	condition := func(e watch.Event) error {
+		rgObj = e.Object.(*v1alpha1.ResourceGroup)
+		return validateResourceGroup(rgObj, expectedGeneration, expectedResourceCount, expectedStatus)
 	}
-	assert.Equal(t, len(status.Conditions), len(actualStatus.Conditions))
-	for i, c := range actualStatus.Conditions {
-		assert.Equal(t, status.Conditions[i].Type, c.Type)
-		assert.Equal(t, status.Conditions[i].Status, c.Status)
+	ctx, cancel := context.WithTimeoutCause(ctx, 10*time.Second, fmt.Errorf("timed out (10s)"))
+	defer cancel()
+	err = testwatch.WatchObjectUntil(ctx, c.Scheme(), watcher, key, condition)
+	require.NoError(t, err)
+	return rgObj
+}
+
+func validateResourceGroup(obj runtime.Object, expectedGeneration, expectedResourceCount int, expectedStatus v1alpha1.ResourceGroupStatus) error {
+	rg := obj.(*v1alpha1.ResourceGroup)
+	rgStatus := rg.Status
+
+	// Ignore timestamps, since we can't fake them using the controller-runtime TestEnvironment
+	opts := []cmp.Option{
+		cmpopts.IgnoreFields(v1alpha1.Condition{}, "LastTransitionTime"),
 	}
+
+	var err error
+	if rg.Generation != int64(expectedGeneration) {
+		err = errors.Join(err, fmt.Errorf("expected `metadata.generation` to equal %v, but got %v",
+			expectedGeneration, rg.Generation))
+	}
+	if len(rg.Spec.Resources) != expectedResourceCount {
+		err = errors.Join(err, fmt.Errorf("expected `len(spec.resources)` to equal %v, but got %v",
+			expectedResourceCount, len(rg.Spec.Resources)))
+	}
+	if rgStatus.ObservedGeneration != expectedStatus.ObservedGeneration {
+		err = errors.Join(err, fmt.Errorf("expected `status.observedGeneration` to equal %v, but got %v",
+			expectedStatus.ObservedGeneration, rgStatus.ObservedGeneration))
+	}
+	if len(rgStatus.ResourceStatuses) != len(expectedStatus.ResourceStatuses) {
+		err = errors.Join(err, fmt.Errorf("expected `len(status.resourceStatuses)` to equal %v, but got %v",
+			expectedStatus.ObservedGeneration, rgStatus.ObservedGeneration))
+	}
+	if !cmp.Equal(expectedStatus.ResourceStatuses, rgStatus.ResourceStatuses, opts...) {
+		err = errors.Join(err, fmt.Errorf("expected `status.resourceStatuses` to equal:\n%sbut got:\n%s\n%s",
+			log.AsYAML(expectedStatus.ResourceStatuses),
+			log.AsYAML(rgStatus.ResourceStatuses),
+			cmp.Diff(expectedStatus.ResourceStatuses, rgStatus.ResourceStatuses)))
+	}
+	if len(rgStatus.Conditions) != len(expectedStatus.Conditions) {
+		err = errors.Join(err, fmt.Errorf("expected `len(status.conditions)` to equal %v, but got %v",
+			expectedStatus.Conditions, rgStatus.Conditions))
+	}
+	if !cmp.Equal(expectedStatus.Conditions, rgStatus.Conditions, opts...) {
+		err = errors.Join(err, fmt.Errorf("expected `status.conditions` to equal:\n%sbut got:\n%s\n%s",
+			log.AsYAML(expectedStatus.Conditions),
+			log.AsYAML(rgStatus.Conditions),
+			cmp.Diff(expectedStatus.Conditions, rgStatus.Conditions, opts...)))
+	}
+	if err == nil {
+		klog.V(3).Info("Watch condition met")
+	}
+	return err
 }
 
 func TestAggregateResourceStatuses(t *testing.T) {

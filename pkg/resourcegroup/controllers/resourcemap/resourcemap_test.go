@@ -67,9 +67,13 @@ func TestResourceMapReconcile(t *testing.T) {
 		Name:      "group2",
 	}
 
+	// TODO: replace with `ctx := t.Context()` in Go 1.24.0+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	var gks []schema.GroupKind
 
-	gks = resourceMap.Reconcile(context.TODO(), resgroup1, []resource{res1, res2}, false)
+	gks = resourceMap.Reconcile(ctx, resgroup1, []resource{res1, res2}, false)
 	assert.Equal(t, []schema.GroupKind{gk}, gks)
 	assert.Len(t, resourceMap.gkToResources, 1)
 	assert.Equal(t, 2, resourceMap.gkToResources[gk].Len())
@@ -91,7 +95,7 @@ func TestResourceMapReconcile(t *testing.T) {
 	resourceMap.SetStatus(res1, &CachedStatus{Status: v1alpha1.Current})
 	resourceMap.SetStatus(res2, &CachedStatus{Status: v1alpha1.InProgress})
 
-	gks = resourceMap.Reconcile(context.TODO(), resgroup2, []resource{res1, res3}, false)
+	gks = resourceMap.Reconcile(ctx, resgroup2, []resource{res1, res3}, false)
 	assert.Len(t, gks, 1)
 	assert.Len(t, resourceMap.gkToResources, 1)
 	assert.Equal(t, 3, resourceMap.gkToResources[gk].Len())
@@ -112,7 +116,7 @@ func TestResourceMapReconcile(t *testing.T) {
 	assert.Equal(t, 1, resourceMap.resToResgroups[res2].Len())
 	assert.Equal(t, 1, resourceMap.resToResgroups[res3].Len())
 
-	gks = resourceMap.Reconcile(context.TODO(), resgroup1, []resource{res2}, false)
+	gks = resourceMap.Reconcile(ctx, resgroup1, []resource{res2}, false)
 	assert.Len(t, gks, 1)
 	assert.Len(t, resourceMap.gkToResources, 1)
 	assert.Equal(t, 3, resourceMap.gkToResources[gk].Len())
@@ -123,7 +127,7 @@ func TestResourceMapReconcile(t *testing.T) {
 	assert.Equal(t, 1, resourceMap.resToResgroups[res1].Len())
 
 	// Set the resource set of resgroup1 to be empty
-	gks = resourceMap.Reconcile(context.TODO(), resgroup1, []resource{}, false)
+	gks = resourceMap.Reconcile(ctx, resgroup1, []resource{}, false)
 	assert.Len(t, gks, 1)
 	assert.Len(t, resourceMap.gkToResources, 1)
 	assert.Equal(t, 2, resourceMap.gkToResources[gk].Len())
@@ -136,16 +140,16 @@ func TestResourceMapReconcile(t *testing.T) {
 	assert.Len(t, resourceMap.resToStatus, 1)
 
 	// Set the resource set of resgroup2 to be empty
-	gks = resourceMap.Reconcile(context.TODO(), resgroup2, []resource{}, false)
+	gks = resourceMap.Reconcile(ctx, resgroup2, []resource{}, false)
 	assert.Empty(t, gks)
 	assert.Empty(t, resourceMap.gkToResources)
 	assert.Len(t, resourceMap.resgroupToResources, 2)
 	// delete resgroup1
-	gks = resourceMap.Reconcile(context.TODO(), resgroup1, []resource{}, true)
+	gks = resourceMap.Reconcile(ctx, resgroup1, []resource{}, true)
 	assert.Empty(t, gks)
 
 	// delete resgroup2
-	gks = resourceMap.Reconcile(context.TODO(), resgroup2, []resource{}, true)
+	gks = resourceMap.Reconcile(ctx, resgroup2, []resource{}, true)
 	assert.Empty(t, gks)
 	assert.True(t, resourceMap.IsEmpty())
 	assert.Empty(t, resourceMap.resToStatus)

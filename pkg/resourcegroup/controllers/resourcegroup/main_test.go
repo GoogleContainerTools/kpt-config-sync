@@ -15,61 +15,51 @@
 package resourcegroup
 
 import (
-	"context"
-	"log"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
+	"kpt.dev/configsync/pkg/testing/testcontroller"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 	// +kubebuilder:scaffold:imports
 )
-
-// These tests use Ginkgo (BDD-style Go testing framework). Refer to
-// http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
 var cfg *rest.Config
 var testEnv *envtest.Environment
 
+// TestMain executes the tests for this package, with a controller-runtime test
+// environment.
 func TestMain(m *testing.M) {
-	testEnv = &envtest.Environment{
-		CRDDirectoryPaths: []string{filepath.Join("..", "..", "..", "..", "manifests")},
+	setup := func() error {
+		klog.InitFlags(nil)
+		testEnv = &envtest.Environment{
+			CRDDirectoryPaths: []string{filepath.Join("..", "..", "..", "..", "manifests")},
+		}
+		var err error
+		cfg, err = testEnv.Start()
+		if err != nil {
+			return err
+		}
+		s := scheme.Scheme
+		if err := v1alpha1.AddToScheme(s); err != nil {
+			return err
+		}
+		if err := v1.AddToScheme(s); err != nil {
+			return err
+		}
+		return nil
+	}
+	cleanup := func() error {
+		if testEnv != nil {
+			return testEnv.Stop()
+		}
+		return nil
 	}
 
-	var err error
-	cfg, err = testEnv.Start()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	s := scheme.Scheme
-	if err := v1alpha1.AddToScheme(s); err != nil {
-		log.Fatal(err)
-	}
-	if err := v1.AddToScheme(s); err != nil {
-		log.Fatal(err)
-	}
-
-	code := m.Run()
-
-	err = testEnv.Stop()
-	if err != nil {
-		log.Printf("Error: Failed to stop test env: %v", err)
-	}
-
-	os.Exit(code)
-}
-
-// StartTestManager adds recFn
-func StartTestManager(t *testing.T, mgr manager.Manager) {
-	go func() {
-		err := mgr.Start(context.Background())
-		assert.NoError(t, err)
-	}()
+	os.Exit(testcontroller.RunTestSuite(m, setup, cleanup))
 }

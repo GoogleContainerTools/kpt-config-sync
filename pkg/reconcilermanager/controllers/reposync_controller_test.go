@@ -322,6 +322,7 @@ func setupNSReconciler(t *testing.T, objs ...client.Object) (*syncerFake.Client,
 		controllerruntime.Log.WithName("controllers").WithName(configsync.RepoSyncKind),
 		cs.Client.Scheme(),
 	)
+	testReconciler.controllerName = t.Name()
 	return cs.Client, cs.DynamicClient, testReconciler
 }
 

@@ -133,7 +133,10 @@ func TestManager_Update(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ctx := context.Background()
+			// TODO: replace with `ctx := t.Context()` in Go 1.24.0+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
 			options := &Options{
 				watcherFunc: testRunnables(ctx, tc.failedWatchers),
 			}
@@ -144,7 +147,7 @@ func TestManager_Update(t *testing.T) {
 			}
 			m.watcherMap = tc.watcherMap
 
-			gotErr := m.UpdateWatches(context.Background(), tc.gvks)
+			gotErr := m.UpdateWatches(ctx, tc.gvks)
 
 			wantErr := tc.wantErr
 			if wantErr != nil && wantErr.Error() != gotErr.Error() {

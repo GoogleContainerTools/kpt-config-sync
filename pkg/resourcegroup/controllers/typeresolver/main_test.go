@@ -13,3 +13,18 @@
 // limitations under the License.
 
 package typeresolver
+
+import (
+	"os"
+	"testing"
+
+	"k8s.io/klog/v2"
+)
+
+// TestMain executes the tests for this package, with optional logging.
+// To see all logs, use:
+// go test kpt.dev/configsync/pkg/resourcegroup/controllers/typeresolver -v -args -v=5
+func TestMain(m *testing.M) {
+	klog.InitFlags(nil)
+	os.Exit(m.Run())
+}

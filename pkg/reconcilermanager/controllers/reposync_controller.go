@@ -108,6 +108,7 @@ func NewRepoSyncReconciler(clusterName string, reconcilerPollingPeriod, hydratio
 			hydrationPollingPeriod:     hydrationPollingPeriod,
 			syncKind:                   configsync.RepoSyncKind,
 			knownHostExist:             false,
+			controllerName:             "",
 		},
 		configMapWatches: make(map[string]bool),
 	}
@@ -518,6 +519,10 @@ func (r *RepoSyncReconciler) Register(mgr controllerruntime.Manager, watchFleetM
 		controllerBuilder.Watches(&hubv1.Membership{},
 			handler.EnqueueRequestsFromMapFunc(r.mapMembershipToRepoSyncs),
 			builder.WithPredicates(predicate.GenerationChangedPredicate{}))
+	}
+
+	if r.controllerName != "" {
+		controllerBuilder.Named(r.controllerName)
 	}
 
 	ctrlr, err := controllerBuilder.Build(r)

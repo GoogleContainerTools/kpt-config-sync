@@ -13,31 +13,31 @@ type FakeConfigmanagementV1 struct {
 }
 
 func (c *FakeConfigmanagementV1) ClusterConfigs() v1.ClusterConfigInterface {
-	return &FakeClusterConfigs{c}
+	return newFakeClusterConfigs(c)
 }
 
 func (c *FakeConfigmanagementV1) ClusterSelectors() v1.ClusterSelectorInterface {
-	return &FakeClusterSelectors{c}
+	return newFakeClusterSelectors(c)
 }
 
 func (c *FakeConfigmanagementV1) HierarchyConfigs() v1.HierarchyConfigInterface {
-	return &FakeHierarchyConfigs{c}
+	return newFakeHierarchyConfigs(c)
 }
 
 func (c *FakeConfigmanagementV1) NamespaceConfigs() v1.NamespaceConfigInterface {
-	return &FakeNamespaceConfigs{c}
+	return newFakeNamespaceConfigs(c)
 }
 
 func (c *FakeConfigmanagementV1) NamespaceSelectors() v1.NamespaceSelectorInterface {
-	return &FakeNamespaceSelectors{c}
+	return newFakeNamespaceSelectors(c)
 }
 
 func (c *FakeConfigmanagementV1) Repos() v1.RepoInterface {
-	return &FakeRepos{c}
+	return newFakeRepos(c)
 }
 
 func (c *FakeConfigmanagementV1) Syncs() v1.SyncInterface {
-	return &FakeSyncs{c}
+	return newFakeSyncs(c)
 }
 
 // RESTClient returns a RESTClient that is used to communicate

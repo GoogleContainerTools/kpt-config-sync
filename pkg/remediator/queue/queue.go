@@ -73,12 +73,12 @@ type ObjectQueue struct {
 	// also allow any call to yield the lock safely (specifically for Get).
 	cond *sync.Cond
 	// rateLimiter enables the ObjectQueue to support rate-limited retries.
-	rateLimiter workqueue.RateLimiter
+	rateLimiter workqueue.TypedRateLimiter[GVKNN]
 	// delayer is a wrapper around the ObjectQueue which supports delayed Adds.
-	delayer workqueue.DelayingInterface
+	delayer workqueue.TypedDelayingInterface[client.Object]
 	// underlying is the workqueue that contains work item keys so that it can
 	// maintain the order in which those items should be worked on.
-	underlying workqueue.Interface
+	underlying workqueue.TypedInterface[GVKNN]
 	// objects is a map of actual work items which need to be processed.
 	objects map[GVKNN]client.Object
 	// dirty is a map of object keys which will need to be reprocessed even if
@@ -91,10 +91,12 @@ type ObjectQueue struct {
 func New(name string) *ObjectQueue {
 	oq := &ObjectQueue{
 		cond:        sync.NewCond(&sync.Mutex{}),
-		rateLimiter: workqueue.DefaultControllerRateLimiter(),
-		underlying:  workqueue.NewNamed(name),
-		objects:     map[GVKNN]client.Object{},
-		dirty:       map[GVKNN]bool{},
+		rateLimiter: workqueue.DefaultTypedControllerRateLimiter[GVKNN](),
+		underlying: workqueue.NewTypedWithConfig[GVKNN](workqueue.TypedQueueConfig[GVKNN]{
+			Name: name,
+		}),
+		objects: map[GVKNN]client.Object{},
+		dirty:   map[GVKNN]bool{},
 	}
 	oq.delayer = delayingWrap(oq, name)
 	return oq
@@ -202,20 +204,9 @@ func (q *ObjectQueue) Get(ctx context.Context) (client.Object, error) {
 
 	// Because length > 0 and nothing else can remove from it while locked,
 	// Get should return immediately.
-	item, shutdown := q.underlying.Get()
+	gvknn, shutdown := q.underlying.Get()
 	if shutdown {
 		return nil, ErrShutdown
-	}
-	if item == nil {
-		return nil, nil
-	}
-
-	gvknn, isID := item.(GVKNN)
-	if !isID {
-		klog.Warningf("ObjectQueue.Get: expected GVKNN from work queue, but found %T: %v", item, item)
-		q.underlying.Done(item)
-		q.rateLimiter.Forget(item)
-		return nil, nil
 	}
 
 	obj := q.objects[gvknn]
@@ -274,53 +265,56 @@ func (q *ObjectQueue) ShuttingDown() bool {
 
 // delayingWrap returns the given ObjectQueue wrapped in a DelayingInterface to
 // enable rate-limited retries.
-func delayingWrap(oq *ObjectQueue, name string) workqueue.DelayingInterface {
-	gw := &genericWrapper{oq}
-	return workqueue.NewDelayingQueueWithCustomQueue(gw, name)
+func delayingWrap(oq *ObjectQueue, name string) workqueue.TypedDelayingInterface[client.Object] {
+	gw := &genericWrapper[client.Object]{oq}
+	return workqueue.NewTypedDelayingQueueWithConfig[client.Object](workqueue.TypedDelayingQueueConfig[client.Object]{
+		Name:  name,
+		Queue: gw,
+	})
 }
 
 // genericWrapper is an internal wrapper that allows us to pass an ObjectQueue
 // to a DelayingInterface to enable rate-limited retries. It uses unsafe type
 // conversion because it should only ever be used in this file and so we know
 // that all of the item interfaces are actually client.Objects.
-type genericWrapper struct {
+type genericWrapper[T client.Object] struct {
 	oq *ObjectQueue
 }
 
-var _ workqueue.Interface = &genericWrapper{}
+var _ workqueue.TypedInterface[client.Object] = &genericWrapper[client.Object]{}
 
 // Add implements workqueue.Interface.
-func (g *genericWrapper) Add(item interface{}) {
-	g.oq.Add(item.(client.Object))
+func (g *genericWrapper[T]) Add(item T) {
+	g.oq.Add(item)
 }
 
 // Get implements workqueue.Interface.
-func (g *genericWrapper) Get() (item interface{}, shutdown bool) {
+func (g *genericWrapper[T]) Get() (item client.Object, shutdown bool) {
 	obj, err := g.oq.Get(context.Background())
 	return obj, (err != nil)
 }
 
 // Done implements workqueue.Interface.
-func (g *genericWrapper) Done(item interface{}) {
-	g.oq.Done(item.(client.Object))
+func (g *genericWrapper[T]) Done(item T) {
+	g.oq.Done(item)
 }
 
 // Len implements workqueue.Interface.
-func (g *genericWrapper) Len() int {
+func (g *genericWrapper[T]) Len() int {
 	return g.oq.Len()
 }
 
 // ShutDown implements workqueue.Interface.
-func (g *genericWrapper) ShutDown() {
+func (g *genericWrapper[T]) ShutDown() {
 	g.oq.ShutDown()
 }
 
 // ShuttingDown implements workqueue.Interface.
-func (g *genericWrapper) ShuttingDown() bool {
+func (g *genericWrapper[T]) ShuttingDown() bool {
 	return g.oq.ShuttingDown()
 }
 
 // ShutDownWithDrain implements workqueue.Interface.
-func (g *genericWrapper) ShutDownWithDrain() {
+func (g *genericWrapper[T]) ShutDownWithDrain() {
 	g.oq.ShutDown()
 }

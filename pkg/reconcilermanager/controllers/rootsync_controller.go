@@ -100,6 +100,7 @@ func NewRootSyncReconciler(clusterName string, reconcilerPollingPeriod, hydratio
 			hydrationPollingPeriod:     hydrationPollingPeriod,
 			syncKind:                   configsync.RootSyncKind,
 			knownHostExist:             false,
+			controllerName:             "",
 		},
 	}
 }
@@ -460,6 +461,10 @@ func (r *RootSyncReconciler) Register(mgr controllerruntime.Manager, watchFleetM
 		controllerBuilder.Watches(&hubv1.Membership{},
 			handler.EnqueueRequestsFromMapFunc(r.mapMembershipToRootSyncs),
 			builder.WithPredicates(predicate.GenerationChangedPredicate{}))
+	}
+
+	if r.controllerName != "" {
+		controllerBuilder.Named(r.controllerName)
 	}
 
 	ctrlr, err := controllerBuilder.Build(r)

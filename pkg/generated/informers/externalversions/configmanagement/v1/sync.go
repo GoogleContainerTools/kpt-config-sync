@@ -3,24 +3,24 @@
 package v1
 
 import (
-	"context"
+	context "context"
 	time "time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
 	cache "k8s.io/client-go/tools/cache"
-	configmanagementv1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	apiconfigmanagementv1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	versioned "kpt.dev/configsync/pkg/generated/clientset/versioned"
 	internalinterfaces "kpt.dev/configsync/pkg/generated/informers/externalversions/internalinterfaces"
-	v1 "kpt.dev/configsync/pkg/generated/listers/configmanagement/v1"
+	configmanagementv1 "kpt.dev/configsync/pkg/generated/listers/configmanagement/v1"
 )
 
 // SyncInformer provides access to a shared informer and lister for
 // Syncs.
 type SyncInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1.SyncLister
+	Lister() configmanagementv1.SyncLister
 }
 
 type syncInformer struct {
@@ -54,7 +54,7 @@ func NewFilteredSyncInformer(client versioned.Interface, resyncPeriod time.Durat
 				return client.ConfigmanagementV1().Syncs().Watch(context.TODO(), options)
 			},
 		},
-		&configmanagementv1.Sync{},
+		&apiconfigmanagementv1.Sync{},
 		resyncPeriod,
 		indexers,
 	)
@@ -65,9 +65,9 @@ func (f *syncInformer) defaultInformer(client versioned.Interface, resyncPeriod 
 }
 
 func (f *syncInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&configmanagementv1.Sync{}, f.defaultInformer)
+	return f.factory.InformerFor(&apiconfigmanagementv1.Sync{}, f.defaultInformer)
 }
 
-func (f *syncInformer) Lister() v1.SyncLister {
-	return v1.NewSyncLister(f.Informer().GetIndexer())
+func (f *syncInformer) Lister() configmanagementv1.SyncLister {
+	return configmanagementv1.NewSyncLister(f.Informer().GetIndexer())
 }

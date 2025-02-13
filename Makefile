@@ -43,7 +43,7 @@ GOLANG_IMAGE := google-go.pkg.dev/golang:$(GOLANG_IMAGE_VERSION)
 # Base image used for debian containers
 # When updating you can use this command: 
 # gcloud container images list-tags gcr.io/gke-release/debian-base --filter="tags:bookworm*" 
-DEBIAN_BASE_IMAGE := gcr.io/gke-release/debian-base:bookworm-v1.0.4-gke.0
+DEBIAN_BASE_IMAGE := gcr.io/gke-release/debian-base:bookworm-v1.0.4-gke.3
 # Base image used for gcloud install, primarily for test images.
 # We use -slim for a smaller base image where we can choose which components to install.
 # https://cloud.google.com/sdk/docs/downloads-docker#docker_image_options
@@ -72,7 +72,7 @@ CRANE := $(BIN_DIR)/crane
 # End vendored tools
 
 # golangci-lint is GPL, so it must not be vendored.
-GOLANGCI_LINT_VERSION := v1.60.3
+GOLANGCI_LINT_VERSION := v1.63.4
 GOLANGCI_LINT := $(BIN_DIR)/golangci-lint
 
 KUSTOMIZE_VERSION := v5.4.2-gke.0
@@ -86,7 +86,7 @@ HELM_STAGING_DIR := $(OUTPUT_DIR)/third_party/helm
 COSIGN_VERSION := v2.4.1
 COSIGN := $(BIN_DIR)/cosign
 
-GIT_SYNC_VERSION := v4.3.0-gke.4__linux_amd64
+GIT_SYNC_VERSION := v4.3.0-gke.9__linux_amd64
 GIT_SYNC_IMAGE_NAME := gcr.io/config-management-release/git-sync:$(GIT_SYNC_VERSION)
 
 OTELCONTRIBCOL_VERSION := v0.103.0-gke.7

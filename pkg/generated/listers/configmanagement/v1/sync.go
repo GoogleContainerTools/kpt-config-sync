@@ -3,10 +3,10 @@
 package v1
 
 import (
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/tools/cache"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
+	configmanagementv1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 )
 
 // SyncLister helps list Syncs.
@@ -14,39 +14,19 @@ import (
 type SyncLister interface {
 	// List lists all Syncs in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1.Sync, err error)
+	List(selector labels.Selector) (ret []*configmanagementv1.Sync, err error)
 	// Get retrieves the Sync from the index for a given name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v1.Sync, error)
+	Get(name string) (*configmanagementv1.Sync, error)
 	SyncListerExpansion
 }
 
 // syncLister implements the SyncLister interface.
 type syncLister struct {
-	indexer cache.Indexer
+	listers.ResourceIndexer[*configmanagementv1.Sync]
 }
 
 // NewSyncLister returns a new SyncLister.
 func NewSyncLister(indexer cache.Indexer) SyncLister {
-	return &syncLister{indexer: indexer}
-}
-
-// List lists all Syncs in the indexer.
-func (s *syncLister) List(selector labels.Selector) (ret []*v1.Sync, err error) {
-	err = cache.ListAll(s.indexer, selector, func(m interface{}) {
-		ret = append(ret, m.(*v1.Sync))
-	})
-	return ret, err
-}
-
-// Get retrieves the Sync from the index for a given name.
-func (s *syncLister) Get(name string) (*v1.Sync, error) {
-	obj, exists, err := s.indexer.GetByKey(name)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, errors.NewNotFound(v1.Resource("sync"), name)
-	}
-	return obj.(*v1.Sync), nil
+	return &syncLister{listers.New[*configmanagementv1.Sync](indexer, configmanagementv1.Resource("sync"))}
 }

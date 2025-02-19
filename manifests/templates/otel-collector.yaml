@@ -26,9 +26,10 @@ data:
   otel-collector-config.yaml: |
     receivers:
       opencensus:
+        endpoint: 0.0.0.0:55678
     exporters:
       prometheus:
-        endpoint: :8675
+        endpoint: 0.0.0.0:8675
         namespace: config_sync
         resource_to_telemetry_conversion:
           enabled: true
@@ -36,6 +37,7 @@ data:
       batch:
     extensions:
       health_check:
+        endpoint: 0.0.0.0:13133
     service:
       extensions: [health_check]
       pipelines:
@@ -66,6 +68,8 @@ spec:
     port: 8888
   - name: metrics # Prometheus exporter metrics.
     port: 8675
+  - name: health-check
+    port: 13133
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -112,6 +116,7 @@ spec:
         - containerPort: 55678 # Default endpoint for OpenCensus receiver.
         - containerPort: 8888  # Default endpoint for querying metrics.
         - containerPort: 8675  # Prometheus exporter metrics.
+        - containerPort: 13133 # Health check
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true

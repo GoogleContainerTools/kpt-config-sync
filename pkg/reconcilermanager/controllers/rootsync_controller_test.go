@@ -1964,7 +1964,7 @@ func TestRootSyncSwitchAuthTypes(t *testing.T) {
 	labels := map[string]string{
 		metadata.SyncNamespaceLabel:       rs.Namespace,
 		metadata.SyncNameLabel:            rs.Name,
-		metadata.SyncKindLabel:            testReconciler.syncKind,
+		metadata.SyncKindLabel:            testReconciler.syncGVK.Kind,
 		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
 
@@ -2203,7 +2203,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	label1 := map[string]string{
 		metadata.SyncNamespaceLabel:       rs1.Namespace,
 		metadata.SyncNameLabel:            rs1.Name,
-		metadata.SyncKindLabel:            testReconciler.syncKind,
+		metadata.SyncKindLabel:            testReconciler.syncGVK.Kind,
 		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
 
@@ -2273,7 +2273,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	label2 := map[string]string{
 		metadata.SyncNamespaceLabel:       rs2.Namespace,
 		metadata.SyncNameLabel:            rs2.Name,
-		metadata.SyncKindLabel:            testReconciler.syncKind,
+		metadata.SyncKindLabel:            testReconciler.syncGVK.Kind,
 		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
 
@@ -2334,7 +2334,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	label3 := map[string]string{
 		metadata.SyncNamespaceLabel:       rs3.Namespace,
 		metadata.SyncNameLabel:            rs3.Name,
-		metadata.SyncKindLabel:            testReconciler.syncKind,
+		metadata.SyncKindLabel:            testReconciler.syncGVK.Kind,
 		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
 
@@ -2399,7 +2399,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	label4 := map[string]string{
 		metadata.SyncNamespaceLabel:       rs4.Namespace,
 		metadata.SyncNameLabel:            rs4.Name,
-		metadata.SyncKindLabel:            testReconciler.syncKind,
+		metadata.SyncKindLabel:            testReconciler.syncGVK.Kind,
 		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
 
@@ -2464,7 +2464,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	label5 := map[string]string{
 		metadata.SyncNamespaceLabel:       rs5.Namespace,
 		metadata.SyncNameLabel:            rs5.Name,
-		metadata.SyncKindLabel:            testReconciler.syncKind,
+		metadata.SyncKindLabel:            testReconciler.syncGVK.Kind,
 		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
 
@@ -3058,7 +3058,7 @@ func TestRootSyncWithHelm(t *testing.T) {
 	labels := map[string]string{
 		metadata.SyncNamespaceLabel:       rs.Namespace,
 		metadata.SyncNameLabel:            rs.Name,
-		metadata.SyncKindLabel:            testReconciler.syncKind,
+		metadata.SyncKindLabel:            testReconciler.syncGVK.Kind,
 		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
 	ksaNoGSAAnnotation := k8sobjects.ServiceAccountObject(
@@ -3311,7 +3311,7 @@ func TestRootSyncWithOCI(t *testing.T) {
 	labels := map[string]string{
 		metadata.SyncNamespaceLabel:       rs.Namespace,
 		metadata.SyncNameLabel:            rs.Name,
-		metadata.SyncKindLabel:            testReconciler.syncKind,
+		metadata.SyncKindLabel:            testReconciler.syncGVK.Kind,
 		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
 

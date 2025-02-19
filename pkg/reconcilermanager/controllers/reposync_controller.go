@@ -106,7 +106,7 @@ func NewRepoSyncReconciler(clusterName string, reconcilerPollingPeriod, hydratio
 			scheme:                     scheme,
 			reconcilerPollingPeriod:    reconcilerPollingPeriod,
 			hydrationPollingPeriod:     hydrationPollingPeriod,
-			syncKind:                   configsync.RepoSyncKind,
+			syncGVK:                    kinds.RepoSyncV1Beta1(),
 			knownHostExist:             false,
 			controllerName:             "",
 		},
@@ -130,7 +130,7 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		Name:      core.NsReconcilerName(rsRef.Namespace, rsRef.Name),
 	}
 	ctx = r.setLoggerValues(ctx,
-		logFieldSyncKind, r.syncKind,
+		logFieldSyncKind, r.syncGVK.Kind,
 		logFieldSyncRef, rsRef.String(),
 		logFieldReconciler, reconcilerRef.String())
 	rs := &v1beta1.RepoSync{}
@@ -220,7 +220,7 @@ func (r *RepoSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 	rsRef := client.ObjectKeyFromObject(rs)
 	r.logger(ctx).V(3).Info("Reconciling managed objects")
 
-	labelMap := ManagedObjectLabelMap(r.syncKind, rsRef)
+	labelMap := ManagedObjectLabelMap(r.syncGVK.Kind, rsRef)
 
 	// Create secret in config-management-system namespace using the
 	// existing secret in the reposync.namespace.
@@ -561,11 +561,14 @@ func (r *RepoSyncReconciler) watchConfigMaps(rs *v1beta1.RepoSync) error {
 
 func (r *RepoSyncReconciler) mapMembershipToRepoSyncs(ctx context.Context, o client.Object) []reconcile.Request {
 	// Clear the membership if the cluster is unregistered
-	if err := r.client.Get(ctx, types.NamespacedName{Name: fleetMembershipName}, &hubv1.Membership{}); err != nil {
+	membershipObj := &hubv1.Membership{}
+	membershipObj.Name = fleetMembershipName
+	membershipRef := client.ObjectKeyFromObject(membershipObj)
+	if err := r.client.Get(ctx, membershipRef, membershipObj); err != nil {
 		if apierrors.IsNotFound(err) {
 			klog.Info("Fleet Membership not found, clearing membership cache")
 			r.membership = nil
-			return r.requeueAllRepoSyncs(fleetMembershipName)
+			return r.requeueAllRSyncs(ctx, membershipObj)
 		}
 		klog.Errorf("Fleet Membership get failed: %v", err)
 		return nil
@@ -581,28 +584,7 @@ func (r *RepoSyncReconciler) mapMembershipToRepoSyncs(ctx context.Context, o cli
 		return nil
 	}
 	r.membership = m
-	return r.requeueAllRepoSyncs(fleetMembershipName)
-}
-
-func (r *RepoSyncReconciler) requeueAllRepoSyncs(name string) []reconcile.Request {
-	//TODO: pass through context (reqs updating controller-runtime)
-	ctx := context.Background()
-	allRepoSyncs := &v1beta1.RepoSyncList{}
-	if err := r.client.List(ctx, allRepoSyncs); err != nil {
-		klog.Errorf("RepoSync list failed: %v", err)
-		return nil
-	}
-
-	requests := make([]reconcile.Request, len(allRepoSyncs.Items))
-	for i, rs := range allRepoSyncs.Items {
-		requests[i] = reconcile.Request{
-			NamespacedName: client.ObjectKeyFromObject(&rs),
-		}
-	}
-	if len(requests) > 0 {
-		klog.Infof("Changes to %s trigger reconciliations for %d RepoSync objects.", name, len(allRepoSyncs.Items))
-	}
-	return requests
+	return r.requeueAllRSyncs(ctx, membershipObj)
 }
 
 // mapSecretToRepoSyncs define a mapping from the Secret object to its attached
@@ -633,7 +615,7 @@ func (r *RepoSyncReconciler) mapSecretToRepoSyncs(ctx context.Context, secret cl
 			// so requeue the mapped RepoSync object and then return.
 			reconcilerName := core.NsReconcilerName(rs.GetNamespace(), rs.GetName())
 			if isUpsertedSecret(&rs, sRef.Name) {
-				return requeueRepoSyncRequest(secret, client.ObjectKeyFromObject(&rs))
+				return r.requeueRSync(ctx, secret, client.ObjectKeyFromObject(&rs))
 			}
 			isSAToken := strings.HasPrefix(sRef.Name, reconcilerName+"-token-")
 			if isSAToken {
@@ -648,7 +630,7 @@ func (r *RepoSyncReconciler) mapSecretToRepoSyncs(ctx context.Context, secret cl
 				}
 				for _, s := range serviceAccount.Secrets {
 					if s.Name == sRef.Name {
-						return requeueRepoSyncRequest(secret, client.ObjectKeyFromObject(&rs))
+						return r.requeueRSync(ctx, secret, client.ObjectKeyFromObject(&rs))
 					}
 				}
 			}
@@ -686,9 +668,9 @@ func (r *RepoSyncReconciler) mapSecretToRepoSyncs(ctx context.Context, secret cl
 	return requests
 }
 
-func (r *RepoSyncReconciler) mapAdmissionWebhookToRepoSyncs(_ context.Context, admissionWebhook client.Object) []reconcile.Request {
+func (r *RepoSyncReconciler) mapAdmissionWebhookToRepoSyncs(ctx context.Context, admissionWebhook client.Object) []reconcile.Request {
 	if admissionWebhook.GetName() == webhookconfiguration.Name {
-		return r.requeueAllRepoSyncs(admissionWebhook.GetName())
+		return r.requeueAllRSyncs(ctx, admissionWebhook)
 	}
 	return nil
 }
@@ -782,7 +764,7 @@ func (r *RepoSyncReconciler) mapConfigMapToRepoSyncs(ctx context.Context, obj cl
 			}
 		}
 		if len(rsRef.Name) > 0 && len(rsRef.Namespace) > 0 {
-			return requeueRepoSyncRequest(obj, rsRef)
+			return r.requeueRSync(ctx, obj, rsRef)
 		}
 		return nil
 	}
@@ -857,10 +839,10 @@ func (r *RepoSyncReconciler) mapObjectToRepoSync(ctx context.Context, obj client
 		}
 	}
 
-	allRepoSyncs := &v1beta1.RepoSyncList{}
-	if err := r.client.List(ctx, allRepoSyncs); err != nil {
-		klog.Errorf("failed to list all RepoSyncs for %s (%s): %v",
-			obj.GetObjectKind().GroupVersionKind().Kind, objRef, err)
+	syncMetaList, err := r.listSyncMetadata(ctx)
+	if err != nil {
+		r.logger(ctx).Error(err, "Failed to list objects",
+			logFieldSyncKind, r.syncGVK.Kind)
 		return nil
 	}
 
@@ -869,19 +851,19 @@ func (r *RepoSyncReconciler) mapObjectToRepoSync(ctx context.Context, obj client
 	// For other resources, requeue the mapping RepoSync object and then return.
 	var requests []reconcile.Request
 	var attachedRSNames []string
-	for _, rs := range allRepoSyncs.Items {
-		reconcilerName := core.NsReconcilerName(rs.GetNamespace(), rs.GetName())
+	for _, syncMeta := range syncMetaList.Items {
+		reconcilerName := core.NsReconcilerName(syncMeta.GetNamespace(), syncMeta.GetName())
 		switch obj.(type) {
 		case *rbacv1.RoleBinding:
-			if objRef.Name == nsRoleBindingName && objRef.Namespace == rs.Namespace {
+			if objRef.Name == nsRoleBindingName && objRef.Namespace == syncMeta.Namespace {
 				requests = append(requests, reconcile.Request{
-					NamespacedName: client.ObjectKeyFromObject(&rs),
+					NamespacedName: client.ObjectKeyFromObject(&syncMeta),
 				})
-				attachedRSNames = append(attachedRSNames, rs.GetName())
+				attachedRSNames = append(attachedRSNames, syncMeta.GetName())
 			}
 		default: // Deployment and ServiceAccount
 			if objRef.Name == reconcilerName {
-				return requeueRepoSyncRequest(obj, client.ObjectKeyFromObject(&rs))
+				return r.requeueRSync(ctx, obj, client.ObjectKeyFromObject(&syncMeta))
 			}
 		}
 	}
@@ -890,16 +872,6 @@ func (r *RepoSyncReconciler) mapObjectToRepoSync(ctx context.Context, obj client
 			obj.GetObjectKind().GroupVersionKind().Kind, objRef, strings.Join(attachedRSNames, ", "))
 	}
 	return requests
-}
-
-func requeueRepoSyncRequest(obj client.Object, rsRef types.NamespacedName) []reconcile.Request {
-	klog.Infof("Changes to %s triggered a reconciliation for the RepoSync (%s).",
-		kinds.ObjectSummary(obj), rsRef)
-	return []reconcile.Request{
-		{
-			NamespacedName: rsRef,
-		},
-	}
 }
 
 func (r *RepoSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1beta1.RepoSync, reconcilerName string) map[string][]corev1.EnvVar {
@@ -926,7 +898,7 @@ func (r *RepoSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 			statusMode:        rs.Spec.SafeOverride().StatusMode,
 			reconcileTimeout:  v1beta1.GetReconcileTimeout(rs.Spec.SafeOverride().ReconcileTimeout),
 			apiServerTimeout:  v1beta1.GetAPIServerTimeout(rs.Spec.SafeOverride().APIServerTimeout),
-			requiresRendering: annotationEnabled(metadata.RequiresRenderingAnnotationKey, rs.GetAnnotations()),
+			requiresRendering: r.isAnnotationValueTrue(ctx, rs, metadata.RequiresRenderingAnnotationKey),
 			// Namespace reconciler doesn't support NamespaceSelector at all.
 			dynamicNSSelectorEnabled: false,
 			webhookEnabled:           r.webhookEnabled,
@@ -1090,7 +1062,7 @@ func (r *RepoSyncReconciler) upsertSharedRoleBinding(ctx context.Context, reconc
 	childRB := &rbacv1.RoleBinding{}
 	childRB.Name = rbRef.Name
 	childRB.Namespace = rbRef.Namespace
-	labelMap := ManagedObjectLabelMap(r.syncKind, rsRef)
+	labelMap := ManagedObjectLabelMap(r.syncGVK.Kind, rsRef)
 	// Remove sync-name label since the RoleBinding may be shared
 	delete(labelMap, metadata.SyncNameLabel)
 
@@ -1242,7 +1214,7 @@ func (r *RepoSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RepoS
 			case reconcilermanager.Reconciler:
 				container.Env = append(container.Env, containerEnvs[container.Name]...)
 			case reconcilermanager.HydrationController:
-				if !annotationEnabled(metadata.RequiresRenderingAnnotationKey, rs.GetAnnotations()) {
+				if !r.isAnnotationValueTrue(ctx, rs, metadata.RequiresRenderingAnnotationKey) {
 					// if the sync source does not require rendering, omit the hydration controller
 					// this minimizes the resource footprint of the reconciler
 					addContainer = false

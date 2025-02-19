@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -31,6 +32,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
 	"k8s.io/client-go/dynamic"
@@ -50,6 +52,7 @@ import (
 	webhookconfiguration "kpt.dev/configsync/pkg/webhook/configuration"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 const (
@@ -103,8 +106,8 @@ type reconcilerBase struct {
 	githubApp               githubAppSpec
 	webhookEnabled          bool
 
-	// syncKind is the kind of the sync object: RootSync or RepoSync.
-	syncKind string
+	// syncGVK is the GroupVersionKind of the sync object: RootSync or RepoSync.
+	syncGVK schema.GroupVersionKind
 
 	// controllerName is used by tests to de-dupe controllers
 	controllerName string
@@ -601,7 +604,7 @@ func (r *reconcilerBase) setupOrTeardown(ctx context.Context, syncObj client.Obj
 			controllerutil.AddFinalizer(syncObj, metadata.ReconcilerManagerFinalizer)
 			if err := r.client.Update(ctx, syncObj, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 				err = status.APIServerError(err,
-					fmt.Sprintf("failed to update %s to add finalizer", r.syncKind))
+					fmt.Sprintf("failed to update %s to add finalizer", r.syncGVK.Kind))
 				r.logger(ctx).Error(err, "Finalizer injection failed")
 				return err
 			}
@@ -650,7 +653,7 @@ func (r *reconcilerBase) setupOrTeardown(ctx context.Context, syncObj client.Obj
 		controllerutil.RemoveFinalizer(syncObj, metadata.ReconcilerManagerFinalizer)
 		if err := r.client.Update(ctx, syncObj, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 			err = status.APIServerError(err,
-				fmt.Sprintf("failed to update %s to remove the reconciler-manager finalizer", r.syncKind))
+				fmt.Sprintf("failed to update %s to remove the reconciler-manager finalizer", r.syncGVK.Kind))
 			r.logger(ctx).Error(err, "Removal of reconciler-manager finalizer failed")
 			return err
 		}
@@ -686,7 +689,7 @@ func (r *reconcilerBase) updateRBACBinding(ctx context.Context, reconcilerRef, r
 	} else if rb, ok := binding.(*rbacv1.RoleBinding); ok {
 		rb.Subjects = subjects
 	}
-	core.AddLabels(binding, ManagedObjectLabelMap(r.syncKind, rsRef))
+	core.AddLabels(binding, ManagedObjectLabelMap(r.syncGVK.Kind, rsRef))
 	if equality.Semantic.DeepEqual(existingBinding, binding) {
 		return nil
 	}
@@ -708,7 +711,7 @@ func (r *reconcilerBase) upsertSharedClusterRoleBinding(ctx context.Context, nam
 	childCRB := &rbacv1.ClusterRoleBinding{}
 	childCRB.Name = crbRef.Name
 
-	labelMap := ManagedObjectLabelMap(r.syncKind, rsRef)
+	labelMap := ManagedObjectLabelMap(r.syncGVK.Kind, rsRef)
 	// Remove sync-name label since the ClusterRoleBinding may be shared
 	delete(labelMap, metadata.SyncNameLabel)
 
@@ -792,7 +795,7 @@ func (r *reconcilerBase) patchSyncMetadata(ctx context.Context, rs client.Object
 				// Some other tooling previously claimed this RSync as an ApplySet parent.
 				// According to the ApplySet KEP, we MUST error if the tooling name does not match.
 				return false, fmt.Errorf("%s applyset owned by %s: remove the %s annotation to allow adoption",
-					r.syncKind, currentApplySetToolingValue, metadata.ApplySetToolingAnnotation)
+					r.syncGVK.Kind, currentApplySetToolingValue, metadata.ApplySetToolingAnnotation)
 			}
 			// Else, if the name is ours, we can adopt it and update the version.
 			// In the future we may want some version migration behavior,
@@ -822,4 +825,63 @@ func (r *reconcilerBase) patchSyncMetadata(ctx context.Context, rs client.Object
 	}
 	r.logger(ctx).Info("Sync metadata update successful")
 	return true, nil
+}
+
+func (r *reconcilerBase) requeueRSync(ctx context.Context, obj client.Object, rsRef types.NamespacedName) []reconcile.Request {
+	r.logger(ctx).Info(fmt.Sprintf("Changes to %s triggered a reconciliation for the %s (%s).",
+		kinds.ObjectSummary(obj), r.syncGVK.Kind, rsRef))
+	return []reconcile.Request{
+		{NamespacedName: rsRef},
+	}
+}
+
+func (r *reconcilerBase) requeueAllRSyncs(ctx context.Context, obj client.Object) []reconcile.Request {
+	syncMetaList, err := r.listSyncMetadata(ctx)
+	if err != nil {
+		r.logger(ctx).Error(err, "Failed to list objects",
+			logFieldSyncKind, r.syncGVK.Kind)
+		return nil
+	}
+	requests := make([]reconcile.Request, len(syncMetaList.Items))
+	for i, syncMeta := range syncMetaList.Items {
+		requests[i] = reconcile.Request{
+			NamespacedName: client.ObjectKeyFromObject(&syncMeta),
+		}
+	}
+	if len(requests) > 0 {
+		r.logger(ctx).Info(fmt.Sprintf("Changes to %s triggered reconciliations for %d %s objects.",
+			kinds.ObjectSummary(obj), len(syncMetaList.Items), r.syncGVK.Kind))
+	}
+	return requests
+}
+
+func (r *reconcilerBase) listSyncMetadata(ctx context.Context, opts ...client.ListOption) (*metav1.PartialObjectMetadataList, error) {
+	syncMetaList := &metav1.PartialObjectMetadataList{}
+	syncMetaList.SetGroupVersionKind(kinds.ListGVKForItemGVK(r.syncGVK))
+	if err := r.client.List(ctx, syncMetaList, opts...); err != nil {
+		return nil, err
+	}
+	return syncMetaList, nil
+}
+
+// isAnnotationValueTrue returns whether the annotation should be enabled for the
+// reconciler of this RSync. This is determined by an annotation that is set on
+// the RSync by the reconciler.
+func (r *reconcilerBase) isAnnotationValueTrue(ctx context.Context, obj core.Annotated, key string) bool {
+	annotations := obj.GetAnnotations()
+	if annotations == nil {
+		return false
+	}
+	val, ok := obj.GetAnnotations()[key]
+	if !ok { // default to disabling the annotation
+		return false
+	}
+	boolVal, err := strconv.ParseBool(val)
+	if err != nil {
+		// This should never happen, as the annotation should always be set to a
+		// valid value by the reconciler. Log the error and return the default value.
+		r.logger(ctx).Error(err, "Failed to parse annotation value as boolean: %s: %s", key, val)
+		return false
+	}
+	return boolVal
 }

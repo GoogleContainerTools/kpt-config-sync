@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -4285,6 +4286,29 @@ For more information, see https://g.co/cloud/acm-errors#knv1061`))
 	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(rootDeployment): rootDeployment}
 	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+}
+
+func TestValidateRootSyncName(t *testing.T) {
+	testCases := map[string]struct {
+		name      string
+		expectErr error
+	}{
+		"valid name": {
+			name:      strings.Repeat("x", 38),
+			expectErr: nil,
+		},
+		"invalid name": {
+			name:      strings.Repeat("x", 39),
+			expectErr: fmt.Errorf("maximum RootSync name length is 38, but found 39"),
+		},
+	}
+	for testName, tc := range testCases {
+		t.Run(testName, func(t *testing.T) {
+			rs := &v1beta1.RootSync{}
+			rs.Name = tc.name
+			require.Equal(t, tc.expectErr, validateRootSyncName(rs))
+		})
 	}
 }
 

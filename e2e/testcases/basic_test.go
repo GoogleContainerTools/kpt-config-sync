@@ -30,7 +30,6 @@ import (
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configsync"
-	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
@@ -259,8 +258,8 @@ func TestMaxRootSyncNameLength(t *testing.T) {
 		fmt.Sprintf("%s/ns.yaml", rootSyncTooLongName),
 		k8sobjects.NamespaceObject(rootSyncTooLongName)))
 	nt.Must(repo.CommitAndPush("create RootSync with too long name"))
-	nt.WaitForRootSyncSyncError(rootSyncTooLongName, applier.ApplierErrorCode,
-		"must be no more than 63 characters", nil)
+	nt.WaitForRootSyncStalledError(rootSyncTooLongName, "Validation",
+		"maximum RootSync name length is 38, but found 39")
 
 	// Test scenario for RootSync with exactly the max name length
 	rootSyncMaxLengthName := strings.Repeat("y", 38)
@@ -318,7 +317,7 @@ func TestMaxRepoSyncNameLength(t *testing.T) {
 			core.Name(repoSyncTooLongNN.Name), core.Namespace(repoSyncTooLongNN.Namespace))))
 	nt.Must(repo.CommitAndPush("create RepoSync with too long NN"))
 	nt.WaitForRepoSyncStalledError(repoSyncTooLongNN.Namespace, repoSyncTooLongNN.Name,
-		"Deployment", "must be no more than 63 characters")
+		"Validation", "maximum combined length of RepoSync name and namespace is 45, but found 46")
 
 	// Test scenario for RepoSync with exactly the max name length
 	repoSyncMaxLengthNN := types.NamespacedName{

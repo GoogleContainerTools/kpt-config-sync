@@ -801,8 +801,7 @@ func TestControllerValidationErrors(t *testing.T) {
 		nt.Must(nomostest.DeleteObjectsAndWait(nt, rsTooLong))
 	})
 	nt.WaitForRepoSyncStalledError(rsTooLong.Namespace, rsTooLong.Name, "Validation",
-		fmt.Sprintf(`Invalid reconciler name "%s": must be no more than %d characters.`,
-			core.NsReconcilerName(rsTooLong.Namespace, rsTooLong.Name), validation.DNS1123SubdomainMaxLength))
+		`maximum combined length of RepoSync name and namespace is 45, but found 260`)
 
 	nt.T.Logf("Validate an invalid config with a long RepoSync Secret name")
 	rsInvalidSecretRef := k8sobjects.RepoSyncObjectV1Beta1(testNs, "repo-test")

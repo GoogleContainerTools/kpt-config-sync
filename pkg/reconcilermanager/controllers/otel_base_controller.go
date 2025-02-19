@@ -27,7 +27,7 @@ import (
 
 // otelBaseController implements common functionality for otel controllers.
 type otelBaseController struct {
-	loggingController
+	*LoggingController
 
 	client client.Client
 }
@@ -52,7 +52,7 @@ func (r *otelBaseController) updateDeploymentAnnotation(ctx context.Context, ann
 		return nil
 	}
 
-	r.logger(ctx).V(3).Info("Patching object",
+	r.Logger(ctx).V(3).Info("Patching object",
 		logFieldObjectRef, key.String(),
 		logFieldObjectKind, "Deployment",
 		annotationKey, annotationValue)
@@ -61,7 +61,7 @@ func (r *otelBaseController) updateDeploymentAnnotation(ctx context.Context, ann
 	if err != nil {
 		return status.APIServerErrorf(err, "failed to patch Deployment: %s", key)
 	}
-	r.logger(ctx).Info("Patching object successful",
+	r.Logger(ctx).Info("Patching object successful",
 		logFieldObjectRef, key.String(),
 		logFieldObjectKind, "Deployment",
 		annotationKey, annotationValue)

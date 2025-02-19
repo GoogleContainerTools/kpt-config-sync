@@ -15,15 +15,16 @@
 package typeresolver
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
-	"github.com/go-logr/logr/testr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
+	"kpt.dev/configsync/pkg/testing/testcontroller"
 	"kpt.dev/configsync/pkg/testing/testerrors"
 )
 
@@ -275,9 +276,10 @@ func TestRefresh(t *testing.T) {
 			if tc.setupFakeDiscoveryClient != nil {
 				tc.setupFakeDiscoveryClient(fakeDC)
 			}
-			logger := testr.New(t)
+			logger := testcontroller.NewTestLogger(t)
 			resolver := NewTypeResolver(fakeDC, logger)
-			err := resolver.Refresh()
+			ctx := context.Background() // TODO: use t.Context() after Go upgrade
+			err := resolver.Refresh(ctx)
 			testerrors.AssertEqual(t, err, tc.expectedError)
 			require.Equal(t, fakeDC.ServerResourcesForGroupVersionCalls, len(fakeDC.ServerResourcesForGroupVersionInputs))
 

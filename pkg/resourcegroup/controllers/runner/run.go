@@ -15,6 +15,7 @@
 package runner
 
 import (
+	"context"
 	"flag"
 	"fmt"
 
@@ -72,6 +73,8 @@ func run() error {
 	flag.Parse()
 
 	profiler.Service()
+	logger := textlogger.NewLogger(textlogger.NewConfig())
+	ctx := context.Background()
 
 	// Register the OpenCensus views
 	if err := ocmetrics.RegisterReconcilerMetricsViews(); err != nil {
@@ -90,6 +93,7 @@ func run() error {
 		}
 	}()
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+		Logger: logger.WithName("controller-manager"),
 		Scheme: scheme,
 		Metrics: metricsserver.Options{
 			BindAddress: metricsAddr,
@@ -104,10 +108,10 @@ func run() error {
 		return fmt.Errorf("failed to build manager: %w", err)
 	}
 
-	logger := textlogger.NewLogger(textlogger.NewConfig()).WithName("controllers")
+	controllerLogger := logger.WithName("controllers")
 
 	for _, group := range []string{root.KptGroup} {
-		if err := registerControllersForGroup(mgr, logger, group); err != nil {
+		if err := registerControllersForGroup(ctx, mgr, controllerLogger, group); err != nil {
 			return fmt.Errorf("failed to register controllers for group %s: %w", group, err)
 		}
 	}
@@ -121,7 +125,7 @@ func run() error {
 	return nil
 }
 
-func registerControllersForGroup(mgr ctrl.Manager, logger logr.Logger, group string) error {
+func registerControllersForGroup(ctx context.Context, mgr ctrl.Manager, logger logr.Logger, group string) error {
 	// channel is watched by ResourceGroup controller.
 	// The Root controller pushes events to it and
 	// the ResourceGroup controller consumes events.
@@ -132,7 +136,7 @@ func registerControllersForGroup(mgr ctrl.Manager, logger logr.Logger, group str
 	if err != nil {
 		return fmt.Errorf("unable to set up the type resolver: %w", err)
 	}
-	if err := resolver.Refresh(); err != nil {
+	if err := resolver.Refresh(ctx); err != nil {
 		return fmt.Errorf("unable to initialize the type resolver resource cache: %w", err)
 	}
 

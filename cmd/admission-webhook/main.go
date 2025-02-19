@@ -47,10 +47,11 @@ func main() {
 	flag.DurationVar(&cacheSyncTimeout, "cache-sync-timeout", configuration.CacheSyncTimeout, "The duration of time to wait while informers synchronize.")
 
 	log.Setup()
-	setupLog := textlogger.NewLogger(textlogger.NewConfig()).WithName("setup")
+	logger := textlogger.NewLogger(textlogger.NewConfig())
+	setupLog := logger.WithName("setup")
 
 	profiler.Service()
-	ctrl.SetLogger(textlogger.NewLogger(textlogger.NewConfig()))
+	ctrl.SetLogger(logger)
 
 	setupLog.Info("starting manager")
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
@@ -64,6 +65,7 @@ func main() {
 		Controller: config.Controller{
 			CacheSyncTimeout: cacheSyncTimeout,
 		},
+		Logger: logger.WithName("controller-manager"),
 	})
 	if err != nil {
 		setupLog.Error(err, "starting manager")

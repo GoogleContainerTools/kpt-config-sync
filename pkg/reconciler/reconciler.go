@@ -19,11 +19,11 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
-	"k8s.io/klog/v2/textlogger"
 	"k8s.io/utils/clock"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/applier"
@@ -56,6 +56,8 @@ import (
 
 // Options contains the settings for a reconciler process.
 type Options struct {
+	// Logger to be used by the controller-manager and controllers.
+	Logger logr.Logger
 	// ClusterName is the name of the cluster we are parsing configuration for.
 	ClusterName string
 	// FightDetectionThreshold is the rate of updates per minute to an API
@@ -326,8 +328,8 @@ func Run(opts Options) {
 	signalCtx := signals.SetupSignalHandler()
 
 	// Create the ControllerManager
-	ctrl.SetLogger(textlogger.NewLogger(textlogger.NewConfig()))
 	mgrOptions := ctrl.Options{
+		Logger: opts.Logger.WithName("controller-manager"),
 		Scheme: core.Scheme,
 		MapperProvider: func(_ *rest.Config, _ *http.Client) (meta.RESTMapper, error) {
 			return mapper, nil
@@ -350,7 +352,7 @@ func Run(opts Options) {
 		klog.Fatalf("Instantiating Controller Manager: %v", err)
 	}
 
-	crdControllerLogger := textlogger.NewLogger(textlogger.NewConfig()).WithName("controllers").WithName("CRD")
+	crdControllerLogger := opts.Logger.WithName("controllers").WithName("CRD")
 	crdMetaController := controllers.NewCRDMetaController(crdController,
 		mgr.GetCache(), mapper, crdControllerLogger)
 	if err := crdMetaController.Register(mgr); err != nil {

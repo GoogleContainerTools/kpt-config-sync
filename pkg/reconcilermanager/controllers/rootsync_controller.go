@@ -86,9 +86,7 @@ type RootSyncReconciler struct {
 func NewRootSyncReconciler(clusterName string, reconcilerPollingPeriod, hydrationPollingPeriod time.Duration, client client.Client, watcher client.WithWatch, dynamicClient dynamic.Interface, log logr.Logger, scheme *runtime.Scheme) *RootSyncReconciler {
 	return &RootSyncReconciler{
 		reconcilerBase: reconcilerBase{
-			loggingController: loggingController{
-				log: log,
-			},
+			LoggingController:          NewLoggingController(log),
 			reconcilerFinalizerHandler: rootReconcilerFinalizerHandler{},
 			clusterName:                clusterName,
 			client:                     client,
@@ -115,7 +113,7 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	rsRef := req.NamespacedName
 	start := time.Now()
 	reconcilerRef := core.RootReconcilerObjectKey(rsRef.Name)
-	ctx = r.setLoggerValues(ctx,
+	ctx = r.SetLoggerValues(ctx,
 		logFieldSyncKind, r.syncGVK.Kind,
 		logFieldSyncRef, rsRef.String(),
 		logFieldReconciler, reconcilerRef.String())
@@ -128,7 +126,7 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 			// have already deleted the managed resources and removed the
 			// rootSyncs cache entry. But if we get here, clean up anyway.
 			if err := r.deleteManagedObjects(ctx, reconcilerRef, rsRef); err != nil {
-				r.logger(ctx).Error(err, "Failed to delete managed objects")
+				r.Logger(ctx).Error(err, "Failed to delete managed objects")
 				// Failed to delete a managed object.
 				// Return an error to trigger retry.
 				metrics.RecordReconcileDuration(ctx, metrics.StatusTagKey(err), start)
@@ -147,7 +145,7 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		// Only validate RootSync if it is not deleting. Otherwise, the validation
 		// error will block the finalizer.
 		if err := r.validateRootSync(ctx, rs, reconcilerRef.Name); err != nil {
-			r.logger(ctx).Error(err, "RootSync spec invalid")
+			r.Logger(ctx).Error(err, "RootSync spec invalid")
 			_, updateErr := r.updateSyncStatus(ctx, rs, reconcilerRef, func(_ *v1beta1.RootSync) error {
 				rootsync.SetStalled(rs, "Validation", err)
 				return nil
@@ -159,7 +157,7 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 			return controllerruntime.Result{}, updateErr
 		}
 	} else {
-		r.logger(ctx).V(3).Info("Sync deletion timestamp detected")
+		r.Logger(ctx).V(3).Info("Sync deletion timestamp detected")
 	}
 
 	enabled, err := r.isWebhookEnabled(ctx)
@@ -186,7 +184,7 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 }
 
 func (r *RootSyncReconciler) upsertManagedObjects(ctx context.Context, reconcilerRef types.NamespacedName, rs *v1beta1.RootSync) error {
-	r.logger(ctx).V(3).Info("Reconciling managed objects")
+	r.Logger(ctx).V(3).Info("Reconciling managed objects")
 
 	// Note: RootSync Secret is managed by the user, not the ReconcilerManager.
 	// This is because it's in the same namespace as the Deployment, so we don't
@@ -253,7 +251,7 @@ func (r *RootSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 		return fmt.Errorf("computing reconciler deployment status: %w", err)
 	}
 
-	r.logger(ctx).V(3).Info("Reconciler status",
+	r.Logger(ctx).V(3).Info("Reconciler status",
 		logFieldObjectRef, deployID.ObjectKey.String(),
 		logFieldObjectKind, deployID.Kind,
 		logFieldResourceVersion, deployObj.GetResourceVersion(),
@@ -292,13 +290,13 @@ func (r *RootSyncReconciler) setup(ctx context.Context, reconcilerRef types.Name
 		return updateErr
 	case err != nil:
 		if updateErr != nil {
-			r.logger(ctx).Error(updateErr, "Sync status update failed")
+			r.Logger(ctx).Error(updateErr, "Sync status update failed")
 		}
 		// Return the upsertManagedObjects error and re-reconcile
 		return err
 	default: // both nil
 		if updated {
-			r.logger(ctx).Info("Setup successful")
+			r.Logger(ctx).Info("Setup successful")
 		}
 		return nil
 	}
@@ -323,13 +321,13 @@ func (r *RootSyncReconciler) teardown(ctx context.Context, reconcilerRef types.N
 		return updateErr
 	case err != nil:
 		if updateErr != nil {
-			r.logger(ctx).Error(updateErr, "Sync status update failed")
+			r.Logger(ctx).Error(updateErr, "Sync status update failed")
 		}
 		// Return the upsertManagedObjects error and re-reconcile
 		return err
 	default: // both nil
 		if updated {
-			r.logger(ctx).Info("Teardown successful")
+			r.Logger(ctx).Info("Teardown successful")
 		}
 		return nil
 	}
@@ -350,7 +348,7 @@ func (r *RootSyncReconciler) handleReconcileError(ctx context.Context, err error
 	var statusErr *ObjectReconcileError
 	if errors.As(err, &opErr) {
 		// Metadata from ManagedObjectOperationError used for log context
-		r.logger(ctx).Error(err, fmt.Sprintf("%s failed", stage),
+		r.Logger(ctx).Error(err, fmt.Sprintf("%s failed", stage),
 			logFieldObjectRef, opErr.ID.ObjectKey.String(),
 			logFieldObjectKind, opErr.ID.Kind,
 			logFieldOperation, opErr.Operation)
@@ -358,7 +356,7 @@ func (r *RootSyncReconciler) handleReconcileError(ctx context.Context, err error
 		rootsync.SetStalled(rs, opErr.ID.Kind, err)
 	} else if errors.As(err, &statusErr) {
 		// Metadata from ObjectReconcileError used for log context
-		r.logger(ctx).Error(err, fmt.Sprintf("%s waiting for event", stage),
+		r.Logger(ctx).Error(err, fmt.Sprintf("%s waiting for event", stage),
 			logFieldObjectRef, statusErr.ID.ObjectKey.String(),
 			logFieldObjectKind, statusErr.ID.Kind,
 			logFieldObjectStatus, statusErr.Status)
@@ -374,7 +372,7 @@ func (r *RootSyncReconciler) handleReconcileError(ctx context.Context, err error
 			rootsync.SetStalled(rs, statusErr.ID.Kind, err)
 		}
 	} else {
-		r.logger(ctx).Error(err, fmt.Sprintf("%s failed", stage))
+		r.Logger(ctx).Error(err, fmt.Sprintf("%s failed", stage))
 		rootsync.SetReconciling(rs, stage, fmt.Sprintf("%s stalled", stage))
 		rootsync.SetStalled(rs, "Error", err)
 	}
@@ -388,7 +386,7 @@ func (r *RootSyncReconciler) handleReconcileError(ctx context.Context, err error
 // deleteManagedObjects deletes objects managed by the reconciler-manager for
 // this RootSync.
 func (r *RootSyncReconciler) deleteManagedObjects(ctx context.Context, reconcilerRef, rsRef types.NamespacedName) error {
-	r.logger(ctx).Info("Deleting managed objects")
+	r.Logger(ctx).Info("Deleting managed objects")
 
 	if err := r.deleteDeployment(ctx, reconcilerRef); err != nil {
 		return fmt.Errorf("deleting reconciler deployment: %w", err)
@@ -476,29 +474,27 @@ func withNamespace(obj client.Object, ns string) client.Object {
 	return obj
 }
 
-func (r *RootSyncReconciler) mapMembershipToRootSyncs(ctx context.Context, o client.Object) []reconcile.Request {
+func (r *RootSyncReconciler) mapMembershipToRootSyncs(ctx context.Context, obj client.Object) []reconcile.Request {
 	// Clear the membership if the cluster is unregistered
 	membershipObj := &hubv1.Membership{}
 	membershipObj.Name = fleetMembershipName
 	membershipRef := client.ObjectKeyFromObject(membershipObj)
 	if err := r.client.Get(ctx, membershipRef, membershipObj); err != nil {
 		if apierrors.IsNotFound(err) {
-			klog.Info("Fleet Membership not found, clearing membership cache")
+			r.Logger(ctx).Info("Fleet Membership not found, clearing membership cache")
 			r.membership = nil
 			return r.requeueAllRSyncs(ctx, membershipObj)
 		}
-		klog.Errorf("Fleet Membership get failed: %v", err)
+		r.Logger(ctx).Error(err, "Fleet Membership get failed")
 		return nil
 	}
 
-	m, isMembership := o.(*hubv1.Membership)
+	m, isMembership := obj.(*hubv1.Membership)
 	if !isMembership {
-		klog.Errorf("Fleet Membership expected, found %q", o.GetObjectKind().GroupVersionKind())
-		return nil
+		klog.Fatalf("Fleet Membership expected, found %q", obj.GetObjectKind().GroupVersionKind())
 	}
 	if m.Name != fleetMembershipName {
-		klog.Errorf("Fleet Membership name expected %q, found %q", fleetMembershipName, m.Name)
-		return nil
+		klog.Fatalf("Fleet Membership name expected %q, found %q", fleetMembershipName, m.Name)
 	}
 	r.membership = m
 	return r.requeueAllRSyncs(ctx, membershipObj)
@@ -516,14 +512,15 @@ func (r *RootSyncReconciler) mapConfigMapsToRootSyncs(ctx context.Context, obj c
 	// Look up RootSyncs and see if any of them reference this ConfigMap.
 	rootSyncList := &v1beta1.RootSyncList{}
 	if err := r.client.List(ctx, rootSyncList, client.InNamespace(objRef.Namespace)); err != nil {
-		klog.Errorf("failed to list RootSyncs for %s: %v", kinds.ObjectSummary(obj), err)
+		r.Logger(ctx).Error(err, "Failed to list objects",
+			logFieldObjectNamespace, objRef.Namespace,
+			logFieldObjectKind, r.syncGVK.Kind)
 		return nil
 	}
 	var requests []reconcile.Request
 	var attachedRSNames []string
 	for _, rs := range rootSyncList.Items {
 		// Only enqueue a request for the RSync if it references the ConfigMap that triggered the event
-		//TODO: Use stdlib slices.Contains in Go 1.21+
 		if slices.Contains(rootSyncHelmValuesFileNames(&rs), objRef.Name) {
 			requests = append(requests, reconcile.Request{
 				NamespacedName: client.ObjectKeyFromObject(&rs),
@@ -532,8 +529,8 @@ func (r *RootSyncReconciler) mapConfigMapsToRootSyncs(ctx context.Context, obj c
 		}
 	}
 	if len(requests) > 0 {
-		klog.Infof("Changes to %s triggered a reconciliation for the RootSync(s) (%s)",
-			kinds.ObjectSummary(obj), strings.Join(attachedRSNames, ", "))
+		r.Logger(ctx).Info(fmt.Sprintf("Changes to %s triggered a reconciliation for the RootSync(s) (%s)",
+			kinds.ObjectSummary(obj), strings.Join(attachedRSNames, ", ")))
 	}
 	return requests
 }
@@ -575,14 +572,14 @@ func (r *RootSyncReconciler) mapObjectToRootSync(ctx context.Context, obj client
 	}
 
 	if err := r.addTypeInformationToObject(obj); err != nil {
-		klog.Errorf("failed to lookup resource of object %T (%s): %v",
-			obj, objRef, err)
+		r.Logger(ctx).Error(err, "Failed to add type to object",
+			logFieldObjectRef, objRef)
 		return nil
 	}
 
 	syncMetaList, err := r.listSyncMetadata(ctx)
 	if err != nil {
-		r.logger(ctx).Error(err, "Failed to list objects",
+		r.Logger(ctx).Error(err, "Failed to list objects",
 			logFieldSyncKind, r.syncGVK.Kind)
 		return nil
 	}
@@ -619,8 +616,8 @@ func (r *RootSyncReconciler) mapObjectToRootSync(ctx context.Context, obj client
 		}
 	}
 	if len(requests) > 0 {
-		klog.Infof("Changes to %s (%s) triggers a reconciliation for the RootSync(s) (%s)",
-			obj.GetObjectKind().GroupVersionKind().Kind, objRef, strings.Join(attachedRSNames, ", "))
+		r.Logger(ctx).Info(fmt.Sprintf("Changes to %s triggers a reconciliation for the RootSync(s) (%s)",
+			kinds.ObjectSummary(obj), strings.Join(attachedRSNames, ", ")))
 	}
 	return requests
 }
@@ -653,7 +650,9 @@ func (r *RootSyncReconciler) mapSecretToRootSyncs(ctx context.Context, secret cl
 
 	attachedRootSyncs := &v1beta1.RootSyncList{}
 	if err := r.client.List(ctx, attachedRootSyncs, client.InNamespace(sRef.Namespace)); err != nil {
-		klog.Errorf("RootSync list failed for Secret (%s): %v", sRef, err)
+		r.Logger(ctx).Error(err, "Failed to list objects",
+			logFieldObjectKind, "Secret",
+			logFieldObjectNamespace, sRef.Namespace)
 		return nil
 	}
 
@@ -672,8 +671,8 @@ func (r *RootSyncReconciler) mapSecretToRootSyncs(ctx context.Context, secret cl
 		}
 	}
 	if len(requests) > 0 {
-		klog.Infof("Changes to Secret (%s) triggers a reconciliation for the RootSync objects: %s",
-			sRef, strings.Join(attachedRSNames, ", "))
+		r.Logger(ctx).Info(fmt.Sprintf("Changes to %s triggers a reconciliation for the RootSync objects: %s",
+			kinds.ObjectSummary(secret), strings.Join(attachedRSNames, ", ")))
 	}
 	return requests
 }
@@ -1077,7 +1076,7 @@ func (r *RootSyncReconciler) createRBACBinding(ctx context.Context, reconcilerRe
 		Name:      binding.GetName(),
 		Namespace: binding.GetNamespace(),
 	}
-	r.logger(ctx).Info("Managed object create successful",
+	r.Logger(ctx).Info("Managed object create successful",
 		logFieldObjectRef, rbRef.String(),
 		logFieldObjectKind, binding.GetObjectKind().GroupVersionKind().Kind)
 	return rbRef, nil
@@ -1108,8 +1107,8 @@ func (r *RootSyncReconciler) updateSyncStatus(ctx context.Context, rs *v1beta1.R
 			// No update necessary.
 			return &mutate.NoUpdateError{}
 		}
-		if r.logger(ctx).V(5).Enabled() {
-			r.logger(ctx).Info("Updating sync status",
+		if r.Logger(ctx).V(5).Enabled() {
+			r.Logger(ctx).Info("Updating sync status",
 				logFieldResourceVersion, rs.ResourceVersion,
 				"diff", fmt.Sprintf("Diff (- Expected, + Actual):\n%s",
 					cmp.Diff(before.Status, rs.Status)))
@@ -1120,9 +1119,9 @@ func (r *RootSyncReconciler) updateSyncStatus(ctx context.Context, rs *v1beta1.R
 		return updated, fmt.Errorf("Sync status update failed: %w", err)
 	}
 	if updated {
-		r.logger(ctx).Info("Sync status update successful")
+		r.Logger(ctx).Info("Sync status update successful")
 	} else {
-		r.logger(ctx).V(5).Info("Sync status update skipped: no change")
+		r.Logger(ctx).V(5).Info("Sync status update skipped: no change")
 	}
 	return updated, nil
 }

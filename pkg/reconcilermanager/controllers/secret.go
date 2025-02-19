@@ -154,6 +154,9 @@ func (r *reconcilerBase) upsertSecret(ctx context.Context, cmsSecretRef types.Na
 	cmsSecret.Name = cmsSecretRef.Name
 	cmsSecret.Namespace = cmsSecretRef.Namespace
 
+	r.Logger(ctx).V(3).Info("Upserting managed object",
+		logFieldObjectRef, cmsSecretRef.String(),
+		logFieldObjectKind, "Secret")
 	op, err := CreateOrUpdate(ctx, r.client, cmsSecret, func() error {
 		core.AddLabels(cmsSecret, labelMap)
 		// Copy user secret data & type to managed secret
@@ -165,7 +168,7 @@ func (r *reconcilerBase) upsertSecret(ctx context.Context, cmsSecretRef types.Na
 		return op, err
 	}
 	if op != controllerutil.OperationResultNone {
-		r.logger(ctx).Info("Managed object upsert successful",
+		r.Logger(ctx).Info("Upserting managed object successful",
 			logFieldObjectRef, cmsSecretRef.String(),
 			logFieldObjectKind, "Secret",
 			logFieldOperation, op)

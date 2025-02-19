@@ -22,7 +22,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-logr/logr"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/assert"
@@ -41,6 +40,7 @@ import (
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
+	"kpt.dev/configsync/pkg/testing/testcontroller"
 	"kpt.dev/configsync/pkg/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -583,9 +583,11 @@ func TestCompareDeploymentsToCreatePatchData(t *testing.T) {
 				err := fakeClient.Create(context.Background(), util.FakeAutopilotWebhookObject(), client.FieldOwner(syncerFake.FieldManager))
 				require.NoError(t, err)
 			}
+			logger := testcontroller.NewTestLogger(t)
 			r := &reconcilerBase{
-				scheme: fakeClient.Scheme(),
-				client: fakeClient,
+				LoggingController: NewLoggingController(logger),
+				scheme:            fakeClient.Scheme(),
+				client:            fakeClient,
 			}
 			dep, err := r.compareDeploymentsToCreatePatchData(testDeclared, testCurrent, reconcilerManagerAllowList)
 			require.NoError(t, err)
@@ -701,9 +703,11 @@ func TestCompareDeploymentsToCreatePatchDataResourceLimits(t *testing.T) {
 				err := fakeClient.Create(context.Background(), util.FakeAutopilotWebhookObject(), client.FieldOwner(syncerFake.FieldManager))
 				require.NoError(t, err)
 			}
+			logger := testcontroller.NewTestLogger(t)
 			r := &reconcilerBase{
-				scheme: fakeClient.Scheme(),
-				client: fakeClient,
+				LoggingController: NewLoggingController(logger),
+				scheme:            fakeClient.Scheme(),
+				client:            fakeClient,
 			}
 			dep, err := r.compareDeploymentsToCreatePatchData(testDeclared, testCurrent, reconcilerManagerAllowList)
 			require.NoError(t, err)
@@ -974,7 +978,6 @@ func withNamespacePhase(phase corev1.NamespacePhase) core.MetaMutator {
 	}
 }
 func TestSetupAndTeardown(t *testing.T) {
-	lc := loggingController{logr.Discard()}
 	testCases := map[string]struct {
 		rsync              client.Object
 		serverObjs         []client.Object
@@ -1103,15 +1106,19 @@ func TestSetupAndTeardown(t *testing.T) {
 			objs := []client.Object{tc.rsync}
 			objs = append(objs, tc.serverObjs...)
 			testClient := syncerFake.NewClient(t, core.Scheme, objs...)
+			logger := testcontroller.NewTestLogger(t)
 			r := &reconcilerBase{
+				LoggingController: NewLoggingController(logger),
 				scheme:            testClient.Scheme(),
 				client:            testClient,
-				loggingController: lc,
 			}
 			if tc.rsync.GetObjectKind().GroupVersionKind().Kind == configsync.RootSyncKind {
 				r.reconcilerFinalizerHandler = rootReconcilerFinalizerHandler{}
 			} else {
-				r.reconcilerFinalizerHandler = nsReconcilerFinalizerHandler{lc, testClient}
+				r.reconcilerFinalizerHandler = nsReconcilerFinalizerHandler{
+					LoggingController: r.LoggingController,
+					client:            testClient,
+				}
 			}
 			err := r.setupOrTeardown(ctx, tc.rsync, noOpFunc, noOpFunc)
 			if tc.expectedErrMsg != "" {

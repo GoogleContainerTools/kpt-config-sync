@@ -28,6 +28,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/metadata"
+	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/handler"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/resourcegroup"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/resourcemap"
@@ -47,23 +48,16 @@ const (
 	DisableStatusValue = "disabled"
 )
 
-// contextKey is a custom type for wrapping context values to make them unique
-// to this package
-type contextKey string
-
-const contextLoggerKey = contextKey("logger")
-
 // Reconciler reconciles a ResourceGroup object
 // It only accepts the Create, Update, Delete events of ResourceGroup objects.
 type Reconciler struct {
+	*controllers.LoggingController
+
 	// cfg is the rest config associated with the reconciler
 	cfg *rest.Config
 
 	// Client is to get and update ResourceGroup object.
-	client.Client
-
-	// log is the logger of the reconciler.
-	log logr.Logger
+	client client.Client
 
 	// TODO: check if scheme is needed
 	scheme *runtime.Scheme
@@ -90,31 +84,31 @@ type Reconciler struct {
 // +kubebuilder:rbac:groups=kpt.dev,resources=resourcegroups,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=kpt.dev,resources=resourcegroups/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=*,resources=*,verbs=get;list;watch
-func (r *Reconciler) Reconcile(rootCtx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := r.log
-	ctx := context.WithValue(rootCtx, contextLoggerKey, logger)
-	logger.Info("starts reconciling")
-	return r.reconcileKptGroup(ctx, logger, req)
-}
+func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	ctx = r.SetLoggerValues(ctx, "resourcegroup", req.NamespacedName)
+	r.Logger(ctx).V(3).Info("Reconcile starting")
 
-func (r *Reconciler) reconcileKptGroup(ctx context.Context, logger logr.Logger, req ctrl.Request) (ctrl.Result, error) {
 	var resgroup = &v1alpha1.ResourceGroup{}
-	err := r.Get(ctx, req.NamespacedName, resgroup)
+	err := r.client.Get(ctx, req.NamespacedName, resgroup)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// If the ResourceGroup has been deleted, update the resMap
+			r.Logger(ctx).V(3).Info("Skipping update event: ResourceGroup not found")
 			return r.reconcile(ctx, req.NamespacedName, []v1alpha1.ObjMetadata{}, true)
 		}
 		return ctrl.Result{}, err
 	}
 
-	// ResourceGroup CR is created from ConfigSync and set to disable the status
+	// Skip ResourceGroup status updates if the status is disabled and has
+	// already been removed.
 	if isStatusDisabled(resgroup) {
+		r.Logger(ctx).V(3).Info("Skipping update event: ResourceGroup status disabled")
 		return r.reconcileDisabledResourceGroup(ctx, req, resgroup)
 	}
 
 	// ResourceGroup is in the process of being deleted, clean up the cache for this ResourceGroup
 	if resgroup.DeletionTimestamp != nil {
+		r.Logger(ctx).V(3).Info("Skipping update event: ResourceGroup being deleted")
 		return r.reconcile(ctx, req.NamespacedName, []v1alpha1.ObjMetadata{}, true)
 	}
 
@@ -126,8 +120,8 @@ func (r *Reconciler) reconcileKptGroup(ctx context.Context, logger logr.Logger, 
 	}
 
 	// Push an event to the ResourceGroup event channel
+	r.Logger(ctx).V(3).Info("Sending update event")
 	r.channel <- event.GenericEvent{Object: resgroup}
-	logger.Info("finished reconciling")
 
 	return ctrl.Result{}, nil
 }
@@ -163,7 +157,7 @@ func (r *Reconciler) reconcileDisabledResourceGroup(ctx context.Context, req ctr
 		}
 		resgroup.Status = emptyStatus
 		// Use `r.Status().Update()` here instead of `r.Update()` to update only resgroup.Status.
-		return r.Status().Update(ctx, resgroup, client.FieldOwner(resourcegroup.FieldManager))
+		return r.client.Status().Update(ctx, resgroup, client.FieldOwner(resourcegroup.FieldManager))
 	})
 	if err != nil {
 		return ctrl.Result{}, err
@@ -196,14 +190,14 @@ func NewController(mgr manager.Manager, channel chan event.GenericEvent,
 	}
 	// Create the reconciler
 	reconciler := &Reconciler{
-		Client:   mgr.GetClient(),
-		cfg:      cfg,
-		log:      logger,
-		scheme:   mgr.GetScheme(),
-		resolver: resolver,
-		resMap:   resMap,
-		channel:  channel,
-		watches:  watchManager,
+		LoggingController: controllers.NewLoggingController(logger),
+		client:            mgr.GetClient(),
+		cfg:               cfg,
+		scheme:            mgr.GetScheme(),
+		resolver:          resolver,
+		resMap:            resMap,
+		channel:           channel,
+		watches:           watchManager,
 	}
 
 	_, err = ctrl.NewControllerManagedBy(mgr).

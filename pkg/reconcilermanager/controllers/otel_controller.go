@@ -48,10 +48,8 @@ type OtelReconciler struct {
 func NewOtelReconciler(client client.Client, log logr.Logger, credentialProvider auth.CredentialProvider) *OtelReconciler {
 	return &OtelReconciler{
 		otelBaseController: otelBaseController{
-			loggingController: loggingController{
-				log: log,
-			},
-			client: client,
+			LoggingController: NewLoggingController(log),
+			client:            client,
 		},
 		credentialProvider: credentialProvider,
 	}
@@ -59,13 +57,10 @@ func NewOtelReconciler(client client.Client, log logr.Logger, credentialProvider
 
 // Reconcile the otel ConfigMap and update the Deployment annotation.
 func (r *OtelReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
-	ctx = r.setLoggerValues(ctx, "otel", req.NamespacedName.String())
+	ctx = r.SetLoggerValues(ctx, "otel", req.NamespacedName.String())
 
 	configMapDataHash, err := r.reconcileConfigMap(ctx, req)
 	if err != nil {
-		r.logger(ctx).Error(err, "Failed to create/update ConfigMap",
-			logFieldObjectKind, "ConfigMap",
-			logFieldObjectRef, req.NamespacedName.String())
 		return controllerruntime.Result{}, err
 	}
 
@@ -74,9 +69,6 @@ func (r *OtelReconciler) Reconcile(ctx context.Context, req reconcile.Request) (
 	}
 	base16Hash := fmt.Sprintf("%x", configMapDataHash)
 	if err := r.updateDeploymentAnnotation(ctx, metadata.ConfigMapAnnotationKey, base16Hash); err != nil {
-		r.logger(ctx).Error(err, "Failed to update Deployment",
-			logFieldObjectRef, otelCollectorDeploymentRef(),
-			logFieldObjectKind, "Deployment")
 		return controllerruntime.Result{}, err
 	}
 	return controllerruntime.Result{}, nil
@@ -110,7 +102,7 @@ func (r *OtelReconciler) reconcileConfigMap(ctx context.Context, req reconcile.R
 			// adds a custom otel config map and later removes the config map.
 			return hash(req.String())
 		}
-		return nil, status.APIServerErrorf(err, "failed to get otel ConfigMap %s", req.NamespacedName.String())
+		return nil, status.APIServerErrorf(err, "failed to get ConfigMap: %s", req.NamespacedName)
 	}
 	if cm.Name == metrics.OtelCollectorName {
 		return r.configureGooglecloudConfigMap(ctx)
@@ -136,6 +128,11 @@ func (r *OtelReconciler) configureGooglecloudConfigMap(ctx context.Context) ([]b
 	cm := &corev1.ConfigMap{}
 	cm.Name = metrics.OtelCollectorGooglecloud
 	cm.Namespace = configmanagement.MonitoringNamespace
+
+	key := client.ObjectKeyFromObject(cm)
+	r.Logger(ctx).V(3).Info("Upserting managed object",
+		logFieldObjectRef, key.String(),
+		logFieldObjectKind, "ConfigMap")
 	op, err := CreateOrUpdate(ctx, r.client, cm, func() error {
 		cm.Labels = map[string]string{
 			"app":                metrics.OpenTelemetry,
@@ -149,11 +146,11 @@ func (r *OtelReconciler) configureGooglecloudConfigMap(ctx context.Context) ([]b
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, status.APIServerErrorf(err, "failed to upsert ConfigMap: %s", key)
 	}
 	if op != controllerutil.OperationResultNone {
-		r.logger(ctx).Info("Managed object upsert successful",
-			logFieldObjectRef, client.ObjectKeyFromObject(cm).String(),
+		r.Logger(ctx).Info("Upserting managed object successful",
+			logFieldObjectRef, key.String(),
 			logFieldObjectKind, "ConfigMap",
 			logFieldOperation, op)
 		return hash(cm)

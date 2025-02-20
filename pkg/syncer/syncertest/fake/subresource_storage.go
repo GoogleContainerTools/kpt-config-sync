@@ -132,7 +132,8 @@ func (ss *SubresourceStorage) Update(ctx context.Context, obj client.Object, opt
 	}
 	// Copy everything back to input object, even if no diff
 	if err := ss.Storage.scheme.Convert(cachedObj, obj, nil); err != nil {
-		return fmt.Errorf("failed to update input object: %w", err)
+		return fmt.Errorf("SubresourceStorage.Update: failed to update input object list: %w", err)
+
 	}
 	// TODO: Remove GVK from typed objects
 	obj.GetObjectKind().SetGroupVersionKind(cachedObj.GroupVersionKind())

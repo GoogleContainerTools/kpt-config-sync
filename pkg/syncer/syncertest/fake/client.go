@@ -24,7 +24,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/watch"
-	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/syncer/reconcile"
 	"sigs.k8s.io/cli-utils/pkg/testutil"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -95,11 +94,7 @@ func (c *Client) IsObjectNamespaced(_ runtime.Object) (bool, error) {
 func (c *Client) Get(ctx context.Context, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
 	options := &client.GetOptions{}
 	options.ApplyOptions(opts)
-	gvk, err := kinds.Lookup(obj, c.scheme)
-	if err != nil {
-		return err
-	}
-	return c.storage.Get(ctx, gvk, key, obj, options)
+	return c.storage.Get(ctx, key, obj, options)
 }
 
 // List implements client.Client.

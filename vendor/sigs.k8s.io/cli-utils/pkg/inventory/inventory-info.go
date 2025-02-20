@@ -29,5 +29,7 @@ type Info interface {
 	// if the Id is necessary and how to use it for pruning objects.
 	ID() string
 
-	Strategy() Strategy
+	// InitialInventory returns an empty initialized inventory object.
+	// This is used in the case that there is no existing object on the cluster.
+	InitialInventory() Inventory
 }

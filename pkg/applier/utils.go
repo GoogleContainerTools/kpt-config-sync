@@ -21,7 +21,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/GoogleContainerTools/kpt/pkg/live"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -34,6 +33,7 @@ import (
 	"kpt.dev/configsync/pkg/remediator/queue"
 	"kpt.dev/configsync/pkg/status"
 	syncerreconcile "kpt.dev/configsync/pkg/syncer/reconcile"
+	"sigs.k8s.io/cli-utils/pkg/inventory"
 	"sigs.k8s.io/cli-utils/pkg/object"
 	"sigs.k8s.io/cli-utils/pkg/object/mutation"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -132,7 +132,7 @@ func idFrom(identifier object.ObjMetadata) core.ID {
 	}
 }
 
-func idFromInventory(rg *live.InventoryResourceGroup) core.ID {
+func idFromInventory(rg inventory.Info) core.ID {
 	return core.ID{
 		GroupKind: v1alpha1.SchemeGroupVersionKind().GroupKind(),
 		ObjectKey: client.ObjectKey{

@@ -38,13 +38,6 @@ func NewClusterConfig(importToken string, loadTime metav1.Time) *ClusterConfig {
 	}
 }
 
-// NewCRDClusterConfig initializes a CRD Clusterconfig.
-func NewCRDClusterConfig(importToken string, loadTime metav1.Time) *ClusterConfig {
-	result := NewClusterConfig(importToken, loadTime)
-	result.Name = CRDClusterConfigName
-	return result
-}
-
 // NewNamespaceConfig initializes a Namespace cluster config.
 func NewNamespaceConfig(
 	name string,

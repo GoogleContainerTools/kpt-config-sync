@@ -141,11 +141,11 @@ func CanPrune(inv Info, obj *unstructured.Unstructured, policy Policy) (bool, er
 	}
 }
 
-func AddInventoryIDAnnotation(obj *unstructured.Unstructured, inv Info) {
+func AddInventoryIDAnnotation(obj *unstructured.Unstructured, inventoryID string) {
 	annotations := obj.GetAnnotations()
 	if annotations == nil {
 		annotations = make(map[string]string)
 	}
-	annotations[OwningInventoryKey] = inv.ID()
+	annotations[OwningInventoryKey] = inventoryID
 	obj.SetAnnotations(annotations)
 }

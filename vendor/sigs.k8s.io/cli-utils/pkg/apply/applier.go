@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -52,9 +53,9 @@ type Applier struct {
 
 // prepareObjects returns the set of objects to apply and to prune or
 // an error if one occurred.
-func (a *Applier) prepareObjects(localInv inventory.Info, localObjs object.UnstructuredSet,
+func (a *Applier) prepareObjects(clusterInv inventory.Inventory, localObjs object.UnstructuredSet,
 	o ApplierOptions) (object.UnstructuredSet, object.UnstructuredSet, error) {
-	if localInv == nil {
+	if clusterInv == nil {
 		return nil, nil, fmt.Errorf("the local inventory can't be nil")
 	}
 	if err := inventory.ValidateNoInventory(localObjs); err != nil {
@@ -62,29 +63,9 @@ func (a *Applier) prepareObjects(localInv inventory.Info, localObjs object.Unstr
 	}
 	// Add the inventory annotation to the resources being applied.
 	for _, localObj := range localObjs {
-		inventory.AddInventoryIDAnnotation(localObj, localInv)
+		inventory.AddInventoryIDAnnotation(localObj, clusterInv.ID())
 	}
-	// If the inventory uses the Name strategy and an inventory ID is provided,
-	// verify that the existing inventory object (if there is one) has an ID
-	// label that matches.
-	// TODO(seans): This inventory id validation should happen in destroy and status.
-	if localInv.Strategy() == inventory.NameStrategy && localInv.ID() != "" {
-		prevInvObjs, err := a.invClient.GetClusterInventoryObjs(localInv)
-		if err != nil {
-			return nil, nil, err
-		}
-		if len(prevInvObjs) > 1 {
-			panic(fmt.Errorf("found %d inv objects with Name strategy", len(prevInvObjs)))
-		}
-		if len(prevInvObjs) == 1 {
-			invObj := prevInvObjs[0]
-			val := invObj.GetLabels()[common.InventoryLabel]
-			if val != localInv.ID() {
-				return nil, nil, fmt.Errorf("inventory-id of inventory object in cluster doesn't match provided id %q", localInv.ID())
-			}
-		}
-	}
-	pruneObjs, err := a.pruner.GetPruneObjs(localInv, localObjs, prune.Options{
+	pruneObjs, err := a.pruner.GetPruneObjs(clusterInv, localObjs, prune.Options{
 		DryRunStrategy: o.DryRunStrategy,
 	})
 	if err != nil {
@@ -116,8 +97,20 @@ func (a *Applier) Run(ctx context.Context, invInfo inventory.Info, objects objec
 		}
 		validator.Validate(objects)
 
+		clusterInventory, err := a.invClient.Get(ctx, invInfo, inventory.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			clusterInventory = invInfo.InitialInventory()
+		} else if err != nil {
+			handleError(eventChannel, err)
+			return
+		}
+		if clusterInventory.ID() != invInfo.ID() {
+			handleError(eventChannel, fmt.Errorf("inventory-id of inventory object %s/%s in cluster doesn't match provided id %q",
+				invInfo.Namespace(), invInfo.Name(), invInfo.ID()))
+		}
+
 		// Decide which objects to apply and which to prune
-		applyObjs, pruneObjs, err := a.prepareObjects(invInfo, objects, options)
+		applyObjs, pruneObjs, err := a.prepareObjects(clusterInventory, objects, options)
 		if err != nil {
 			handleError(eventChannel, err)
 			return
@@ -174,6 +167,7 @@ func (a *Applier) Run(ctx context.Context, invInfo inventory.Info, objects objec
 			OpenAPIGetter: a.openAPIGetter,
 			InfoHelper:    a.infoHelper,
 			Mapper:        a.mapper,
+			Inventory:     clusterInventory,
 			InvClient:     a.invClient,
 			Collector:     vCollector,
 			ApplyFilters:  applyFilters,
@@ -199,7 +193,7 @@ func (a *Applier) Run(ctx context.Context, invInfo inventory.Info, objects objec
 			Build(taskContext, opts)
 
 		klog.V(4).Infof("validation errors: %d", len(vCollector.Errors))
-		klog.V(4).Infof("invalid objects: %d", len(vCollector.InvalidIds))
+		klog.V(4).Infof("invalid objects: %d", len(vCollector.InvalidIDs))
 
 		// Handle validation errors
 		switch options.ValidationPolicy {
@@ -219,7 +213,7 @@ func (a *Applier) Run(ctx context.Context, invInfo inventory.Info, objects objec
 		}
 
 		// Register invalid objects to be retained in the inventory, if present.
-		for _, id := range vCollector.InvalidIds {
+		for _, id := range vCollector.InvalidIDs {
 			taskContext.AddInvalidObject(id)
 		}
 
@@ -233,13 +227,13 @@ func (a *Applier) Run(ctx context.Context, invInfo inventory.Info, objects objec
 		}
 		// Create a new TaskStatusRunner to execute the taskQueue.
 		klog.V(4).Infoln("applier building TaskStatusRunner...")
-		allIds := object.UnstructuredSetToObjMetadataSet(append(applyObjs, pruneObjs...))
+		allIDs := object.UnstructuredSetToObjMetadataSet(append(applyObjs, pruneObjs...))
 		statusWatcher := a.statusWatcher
 		// Disable watcher for dry runs
 		if opts.DryRunStrategy.ClientOrServerDryRun() {
 			statusWatcher = watcher.BlindStatusWatcher{}
 		}
-		runner := taskrunner.NewTaskStatusRunner(allIds, statusWatcher)
+		runner := taskrunner.NewTaskStatusRunner(allIDs, statusWatcher)
 		klog.V(4).Infoln("applier running TaskStatusRunner...")
 		err = runner.Run(ctx, taskContext, taskQueue.ToChannel(), taskrunner.Options{
 			EmitStatusEvents:         options.EmitStatusEvents,

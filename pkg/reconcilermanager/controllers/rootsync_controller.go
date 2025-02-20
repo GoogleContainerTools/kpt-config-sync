@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -98,7 +97,7 @@ func NewRootSyncReconciler(clusterName string, reconcilerPollingPeriod, hydratio
 			scheme:                     scheme,
 			reconcilerPollingPeriod:    reconcilerPollingPeriod,
 			hydrationPollingPeriod:     hydrationPollingPeriod,
-			syncKind:                   configsync.RootSyncKind,
+			syncGVK:                    kinds.RootSyncV1Beta1(),
 			knownHostExist:             false,
 			controllerName:             "",
 		},
@@ -117,7 +116,7 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 	start := time.Now()
 	reconcilerRef := core.RootReconcilerObjectKey(rsRef.Name)
 	ctx = r.setLoggerValues(ctx,
-		logFieldSyncKind, r.syncKind,
+		logFieldSyncKind, r.syncGVK.Kind,
 		logFieldSyncRef, rsRef.String(),
 		logFieldReconciler, reconcilerRef.String())
 	rs := &v1beta1.RootSync{}
@@ -194,7 +193,7 @@ func (r *RootSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 	// need to copy it to the config-management-system namespace.
 
 	rsRef := client.ObjectKeyFromObject(rs)
-	labelMap := ManagedObjectLabelMap(r.syncKind, rsRef)
+	labelMap := ManagedObjectLabelMap(r.syncGVK.Kind, rsRef)
 
 	// Overwrite reconciler pod ServiceAccount.
 	var auth configsync.AuthType
@@ -479,11 +478,14 @@ func withNamespace(obj client.Object, ns string) client.Object {
 
 func (r *RootSyncReconciler) mapMembershipToRootSyncs(ctx context.Context, o client.Object) []reconcile.Request {
 	// Clear the membership if the cluster is unregistered
-	if err := r.client.Get(ctx, types.NamespacedName{Name: fleetMembershipName}, &hubv1.Membership{}); err != nil {
+	membershipObj := &hubv1.Membership{}
+	membershipObj.Name = fleetMembershipName
+	membershipRef := client.ObjectKeyFromObject(membershipObj)
+	if err := r.client.Get(ctx, membershipRef, membershipObj); err != nil {
 		if apierrors.IsNotFound(err) {
 			klog.Info("Fleet Membership not found, clearing membership cache")
 			r.membership = nil
-			return r.requeueAllRootSyncs(fleetMembershipName)
+			return r.requeueAllRSyncs(ctx, membershipObj)
 		}
 		klog.Errorf("Fleet Membership get failed: %v", err)
 		return nil
@@ -499,7 +501,7 @@ func (r *RootSyncReconciler) mapMembershipToRootSyncs(ctx context.Context, o cli
 		return nil
 	}
 	r.membership = m
-	return r.requeueAllRootSyncs(fleetMembershipName)
+	return r.requeueAllRSyncs(ctx, membershipObj)
 }
 
 // mapConfigMapsToRootSyncs handles updates to referenced ConfigMaps
@@ -578,10 +580,10 @@ func (r *RootSyncReconciler) mapObjectToRootSync(ctx context.Context, obj client
 		return nil
 	}
 
-	allRootSyncs := &v1beta1.RootSyncList{}
-	if err := r.client.List(ctx, allRootSyncs); err != nil {
-		klog.Errorf("failed to list all RootSyncs for %s (%s): %v",
-			obj.GetObjectKind().GroupVersionKind().Kind, objRef, err)
+	syncMetaList, err := r.listSyncMetadata(ctx)
+	if err != nil {
+		r.logger(ctx).Error(err, "Failed to list objects",
+			logFieldSyncKind, r.syncGVK.Kind)
 		return nil
 	}
 
@@ -595,24 +597,24 @@ func (r *RootSyncReconciler) mapObjectToRootSync(ctx context.Context, obj client
 	// For other resources, requeue the mapping RootSync object and then return.
 	var requests []reconcile.Request
 	var attachedRSNames []string
-	for _, rs := range allRootSyncs.Items {
-		reconcilerName := core.RootReconcilerName(rs.GetName())
+	for _, syncMeta := range syncMetaList.Items {
+		reconcilerName := core.RootReconcilerName(syncMeta.GetName())
 		switch obj.(type) {
 		case *rbacv1.ClusterRoleBinding:
 			if objRef.Name == RootSyncLegacyClusterRoleBindingName || objRef.Name == RootSyncBaseClusterRoleBindingName {
 				requests = append(requests, reconcile.Request{
-					NamespacedName: client.ObjectKeyFromObject(&rs)})
-				attachedRSNames = append(attachedRSNames, rs.GetName())
+					NamespacedName: client.ObjectKeyFromObject(&syncMeta)})
+				attachedRSNames = append(attachedRSNames, syncMeta.GetName())
 			} else if strings.HasPrefix(objRef.Name, reconcilerName) {
-				return requeueRootSyncRequest(obj, &rs)
+				return r.requeueRSync(ctx, obj, client.ObjectKeyFromObject(&syncMeta))
 			}
 		case *rbacv1.RoleBinding: // RoleBinding can be in any namespace
 			if strings.HasPrefix(objRef.Name, reconcilerName) {
-				return requeueRootSyncRequest(obj, &rs)
+				return r.requeueRSync(ctx, obj, client.ObjectKeyFromObject(&syncMeta))
 			}
 		default: // Deployment and ServiceAccount are in the controller Namespace
 			if objRef.Name == reconcilerName && objRef.Namespace == configsync.ControllerNamespace {
-				return requeueRootSyncRequest(obj, &rs)
+				return r.requeueRSync(ctx, obj, client.ObjectKeyFromObject(&syncMeta))
 			}
 		}
 	}
@@ -623,41 +625,9 @@ func (r *RootSyncReconciler) mapObjectToRootSync(ctx context.Context, obj client
 	return requests
 }
 
-func requeueRootSyncRequest(obj client.Object, rs *v1beta1.RootSync) []reconcile.Request {
-	rsRef := client.ObjectKeyFromObject(rs)
-	klog.Infof("Changes to %s (%s) triggers a reconciliation for the RootSync (%s)",
-		obj.GetObjectKind().GroupVersionKind().Kind, client.ObjectKeyFromObject(obj), rsRef)
-	return []reconcile.Request{
-		{
-			NamespacedName: rsRef,
-		},
-	}
-}
-
-func (r *RootSyncReconciler) requeueAllRootSyncs(name string) []reconcile.Request {
-	//TODO: pass through context (reqs updating controller-runtime)
-	ctx := context.Background()
-	allRootSyncs := &v1beta1.RootSyncList{}
-	if err := r.client.List(ctx, allRootSyncs); err != nil {
-		klog.Errorf("RootSync list failed: %v", err)
-		return nil
-	}
-
-	requests := make([]reconcile.Request, len(allRootSyncs.Items))
-	for i, rs := range allRootSyncs.Items {
-		requests[i] = reconcile.Request{
-			NamespacedName: client.ObjectKeyFromObject(&rs),
-		}
-	}
-	if len(requests) > 0 {
-		klog.Infof("Changes to %s trigger reconciliations for %d RootSync objects.", name, len(allRootSyncs.Items))
-	}
-	return requests
-}
-
-func (r *RootSyncReconciler) mapAdmissionWebhookToRootSync(_ context.Context, admissionWebhook client.Object) []reconcile.Request {
+func (r *RootSyncReconciler) mapAdmissionWebhookToRootSync(ctx context.Context, admissionWebhook client.Object) []reconcile.Request {
 	if admissionWebhook.GetName() == webhookconfiguration.Name {
-		return r.requeueAllRootSyncs(admissionWebhook.GetName())
+		return r.requeueAllRSyncs(ctx, admissionWebhook)
 	}
 	return nil
 }
@@ -798,8 +768,8 @@ func (r *RootSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 				statusMode:               rs.Spec.SafeOverride().StatusMode,
 				reconcileTimeout:         v1beta1.GetReconcileTimeout(rs.Spec.SafeOverride().ReconcileTimeout),
 				apiServerTimeout:         v1beta1.GetAPIServerTimeout(rs.Spec.SafeOverride().APIServerTimeout),
-				requiresRendering:        annotationEnabled(metadata.RequiresRenderingAnnotationKey, rs.GetAnnotations()),
-				dynamicNSSelectorEnabled: annotationEnabled(metadata.DynamicNSSelectorEnabledAnnotationKey, rs.GetAnnotations()),
+				requiresRendering:        r.isAnnotationValueTrue(ctx, rs, metadata.RequiresRenderingAnnotationKey),
+				dynamicNSSelectorEnabled: r.isAnnotationValueTrue(ctx, rs, metadata.DynamicNSSelectorEnabledAnnotationKey),
 				webhookEnabled:           r.webhookEnabled,
 			}),
 			sourceFormatEnv(rs.Spec.SourceFormat),
@@ -964,7 +934,7 @@ func (r *RootSyncReconciler) validateRootSecret(ctx context.Context, rootSync *v
 // A map is returned which maps RoleRef to RBAC binding for convenience to the caller.
 func (r *RootSyncReconciler) listCurrentRoleRefs(ctx context.Context, rsRef types.NamespacedName) (map[v1beta1.RootSyncRoleRef]client.Object, error) {
 	currentRoleMap := make(map[v1beta1.RootSyncRoleRef]client.Object)
-	labelMap := ManagedObjectLabelMap(r.syncKind, rsRef)
+	labelMap := ManagedObjectLabelMap(r.syncGVK.Kind, rsRef)
 	opts := &client.ListOptions{}
 	opts.LabelSelector = client.MatchingLabelsSelector{
 		Selector: labels.SelectorFromSet(labelMap),
@@ -1098,7 +1068,7 @@ func (r *RootSyncReconciler) createRBACBinding(ctx context.Context, reconcilerRe
 	// is not feasible, since it would risk hitting length constraints.
 	// e.g. reconciler.name + roleRef.kind + roleRef.name
 	binding.SetGenerateName(fmt.Sprintf("%s-", reconcilerRef.Name))
-	binding.SetLabels(ManagedObjectLabelMap(r.syncKind, rsRef))
+	binding.SetLabels(ManagedObjectLabelMap(r.syncGVK.Kind, rsRef))
 
 	if err := r.client.Create(ctx, binding, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		return client.ObjectKey{}, err
@@ -1155,24 +1125,6 @@ func (r *RootSyncReconciler) updateSyncStatus(ctx context.Context, rs *v1beta1.R
 		r.logger(ctx).V(5).Info("Sync status update skipped: no change")
 	}
 	return updated, nil
-}
-
-// annotationEnabled returns whether the annotation should be enabled for the
-// reconciler of this RSync. This is determined by an annotation that is set on
-// the RSync by the reconciler.
-func annotationEnabled(key string, annotations map[string]string) bool {
-	val, ok := annotations[key]
-	if !ok { // default to disabling the annotation
-		return false
-	}
-	boolVal, err := strconv.ParseBool(val)
-	if err != nil {
-		// This should never happen, as the annotation should always be set to a
-		// valid value by the reconciler. Log the error and return the default value.
-		klog.Infof("failed to parse %s value to boolean: %s", key, val)
-		return false
-	}
-	return boolVal
 }
 
 func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootSync, containerEnvs map[string][]corev1.EnvVar) mutateFn {
@@ -1260,7 +1212,7 @@ func (r *RootSyncReconciler) mutationsFor(ctx context.Context, rs *v1beta1.RootS
 			case reconcilermanager.Reconciler:
 				container.Env = append(container.Env, containerEnvs[container.Name]...)
 			case reconcilermanager.HydrationController:
-				if !annotationEnabled(metadata.RequiresRenderingAnnotationKey, rs.GetAnnotations()) {
+				if !r.isAnnotationValueTrue(ctx, rs, metadata.RequiresRenderingAnnotationKey) {
 					// if the sync source does not require rendering, omit the hydration controller
 					// this minimizes the resource footprint of the reconciler
 					addContainer = false

@@ -305,11 +305,15 @@ func (ms *MemoryStorage) listObjects(gk schema.GroupKind) []*unstructured.Unstru
 }
 
 // Get an object from storage
-func (ms *MemoryStorage) Get(_ context.Context, gvk schema.GroupVersionKind, key client.ObjectKey, obj client.Object, opts *client.GetOptions) error {
+func (ms *MemoryStorage) Get(_ context.Context, key client.ObjectKey, obj client.Object, opts *client.GetOptions) error {
 	ms.lock.RLock()
 	defer ms.lock.RUnlock()
 
 	err := ms.validateGetOptions(opts)
+	if err != nil {
+		return err
+	}
+	gvk, err := kinds.Lookup(obj, ms.scheme)
 	if err != nil {
 		return err
 	}
@@ -326,17 +330,11 @@ func (ms *MemoryStorage) Get(_ context.Context, gvk schema.GroupVersionKind, key
 		cachedObj.GetGeneration(), cachedObj.GetResourceVersion(),
 		log.AsJSON(cachedObj))
 
-	// Convert to a typed object, optionally convert between versions
-	tObj, err := kinds.ToTypedWithVersion(cachedObj, gvk, ms.scheme)
-	if err != nil {
-		return err
+	// Convert to the requested type and version (DeepCopyInto the input object).
+	if err := convertUnstructuredIntoObject(cachedObj, obj, ms.scheme); err != nil {
+		return fmt.Errorf("MemoryStorage.Get: failed to update input object list: %w", err)
 	}
 
-	// Convert from the typed object to whatever type the caller asked for.
-	// If it's the same, it'll just do a DeepCopyInto.
-	if err = ms.scheme.Convert(tObj, obj, nil); err != nil {
-		return err
-	}
 	// TODO: Remove GVK from typed objects
 	obj.GetObjectKind().SetGroupVersionKind(gvk)
 
@@ -413,12 +411,11 @@ func (ms *MemoryStorage) List(_ context.Context, list client.ObjectList, opts *c
 		uList.Items = append(uList.Items, *uObj)
 	}
 
-	// Convert from the UnstructuredList to whatever type the caller asked for.
-	// If it's the same, it'll just do a DeepCopyInto.
-	err = ms.scheme.Convert(uList, list, nil)
-	if err != nil {
-		return err
+	// Convert to the requested type and version (DeepCopyInto the input object).
+	if err := convertUnstructuredListIntoObjectList(uList, list, ms.scheme); err != nil {
+		return fmt.Errorf("MemoryStorage.List: failed to update input object list: %w", err)
 	}
+
 	// TODO: Remove GVK from typed objects
 	list.GetObjectKind().SetGroupVersionKind(listGVK)
 
@@ -491,10 +488,12 @@ func (ms *MemoryStorage) Create(ctx context.Context, obj client.Object, opts *cl
 	if err != nil {
 		return err
 	}
-	// Copy everything back to input object, even if no diff
-	if err := ms.scheme.Convert(cachedObj, obj, nil); err != nil {
-		return fmt.Errorf("failed to update input object: %w", err)
+
+	// Convert to the requested type and version (DeepCopyInto the input object).
+	if err := convertUnstructuredIntoObject(cachedObj, obj, ms.scheme); err != nil {
+		return fmt.Errorf("MemoryStorage.Create: failed to update input object list: %w", err)
 	}
+
 	// TODO: Remove GVK from typed objects
 	obj.GetObjectKind().SetGroupVersionKind(cachedObj.GroupVersionKind())
 	if diff {
@@ -769,10 +768,12 @@ func (ms *MemoryStorage) updateWithoutLock(ctx context.Context, obj client.Objec
 	if err != nil {
 		return err
 	}
-	// Copy everything back to input object, even if no diff
-	if err := ms.scheme.Convert(cachedObj, obj, nil); err != nil {
-		return fmt.Errorf("failed to update input object: %w", err)
+
+	// Convert to the requested type and version (DeepCopyInto the input object).
+	if err := convertUnstructuredIntoObject(cachedObj, obj, ms.scheme); err != nil {
+		return fmt.Errorf("MemoryStorage.Update: failed to update input object list: %w", err)
 	}
+
 	// TODO: Remove GVK from typed objects
 	obj.GetObjectKind().SetGroupVersionKind(cachedObj.GroupVersionKind())
 	if diff {
@@ -944,10 +945,12 @@ func (ms *MemoryStorage) Patch(ctx context.Context, obj client.Object, patch cli
 	if err != nil {
 		return err
 	}
-	// Copy everything back to input object, even if no diff
-	if err := ms.scheme.Convert(cachedObj, obj, nil); err != nil {
-		return fmt.Errorf("failed to update input object:: %w", err)
+
+	// Convert to the requested type and version (DeepCopyInto the input object).
+	if err := convertUnstructuredIntoObject(cachedObj, obj, ms.scheme); err != nil {
+		return fmt.Errorf("MemoryStorage.Patch: failed to update input object list: %w", err)
 	}
+
 	// TODO: Remove GVK from typed objects
 	obj.GetObjectKind().SetGroupVersionKind(cachedObj.GroupVersionKind())
 	if diff {

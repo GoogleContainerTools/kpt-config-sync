@@ -192,7 +192,8 @@ func (dc *DynamicClient) get(action clienttesting.Action) (bool, runtime.Object,
 	}
 	id := genID(getAction.GetNamespace(), getAction.GetName(), gvk.GroupKind())
 	uObj := &unstructured.Unstructured{}
-	err = dc.storage.Get(context.Background(), gvk, id.ObjectKey, uObj, &client.GetOptions{})
+	uObj.SetGroupVersionKind(gvk)
+	err = dc.storage.Get(context.Background(), id.ObjectKey, uObj, &client.GetOptions{})
 	return true, uObj, err
 }
 

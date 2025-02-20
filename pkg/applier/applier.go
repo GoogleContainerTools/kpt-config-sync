@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -510,6 +511,25 @@ func (s *supervisor) checkInventoryObjectSize(ctx context.Context, c client.Clie
 	}
 }
 
+// setApplierAnnotation sets the annotation on the ResourceGroup which indicates
+// that the applier is currently running. This tells the resource-group-controller
+// to stop updating the status. This avoids resource conflicts while the applier
+// is running.
+func (s *supervisor) setApplierAnnotation(ctx context.Context, applierRunning bool) error {
+	u := newInventoryUnstructured(s.syncKind, s.syncName, s.syncNamespace, s.clientSet.StatusMode)
+	err := s.clientSet.Client.Get(ctx, client.ObjectKey{Namespace: s.syncNamespace, Name: s.syncName}, u)
+	if apierrors.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	annotations := u.GetAnnotations()
+	annotations[metadata.ApplierRunning] = strconv.FormatBool(applierRunning)
+	u.SetAnnotations(annotations)
+	return s.clientSet.Client.Update(ctx, u)
+}
+
 // applyInner triggers a kpt live apply library call to apply a set of resources.
 func (s *supervisor) applyInner(ctx context.Context, eventHandler func(Event), declaredResources *declared.Resources) (ObjectStatusMap, *stats.SyncStats) {
 	s.checkInventoryObjectSize(ctx, s.clientSet.Client)
@@ -518,6 +538,15 @@ func (s *supervisor) applyInner(ctx context.Context, eventHandler func(Event), d
 	syncStats := stats.NewSyncStats()
 	objStatusMap := make(ObjectStatusMap)
 	objs := declaredResources.DeclaredObjects()
+	if err := s.setApplierAnnotation(ctx, true); err != nil {
+		sendErrorEvent(err, eventHandler)
+		return objStatusMap, syncStats
+	}
+	defer func() {
+		if err := s.setApplierAnnotation(ctx, false); err != nil {
+			sendErrorEvent(err, eventHandler)
+		}
+	}()
 
 	if err := s.cacheIgnoreMutationObjects(ctx, declaredResources); err != nil {
 		sendErrorEvent(err, eventHandler)
@@ -659,6 +688,15 @@ func (s *supervisor) destroyInner(ctx context.Context, eventHandler func(Event))
 	syncStats := stats.NewSyncStats()
 	objStatusMap := make(ObjectStatusMap)
 	isDestroy := true
+	if err := s.setApplierAnnotation(ctx, true); err != nil {
+		sendErrorEvent(err, eventHandler)
+		return objStatusMap, syncStats
+	}
+	defer func() {
+		if err := s.setApplierAnnotation(ctx, false); err != nil {
+			sendErrorEvent(err, eventHandler)
+		}
+	}()
 
 	options := apply.DestroyerOptions{
 		InventoryPolicy: s.policy,

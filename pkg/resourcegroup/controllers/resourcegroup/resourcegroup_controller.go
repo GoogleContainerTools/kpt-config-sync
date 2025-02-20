@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
+	"kpt.dev/configsync/pkg/metadata"
 	"sigs.k8s.io/cli-utils/pkg/common"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -112,6 +113,11 @@ func (r *reconciler) reconcileKpt(ctx context.Context, req ctrl.Request, logger 
 
 	// ResourceGroup is in the process of being deleted
 	if resgroup.DeletionTimestamp != nil {
+		return ctrl.Result{}, nil
+	}
+
+	// Applier is still running for this ResourceGroup
+	if val, ok := resgroup.Annotations[metadata.ApplierRunning]; ok && val == "true" {
 		return ctrl.Result{}, nil
 	}
 

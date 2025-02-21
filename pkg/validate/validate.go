@@ -88,6 +88,12 @@ type Options struct {
 	WebhookEnabled bool
 	// FieldManager to use when performing cluster operations
 	FieldManager string
+	// MaxObjectCount is the maximum number of objects allowed in a single
+	// inventory. Optional. Set to a non-zero value to enable.
+	MaxObjectCount int
+	// MaxInventorySizeBytes is the maximum number of JSON bytes allowed for a
+	// single inventory object. Optional. Set to a non-zero value to enable.
+	MaxInventorySizeBytes int
 }
 
 // Hierarchical validates and hydrates the given FileObjects from a structured,
@@ -158,8 +164,13 @@ func Hierarchical(objs []ast.FileObject, opts Options) ([]ast.FileObject, status
 	// depends on the final state of the objects. This includes:
 	//   - checking for resources with duplicate GKNNs
 	//   - checking for managed resources in unmanaged namespaces
+	//   - checking for too many objects, if configured
+	finalOpts := final.Options{
+		MaxObjectCount:        opts.MaxObjectCount,
+		MaxInventorySizeBytes: opts.MaxInventorySizeBytes,
+	}
 	finalObjects := treeObjects.Objects()
-	if errs = final.Validation(finalObjects); errs != nil {
+	if errs = final.Validate(finalObjects, finalOpts); errs != nil {
 		return nil, status.Append(nonBlockingErrs, errs)
 	}
 
@@ -233,8 +244,13 @@ func Unstructured(ctx context.Context, c client.Client, objs []ast.FileObject, o
 	// depends on the final state of the objects. This includes:
 	//   - checking for resources with duplicate GKNNs
 	//   - checking for managed resources in unmanaged namespaces
+	//   - checking for too many objects, if configured
+	finalOpts := final.Options{
+		MaxObjectCount:        opts.MaxObjectCount,
+		MaxInventorySizeBytes: opts.MaxInventorySizeBytes,
+	}
 	finalObjects := scopedObjects.Objects()
-	if errs := final.Validation(finalObjects); errs != nil {
+	if errs := final.Validate(finalObjects, finalOpts); errs != nil {
 		return nil, status.Append(nonBlockingErrs, errs)
 	}
 

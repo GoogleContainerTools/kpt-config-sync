@@ -321,6 +321,12 @@ func Generate() AllExamples {
 	// 1069
 	result.add(validate.SelfReconcileError(k8sobjects.RootSyncV1Beta1(configsync.RootSyncName)))
 
+	// 1070
+	result.add(system.MaxObjectCountError(system.DefaultMaxObjectCount, system.DefaultMaxObjectCount+1))
+
+	// 1071
+	result.add(system.MaxInventorySizeError(system.DefaultMaxInventorySizeBytes, system.DefaultMaxInventorySizeBytes+1))
+
 	// 2001
 	result.add(status.PathWrapError(errors.New("error creating directory"), "namespaces/foo"))
 

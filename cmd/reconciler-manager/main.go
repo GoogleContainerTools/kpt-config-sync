@@ -165,7 +165,7 @@ func main() {
 
 	otel := controllers.NewOtelReconciler(mgr.GetClient(),
 		textlogger.NewLogger(textlogger.NewConfig()).WithName("controllers").WithName("Otel"),
-		mgr.GetScheme(), otelCredentialProvider)
+		otelCredentialProvider)
 	if err := otel.Register(mgr); err != nil {
 		setupLog.Error(err, "failed to register controller", "controller", "Otel")
 		os.Exit(1)
@@ -173,8 +173,7 @@ func main() {
 	setupLog.Info("Otel controller registration successful")
 
 	otelSA := controllers.NewOtelSAReconciler(*clusterName, mgr.GetClient(),
-		textlogger.NewLogger(textlogger.NewConfig()).WithName("controllers").WithName(controllers.OtelSALoggerName),
-		mgr.GetScheme())
+		textlogger.NewLogger(textlogger.NewConfig()).WithName("controllers").WithName(controllers.OtelSALoggerName))
 	if err := otelSA.Register(mgr); err != nil {
 		setupLog.Error(err, "failed to register controller", "controller", "OtelSA")
 		os.Exit(1)

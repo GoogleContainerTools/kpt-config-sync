@@ -67,7 +67,6 @@ func setupOtelReconciler(t *testing.T, credentialprovider auth.CredentialProvide
 	testReconciler := NewOtelReconciler(
 		fakeClient,
 		controllerruntime.Log.WithName("controllers").WithName("Otel"),
-		fakeClient.Scheme(),
 		credentialprovider,
 	)
 	return fakeClient, testReconciler
@@ -302,7 +301,6 @@ func setupOtelSAReconciler(t *testing.T, objs ...client.Object) (*syncerFake.Cli
 	testReconciler := NewOtelSAReconciler("",
 		fakeClient,
 		controllerruntime.Log.WithName("controllers").WithName(OtelSALoggerName),
-		fakeClient.Scheme(),
 	)
 	return fakeClient, testReconciler
 }

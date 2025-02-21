@@ -26,10 +26,16 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
+	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
+	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
+	"kpt.dev/configsync/pkg/resourcegroup/controllers/handler"
+	"kpt.dev/configsync/pkg/resourcegroup/controllers/metrics"
+	"kpt.dev/configsync/pkg/resourcegroup/controllers/resourcemap"
+	controllerstatus "kpt.dev/configsync/pkg/resourcegroup/controllers/status"
+	"kpt.dev/configsync/pkg/resourcegroup/controllers/typeresolver"
 	"sigs.k8s.io/cli-utils/pkg/common"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -37,13 +43,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-
-	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
-	"kpt.dev/configsync/pkg/resourcegroup/controllers/handler"
-	"kpt.dev/configsync/pkg/resourcegroup/controllers/metrics"
-	"kpt.dev/configsync/pkg/resourcegroup/controllers/resourcemap"
-	controllerstatus "kpt.dev/configsync/pkg/resourcegroup/controllers/status"
-	"kpt.dev/configsync/pkg/resourcegroup/controllers/typeresolver"
 )
 
 //nolint:revive // TODO: add comments for public constants and enable linting
@@ -60,25 +59,15 @@ const (
 	readinessComponent       = "readiness"
 )
 
-// contextKey is a custom type for wrapping context values to make them unique
-// to this package
-type contextKey string
-
-const contextLoggerKey = contextKey("logger")
-
 // DefaultDuration is the default throttling duration
 var DefaultDuration = 30 * time.Second
 
 // reconciler reconciles a ResourceGroup object
 type reconciler struct {
+	*controllers.LoggingController
+
 	// Client is to get and update ResourceGroup object.
-	client.Client
-
-	// log is the logger of the reconciler.
-	log logr.Logger
-
-	// TODO: check if scheme is needed
-	scheme *runtime.Scheme
+	client client.Client
 
 	// resolver is the type resolver to find the server preferred
 	// GVK for a GK
@@ -92,17 +81,13 @@ type reconciler struct {
 // +kubebuilder:rbac:groups=kpt.dev,resources=resourcegroups/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=*,resources=*,verbs=get;list;watch
 
-func (r *reconciler) Reconcile(c context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := r.log
-	ctx := context.WithValue(c, contextLoggerKey, logger)
-	logger.Info("starts reconciling")
-	return r.reconcileKpt(ctx, req, logger)
-}
+func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	ctx = r.SetLoggerValues(ctx, "resourcegroup", req.NamespacedName)
+	r.Logger(ctx).V(3).Info("Reconcile starting")
 
-func (r *reconciler) reconcileKpt(ctx context.Context, req ctrl.Request, logger logr.Logger) (ctrl.Result, error) {
 	// obtain the ResourceGroup CR
-	resgroup := &v1alpha1.ResourceGroup{}
-	err := r.Get(ctx, req.NamespacedName, resgroup)
+	rgObj := &v1alpha1.ResourceGroup{}
+	err := r.client.Get(ctx, req.NamespacedName, rgObj)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return ctrl.Result{}, nil
@@ -110,25 +95,24 @@ func (r *reconciler) reconcileKpt(ctx context.Context, req ctrl.Request, logger 
 		return ctrl.Result{}, err
 	}
 
-	// ResourceGroup is in the process of being deleted
-	if resgroup.DeletionTimestamp != nil {
+	if rgObj.DeletionTimestamp != nil {
+		r.Logger(ctx).V(3).Info("Skipping ResourceGroup status update: ResourceGroup being deleted")
 		return ctrl.Result{}, nil
 	}
 
-	newStatus := r.startReconcilingStatus(resgroup.Status)
-	if err := r.updateStatusKptGroup(ctx, resgroup, newStatus); err != nil {
-		logger.Error(err, "failed to update")
+	newStatus := r.startReconcilingStatus(rgObj.Status)
+	if err := r.updateStatusKptGroup(ctx, rgObj, newStatus); err != nil {
+		r.Logger(ctx).Error(err, "failed to update ResourceGroup to start reconciling")
 		return ctrl.Result{Requeue: true}, err
 	}
 
-	id := getInventoryID(resgroup.Labels)
-	newStatus = r.endReconcilingStatus(ctx, id, req.NamespacedName, resgroup.Spec, resgroup.Status, resgroup.Generation)
-	if err := r.updateStatusKptGroup(ctx, resgroup, newStatus); err != nil {
-		logger.Error(err, "failed to update")
+	id := getInventoryID(rgObj.Labels)
+	newStatus = r.endReconcilingStatus(ctx, id, req.NamespacedName, rgObj.Spec, rgObj.Status, rgObj.Generation)
+	if err := r.updateStatusKptGroup(ctx, rgObj, newStatus); err != nil {
+		r.Logger(ctx).Error(err, "failed to update ResourceGroup to finish reconciling")
 		return ctrl.Result{Requeue: true}, err
 	}
 
-	logger.Info("finished reconciling")
 	return ctrl.Result{}, nil
 }
 
@@ -177,7 +161,7 @@ func (r *reconciler) updateStatusKptGroup(ctx context.Context, resgroup *v1alpha
 		}
 		resgroup.Status = newStatus
 		// Use `r.Status().Update()` here instead of `r.Update()` to update only resgroup.Status.
-		return r.Status().Update(ctx, resgroup, client.FieldOwner(FieldManager))
+		return r.client.Status().Update(ctx, resgroup, client.FieldOwner(FieldManager))
 	})
 }
 
@@ -284,39 +268,46 @@ func (r *reconciler) computeStatus(
 		resStatus := v1alpha1.ResourceStatus{
 			ObjMetadata: res,
 		}
+		// New temporary logger for each object to add object ID fields
+		log := r.Logger(ctx).WithValues("inventory.object", res)
 
 		cachedStatus := r.resMap.GetStatus(res)
 
 		// Add status to cache, if not present.
 		switch {
 		case cachedStatus != nil:
-			r.log.V(4).Info("found the cached resource status for", "namespace", res.Namespace, "name", res.Name)
+			log.V(4).Info("Resource object status found in the cache")
 			setResStatus(id, &resStatus, cachedStatus)
 		default:
+			log.V(4).Info("Resource object status not found in the cache")
 			resObj := new(unstructured.Unstructured)
 			gvk, gvkFound := r.resolver.Resolve(schema.GroupKind(res.GroupKind))
 			if !gvkFound {
 				// If the resolver cache does not contain the server preferred GVK, then GVK returned
 				// will be empty resulting in a GET error. An instance of this occurring is when the
 				// resource type (CRD) does not exist.
-				r.log.V(4).Info("unable to get object from API server to compute status as resource does not exist", "namespace", res.Namespace, "name", res.Name)
+				log.V(4).Info("Resource type unknown")
 				resStatus.Status = v1alpha1.NotFound
-				break
+				break // Breaks out of switch statement, not the loop.
 			}
 			resObj.SetGroupVersionKind(gvk)
-			r.log.Info("get the object from API server to compute status for", "namespace", res.Namespace, "name", res.Name)
-			err := r.Get(ctx, types.NamespacedName{
+			log.V(4).Info("Fetching object from API server")
+			err := r.client.Get(ctx, types.NamespacedName{
 				Namespace: res.Namespace,
 				Name:      res.Name,
 			}, resObj)
 			if err != nil {
-				if errors.IsNotFound(err) || meta.IsNoMatchError(err) {
+				switch {
+				case meta.IsNoMatchError(err):
+					log.V(4).Info("Resource type unknown")
 					resStatus.Status = v1alpha1.NotFound
-				} else {
+				case errors.IsNotFound(err):
+					log.V(4).Info("Resource object not found")
+					resStatus.Status = v1alpha1.NotFound
+				default:
+					log.Error(err, "Resource object status unknown: failed to get resource object from API server to compute status")
 					resStatus.Status = v1alpha1.Unknown
 				}
-				r.log.V(4).Error(err, "unable to get object from API server to compute status", "namespace", res.Namespace, "name", res.Name)
-
 				break // Breaks out of switch statement, not the loop.
 			}
 			// get the resource status using the kstatus library
@@ -406,11 +397,10 @@ func aggregateResourceStatuses(statuses []v1alpha1.ResourceStatus) v1alpha1.Cond
 func NewRGController(mgr ctrl.Manager, channel chan event.GenericEvent, logger logr.Logger,
 	resolver *typeresolver.TypeResolver, resMap *resourcemap.ResourceMap, duration time.Duration) error {
 	r := &reconciler{
-		Client:   mgr.GetClient(),
-		log:      logger,
-		scheme:   mgr.GetScheme(),
-		resolver: resolver,
-		resMap:   resMap,
+		LoggingController: controllers.NewLoggingController(logger),
+		client:            mgr.GetClient(),
+		resolver:          resolver,
+		resMap:            resMap,
 	}
 
 	c, err := controller.New(v1alpha1.ResourceGroupKind, mgr, controller.Options{

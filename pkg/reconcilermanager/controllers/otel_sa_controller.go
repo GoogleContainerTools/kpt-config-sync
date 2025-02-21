@@ -52,10 +52,8 @@ func NewOtelSAReconciler(clusterName string, client client.Client, log logr.Logg
 	}
 	return &OtelSAReconciler{
 		otelBaseController: otelBaseController{
-			loggingController: loggingController{
-				log: log,
-			},
-			client: client,
+			LoggingController: NewLoggingController(log),
+			client:            client,
 		},
 		clusterName: clusterName,
 	}
@@ -64,7 +62,7 @@ func NewOtelSAReconciler(clusterName string, client client.Client, log logr.Logg
 // Reconcile reconciles the default service account under the config-management-monitoring namespace and updates the Deployment annotation.
 // This triggers the `otel-collector` Deployment to restart in the event of an annotation update.
 func (r *OtelSAReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
-	ctx = r.setLoggerValues(ctx, OtelSALoggerName, req.NamespacedName.String())
+	ctx = r.SetLoggerValues(ctx, OtelSALoggerName, req.NamespacedName.String())
 
 	if req.Name != defaultSAName {
 		return controllerruntime.Result{}, nil
@@ -75,7 +73,7 @@ func (r *OtelSAReconciler) Reconcile(ctx context.Context, req reconcile.Request)
 		if apierrors.IsNotFound(err) {
 			return controllerruntime.Result{}, nil
 		}
-		return controllerruntime.Result{}, status.APIServerErrorf(err, "failed to get service account %s", req.NamespacedName.String())
+		return controllerruntime.Result{}, status.APIServerErrorf(err, "failed to get service account: %s", req.NamespacedName)
 	}
 	var v string
 	if sa.GetAnnotations() != nil && len(sa.GetAnnotations()) > 0 {
@@ -87,9 +85,6 @@ func (r *OtelSAReconciler) Reconcile(ctx context.Context, req reconcile.Request)
 	// On a cluster without Workload Identity, the annotation does not have any effects.
 	// Therefore, we don't check whether the cluster has Workload Identity enabled before updating the Deployment annotation.
 	if err := r.updateDeploymentAnnotation(ctx, GCPSAAnnotationKey, v); err != nil {
-		r.logger(ctx).Error(err, "Failed to update Deployment",
-			logFieldObjectRef, otelCollectorDeploymentRef(),
-			logFieldObjectKind, "Deployment")
 		return controllerruntime.Result{}, err
 	}
 	return controllerruntime.Result{}, nil

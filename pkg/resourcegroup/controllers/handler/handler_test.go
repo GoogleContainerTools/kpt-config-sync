@@ -18,11 +18,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-logr/logr/testr"
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/klog/v2/textlogger"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/resourcemap"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -63,11 +63,12 @@ func (m fakeMapping) SetStatus(_ v1alpha1.ObjMetadata, _ *resourcemap.CachedStat
 }
 
 func TestEventHandler(t *testing.T) {
+	testLogger := testr.New(t)
 	ch := make(chan event.GenericEvent)
 	h := EnqueueEventToChannel{
 		Mapping: fakeMapping{},
 		Channel: ch,
-		Log:     textlogger.NewLogger(textlogger.NewConfig()),
+		Log:     testLogger,
 	}
 	u := &unstructured.Unstructured{}
 
@@ -86,17 +87,18 @@ func TestEventHandler(t *testing.T) {
 }
 
 func TestEventHandlerMultipleHandlers(t *testing.T) {
+	testLogger := testr.New(t)
 	ch := make(chan event.GenericEvent)
 	h1 := EnqueueEventToChannel{
 		Mapping: fakeMapping{},
 		Channel: ch,
-		Log:     textlogger.NewLogger(textlogger.NewConfig()),
+		Log:     testLogger,
 	}
 
 	h2 := EnqueueEventToChannel{
 		Mapping: fakeMapping{},
 		Channel: ch,
-		Log:     textlogger.NewLogger(textlogger.NewConfig()),
+		Log:     testLogger,
 		GVK:     schema.GroupVersionKind{Kind: "MyKind"},
 	}
 

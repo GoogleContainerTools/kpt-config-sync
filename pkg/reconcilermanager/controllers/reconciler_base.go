@@ -59,12 +59,13 @@ const (
 	// fleetMembershipName is the name of the fleet membership
 	fleetMembershipName = "membership"
 
-	logFieldSyncKind        = "syncKind"
+	logFieldSyncKind        = "sync.kind"
 	logFieldSyncRef         = "sync"
-	logFieldObjectKind      = "objectKind"
 	logFieldObjectRef       = "object"
+	logFieldObjectNamespace = "object.namespace"
+	logFieldObjectKind      = "object.kind"
+	logFieldObjectStatus    = "object.status"
 	logFieldOperation       = "operation"
-	logFieldObjectStatus    = "objectStatus"
 	logFieldReconciler      = "reconciler"
 	logFieldResourceVersion = "resourceVersion"
 )
@@ -90,7 +91,8 @@ var reconcilerManagerAllowList = []string{
 
 // reconcilerBase provides common data and methods for the RepoSync and RootSync reconcilers
 type reconcilerBase struct {
-	loggingController
+	*LoggingController
+
 	reconcilerFinalizerHandler reconcilerFinalizerHandler
 
 	clusterName             string
@@ -130,6 +132,9 @@ func (r *reconcilerBase) upsertServiceAccount(
 	childSA.Name = childSARef.Name
 	childSA.Namespace = childSARef.Namespace
 
+	r.Logger(ctx).V(3).Info("Upserting managed object",
+		logFieldObjectRef, childSARef.String(),
+		logFieldObjectKind, "ServiceAccount")
 	op, err := CreateOrUpdate(ctx, r.client, childSA, func() error {
 		core.AddLabels(childSA, labelMap)
 		// Update ownerRefs for RootSync ServiceAccount.
@@ -151,7 +156,7 @@ func (r *reconcilerBase) upsertServiceAccount(
 		return childSARef, err
 	}
 	if op != controllerutil.OperationResultNone {
-		r.logger(ctx).Info("Managed object upsert successful",
+		r.Logger(ctx).Info("Upserting managed object successful",
 			logFieldObjectRef, childSARef.String(),
 			logFieldObjectKind, "ServiceAccount",
 			logFieldOperation, op)
@@ -196,7 +201,7 @@ func (r *reconcilerBase) upsertDeployment(ctx context.Context, reconcilerRef typ
 	appliedObj, op, err := r.applyDeployment(ctx, reconcilerDeployment)
 
 	if op != controllerutil.OperationResultNone {
-		r.logger(ctx).Info("Managed object upsert successful",
+		r.Logger(ctx).Info("Managed object upsert successful",
 			logFieldObjectRef, reconcilerRef.String(),
 			logFieldObjectKind, "Deployment",
 			logFieldOperation, op)
@@ -220,7 +225,7 @@ func (r *reconcilerBase) applyDeployment(ctx context.Context, declared *appsv1.D
 		if !apierrors.IsNotFound(err) {
 			return nil, controllerutil.OperationResultNone, NewObjectOperationErrorWithID(err, id, OperationGet)
 		}
-		r.logger(ctx).Info("Managed object not found, creating",
+		r.Logger(ctx).V(3).Info("Applying managed object (NotFound)",
 			logFieldObjectRef, id.ObjectKey.String(),
 			logFieldObjectKind, id.Kind)
 		// Ensure GVK is included in the patch data
@@ -233,6 +238,9 @@ func (r *reconcilerBase) applyDeployment(ctx context.Context, declared *appsv1.D
 		if err != nil {
 			return nil, controllerutil.OperationResultNone, NewObjectOperationErrorWithID(err, id, OperationPatch)
 		}
+		r.Logger(ctx).Info("Applying managed object successful",
+			logFieldObjectRef, id.ObjectKey.String(),
+			logFieldObjectKind, id.Kind)
 		return appliedObj, controllerutil.OperationResultCreated, nil
 	}
 	currentGeneration := currentDeploymentUnstructured.GetGeneration()
@@ -244,18 +252,18 @@ func (r *reconcilerBase) applyDeployment(ctx context.Context, declared *appsv1.D
 	}
 	if dep.adjusted {
 		mutator := "Autopilot"
-		r.logger(ctx).Info("Managed object container resources adjusted by autopilot",
+		r.Logger(ctx).V(3).Info("Managed object container resources adjusted by autopilot",
 			logFieldObjectRef, id.ObjectKey.String(),
 			logFieldObjectKind, id.Kind,
 			"mutator", mutator)
 	}
 	if dep.same {
-		r.logger(ctx).Info("Managed object apply skipped, no diff",
+		r.Logger(ctx).V(3).Info("Skipping applying managed object, no diff",
 			logFieldObjectRef, id.ObjectKey.String(),
 			logFieldObjectKind, id.Kind)
 		return nil, controllerutil.OperationResultNone, nil
 	}
-	r.logger(ctx).Info("Managed object found, patching",
+	r.Logger(ctx).V(3).Info("Applying managed object",
 		logFieldObjectRef, id.ObjectKey.String(),
 		logFieldObjectKind, id.Kind,
 		"patchJSON", string(dep.dataToPatch))
@@ -267,7 +275,7 @@ func (r *reconcilerBase) applyDeployment(ctx context.Context, declared *appsv1.D
 		}
 		// The provided data is invalid (e.g. http://b/196922619), so delete and re-create the resource.
 		// This handles changes to immutable fields, like labels.
-		r.logger(ctx).Error(err, "Managed object update failed, deleting and re-creating",
+		r.Logger(ctx).Error(err, "Managed object update failed, deleting and re-creating",
 			logFieldObjectRef, id.ObjectKey.String(),
 			logFieldObjectKind, id.Kind)
 		if err := deploymentClient.Delete(ctx, id.Name, metav1.DeleteOptions{}); err != nil {
@@ -287,6 +295,9 @@ func (r *reconcilerBase) applyDeployment(ctx context.Context, declared *appsv1.D
 	if appliedObj.GetGeneration() == currentGeneration && appliedObj.GetUID() == currentUID {
 		return appliedObj, controllerutil.OperationResultNone, nil
 	}
+	r.Logger(ctx).Info("Applying managed object successful",
+		logFieldObjectRef, id.ObjectKey.String(),
+		logFieldObjectKind, id.Kind)
 	return appliedObj, controllerutil.OperationResultUpdated, nil
 }
 
@@ -574,7 +585,7 @@ func (r *reconcilerBase) validateCACertSecret(ctx context.Context, namespace, ca
 func (r *reconcilerBase) addTypeInformationToObject(obj runtime.Object) error {
 	gvk, err := kinds.Lookup(obj, r.scheme)
 	if err != nil {
-		return fmt.Errorf("missing apiVersion or kind and cannot assign it: %w", err)
+		return fmt.Errorf("resource type %T is not registered in the scheme: %w", obj, err)
 	}
 	obj.GetObjectKind().SetGroupVersionKind(gvk)
 	return nil
@@ -596,26 +607,30 @@ func (r *reconcilerBase) addTypeInformationToObject(obj runtime.Object) error {
 // references. Using the finalizer for all resources also ensures well ordered
 // deletion, which allows for stricter contracts when uninstalling.
 func (r *reconcilerBase) setupOrTeardown(ctx context.Context, syncObj client.Object, setupFn, teardownFn func(context.Context) error) error {
+	syncKey := client.ObjectKeyFromObject(syncObj)
+
 	if syncObj.GetDeletionTimestamp().IsZero() {
 		// The object is NOT being deleted.
 		if !controllerutil.ContainsFinalizer(syncObj, metadata.ReconcilerManagerFinalizer) {
 			// The object is new and doesn't have our finalizer yet.
 			// Add our finalizer and update the object.
+			r.Logger(ctx).V(3).Info("Adding finalizer",
+				logFieldObjectRef, syncKey.String(),
+				logFieldObjectKind, r.syncGVK.Kind)
 			controllerutil.AddFinalizer(syncObj, metadata.ReconcilerManagerFinalizer)
 			if err := r.client.Update(ctx, syncObj, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
-				err = status.APIServerError(err,
-					fmt.Sprintf("failed to update %s to add finalizer", r.syncGVK.Kind))
-				r.logger(ctx).Error(err, "Finalizer injection failed")
-				return err
+				return status.APIServerErrorf(err, "failed to update %s to add finalizer", r.syncGVK.Kind)
 			}
-			r.logger(ctx).Info("Finalizer injection successful")
+			r.Logger(ctx).Info("Adding finalizer successful",
+				logFieldObjectRef, syncKey.String(),
+				logFieldObjectKind, r.syncGVK.Kind)
 		}
 
 		// Our finalizer is present, so setup managed resource objects.
 		if err := setupFn(ctx); err != nil {
 			var nre *NoRetryError
 			if errors.As(err, &nre) {
-				r.logger(ctx).Error(err, "Setup failed (waiting for resource status to change)")
+				r.Logger(ctx).Error(err, "Setup failed (waiting for resource status to change)")
 				// Return nil to avoid triggering immediate retry.
 				return nil
 			}
@@ -632,7 +647,7 @@ func (r *reconcilerBase) setupOrTeardown(ctx context.Context, syncObj client.Obj
 			return err
 		}
 		if !removed {
-			r.logger(ctx).Info("Waiting for Reconciler Finalizer to finish")
+			r.Logger(ctx).Info("Waiting for Reconciler Finalizer to finish")
 			return nil
 		}
 	}
@@ -642,7 +657,7 @@ func (r *reconcilerBase) setupOrTeardown(ctx context.Context, syncObj client.Obj
 		if err := teardownFn(ctx); err != nil {
 			var nre *NoRetryError
 			if errors.As(err, &nre) {
-				r.logger(ctx).Error(err, "Teardown failed (waiting for resource status to change)")
+				r.Logger(ctx).Error(err, "Teardown failed (waiting for resource status to change)")
 				// Return nil to avoid triggering immediate retry.
 				return nil
 			}
@@ -651,13 +666,15 @@ func (r *reconcilerBase) setupOrTeardown(ctx context.Context, syncObj client.Obj
 
 		// Remove our finalizer and update the object.
 		controllerutil.RemoveFinalizer(syncObj, metadata.ReconcilerManagerFinalizer)
+		r.Logger(ctx).V(3).Info("Removing finalizer",
+			logFieldObjectRef, syncKey.String(),
+			logFieldObjectKind, r.syncGVK.Kind)
 		if err := r.client.Update(ctx, syncObj, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
-			err = status.APIServerError(err,
-				fmt.Sprintf("failed to update %s to remove the reconciler-manager finalizer", r.syncGVK.Kind))
-			r.logger(ctx).Error(err, "Removal of reconciler-manager finalizer failed")
-			return err
+			return status.APIServerErrorf(err, "failed to update %s to remove the reconciler-manager finalizer", r.syncGVK.Kind)
 		}
-		r.logger(ctx).Info("Removal of reconciler-manager finalizer succeeded")
+		r.Logger(ctx).Info("Removing finalizer succeeded",
+			logFieldObjectRef, syncKey.String(),
+			logFieldObjectKind, r.syncGVK.Kind)
 	}
 
 	return nil
@@ -693,16 +710,20 @@ func (r *reconcilerBase) updateRBACBinding(ctx context.Context, reconcilerRef, r
 	if equality.Semantic.DeepEqual(existingBinding, binding) {
 		return nil
 	}
-	if err := r.client.Update(ctx, binding, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
-		return err
-	}
 	bindingNN := types.NamespacedName{
 		Name:      binding.GetName(),
 		Namespace: binding.GetNamespace(),
 	}
-	r.logger(ctx).Info("Managed object update successful",
+	bindingKind := binding.GetObjectKind().GroupVersionKind().Kind
+	r.Logger(ctx).V(3).Info("Updating managed object",
 		logFieldObjectRef, bindingNN.String(),
-		logFieldObjectKind, binding.GetObjectKind().GroupVersionKind().Kind)
+		logFieldObjectKind, bindingKind)
+	if err := r.client.Update(ctx, binding, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
+		return err
+	}
+	r.Logger(ctx).Info("Updating managed object successful",
+		logFieldObjectRef, bindingNN.String(),
+		logFieldObjectKind, bindingKind)
 	return nil
 }
 
@@ -715,6 +736,9 @@ func (r *reconcilerBase) upsertSharedClusterRoleBinding(ctx context.Context, nam
 	// Remove sync-name label since the ClusterRoleBinding may be shared
 	delete(labelMap, metadata.SyncNameLabel)
 
+	r.Logger(ctx).V(3).Info("Upserting managed object",
+		logFieldObjectRef, crbRef.String(),
+		logFieldObjectKind, "ClusterRoleBinding")
 	op, err := CreateOrUpdate(ctx, r.client, childCRB, func() error {
 		core.AddLabels(childCRB, labelMap)
 		childCRB.RoleRef = rolereference(clusterRole, "ClusterRole")
@@ -727,7 +751,7 @@ func (r *reconcilerBase) upsertSharedClusterRoleBinding(ctx context.Context, nam
 		return err
 	}
 	if op != controllerutil.OperationResultNone {
-		r.logger(ctx).Info("Managed object upsert successful",
+		r.Logger(ctx).Info("Upserting managed object successful",
 			logFieldObjectRef, crbRef.String(),
 			logFieldObjectKind, "ClusterRoleBinding",
 			logFieldOperation, op)
@@ -762,6 +786,7 @@ func (r *reconcilerBase) isWebhookEnabled(ctx context.Context) (bool, error) {
 // Returns an error if the tooling annotation exists with a different name or
 // an invalid value.
 func (r *reconcilerBase) patchSyncMetadata(ctx context.Context, rs client.Object) (bool, error) {
+	syncKey := client.ObjectKeyFromObject(rs)
 	syncScope := declared.ScopeFromSyncNamespace(rs.GetNamespace())
 	applySetID := applyset.IDFromSync(rs.GetName(), syncScope)
 	applySetToolingValue := applyset.FormatTooling(metadata.ApplySetToolingName, metadata.ApplySetToolingVersion)
@@ -771,8 +796,8 @@ func (r *reconcilerBase) patchSyncMetadata(ctx context.Context, rs client.Object
 	if currentApplySetID != applySetID {
 		updateRequired = true
 
-		if r.logger(ctx).V(5).Enabled() {
-			r.logger(ctx).Info("Updating sync metadata: applyset label",
+		if r.Logger(ctx).V(5).Enabled() {
+			r.Logger(ctx).Info("Updating sync metadata: applyset label",
 				logFieldResourceVersion, rs.GetResourceVersion(),
 				"labelKey", metadata.ApplySetParentIDLabel,
 				"labelValueOld", currentApplySetID, "labelValue", applySetID)
@@ -802,8 +827,8 @@ func (r *reconcilerBase) patchSyncMetadata(ctx context.Context, rs client.Object
 			// but for now there's only one version, so this case is unlikely.
 		}
 
-		if r.logger(ctx).V(5).Enabled() {
-			r.logger(ctx).Info("Updating sync metadata: applyset annotation",
+		if r.Logger(ctx).V(5).Enabled() {
+			r.Logger(ctx).Info("Updating sync metadata: applyset annotation",
 				logFieldResourceVersion, rs.GetResourceVersion(),
 				"annotationKey", metadata.ApplySetToolingAnnotation,
 				"annotationValueOld", currentApplySetToolingValue, "annotationValue", applySetToolingValue)
@@ -811,10 +836,13 @@ func (r *reconcilerBase) patchSyncMetadata(ctx context.Context, rs client.Object
 	}
 
 	if !updateRequired {
-		r.logger(ctx).V(5).Info("Sync metadata update skipped: no change")
+		r.Logger(ctx).V(5).Info("Sync metadata update skipped: no change")
 		return false, nil
 	}
 
+	r.Logger(ctx).V(3).Info("Patching object metadata",
+		logFieldObjectRef, syncKey.String(),
+		logFieldObjectKind, r.syncGVK.Kind)
 	patch := fmt.Sprintf(`{"metadata": {"labels": {%q: %q}, "annotations": {%q: %q}}}`,
 		metadata.ApplySetParentIDLabel, applySetID,
 		metadata.ApplySetToolingAnnotation, applySetToolingValue)
@@ -823,12 +851,14 @@ func (r *reconcilerBase) patchSyncMetadata(ctx context.Context, rs client.Object
 	if err != nil {
 		return true, fmt.Errorf("Sync metadata update failed: %w", err)
 	}
-	r.logger(ctx).Info("Sync metadata update successful")
+	r.Logger(ctx).V(3).Info("Patching object metadata successful",
+		logFieldObjectRef, syncKey.String(),
+		logFieldObjectKind, r.syncGVK.Kind)
 	return true, nil
 }
 
 func (r *reconcilerBase) requeueRSync(ctx context.Context, obj client.Object, rsRef types.NamespacedName) []reconcile.Request {
-	r.logger(ctx).Info(fmt.Sprintf("Changes to %s triggered a reconciliation for the %s (%s).",
+	r.Logger(ctx).Info(fmt.Sprintf("Changes to %s triggered a reconciliation for the %s (%s).",
 		kinds.ObjectSummary(obj), r.syncGVK.Kind, rsRef))
 	return []reconcile.Request{
 		{NamespacedName: rsRef},
@@ -838,7 +868,7 @@ func (r *reconcilerBase) requeueRSync(ctx context.Context, obj client.Object, rs
 func (r *reconcilerBase) requeueAllRSyncs(ctx context.Context, obj client.Object) []reconcile.Request {
 	syncMetaList, err := r.listSyncMetadata(ctx)
 	if err != nil {
-		r.logger(ctx).Error(err, "Failed to list objects",
+		r.Logger(ctx).Error(err, "Failed to list objects",
 			logFieldSyncKind, r.syncGVK.Kind)
 		return nil
 	}
@@ -849,7 +879,7 @@ func (r *reconcilerBase) requeueAllRSyncs(ctx context.Context, obj client.Object
 		}
 	}
 	if len(requests) > 0 {
-		r.logger(ctx).Info(fmt.Sprintf("Changes to %s triggered reconciliations for %d %s objects.",
+		r.Logger(ctx).Info(fmt.Sprintf("Changes to %s triggered reconciliations for %d %s objects.",
 			kinds.ObjectSummary(obj), len(syncMetaList.Items), r.syncGVK.Kind))
 	}
 	return requests
@@ -880,7 +910,7 @@ func (r *reconcilerBase) isAnnotationValueTrue(ctx context.Context, obj core.Ann
 	if err != nil {
 		// This should never happen, as the annotation should always be set to a
 		// valid value by the reconciler. Log the error and return the default value.
-		r.logger(ctx).Error(err, "Failed to parse annotation value as boolean: %s: %s", key, val)
+		r.Logger(ctx).Error(err, "Failed to parse annotation value as boolean: %s: %s", key, val)
 		return false
 	}
 	return boolVal

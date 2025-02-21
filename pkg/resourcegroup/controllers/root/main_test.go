@@ -25,6 +25,7 @@ import (
 	"k8s.io/klog/v2"
 	v1 "kpt.dev/configsync/pkg/api/hub/v1"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
+	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/resourcemap"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/watch"
 	"kpt.dev/configsync/pkg/testing/testcontroller"
@@ -76,11 +77,11 @@ func NewReconciler(mgr manager.Manager, logger logr.Logger) (*Reconciler, error)
 		return nil, err
 	}
 	r := &Reconciler{
-		Client:  mgr.GetClient(),
-		cfg:     mgr.GetConfig(),
-		log:     logger,
-		resMap:  resmap,
-		watches: watches,
+		LoggingController: controllers.NewLoggingController(logger),
+		client:            mgr.GetClient(),
+		cfg:               mgr.GetConfig(),
+		resMap:            resmap,
+		watches:           watches,
 	}
 	obj := &v1alpha1.ResourceGroup{}
 	_, err = ctrl.NewControllerManagedBy(mgr).

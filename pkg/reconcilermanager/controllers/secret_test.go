@@ -18,7 +18,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
@@ -26,6 +25,7 @@ import (
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
+	"kpt.dev/configsync/pkg/testing/testcontroller"
 	"sigs.k8s.io/cli-utils/pkg/testutil"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -193,12 +193,11 @@ func TestUpsertAuthSecret(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := context.Background()
-			log := logr.Discard()
+			logger := testcontroller.NewTestLogger(t)
 			r := reconcilerBase{
-				loggingController: loggingController{
-					log: log,
-				},
-				client: tc.client,
+				LoggingController: NewLoggingController(logger),
+				scheme:            tc.client.Scheme(),
+				client:            tc.client,
 			}
 			labelMap := ManagedObjectLabelMap(configsync.RepoSyncKind, types.NamespacedName{
 				Name:      tc.reposync.Name,

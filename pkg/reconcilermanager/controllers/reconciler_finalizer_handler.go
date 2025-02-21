@@ -53,7 +53,8 @@ func (r rootReconcilerFinalizerHandler) handleReconcilerFinalizer(context.Contex
 }
 
 type nsReconcilerFinalizerHandler struct {
-	loggingController
+	*LoggingController
+
 	client client.Client
 }
 
@@ -70,9 +71,9 @@ type nsReconcilerFinalizerHandler struct {
 func (r nsReconcilerFinalizerHandler) handleReconcilerFinalizer(ctx context.Context, syncObj client.Object) (bool, error) {
 	syncObjNamespace := &corev1.Namespace{}
 	syncObjNamespace.Name = syncObj.GetNamespace()
-	key := client.ObjectKeyFromObject(syncObjNamespace)
-	if err := r.client.Get(ctx, key, syncObjNamespace); err != nil {
-		r.logger(ctx).Error(err, "Get sync object Namespace failed")
+	nsKey := client.ObjectKeyFromObject(syncObjNamespace)
+	if err := r.client.Get(ctx, nsKey, syncObjNamespace); err != nil {
+		r.Logger(ctx).Error(err, "Get sync object Namespace failed")
 		return false, err
 	}
 
@@ -81,16 +82,21 @@ func (r nsReconcilerFinalizerHandler) handleReconcilerFinalizer(ctx context.Cont
 		return false, nil
 	}
 
-	r.logger(ctx).Info("Removing the reconciler finalizer because RepoSync's namespace is terminating")
+	syncKey := client.ObjectKeyFromObject(syncObj)
 	if !controllerutil.RemoveFinalizer(syncObj, metadata.ReconcilerFinalizer) {
-		r.logger(ctx).Info("Reconciler finalizer not found")
+		r.Logger(ctx).V(3).Info("Reconciler finalizer not found",
+			logFieldObjectRef, syncKey.String(),
+			logFieldObjectKind, "RepoSync")
 		return true, nil
 	}
+	r.Logger(ctx).V(3).Info("Removing reconciler finalizer: namespace is terminating",
+		logFieldObjectRef, syncKey.String(),
+		logFieldObjectKind, "RepoSync")
 	if err := r.client.Update(ctx, syncObj, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
-		err = status.APIServerError(err, "failed to update RepoSync to remove the reconciler finalizer")
-		r.logger(ctx).Error(err, "Removal of reconciler finalizer removal failed")
-		return false, err
+		return false, status.APIServerError(err, "failed to update RepoSync to remove the reconciler finalizer")
 	}
-	r.logger(ctx).Info("Removal of reconciler finalizer succeeded")
+	r.Logger(ctx).Info("Removing reconciler finalizer successful",
+		logFieldObjectRef, syncKey.String(),
+		logFieldObjectKind, "RepoSync")
 	return true, nil
 }

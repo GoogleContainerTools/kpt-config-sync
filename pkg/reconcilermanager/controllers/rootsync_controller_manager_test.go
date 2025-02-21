@@ -570,6 +570,8 @@ func testDriftProtection(t *testing.T, fakeClient *syncerFake.Client, testReconc
 func startControllerManager(ctx context.Context, t *testing.T, fakeClient *syncerFake.Client, testReconciler Controller) <-chan error {
 	t.Helper()
 
+	testLogger := testr.New(t)
+
 	// start sub-context so we can cancel & stop the manager in case of pre-return error
 	ctx, cancel := context.WithCancel(ctx)
 
@@ -577,8 +579,8 @@ func startControllerManager(ctx context.Context, t *testing.T, fakeClient *synce
 
 	t.Log("building controller-manager")
 	mgr, err := controllerruntime.NewManager(&rest.Config{}, controllerruntime.Options{
+		Logger: testLogger.WithName("controller-manager"),
 		Scheme: core.Scheme,
-		Logger: testr.New(t),
 		BaseContext: func() context.Context {
 			return ctx
 		},

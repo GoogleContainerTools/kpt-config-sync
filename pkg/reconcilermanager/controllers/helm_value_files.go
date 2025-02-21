@@ -136,6 +136,9 @@ func (r *RepoSyncReconciler) upsertHelmConfigMap(ctx context.Context, cmsCMRef, 
 	cmsConfigMap.Name = cmsCMRef.Name
 	cmsConfigMap.Namespace = cmsCMRef.Namespace
 
+	r.Logger(ctx).V(3).Info("Upserting managed object",
+		logFieldObjectRef, cmsCMRef.String(),
+		logFieldObjectKind, "ConfigMap")
 	op, err := CreateOrUpdate(ctx, r.client, cmsConfigMap, func() error {
 		// TODO: Eventually remove the annotations and use the labels for list filtering, to optimize cleanup.
 		// We can't remove the annotations until v1.16.0 is no longer supported.
@@ -156,7 +159,7 @@ func (r *RepoSyncReconciler) upsertHelmConfigMap(ctx context.Context, cmsCMRef, 
 		return op, err
 	}
 	if op != controllerutil.OperationResultNone {
-		r.logger(ctx).Info("Managed object upsert successful",
+		r.Logger(ctx).Info("Upserting managed object successful",
 			logFieldObjectRef, cmsCMRef.String(),
 			logFieldObjectKind, "ConfigMap",
 			logFieldOperation, op)

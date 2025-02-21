@@ -63,7 +63,7 @@ func (r *reconcilerBase) cleanup(ctx context.Context, obj client.Object) error {
 	uObj.SetName(id.Name)
 	uObj.SetNamespace(id.Namespace)
 	uObj.SetGroupVersionKind(gvk)
-	r.logger(ctx).Info("Deleting managed object",
+	r.Logger(ctx).V(3).Info("Deleting managed object",
 		logFieldObjectRef, id.ObjectKey.String(),
 		logFieldObjectKind, id.Kind)
 	err = watch.DeleteAndWait(ctx, r.watcher, uObj, deleteWaitTimeout)
@@ -86,7 +86,7 @@ func (r *reconcilerBase) cleanup(ctx context.Context, obj client.Object) error {
 		// If not a timeout, assume the delete failed.
 		return NewObjectOperationErrorWithID(err, id, OperationDelete)
 	}
-	r.logger(ctx).Info("Managed object delete successful",
+	r.Logger(ctx).Info("Deleting managed object successful",
 		logFieldObjectRef, id.ObjectKey.String(),
 		logFieldObjectKind, id.Kind)
 	return nil
@@ -152,7 +152,7 @@ func (r *RepoSyncReconciler) deleteSharedRoleBinding(ctx context.Context, reconc
 	if err := r.client.Get(ctx, rbKey, rb); err != nil {
 		if apierrors.IsNotFound(err) {
 			// already deleted
-			r.logger(ctx).Info("Managed object already deleted",
+			r.Logger(ctx).V(3).Info("Managed object already deleted",
 				logFieldObjectRef, rbKey.String(),
 				logFieldObjectKind, "RoleBinding")
 			return nil
@@ -169,9 +169,15 @@ func (r *RepoSyncReconciler) deleteSharedRoleBinding(ctx context.Context, reconc
 		// Delete the whole RB
 		return r.cleanup(ctx, rb)
 	}
+	r.Logger(ctx).V(3).Info("Updating managed object",
+		logFieldObjectRef, rbKey.String(),
+		logFieldObjectKind, "RoleBinding")
 	if err := r.client.Update(ctx, rb, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		return NewObjectOperationError(err, rb, OperationUpdate)
 	}
+	r.Logger(ctx).Info("Updating managed object successful",
+		logFieldObjectRef, rbKey.String(),
+		logFieldObjectKind, "RoleBinding")
 	return nil
 }
 
@@ -244,7 +250,7 @@ func (r *reconcilerBase) deleteSharedClusterRoleBinding(ctx context.Context, nam
 	if err := r.client.Get(ctx, crbKey, crb); err != nil {
 		if apierrors.IsNotFound(err) {
 			// already deleted
-			r.logger(ctx).Info("Managed object already deleted",
+			r.Logger(ctx).V(3).Info("Managed object already deleted",
 				logFieldObjectRef, crbKey.String(),
 				logFieldObjectKind, "ClusterRoleBinding")
 			return nil
@@ -261,8 +267,14 @@ func (r *reconcilerBase) deleteSharedClusterRoleBinding(ctx context.Context, nam
 		// No change
 		return nil
 	}
+	r.Logger(ctx).V(3).Info("Updating managed object",
+		logFieldObjectRef, crbKey.String(),
+		logFieldObjectKind, "ClusterRoleBinding")
 	if err := r.client.Update(ctx, crb, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		return NewObjectOperationError(err, crb, OperationUpdate)
 	}
+	r.Logger(ctx).Info("Updating managed object successful",
+		logFieldObjectRef, crbKey.String(),
+		logFieldObjectKind, "ClusterRoleBinding")
 	return nil
 }

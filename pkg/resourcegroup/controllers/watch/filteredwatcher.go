@@ -149,7 +149,7 @@ func waitUntilNextRetry(retries int) {
 // filters the event and pushes the object contained
 // in the event to the controller work queue.
 func (w *filteredWatcher) Run(context.Context) error {
-	klog.Infof("Watch started for %s", w.gvk)
+	klog.V(3).Infof("Watch started for %s", w.gvk)
 	var resourceVersion string
 	var retriesForWatchError int
 
@@ -168,7 +168,7 @@ func (w *filteredWatcher) Run(context.Context) error {
 
 		eventCount := 0
 		ignoredEventCount := 0
-		klog.Infof("(Re)starting watch for %s at resource version %q", w.gvk, resourceVersion)
+		klog.V(3).Infof("(Re)starting watch for %s at resource version %q", w.gvk, resourceVersion)
 		for event := range w.base.ResultChan() {
 			w.pruneErrors()
 			newVersion, ignoreEvent, err := w.handle(event)
@@ -197,10 +197,10 @@ func (w *filteredWatcher) Run(context.Context) error {
 				resourceVersion = newVersion
 			}
 		}
-		klog.Infof("Ending watch for %s at resource version %q (total events: %d, ignored events: %d)",
+		klog.V(3).Infof("Ending watch for %s at resource version %q (total events: %d, ignored events: %d)",
 			w.gvk, resourceVersion, eventCount, ignoredEventCount)
 	}
-	klog.Infof("Watch stopped for %s", w.gvk)
+	klog.V(3).Infof("Watch stopped for %s", w.gvk)
 	return nil
 }
 

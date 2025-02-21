@@ -33,18 +33,25 @@ func (c contextKey) String() string {
 // values, in the context.Context.
 const contextKeyLogger = contextKey("logger")
 
-// loggingController is a parent class for a controller that logs.
+// LoggingController is a parent class for a controller that logs.
 // The logger can be stored in the context with contextual values.
 //
 // Use lc.logger(ctx) to retrieve the logger.
 // Use ctx = lc.setLoggerValues(ctx, key, value) to add key/value pairs.
-type loggingController struct {
+type LoggingController struct {
 	log logr.Logger
 }
 
-// logger returns a logr.Logger, either from the context or from
+// NewLoggingController constructs a new LoggingController
+func NewLoggingController(log logr.Logger) *LoggingController {
+	return &LoggingController{
+		log: log,
+	}
+}
+
+// Logger returns a logr.Logger, either from the context or from
 // reconcilerBase.log.
-func (lc *loggingController) logger(ctx context.Context) logr.Logger {
+func (lc *LoggingController) Logger(ctx context.Context) logr.Logger {
 	logger := ctx.Value(contextKeyLogger)
 	if logger != nil {
 		return logger.(logr.Logger)
@@ -52,9 +59,9 @@ func (lc *loggingController) logger(ctx context.Context) logr.Logger {
 	return lc.log
 }
 
-// setLoggerValues sets key/value pairs on the logger stored in the context.
+// SetLoggerValues sets key/value pairs on the logger stored in the context.
 // If not initially present, the default logger is added to the context.
 // See logr.Logger.WithValues for more details about how values work.
-func (lc *loggingController) setLoggerValues(ctx context.Context, keysAndValues ...interface{}) context.Context {
-	return context.WithValue(ctx, contextKeyLogger, lc.logger(ctx).WithValues(keysAndValues...))
+func (lc *LoggingController) SetLoggerValues(ctx context.Context, keysAndValues ...interface{}) context.Context {
+	return context.WithValue(ctx, contextKeyLogger, lc.Logger(ctx).WithValues(keysAndValues...))
 }

@@ -68,10 +68,11 @@ func main() {
 			"Enabling this will ensure there is only one active controller manager.")
 
 	log.Setup()
-	setupLog := textlogger.NewLogger(textlogger.NewConfig()).WithName("setup")
+	logger := textlogger.NewLogger(textlogger.NewConfig())
+	setupLog := logger.WithName("setup")
 
 	profiler.Service()
-	ctrl.SetLogger(textlogger.NewLogger(textlogger.NewConfig()))
+	ctrl.SetLogger(logger)
 
 	setupLog.Info(fmt.Sprintf("running with flags --cluster-name=%s; --reconciler-polling-period=%s; --hydration-polling-period=%s",
 		*clusterName, *reconcilerPollingPeriod, *hydrationPollingPeriod))
@@ -85,6 +86,7 @@ func main() {
 	}
 
 	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
+		Logger: logger.WithName("controller-manager"),
 		Scheme: core.Scheme,
 		MapperProvider: func(_ *rest.Config, _ *http.Client) (meta.RESTMapper, error) {
 			return mapper, nil
@@ -114,7 +116,7 @@ func main() {
 	watchFleetMembership := fleetMembershipCRDExists(dynamicClient, mapper, &setupLog)
 
 	crdController := &controllers.CRDController{}
-	crdControllerLogger := textlogger.NewLogger(textlogger.NewConfig()).WithName("controllers").WithName("CRD")
+	crdControllerLogger := logger.WithName("controllers").WithName("CRD")
 	crdMetaController := controllers.NewCRDMetaController(crdController,
 		mgr.GetCache(), mapper, crdControllerLogger)
 	if err := crdMetaController.Register(mgr); err != nil {
@@ -126,7 +128,7 @@ func main() {
 	repoSyncController := controllers.NewRepoSyncReconciler(*clusterName,
 		*reconcilerPollingPeriod, *hydrationPollingPeriod,
 		mgr.GetClient(), watcher, dynamicClient,
-		textlogger.NewLogger(textlogger.NewConfig()).WithName("controllers").WithName(configsync.RepoSyncKind),
+		logger.WithName("controllers").WithName(configsync.RepoSyncKind),
 		mgr.GetScheme())
 	crdController.SetReconciler(kinds.RepoSyncV1Beta1().GroupKind(), func(_ context.Context, crd *apiextensionsv1.CustomResourceDefinition) error {
 		if customresource.IsEstablished(crd) {
@@ -144,7 +146,7 @@ func main() {
 	rootSyncController := controllers.NewRootSyncReconciler(*clusterName,
 		*reconcilerPollingPeriod, *hydrationPollingPeriod,
 		mgr.GetClient(), watcher, dynamicClient,
-		textlogger.NewLogger(textlogger.NewConfig()).WithName("controllers").WithName(configsync.RootSyncKind),
+		logger.WithName("controllers").WithName(configsync.RootSyncKind),
 		mgr.GetScheme())
 	crdController.SetReconciler(kinds.RootSyncV1Beta1().GroupKind(), func(_ context.Context, crd *apiextensionsv1.CustomResourceDefinition) error {
 		if customresource.IsEstablished(crd) {
@@ -164,7 +166,7 @@ func main() {
 	}
 
 	otel := controllers.NewOtelReconciler(mgr.GetClient(),
-		textlogger.NewLogger(textlogger.NewConfig()).WithName("controllers").WithName("Otel"),
+		logger.WithName("controllers").WithName("Otel"),
 		otelCredentialProvider)
 	if err := otel.Register(mgr); err != nil {
 		setupLog.Error(err, "failed to register controller", "controller", "Otel")
@@ -173,7 +175,7 @@ func main() {
 	setupLog.Info("Otel controller registration successful")
 
 	otelSA := controllers.NewOtelSAReconciler(*clusterName, mgr.GetClient(),
-		textlogger.NewLogger(textlogger.NewConfig()).WithName("controllers").WithName(controllers.OtelSALoggerName))
+		logger.WithName("controllers").WithName(controllers.OtelSALoggerName))
 	if err := otelSA.Register(mgr); err != nil {
 		setupLog.Error(err, "failed to register controller", "controller", "OtelSA")
 		os.Exit(1)

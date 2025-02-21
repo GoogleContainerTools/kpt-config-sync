@@ -24,20 +24,22 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/discovery"
+	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 // TypeResolver keeps the preferred GroupVersionKind for all the
 // types in the cluster.
 type TypeResolver struct {
-	log         logr.Logger
+	*controllers.LoggingController
+
 	mu          sync.Mutex
 	dc          discovery.DiscoveryInterface
 	typeMapping map[schema.GroupKind]schema.GroupVersionKind
 }
 
 // Refresh refreshes the type mapping by querying the api server
-func (r *TypeResolver) Refresh() error {
+func (r *TypeResolver) Refresh(ctx context.Context) error {
 	mapping := make(map[schema.GroupKind]schema.GroupVersionKind)
 	apiResourcesList, err := discovery.ServerPreferredResources(r.dc)
 	if err != nil {
@@ -49,7 +51,7 @@ func (r *TypeResolver) Refresh() error {
 			// will be surfaced as a resource-specific API error later, when
 			// watched or listed, which are retried and won't prevent updating
 			// the status of other managed resources.
-			r.log.Error(err, "Failed to discover API resources; using cached results")
+			r.Logger(ctx).Error(err, "Failed to discover API resources; using cached results")
 		} else {
 			// Return error, where it will be logged by the controller manager and retried
 			return fmt.Errorf("discovery of API resources failed: %w", err)
@@ -116,22 +118,16 @@ func (r *TypeResolver) Resolve(gk schema.GroupKind) (schema.GroupVersionKind, bo
 // Reconcile implements reconciler.Reconciler. This function handles reconciliation
 // for the type mapping.
 // +kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=get;list;watch
-func (r *TypeResolver) Reconcile(context.Context, ctrl.Request) (ctrl.Result, error) {
-	logger := r.log
-	logger.Info("refreshing type resolver")
-	var result ctrl.Result
-	if err := r.Refresh(); err != nil {
-		// log the error and retry with backoff
-		return result, err
-	}
-	return result, nil
+func (r *TypeResolver) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
+	r.Logger(ctx).V(3).Info("Reconcile starting")
+	return ctrl.Result{}, r.Refresh(ctx)
 }
 
 // NewTypeResolver constructs a new TypeResolver
 func NewTypeResolver(dc discovery.DiscoveryInterface, logger logr.Logger) *TypeResolver {
 	return &TypeResolver{
-		log: logger,
-		dc:  dc,
+		LoggingController: controllers.NewLoggingController(logger),
+		dc:                dc,
 	}
 }
 

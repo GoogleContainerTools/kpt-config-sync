@@ -132,7 +132,8 @@ var flags = struct {
 func main() {
 	log.Setup()
 	profiler.Service()
-	ctrl.SetLogger(textlogger.NewLogger(textlogger.NewConfig()))
+	logger := textlogger.NewLogger(textlogger.NewConfig())
+	ctrl.SetLogger(logger)
 
 	if *debug {
 		status.EnablePanicOnMisuse()
@@ -183,6 +184,7 @@ func main() {
 	}
 
 	opts := reconciler.Options{
+		Logger:                   logger,
 		ClusterName:              *clusterName,
 		FightDetectionThreshold:  *fightDetectionThreshold,
 		NumWorkers:               *workers,

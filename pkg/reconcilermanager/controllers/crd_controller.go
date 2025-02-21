@@ -94,7 +94,7 @@ func (s *CRDController) getReconciler(gk schema.GroupKind) CRDReconcileFunc {
 
 // CRDMetaController watches CRDs and delegates reconciliation to a CRDControllerManager.
 type CRDMetaController struct {
-	loggingController
+	*LoggingController
 	cache             cache.Cache
 	mapper            utilwatch.ResettableRESTMapper
 	delegate          *CRDController
@@ -111,9 +111,7 @@ func NewCRDMetaController(
 	log logr.Logger,
 ) *CRDMetaController {
 	return &CRDMetaController{
-		loggingController: loggingController{
-			log: log,
-		},
+		LoggingController: NewLoggingController(log),
 		cache:             cache,
 		mapper:            mapper,
 		delegate:          delegate,
@@ -128,7 +126,7 @@ func NewCRDMetaController(
 // resources by calling Reset on the RESTMapper, as needed.
 func (r *CRDMetaController) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
 	crdName := req.Name
-	ctx = r.setLoggerValues(ctx, "crd", crdName)
+	ctx = r.SetLoggerValues(ctx, "crd", crdName)
 
 	// Established if CRD exists and .status.conditions[type="Established"].status = "True"
 	var kind schema.GroupKind
@@ -167,7 +165,7 @@ func (r *CRDMetaController) Reconcile(ctx context.Context, req reconcile.Request
 		r.observedResources[resource] = kind
 	}
 
-	r.logger(ctx).Info("CRDMetaController handling CRD status update", "name", crdName)
+	r.Logger(ctx).V(3).Info("CRDMetaController handling CRD status update", "name", crdName)
 
 	if customresource.IsEstablished(crdObj) {
 		if err := discoverResourceForKind(r.mapper, kind); err != nil {
@@ -186,7 +184,7 @@ func (r *CRDMetaController) Reconcile(ctx context.Context, req reconcile.Request
 		return reconcile.Result{}, err
 	}
 
-	r.logger(ctx).V(3).Info("CRDMetaController handled CRD status update", "name", crdName)
+	r.Logger(ctx).V(3).Info("CRDMetaController handled CRD status update", "name", crdName)
 
 	return reconcile.Result{}, nil
 }

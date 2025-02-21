@@ -2,6 +2,8 @@ module kpt.dev/configsync
 
 go 1.23.0
 
+replace github.com/GoogleContainerTools/kpt => ./internal/third_party/github.com/GoogleContainerTools/kpt
+
 require (
 	cloud.google.com/go/compute/metadata v0.5.1
 	cloud.google.com/go/monitoring v1.21.0

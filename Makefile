@@ -388,9 +388,12 @@ ALLOWED_LICENSES := "MIT,ISC,Apache-2.0,BSD-2-Clause,BSD-3-Clause"
 
 .PHONY: lint-license
 # Lints licenses for all packages, even ones just for testing.
+# Ignore the vendored kpt, because it's a copy from ./internal/third_party,
+# which causes go-licenses to error.
+# https://github.com/google/go-licenses/issues/310
 lint-license: "$(GO_LICENSES)"
-	@echo "\"$(GO_LICENSES)\" check --allowed_licenses=$(ALLOWED_LICENSES) \$$(go list all) ./vendor/..."
-	@"$(GO_LICENSES)" check --allowed_licenses=$(ALLOWED_LICENSES) $(shell go list all) ./vendor/...
+	@echo "\"$(GO_LICENSES)\" check --allowed_licenses=$(ALLOWED_LICENSES) \$$(go list all) ./vendor/... --ignore github.com/GoogleContainerTools/kpt"
+	@"$(GO_LICENSES)" check --allowed_licenses=$(ALLOWED_LICENSES) $(shell go list all) ./vendor/... --ignore github.com/GoogleContainerTools/kpt
 
 "$(GO_LICENSES)": buildenv-dirs
 	GOPATH="$(GO_DIR)" go install github.com/google/go-licenses/v2

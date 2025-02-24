@@ -15,7 +15,6 @@
 package declared
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/elliotchance/orderedmap/v2"
@@ -24,6 +23,7 @@ import (
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
+	"kpt.dev/configsync/pkg/testing/testerrors"
 )
 
 func TestDontDeleteAllNamespaces(t *testing.T) {
@@ -95,9 +95,7 @@ func TestDontDeleteAllNamespaces(t *testing.T) {
 			}
 
 			got := deletesAllNamespaces(previous, current)
-			if !errors.Is(got, tc.want) {
-				t.Errorf("got deletesAllNamespaces() = %v, want %v", got, tc.want)
-			}
+			testerrors.AssertEqual(t, got, tc.want)
 		})
 	}
 }

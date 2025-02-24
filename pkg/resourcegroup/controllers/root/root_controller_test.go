@@ -46,8 +46,6 @@ const (
 )
 
 func TestRootReconciler(t *testing.T) {
-	var reconcilerKpt *Reconciler
-
 	// Configure controller-manager to log to the test logger
 	testLogger := testcontroller.NewTestLogger(t)
 	controllerruntime.SetLogger(testLogger)
@@ -67,7 +65,7 @@ func TestRootReconciler(t *testing.T) {
 	defer cancel()
 
 	logger := testLogger.WithName("controllers")
-	reconcilerKpt, err = NewReconciler(mgr, logger.WithName("root"))
+	reconcilerKpt, err := NewReconciler(mgr, logger.WithName("root"))
 	require.NoError(t, err)
 
 	resolver, err := typeresolver.ForManager(mgr, logger.WithName("typeresolver"))
@@ -105,7 +103,7 @@ func TestRootReconciler(t *testing.T) {
 	waitForEvent(t, reconcilerKpt.channel, 5*time.Second)
 
 	t.Log("Updating ResourceGroup status") // simulating InventoryResourceGroup.Apply
-	resourceGroupKpt.Status.ObservedGeneration = resourceGroupKpt.Generation
+	resourceGroupKpt.Status.ObservedGenerations.Reconciler = resourceGroupKpt.Generation
 	err = c.Status().Update(ctx, resourceGroupKpt, client.FieldOwner(fake.FieldManager))
 	require.NoError(t, err)
 
@@ -174,7 +172,7 @@ func TestRootReconciler(t *testing.T) {
 	waitForEvent(t, reconcilerKpt.channel, 5*time.Second)
 
 	t.Log("Updating ResourceGroup status") // simulating InventoryResourceGroup.Apply
-	resourceGroupKpt.Status.ObservedGeneration = resourceGroupKpt.Generation
+	resourceGroupKpt.Status.ObservedGenerations.Reconciler = resourceGroupKpt.Generation
 	err = c.Status().Update(ctx, resourceGroupKpt, client.FieldOwner(fake.FieldManager))
 	require.NoError(t, err)
 

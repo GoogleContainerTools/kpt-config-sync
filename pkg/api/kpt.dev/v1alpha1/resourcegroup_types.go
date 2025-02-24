@@ -64,13 +64,22 @@ type ResourceGroupStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// observedGeneration is the most recent generation observed.
-	// It corresponds to the Object's generation, which is updated on
-	// mutation by the API Server.
-	// Everytime the controller does a successful reconcile, it sets
-	// observedGeneration to match ResourceGroup.metadata.generation.
+	// It corresponds to the Object's generation, which is updated by the
+	// API Server whenever the object's spec is changed.
+	// Every time a controller successfully reconciles, it updates the
+	// observedGeneration to match the Object's generation.
 	// +optional
 	// +kubebuilder:default:=0
 	ObservedGeneration int64 `json:"observedGeneration"`
+
+	// observedGenerations is a set of observed generations for each controller
+	// that updates the ResourceGroup status.
+	// Every time a controller successfully reconciles, it updates its entry in
+	// observedGenerations to match the Object's generation.
+	// When all the observedGenerations entries match, the last controller to
+	// update it also updates the observedGeneration.
+	// +optional
+	ObservedGenerations ResourceGroupObservedGenerations `json:"observedGenerations"`
 
 	// resourceStatuses lists the status for each resource in the group
 	// +optional
@@ -83,6 +92,21 @@ type ResourceGroupStatus struct {
 	// conditions lists the conditions of the current status for the group
 	// +optional
 	Conditions []Condition `json:"conditions,omitempty"`
+}
+
+// ResourceGroupObservedGenerations is a set of observed generations for each
+// controller that updates the ResourceGroup status.
+type ResourceGroupObservedGenerations struct {
+	// reconciler is the observed generation for the Config Sync reconciler.
+	// +optional
+	// +kubebuilder:default:=0
+	Reconciler int64 `json:"reconciler"`
+
+	// resourceGroupController is the observed generation for the ResourceGroup
+	// controller.
+	// +optional
+	// +kubebuilder:default:=0
+	ResourceGroupController int64 `json:"resourceGroupController"`
 }
 
 // each item organizes and stores the identifying information

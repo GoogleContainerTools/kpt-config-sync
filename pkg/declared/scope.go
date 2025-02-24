@@ -15,11 +15,13 @@
 package declared
 
 import (
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/status"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // RootScope is the scope that includes both cluster-scoped and namespace-scoped
@@ -91,4 +93,23 @@ func ReconcilerNameFromScope(syncScope Scope, syncName string) string {
 		return core.RootReconcilerName(syncName)
 	}
 	return core.NsReconcilerName(syncScope.String(), syncName)
+}
+
+// SyncKeyFromScope returns the Sync name & namespace as an ObjectKey.
+func SyncKeyFromScope(syncScope Scope, syncName string) client.ObjectKey {
+	return client.ObjectKey{
+		Name:      syncName,
+		Namespace: syncScope.SyncNamespace(),
+	}
+}
+
+// SyncIDFromScope returns the Sync ID from the Scope and name.
+func SyncIDFromScope(syncScope Scope, syncName string) core.ID {
+	return core.ID{
+		GroupKind: schema.GroupKind{
+			Group: configsync.GroupName,
+			Kind:  syncScope.SyncKind(),
+		},
+		ObjectKey: SyncKeyFromScope(syncScope, syncName),
+	}
 }

@@ -16,9 +16,9 @@ package e2e
 
 import (
 	"fmt"
-	"reflect"
 	"testing"
 
+	"k8s.io/apimachinery/pkg/api/equality"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
@@ -30,6 +30,7 @@ import (
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
+	"kpt.dev/configsync/pkg/util/log"
 	"sigs.k8s.io/cli-utils/pkg/common"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -83,12 +84,14 @@ func resourceGroupHasNoStatus(obj client.Object) error {
 	if !ok {
 		return testpredicates.WrongTypeErr(obj, &resourcegroupv1alpha1.ResourceGroup{})
 	}
-	// We can't check that the status field is missing, because the
-	// ResourceGroup object doesn't use a pointer for status.
-	// But we can check that the status is empty, which is what we really care
-	// about, to reduce the size of the object in etcd.
-	if !reflect.ValueOf(rg.Status).IsZero() {
-		return fmt.Errorf("found non-empty status in %s", core.IDOf(obj))
+	// observedGeneration might still be populated when status is disabled.
+	// All the other fields should be empty or equivalent to empty.
+	emptyStatus := resourcegroupv1alpha1.ResourceGroupStatus{
+		ObservedGeneration: rg.Status.ObservedGeneration,
+	}
+	if !equality.Semantic.DeepEqual(emptyStatus, rg.Status) {
+		return fmt.Errorf("found non-empty status in %s:\nDiff (- Expected, + Found)\n%s",
+			kinds.ObjectSummary(rg), log.AsYAMLDiff(emptyStatus, rg.Status))
 	}
 	return nil
 }
@@ -101,9 +104,13 @@ func resourceGroupHasStatus(obj client.Object) error {
 	if !ok {
 		return testpredicates.WrongTypeErr(obj, &resourcegroupv1alpha1.ResourceGroup{})
 	}
-	// When status is enabled, the resource statuses are computed and populated.
-	if len(rg.Status.ResourceStatuses) == 0 {
-		return fmt.Errorf("found empty status in %s", core.IDOf(obj))
+	// observedGeneration might still be populated when status is disabled.
+	// All the other fields should be empty or equivalent to empty.
+	emptyStatus := resourcegroupv1alpha1.ResourceGroupStatus{
+		ObservedGeneration: rg.Status.ObservedGeneration,
+	}
+	if equality.Semantic.DeepEqual(emptyStatus, rg.Status) {
+		return fmt.Errorf("found empty status in %s", kinds.ObjectSummary(rg))
 	}
 	return nil
 }

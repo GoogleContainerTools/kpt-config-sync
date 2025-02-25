@@ -113,6 +113,10 @@ func TestReconcile(t *testing.T) {
 	}
 	expectedStatus := v1alpha1.ResourceGroupStatus{
 		ObservedGeneration: 0,
+		ObservedGenerations: v1alpha1.ResourceGroupObservedGenerations{
+			Reconciler:              0,
+			ResourceGroupController: 0,
+		},
 	}
 
 	// Create the ResourceGroup spec (simulating InventoryResourceGroup.Apply)
@@ -121,16 +125,17 @@ func TestReconcile(t *testing.T) {
 	resgroupKpt = waitForResourceGroupStatus(t, ctx, c, rgKey, 1, 0, expectedStatus)
 
 	// Update the ResourceGroup status (simulating InventoryResourceGroup.Apply)
-	resgroupKpt.Status.ObservedGeneration = resgroupKpt.Generation
+	resgroupKpt.Status.ObservedGenerations.Reconciler = resgroupKpt.Generation
 	err = c.Status().Update(ctx, resgroupKpt, client.FieldOwner(fake.FieldManager))
 	require.NoError(t, err)
-	expectedStatus.ObservedGeneration = 1
+	expectedStatus.ObservedGenerations.Reconciler = 1
 	resgroupKpt = waitForResourceGroupStatus(t, ctx, c, rgKey, 1, 0, expectedStatus)
 
 	// Push an event to the channel, which will cause trigger a reconciliation for resgroup
 	channelKpt <- event.GenericEvent{Object: resgroupKpt}
 
 	// Verify that the reconciliation modifies the ResourceGroupStatus field correctly
+	expectedStatus.ObservedGenerations.ResourceGroupController = 1
 	expectedStatus.ObservedGeneration = 1
 	expectedStatus.Conditions = []v1alpha1.Condition{
 		newReconcilingCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg),
@@ -165,10 +170,10 @@ func TestReconcile(t *testing.T) {
 	resgroupKpt = waitForResourceGroupStatus(t, ctx, c, rgKey, 2, 2, expectedStatus)
 
 	// Update the ResourceGroup status (simulating InventoryResourceGroup.Apply)
-	resgroupKpt.Status.ObservedGeneration = resgroupKpt.Generation
+	resgroupKpt.Status.ObservedGenerations.Reconciler = resgroupKpt.Generation
 	err = c.Status().Update(ctx, resgroupKpt, client.FieldOwner(fake.FieldManager))
 	require.NoError(t, err)
-	expectedStatus.ObservedGeneration = 2
+	expectedStatus.ObservedGenerations.Reconciler = 2
 	resgroupKpt = waitForResourceGroupStatus(t, ctx, c, rgKey, 2, 2, expectedStatus)
 
 	channelKpt <- event.GenericEvent{Object: resgroupKpt}
@@ -184,6 +189,7 @@ func TestReconcile(t *testing.T) {
 			Status:      v1alpha1.NotFound,
 		},
 	}
+	expectedStatus.ObservedGenerations.ResourceGroupController = 2
 	expectedStatus.ObservedGeneration = 2
 	expectedStatus.Conditions = []v1alpha1.Condition{
 		newReconcilingCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg),
@@ -276,10 +282,10 @@ func TestReconcile(t *testing.T) {
 	resgroupKpt = waitForResourceGroupStatus(t, ctx, c, rgKey, 3, 1, expectedStatus)
 
 	// Update the ResourceGroup status (simulating InventoryResourceGroup.Apply)
-	resgroupKpt.Status.ObservedGeneration = resgroupKpt.Generation
+	resgroupKpt.Status.ObservedGenerations.Reconciler = resgroupKpt.Generation
 	err = c.Status().Update(ctx, resgroupKpt, client.FieldOwner(fake.FieldManager))
 	require.NoError(t, err)
-	expectedStatus.ObservedGeneration = 3
+	expectedStatus.ObservedGenerations.Reconciler = 3
 	resgroupKpt = waitForResourceGroupStatus(t, ctx, c, rgKey, 3, 1, expectedStatus)
 
 	channelKpt <- event.GenericEvent{Object: resgroupKpt}
@@ -291,6 +297,7 @@ func TestReconcile(t *testing.T) {
 			Status:      v1alpha1.Current,
 		},
 	}
+	expectedStatus.ObservedGenerations.ResourceGroupController = 3
 	expectedStatus.ObservedGeneration = 3
 	expectedStatus.Conditions = []v1alpha1.Condition{
 		newReconcilingCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg),
@@ -337,6 +344,14 @@ func validateResourceGroup(obj runtime.Object, expectedGeneration, expectedResou
 	if rgStatus.ObservedGeneration != expectedStatus.ObservedGeneration {
 		err = errors.Join(err, fmt.Errorf("expected `status.observedGeneration` to equal %v, but got %v",
 			expectedStatus.ObservedGeneration, rgStatus.ObservedGeneration))
+	}
+	if rgStatus.ObservedGenerations.Reconciler != expectedStatus.ObservedGenerations.Reconciler {
+		err = errors.Join(err, fmt.Errorf("expected `status.observedGenerations.reconciler` to equal %v, but got %v",
+			expectedStatus.ObservedGenerations.Reconciler, rgStatus.ObservedGenerations.Reconciler))
+	}
+	if rgStatus.ObservedGenerations.ResourceGroupController != expectedStatus.ObservedGenerations.ResourceGroupController {
+		err = errors.Join(err, fmt.Errorf("expected `status.observedGenerations.resourceGroupController` to equal %v, but got %v",
+			expectedStatus.ObservedGenerations.ResourceGroupController, rgStatus.ObservedGenerations.ResourceGroupController))
 	}
 	if len(rgStatus.ResourceStatuses) != len(expectedStatus.ResourceStatuses) {
 		err = errors.Join(err, fmt.Errorf("expected `len(status.resourceStatuses)` to equal %v, but got %v",
@@ -466,71 +481,6 @@ func TestReconcileTimeout(t *testing.T) {
 		t.Run(fmt.Sprintf("getReconcileTimeOut %s", name), func(t *testing.T) {
 			actual := getReconcileTimeOut(tc.resourceCount)
 			assert.Equal(t, tc.expected, actual)
-		})
-	}
-}
-
-func TestActuationStatusToLegacy(t *testing.T) {
-	tests := []struct {
-		name      string
-		resStatus v1alpha1.ResourceStatus
-		want      v1alpha1.Status
-	}{
-		{
-			"Status should equal current status when actuation is status is successful",
-			v1alpha1.ResourceStatus{
-				Status:    v1alpha1.Current,
-				Actuation: v1alpha1.ActuationSucceeded,
-			},
-			v1alpha1.Current,
-		},
-		{
-			"Return status field when actuation is status is empty",
-			v1alpha1.ResourceStatus{
-				Status: v1alpha1.InProgress,
-			},
-			v1alpha1.InProgress,
-		},
-		{
-			"Return unknown when actuation is not successful",
-			v1alpha1.ResourceStatus{
-				Actuation: v1alpha1.ActuationPending,
-			},
-			v1alpha1.Unknown,
-		},
-		{
-			"Return not found when status is not found already",
-			v1alpha1.ResourceStatus{
-				Status:    v1alpha1.NotFound,
-				Actuation: v1alpha1.ActuationPending,
-			},
-			v1alpha1.NotFound,
-		},
-		{
-			"Return not found when status is not found already - disregard actuation success",
-			v1alpha1.ResourceStatus{
-				Status:    v1alpha1.NotFound,
-				Actuation: v1alpha1.ActuationSucceeded,
-			},
-			v1alpha1.NotFound,
-		},
-		{
-			"Return Current if both Actuation and Reconcile succeeded",
-			v1alpha1.ResourceStatus{
-				Status:    v1alpha1.Unknown,
-				Actuation: v1alpha1.ActuationSucceeded,
-				Reconcile: v1alpha1.ReconcileSucceeded,
-			},
-			v1alpha1.Current,
-		},
-	}
-	for _, tc := range tests {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			if got := ActuationStatusToLegacy(tc.resStatus); got != tc.want {
-				t.Errorf("ActuationStatusToLegacy() = %v, want %v", got, tc.want)
-			}
 		})
 	}
 }

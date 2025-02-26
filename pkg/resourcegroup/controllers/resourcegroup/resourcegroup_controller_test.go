@@ -37,6 +37,7 @@ import (
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/typeresolver"
 	"kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/testcontroller"
+	"kpt.dev/configsync/pkg/testing/testerrors"
 	"kpt.dev/configsync/pkg/testing/testwatch"
 	"kpt.dev/configsync/pkg/util/log"
 	"sigs.k8s.io/cli-utils/pkg/common"
@@ -470,6 +471,228 @@ func TestReconcileTimeout(t *testing.T) {
 		t.Run(fmt.Sprintf("getReconcileTimeOut %s", name), func(t *testing.T) {
 			actual := getReconcileTimeOut(tc.resourceCount)
 			assert.Equal(t, tc.expected, actual)
+		})
+	}
+}
+
+// TestUpdateReconcileStatusToReflectKstatus tests the
+// UpdateReconcileStatusToReflectKstatus function.
+func TestUpdateReconcileStatusToReflectKstatus(t *testing.T) {
+	// Define test cases using a table-driven approach
+	testCases := []struct {
+		name          string
+		status        v1alpha1.ResourceStatus
+		expected      v1alpha1.Reconcile
+		expectedError error
+	}{
+		// Apply Strategy tests
+		{
+			name: "Apply_Succeeded_Current",
+			status: v1alpha1.ResourceStatus{
+				Strategy:  v1alpha1.Apply,
+				Actuation: v1alpha1.ActuationSucceeded,
+				Status:    v1alpha1.Current,
+			},
+			expected: v1alpha1.ReconcileSucceeded,
+		},
+		{
+			name: "Apply_Succeeded_InProgress",
+			status: v1alpha1.ResourceStatus{
+				Strategy:  v1alpha1.Apply,
+				Actuation: v1alpha1.ActuationSucceeded,
+				Status:    v1alpha1.InProgress,
+			},
+			expected: v1alpha1.ReconcilePending,
+		},
+		{
+			name: "Apply_Succeeded_Failed",
+			status: v1alpha1.ResourceStatus{
+				Strategy:  v1alpha1.Apply,
+				Actuation: v1alpha1.ActuationSucceeded,
+				Status:    v1alpha1.Failed,
+			},
+			expected: v1alpha1.ReconcileFailed,
+		},
+		{
+			name: "Apply_Succeeded_Terminating",
+			status: v1alpha1.ResourceStatus{
+				Strategy:  v1alpha1.Apply,
+				Actuation: v1alpha1.ActuationSucceeded,
+				Status:    v1alpha1.Terminating,
+			},
+			expected: v1alpha1.ReconcileFailed,
+		},
+		{
+			name: "Apply_Succeeded_NotFound",
+			status: v1alpha1.ResourceStatus{
+				Strategy:  v1alpha1.Apply,
+				Actuation: v1alpha1.ActuationSucceeded,
+				Status:    v1alpha1.NotFound,
+			},
+			expected: v1alpha1.ReconcileFailed,
+		},
+		{
+			name: "Apply_Succeeded_Unknown",
+			status: v1alpha1.ResourceStatus{
+				Strategy:  v1alpha1.Apply,
+				Actuation: v1alpha1.ActuationSucceeded,
+				Status:    v1alpha1.Unknown,
+				Reconcile: v1alpha1.ReconcilePending, // Simulate previous reconcile status
+			},
+			expected: v1alpha1.ReconcilePending,
+		},
+		{
+			name: "Apply_Succeeded_InvalidKstatus",
+			status: v1alpha1.ResourceStatus{
+				Strategy:  v1alpha1.Apply,
+				Actuation: v1alpha1.ActuationSucceeded,
+				Status:    "Invalid", // Invalid Kstatus
+			},
+			expected:      "",
+			expectedError: fmt.Errorf("invalid kstatus: %s", "Invalid"),
+		},
+		{
+			name: "Apply_Pending",
+			status: v1alpha1.ResourceStatus{
+				Strategy:  v1alpha1.Apply,
+				Actuation: v1alpha1.ActuationPending,
+			},
+			expected: v1alpha1.ReconcilePending,
+		},
+		{
+			name: "Apply_Skipped",
+			status: v1alpha1.ResourceStatus{
+				Strategy:  v1alpha1.Apply,
+				Actuation: v1alpha1.ActuationSkipped,
+			},
+			expected: v1alpha1.ReconcileSkipped,
+		},
+		{
+			name: "Apply_Failed",
+			status: v1alpha1.ResourceStatus{
+				Strategy:  v1alpha1.Apply,
+				Actuation: v1alpha1.ActuationFailed,
+			},
+			expected: v1alpha1.ReconcileSkipped,
+		},
+		{
+			name: "Apply_InvalidActuation",
+			status: v1alpha1.ResourceStatus{
+				Strategy:  v1alpha1.Apply,
+				Actuation: "Invalid", // Invalid Actuation
+			},
+			expected:      "",
+			expectedError: fmt.Errorf("invalid actuation status: %s", "Invalid"),
+		},
+
+		// Delete Strategy tests
+		{
+			name: "Delete_Succeeded_Current",
+			status: v1alpha1.ResourceStatus{
+				Strategy:  v1alpha1.Delete,
+				Actuation: v1alpha1.ActuationSucceeded,
+				Status:    v1alpha1.Current,
+			},
+			expected: v1alpha1.ReconcileFailed,
+		},
+		{
+			name: "Delete_Succeeded_InProgress",
+			status: v1alpha1.ResourceStatus{
+				Strategy:  v1alpha1.Delete,
+				Actuation: v1alpha1.ActuationSucceeded,
+				Status:    v1alpha1.InProgress,
+			},
+			expected: v1alpha1.ReconcileFailed,
+		},
+		{
+			name: "Delete_Succeeded_Failed",
+			status: v1alpha1.ResourceStatus{
+				Strategy:  v1alpha1.Delete,
+				Actuation: v1alpha1.ActuationSucceeded,
+				Status:    v1alpha1.Failed,
+			},
+			expected: v1alpha1.ReconcileFailed,
+		},
+		{
+			name: "Delete_Succeeded_Terminating",
+			status: v1alpha1.ResourceStatus{
+				Strategy:  v1alpha1.Delete,
+				Actuation: v1alpha1.ActuationSucceeded,
+				Status:    v1alpha1.Terminating,
+			},
+			expected: v1alpha1.ReconcilePending,
+		},
+		{
+			name: "Delete_Succeeded_NotFound",
+			status: v1alpha1.ResourceStatus{
+				Strategy:  v1alpha1.Delete,
+				Actuation: v1alpha1.ActuationSucceeded,
+				Status:    v1alpha1.NotFound,
+			},
+			expected: v1alpha1.ReconcileSucceeded,
+		},
+		{
+			name: "Delete_Succeeded_InvalidKstatus",
+			status: v1alpha1.ResourceStatus{
+				Strategy:  v1alpha1.Delete,
+				Actuation: v1alpha1.ActuationSucceeded,
+				Status:    "Invalid", // Invalid Kstatus
+			},
+			expected:      "",
+			expectedError: fmt.Errorf("invalid kstatus: %s", "Invalid"),
+		},
+		{
+			name: "Delete_Pending",
+			status: v1alpha1.ResourceStatus{
+				Strategy:  v1alpha1.Delete,
+				Actuation: v1alpha1.ActuationPending,
+			},
+			expected: v1alpha1.ReconcilePending,
+		},
+		{
+			name: "Delete_Skipped",
+			status: v1alpha1.ResourceStatus{
+				Strategy:  v1alpha1.Delete,
+				Actuation: v1alpha1.ActuationSkipped,
+			},
+			expected: v1alpha1.ReconcileSkipped,
+		},
+		{
+			name: "Delete_Failed",
+			status: v1alpha1.ResourceStatus{
+				Strategy:  v1alpha1.Delete,
+				Actuation: v1alpha1.ActuationFailed,
+			},
+			expected: v1alpha1.ReconcileSkipped,
+		},
+		{
+			name: "Delete_InvalidActuation",
+			status: v1alpha1.ResourceStatus{
+				Strategy:  v1alpha1.Delete,
+				Actuation: "Invalid", // Invalid Actuation
+			},
+			expected:      "",
+			expectedError: fmt.Errorf("invalid actuation status: %s", "Invalid"),
+		},
+
+		// Invalid Strategy tests
+		{
+			name: "InvalidStrategy",
+			status: v1alpha1.ResourceStatus{
+				Strategy: "Invalid", // Invalid Strategy
+			},
+			expected:      "",
+			expectedError: fmt.Errorf("invalid actuation strategy: %s", "Invalid"),
+		},
+	}
+
+	// Iterate through the test cases
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Call the function under test
+			actual, err := UpdateReconcileStatusToReflectKstatus(tc.status)
+			assert.Equal(t, tc.expected, actual)
+			testerrors.AssertEqual(t, tc.expectedError, err)
 		})
 	}
 }

@@ -100,16 +100,17 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, nil
 	}
 
-	newStatus := r.startReconcilingStatus(rgObj.Status)
-	if err := r.updateStatusKptGroup(ctx, rgObj, newStatus); err != nil {
-		r.Logger(ctx).Error(err, "failed to update ResourceGroup to start reconciling")
-		return ctrl.Result{Requeue: true}, err
-	}
+	// Since this controller doesn't perform any writes in any external systems,
+	// it doesn't need to set the Reconciling condition status to True before
+	// building the new status, because there are no possible side-effects that
+	// the user might need to know about when reconciling fails.
+	// So skip initializing the Reconciling & Stalled conditions and only set
+	// them when reconciling succeeds or fails.
 
 	id := getInventoryID(rgObj.Labels)
-	newStatus = r.endReconcilingStatus(ctx, id, req.NamespacedName, rgObj.Spec, rgObj.Status, rgObj.Generation)
+	newStatus := r.endReconcilingStatus(ctx, id, req.NamespacedName, rgObj.Spec, rgObj.Status, rgObj.Generation)
 	if err := r.updateStatusKptGroup(ctx, rgObj, newStatus); err != nil {
-		r.Logger(ctx).Error(err, "failed to update ResourceGroup to finish reconciling")
+		r.Logger(ctx).Error(err, "failed to update ResourceGroup")
 		return ctrl.Result{Requeue: true}, err
 	}
 
@@ -152,7 +153,6 @@ func updateResourceMetrics(ctx context.Context, nn types.NamespacedName, statuse
 	metrics.RecordCRDCount(ctx, nn, int64(len(crds)))
 	metrics.RecordKCCResourceCount(ctx, nn, int64(kccCount))
 }
-
 func (r *reconciler) updateStatusKptGroup(ctx context.Context, resgroup *v1alpha1.ResourceGroup, newStatus v1alpha1.ResourceGroupStatus) error {
 	newStatus.Conditions = adjustConditionOrder(newStatus.Conditions)
 	return retry.RetryOnConflict(retry.DefaultBackoff, func() error {
@@ -163,19 +163,6 @@ func (r *reconciler) updateStatusKptGroup(ctx context.Context, resgroup *v1alpha
 		// Use `r.Status().Update()` here instead of `r.Update()` to update only resgroup.Status.
 		return r.client.Status().Update(ctx, resgroup, client.FieldOwner(FieldManager))
 	})
-}
-
-func (r *reconciler) startReconcilingStatus(status v1alpha1.ResourceGroupStatus) v1alpha1.ResourceGroupStatus {
-	// Preserve existing status and only update fields that need to change.
-	// This avoids repeatedly updating the status just to update a timestamp.
-	// It also prevents fighting with other controllers updating the status.
-	newStatus := *status.DeepCopy()
-	// Update conditions, if they've changed
-	newStatus.Conditions = updateCondition(newStatus.Conditions,
-		newReconcilingCondition(v1alpha1.TrueConditionStatus, StartReconciling, startReconcilingMsg))
-	newStatus.Conditions = updateCondition(newStatus.Conditions,
-		newStalledCondition(v1alpha1.FalseConditionStatus, "", ""))
-	return newStatus
 }
 
 func (r *reconciler) endReconcilingStatus(

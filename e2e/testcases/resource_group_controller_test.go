@@ -23,18 +23,17 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
-	"kpt.dev/configsync/e2e/nomostest/retry"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testresourcegroup"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
-	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
-	"kpt.dev/configsync/pkg/resourcegroup"
+	"kpt.dev/configsync/pkg/reconcilermanager"
 )
 
 func TestResourceGroupController(t *testing.T) {
@@ -53,25 +52,23 @@ func TestResourceGroupController(t *testing.T) {
 	nt.Must(rootSyncGitRepo.CommitAndPush("Adding a ConfigMap to repo"))
 	nt.Must(nt.WatchForAllSyncs())
 
-	// Checking that the ResourceGroup controller captures the status of the
-	// managed resources.
-	id := applier.InventoryID(configsync.RootSyncName, configsync.ControllerNamespace)
-	_, err := retry.Retry(60*time.Second, func() error {
-		rg := resourcegroup.Unstructured(configsync.RootSyncName, configsync.ControllerNamespace, id)
-		err := nt.Validate(configsync.RootSyncName, configsync.ControllerNamespace, rg,
-			testpredicates.AllResourcesReconciled(nt.Scheme))
-		if err != nil {
-			return err
-		}
-		return nil
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.T.Log("Wait for the ResourceGroupController to update the ResourceGroup status")
+	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(), configsync.RootSyncName, configsync.ControllerNamespace,
+		testwatcher.WatchPredicates(
+			testpredicates.AllResourcesReconciled(nt.Scheme),
+		)))
 }
 
 func TestResourceGroupControllerInKptGroup(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.ACMController)
+
+	// increase logging
+	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
+	nt.Must(nt.KubeClient.Get(rs.Name, rs.Namespace, rs))
+	rs.Spec.SafeOverride().LogLevels = []v1beta1.ContainerLogLevelOverride{
+		{ContainerName: reconcilermanager.Reconciler, LogLevel: 5},
+	}
+	nt.Must(nt.KubeClient.Update(rs))
 
 	namespace := "resourcegroup-e2e"
 	nt.T.Cleanup(func() {
@@ -80,19 +77,22 @@ func TestResourceGroupControllerInKptGroup(t *testing.T) {
 			nt.T.Error(err)
 		}
 	})
-	if err := nt.KubeClient.Create(k8sobjects.NamespaceObject(namespace)); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.KubeClient.Create(k8sobjects.NamespaceObject(namespace)))
+
+	nt.T.Log("Create a ResourceGroup")
 	rgNN := types.NamespacedName{
 		Name:      "group-a",
 		Namespace: namespace,
 	}
 	resourceID := rgNN.Name
 	rg := testresourcegroup.New(rgNN, resourceID)
-	if err := nt.KubeClient.Create(rg); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.KubeClient.Create(rg))
 
+	nt.T.Log("Update the ResourceGroup status to simulate the Reconciler")
+	rg.Status.ObservedGeneration = rg.Generation
+	nt.Must(nt.KubeClient.UpdateStatus(rg))
+
+	nt.T.Log("Wait for the ResourceGroupController to update the ResourceGroup status")
 	expectedStatus := testresourcegroup.EmptyStatus()
 	expectedStatus.ObservedGeneration = 1
 	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace,
@@ -100,6 +100,7 @@ func TestResourceGroupControllerInKptGroup(t *testing.T) {
 			testpredicates.ResourceGroupStatusEquals(expectedStatus),
 		)))
 
+	nt.T.Log("Add a ConfigMap to the ResourceGroup spec")
 	resources := []v1alpha1.ObjMetadata{
 		{
 			Name:      "example",
@@ -110,28 +111,52 @@ func TestResourceGroupControllerInKptGroup(t *testing.T) {
 			},
 		},
 	}
-	nt.Must(testresourcegroup.UpdateResourceGroup(nt.KubeClient, rgNN, func(rg *v1alpha1.ResourceGroup) {
-		rg.Spec.Resources = resources
-	}))
+	rg = &v1alpha1.ResourceGroup{}
+	nt.Must(nt.KubeClient.Get(rgNN.Name, rgNN.Namespace, rg))
+	rg.Spec.Resources = resources
+	nt.Must(nt.KubeClient.Update(rg))
 
+	nt.T.Log("Update the ResourceGroup status to simulate the Reconciler")
+	rg.Status.ObservedGeneration = rg.Generation
+	nt.Must(nt.KubeClient.UpdateStatus(rg))
+
+	nt.T.Log("Wait for the ResourceGroupController to update the ResourceGroup status")
+	expectedStatus.ObservedGeneration = 2
+	expectedStatus.ResourceStatuses = []v1alpha1.ResourceStatus{
+		{
+			ObjMetadata: resources[0],
+			Status:      v1alpha1.NotFound,
+		},
+	}
+	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace,
+		testwatcher.WatchPredicates(
+			testpredicates.ResourceGroupStatusEquals(expectedStatus),
+		)))
+
+	nt.T.Log("Create a ResourceGroup to use as a Subgroup")
 	subRGNN := types.NamespacedName{
 		Name:      "group-b",
 		Namespace: rgNN.Namespace,
 	}
 	subRG := testresourcegroup.New(subRGNN, subRGNN.Name)
-	if err := nt.KubeClient.Create(subRG); err != nil {
-		nt.T.Fatal(err)
+	nt.Must(nt.KubeClient.Create(subRG))
+
+	nt.T.Log("Add the new ResourceGroup as a Subgroup to the ResourceGroup spec")
+	rg = &v1alpha1.ResourceGroup{}
+	nt.Must(nt.KubeClient.Get(rgNN.Name, rgNN.Namespace, rg))
+	rg.Spec.Subgroups = []v1alpha1.GroupMetadata{
+		{
+			Name:      subRGNN.Name,
+			Namespace: subRGNN.Namespace,
+		},
 	}
+	nt.Must(nt.KubeClient.Update(rg))
 
-	nt.Must(testresourcegroup.UpdateResourceGroup(nt.KubeClient, rgNN, func(rg *v1alpha1.ResourceGroup) {
-		rg.Spec.Subgroups = []v1alpha1.GroupMetadata{
-			{
-				Name:      subRGNN.Name,
-				Namespace: subRGNN.Namespace,
-			},
-		}
-	}))
+	nt.T.Log("Update the ResourceGroup status to simulate the Reconciler")
+	rg.Status.ObservedGeneration = rg.Generation
+	nt.Must(nt.KubeClient.UpdateStatus(rg))
 
+	nt.T.Log("Wait for the ResourceGroupController to update the ResourceGroup status")
 	expectedStatus.ObservedGeneration = 3
 	expectedStatus.ResourceStatuses = []v1alpha1.ResourceStatus{
 		{
@@ -156,17 +181,15 @@ func TestResourceGroupControllerInKptGroup(t *testing.T) {
 			},
 		},
 	}
-
 	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace,
 		testwatcher.WatchPredicates(
 			testpredicates.ResourceGroupStatusEquals(expectedStatus),
 		), testwatcher.WatchTimeout(time.Minute)))
 
-	if err := testresourcegroup.CreateOrUpdateResources(nt.KubeClient, resources, resourceID); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.T.Log("Simulate the Reconciler applying the managed resources")
+	nt.Must(testresourcegroup.CreateOrUpdateResources(nt.KubeClient, resources, resourceID))
 
-	expectedStatus.ObservedGeneration = 3
+	nt.T.Log("Wait for the ResourceGroupController to update the ResourceGroup status")
 	expectedStatus.ResourceStatuses = []v1alpha1.ResourceStatus{
 		{
 			ObjMetadata: resources[0],
@@ -174,15 +197,15 @@ func TestResourceGroupControllerInKptGroup(t *testing.T) {
 			SourceHash:  "1234567",
 		},
 	}
-
 	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace,
 		testwatcher.WatchPredicates(
 			testpredicates.ResourceGroupStatusEquals(expectedStatus),
 		), testwatcher.WatchTimeout(time.Minute)))
 
-	if err := testresourcegroup.CreateOrUpdateResources(nt.KubeClient, resources, "another"); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.T.Log("Simulate a different Reconciler adopting the managed resources")
+	nt.Must(testresourcegroup.CreateOrUpdateResources(nt.KubeClient, resources, "another"))
+
+	nt.T.Log("Wait for the ResourceGroupController to update the ResourceGroup status")
 	expectedStatus.ResourceStatuses = []v1alpha1.ResourceStatus{
 		{
 			ObjMetadata: resources[0],
@@ -198,22 +221,15 @@ func TestResourceGroupControllerInKptGroup(t *testing.T) {
 			},
 		},
 	}
-
 	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace,
 		testwatcher.WatchPredicates(
 			testpredicates.ResourceGroupStatusEquals(expectedStatus),
 		), testwatcher.WatchTimeout(time.Minute)))
 
-	if err := nt.KubeClient.Delete(rg); err != nil {
-		nt.T.Fatal(err)
-	}
-	if err := nt.KubeClient.Delete(subRG); err != nil {
-		nt.T.Fatal(err)
-	}
-
-	if err := testresourcegroup.ValidateNoControllerPodRestarts(nt.KubeClient); err != nil {
-		nt.T.Fatal(err)
-	}
+	// Cleanup
+	nt.Must(nt.KubeClient.Delete(rg))
+	nt.Must(nt.KubeClient.Delete(subRG))
+	nt.Must(testresourcegroup.ValidateNoControllerPodRestarts(nt.KubeClient))
 }
 
 func TestResourceGroupCustomResource(t *testing.T) {
@@ -226,40 +242,51 @@ func TestResourceGroupCustomResource(t *testing.T) {
 			nt.T.Error(err)
 		}
 	})
-	if err := nt.KubeClient.Create(k8sobjects.NamespaceObject(namespace)); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.KubeClient.Create(k8sobjects.NamespaceObject(namespace)))
+
+	nt.T.Log("Create a ResourceGroup")
 	rgNN := types.NamespacedName{
 		Name:      "group-d",
 		Namespace: namespace,
 	}
 	resourceID := rgNN.Name
 	rg := testresourcegroup.New(rgNN, resourceID)
-	if err := nt.KubeClient.Create(rg); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.KubeClient.Create(rg))
 
+	nt.T.Log("Update the ResourceGroup status to simulate the Reconciler")
+	rg.Status.ObservedGeneration = rg.Generation
+	nt.Must(nt.KubeClient.UpdateStatus(rg))
+
+	nt.T.Log("Wait for the ResourceGroupController to update the ResourceGroup status")
 	expectedStatus := testresourcegroup.EmptyStatus()
 	expectedStatus.ObservedGeneration = 1
 	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace,
 		testwatcher.WatchPredicates(
 			testpredicates.ResourceGroupStatusEquals(expectedStatus),
 		)))
-	crdObj := anvilV1CRD()
-	crdGVK := anvilGVK("v1")
+
+	nt.T.Log("Add an Anvil object to the ResourceGroup spec")
+	anvilGVK := anvilGVK("v1")
 	resources := []v1alpha1.ObjMetadata{
 		{
 			Name:      "example",
 			Namespace: namespace,
 			GroupKind: v1alpha1.GroupKind{
-				Group: crdGVK.Group,
-				Kind:  crdGVK.Kind,
+				Group: anvilGVK.Group,
+				Kind:  anvilGVK.Kind,
 			},
 		},
 	}
-	nt.Must(testresourcegroup.UpdateResourceGroup(nt.KubeClient, rgNN, func(rg *v1alpha1.ResourceGroup) {
-		rg.Spec.Resources = resources
-	}))
+	rg = &v1alpha1.ResourceGroup{}
+	nt.Must(nt.KubeClient.Get(rgNN.Name, rgNN.Namespace, rg))
+	rg.Spec.Resources = resources
+	nt.Must(nt.KubeClient.Update(rg))
+
+	nt.T.Log("Update the ResourceGroup status to simulate the Reconciler")
+	rg.Status.ObservedGeneration = rg.Generation
+	nt.Must(nt.KubeClient.UpdateStatus(rg))
+
+	nt.T.Log("Wait for the ResourceGroupController to update the ResourceGroup status")
 	expectedStatus.ObservedGeneration = 2
 	expectedStatus.ResourceStatuses = []v1alpha1.ResourceStatus{
 		{
@@ -271,21 +298,19 @@ func TestResourceGroupCustomResource(t *testing.T) {
 		testwatcher.WatchPredicates(
 			testpredicates.ResourceGroupStatusEquals(expectedStatus),
 		)))
-	// Create CRD and CR
+
+	nt.T.Log("Create Anvil CRD")
 	nt.T.Cleanup(func() {
 		crdObj := anvilV1CRD()
 		if err := nt.KubeClient.Delete(crdObj); err != nil && !apierrors.IsNotFound(err) {
 			nt.T.Error(err)
 		}
 	})
-	if err := nt.KubeClient.Create(crdObj); err != nil {
-		nt.T.Fatal(err)
-	}
-	if err := nt.Watcher.WatchForCurrentStatus(kinds.CustomResourceDefinitionV1(), crdObj.Name, ""); err != nil {
-		nt.T.Fatal(err)
-	}
-	anvilObj := anvilCR("v1", resources[0].Name, 10)
-	anvilObj.SetNamespace(resources[0].Namespace)
+	crdObj := anvilV1CRD()
+	nt.Must(nt.KubeClient.Create(crdObj))
+	nt.Must(nt.Watcher.WatchForCurrentStatus(kinds.CustomResourceDefinitionV1(), crdObj.Name, ""))
+
+	nt.T.Log("Create Anvil object")
 	nt.T.Cleanup(func() {
 		anvilObj := anvilCR("v1", resources[0].Name, 10)
 		anvilObj.SetNamespace(resources[0].Namespace)
@@ -293,10 +318,11 @@ func TestResourceGroupCustomResource(t *testing.T) {
 			nt.T.Error(err)
 		}
 	})
-	if err := nt.KubeClient.Create(anvilObj); err != nil {
-		nt.T.Fatal(err)
-	}
-	// assert status is updated
+	anvilObj := anvilCR("v1", resources[0].Name, 10)
+	anvilObj.SetNamespace(resources[0].Namespace)
+	nt.Must(nt.KubeClient.Create(anvilObj))
+
+	nt.T.Log("Wait for the ResourceGroupController to update the ResourceGroup status")
 	expectedStatus.ResourceStatuses = []v1alpha1.ResourceStatus{
 		{
 			ObjMetadata: resources[0],
@@ -315,9 +341,11 @@ func TestResourceGroupCustomResource(t *testing.T) {
 		testwatcher.WatchPredicates(
 			testpredicates.ResourceGroupStatusEquals(expectedStatus),
 		)))
-	if err := nt.KubeClient.Delete(crdObj); err != nil {
-		nt.T.Fatal(err)
-	}
+
+	nt.T.Log("Delete the Anvil CRD (k8s should delete all the Anvil objects too)")
+	nt.Must(nt.KubeClient.Delete(crdObj))
+
+	nt.T.Log("Wait for the ResourceGroupController to update the ResourceGroup status")
 	expectedStatus.ResourceStatuses = []v1alpha1.ResourceStatus{
 		{
 			ObjMetadata: resources[0],
@@ -340,19 +368,22 @@ func TestResourceGroupApplyStatus(t *testing.T) {
 			nt.T.Error(err)
 		}
 	})
-	if err := nt.KubeClient.Create(k8sobjects.NamespaceObject(namespace)); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.KubeClient.Create(k8sobjects.NamespaceObject(namespace)))
+
+	nt.T.Log("Create a ResourceGroup")
 	rgNN := types.NamespacedName{
 		Name:      "group-e",
 		Namespace: namespace,
 	}
 	resourceID := rgNN.Name
 	rg := testresourcegroup.New(rgNN, resourceID)
-	if err := nt.KubeClient.Create(rg); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.KubeClient.Create(rg))
 
+	nt.T.Log("Update the ResourceGroup status to simulate the Reconciler")
+	rg.Status.ObservedGeneration = rg.Generation
+	nt.Must(nt.KubeClient.UpdateStatus(rg))
+
+	nt.T.Log("Wait for the ResourceGroupController to update the ResourceGroup status")
 	expectedStatus := testresourcegroup.EmptyStatus()
 	expectedStatus.ObservedGeneration = 1
 	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace,
@@ -360,7 +391,6 @@ func TestResourceGroupApplyStatus(t *testing.T) {
 			testpredicates.ResourceGroupStatusEquals(expectedStatus),
 		)))
 
-	nt.T.Log("Create and apply ConfigMaps")
 	resources := []v1alpha1.ObjMetadata{
 		{
 			Name:      "test-status-0",
@@ -419,11 +449,21 @@ func TestResourceGroupApplyStatus(t *testing.T) {
 			},
 		},
 	}
+
 	nt.T.Log("Apply all but the last ConfigMap to test NotFound error")
 	nt.Must(testresourcegroup.CreateOrUpdateResources(nt.KubeClient, resources[:len(resources)-1], resourceID))
-	nt.Must(testresourcegroup.UpdateResourceGroup(nt.KubeClient, rgNN, func(rg *v1alpha1.ResourceGroup) {
-		rg.Spec.Resources = resources
-	}))
+
+	nt.T.Log("Update the ResourceGroup spec")
+	rg = &v1alpha1.ResourceGroup{}
+	nt.Must(nt.KubeClient.Get(rgNN.Name, rgNN.Namespace, rg))
+	rg.Spec.Resources = resources
+	nt.Must(nt.KubeClient.Update(rg))
+
+	nt.T.Log("Update the ResourceGroup status to simulate the Reconciler")
+	rg.Status.ObservedGeneration = rg.Generation
+	nt.Must(nt.KubeClient.UpdateStatus(rg))
+
+	nt.T.Log("Wait for the ResourceGroupController to update the ResourceGroup status")
 	expectedStatus.ObservedGeneration = 2
 	expectedStatus.ResourceStatuses = []v1alpha1.ResourceStatus{
 		{
@@ -466,21 +506,23 @@ func TestResourceGroupApplyStatus(t *testing.T) {
 			testpredicates.ResourceGroupStatusEquals(expectedStatus),
 		)))
 
-	nt.T.Log("inject resource status to verify reconcile behavior")
-	nt.Must(testresourcegroup.UpdateResourceGroup(nt.KubeClient, rgNN, func(rg *v1alpha1.ResourceGroup) {
-		rg.Status.ResourceStatuses = nil
-	}))
-	nt.T.Log("verify that the controller reconciles to the original status")
+	nt.T.Log("Update the ResourceGroup to clear resource status")
+	rg = &v1alpha1.ResourceGroup{}
+	nt.Must(nt.KubeClient.Get(rgNN.Name, rgNN.Namespace, rg))
+	rg.Status.ResourceStatuses = nil
+	nt.Must(nt.KubeClient.UpdateStatus(rg))
+
+	nt.T.Log("Wait for the ResourceGroupController to update the ResourceGroup status")
 	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace,
 		testwatcher.WatchPredicates(
 			testpredicates.ResourceGroupStatusEquals(expectedStatus),
 		)))
-	actualRG := &v1alpha1.ResourceGroup{}
-	if err := nt.KubeClient.Get(rgNN.Name, rgNN.Namespace, actualRG); err != nil {
-		nt.T.Fatal(err)
-	}
-	resourceVersion := actualRG.ResourceVersion
-	nt.T.Log("Wait and check to see we don't cause an infinite/recursive reconcile loop by ensuring the resourceVersion doesn't change.")
+
+	rg = &v1alpha1.ResourceGroup{}
+	nt.Must(nt.KubeClient.Get(rgNN.Name, rgNN.Namespace, rg))
+	resourceVersion := rg.ResourceVersion
+
+	nt.T.Log("Wait 60s to validate that the ResourceGroupController doesn't make any more updates (no resourceVersion change)")
 	err := nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace,
 		testwatcher.WatchPredicates(
 			testpredicates.ResourceVersionNotEquals(nt.Scheme, resourceVersion),
@@ -494,11 +536,7 @@ func TestResourceGroupApplyStatus(t *testing.T) {
 	}
 
 	nt.T.Log("Delete the ResourceGroup")
-	if err := nt.KubeClient.Delete(rg); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.KubeClient.Delete(rg))
 	nt.T.Log("Assert that the controller pods did not restart")
-	if err := testresourcegroup.ValidateNoControllerPodRestarts(nt.KubeClient); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(testresourcegroup.ValidateNoControllerPodRestarts(nt.KubeClient))
 }

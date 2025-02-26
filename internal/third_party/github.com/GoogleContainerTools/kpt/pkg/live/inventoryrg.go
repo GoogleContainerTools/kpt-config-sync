@@ -239,10 +239,11 @@ func (icm *InventoryResourceGroup) GetObject() (*unstructured.Unstructured, erro
 		if err != nil {
 			return nil, err
 		}
-		generation := invCopy.GetGeneration()
-		err = unstructured.SetNestedField(invCopy.UnstructuredContent(),
-			generation, "status", "observedGeneration")
-		if err != nil {
+		// Update status.observedGeneration here for reverse-compatibility of GetObject.
+		// But since the caller has to fetch the ResourceGroup before updating the
+		// status to avoid resourceVersion conflict, the caller will have to update
+		// the status.observedGeneration again afterwards anyway.
+		if err = updateObservedGeneration(invCopy); err != nil {
 			return nil, err
 		}
 	}
@@ -285,7 +286,8 @@ func (icm *InventoryResourceGroup) Apply(dc dynamic.Interface, mapper meta.RESTM
 		if err := deepCopyField(invInfo, appliedObj, "status", "resourceStatuses"); err != nil {
 			return err
 		}
-		if err := deepCopyField(invInfo, appliedObj, "status", "observedGeneration"); err != nil {
+		// Update status.observedGeneration after spec update
+		if err = updateObservedGeneration(appliedObj); err != nil {
 			return err
 		}
 		klog.V(1).Infof("Apply: Updating inventory object status (observedGeneration: %d): %s/%s\n",
@@ -323,7 +325,8 @@ func (icm *InventoryResourceGroup) ApplyWithPrune(dc dynamic.Interface, mapper m
 		if err := deepCopyField(invInfo, appliedObj, "status", "resourceStatuses"); err != nil {
 			return err
 		}
-		if err := deepCopyField(invInfo, appliedObj, "status", "observedGeneration"); err != nil {
+		// Update status.observedGeneration after spec update
+		if err = updateObservedGeneration(appliedObj); err != nil {
 			return err
 		}
 		klog.V(1).Infof("ApplyWithPrune: Updating inventory object status (observedGeneration: %d): %s/%s\n",
@@ -335,6 +338,13 @@ func (icm *InventoryResourceGroup) ApplyWithPrune(dc dynamic.Interface, mapper m
 	}
 
 	return nil
+}
+
+// updateObservedGeneration sets `status.observedGeneration` to the value of
+// `metadata.generation`.
+func updateObservedGeneration(obj *unstructured.Unstructured) error {
+	return unstructured.SetNestedField(obj.UnstructuredContent(),
+		obj.GetGeneration(), "status", "observedGeneration")
 }
 
 // deepCopyField replaces the specified field in the "to" object with a deep

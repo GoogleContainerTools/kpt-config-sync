@@ -166,15 +166,15 @@ func (r *reconciler) updateStatusKptGroup(ctx context.Context, resgroup *v1alpha
 }
 
 func (r *reconciler) startReconcilingStatus(status v1alpha1.ResourceGroupStatus) v1alpha1.ResourceGroupStatus {
-	newStatus := v1alpha1.ResourceGroupStatus{
-		ObservedGeneration: status.ObservedGeneration,
-		ResourceStatuses:   status.ResourceStatuses,
-		SubgroupStatuses:   status.SubgroupStatuses,
-		Conditions: []v1alpha1.Condition{
-			newReconcilingCondition(v1alpha1.TrueConditionStatus, StartReconciling, startReconcilingMsg),
-			newStalledCondition(v1alpha1.FalseConditionStatus, "", ""),
-		},
-	}
+	// Preserve existing status and only update fields that need to change.
+	// This avoids repeatedly updating the status just to update a timestamp.
+	// It also prevents fighting with other controllers updating the status.
+	newStatus := *status.DeepCopy()
+	// Update conditions, if they've changed
+	newStatus.Conditions = updateCondition(newStatus.Conditions,
+		newReconcilingCondition(v1alpha1.TrueConditionStatus, StartReconciling, startReconcilingMsg))
+	newStatus.Conditions = updateCondition(newStatus.Conditions,
+		newStalledCondition(v1alpha1.FalseConditionStatus, "", ""))
 	return newStatus
 }
 
@@ -186,32 +186,33 @@ func (r *reconciler) endReconcilingStatus(
 	status v1alpha1.ResourceGroupStatus,
 	generation int64,
 ) v1alpha1.ResourceGroupStatus {
-	// reset newStatus to make sure the former setting of newStatus does not carry over
-	newStatus := v1alpha1.ResourceGroupStatus{}
+	// Preserve existing status and only update fields that need to change.
+	// This avoids repeatedly updating the status just to update a timestamp.
+	// It also prevents fighting with other controllers updating the status.
+	newStatus := *status.DeepCopy()
 	startTime := time.Now()
 	reconcileTimeout := getReconcileTimeOut(len(spec.Subgroups) + len(spec.Resources))
 
 	finish := make(chan struct{})
 	go func() {
+		defer close(finish)
 		newStatus.ResourceStatuses = r.computeResourceStatuses(ctx, id, status, spec.Resources, namespacedName)
 		newStatus.SubgroupStatuses = r.computeSubGroupStatuses(ctx, id, status, spec.Subgroups, namespacedName)
-		close(finish)
 	}()
 	select {
 	case <-finish:
 		newStatus.ObservedGeneration = generation
-		newStatus.Conditions = []v1alpha1.Condition{
-			newReconcilingCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg),
-			aggregateResourceStatuses(newStatus.ResourceStatuses),
-		}
+		// Update conditions, if they've changed
+		newStatus.Conditions = updateCondition(newStatus.Conditions,
+			newReconcilingCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg))
+		newStatus.Conditions = updateCondition(newStatus.Conditions,
+			aggregateResourceStatuses(newStatus.ResourceStatuses))
 	case <-time.After(reconcileTimeout):
-		newStatus.ObservedGeneration = status.ObservedGeneration
-		newStatus.ResourceStatuses = status.ResourceStatuses
-		newStatus.SubgroupStatuses = status.SubgroupStatuses
-		newStatus.Conditions = []v1alpha1.Condition{
-			newReconcilingCondition(v1alpha1.FalseConditionStatus, ExceedTimeout, exceedTimeoutMsg),
-			newStalledCondition(v1alpha1.TrueConditionStatus, ExceedTimeout, exceedTimeoutMsg),
-		}
+		// Update conditions, if they've changed
+		newStatus.Conditions = updateCondition(newStatus.Conditions,
+			newReconcilingCondition(v1alpha1.FalseConditionStatus, ExceedTimeout, exceedTimeoutMsg))
+		newStatus.Conditions = updateCondition(newStatus.Conditions,
+			newStalledCondition(v1alpha1.TrueConditionStatus, ExceedTimeout, exceedTimeoutMsg))
 	}
 
 	metrics.RecordReconcileDuration(ctx, newStatus.Conditions[1].Reason, startTime)

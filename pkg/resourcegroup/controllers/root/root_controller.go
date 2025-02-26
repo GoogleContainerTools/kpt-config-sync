@@ -200,7 +200,6 @@ func NewController(mgr manager.Manager, channel chan event.GenericEvent,
 	_, err = ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.ResourceGroup{}).
 		Named(group+"Root").
-		WithEventFilter(ResourceGroupPredicate{}).
 		// skip the Generic events
 		WithEventFilter(NoGenericEventPredicate{}).
 		// only reconcile resource groups owned by Config Sync
@@ -225,69 +224,6 @@ type NoGenericEventPredicate struct {
 
 // Generic skips all generic events
 func (NoGenericEventPredicate) Generic(event.GenericEvent) bool {
-	return false
-}
-
-// ResourceGroupPredicate skips events where the new status is not changed by the old status.
-type ResourceGroupPredicate struct {
-	predicate.Funcs
-}
-
-// Update ensures only select ResourceGroup updates causes a reconciliation loop. This prevents
-// the controller from generating an infinite loop of reconcilers.
-func (ResourceGroupPredicate) Update(e event.UpdateEvent) bool {
-	// Only allow ResourceGroup CR events.
-	rgNew, ok := e.ObjectNew.(*v1alpha1.ResourceGroup)
-	if !ok {
-		return false
-	}
-	rgOld, ok := e.ObjectOld.(*v1alpha1.ResourceGroup)
-	if !ok {
-		return false
-	}
-
-	// Reconcile if the generation (spec) is updated, or the previous reconcile stalled and needs to be reconciled.
-	if rgNew.Generation != rgOld.Generation || isConditionTrue(v1alpha1.Stalled, rgNew.Status.Conditions) {
-		return true
-	}
-
-	// If a ResourceGroup has the status disabled annotation and it status field
-	// is not empty, it should trigger a reconcile to remove reset the status.
-	if isStatusDisabled(rgNew) {
-		return rgNew.Status.Conditions != nil
-	}
-
-	// If a current reconcile loop is already acting on the ResourceGroup CR, it
-	// should not trigger another reconcile.
-	if isConditionTrue(v1alpha1.Reconciling, rgNew.Status.Conditions) {
-		return false
-	}
-
-	// Check if the status field needs to be updated since the actuation field was externally updated.
-	return statusNeedsUpdate(rgNew.Status.ResourceStatuses)
-}
-
-// statusNeedsUpdate checks each resource status to ensure the status field
-// reflects the actuation status.
-func statusNeedsUpdate(statuses []v1alpha1.ResourceStatus) bool {
-	for _, s := range statuses {
-		if resourcegroup.UpdateStatusToReflectActuation(s) != s.Status {
-			return true
-		}
-	}
-
-	return false
-}
-
-// isConditionTrue scans through a slice of conditions and returns whether the wanted condition
-// type is true or false. Defaults to false if the condition type is not found.
-func isConditionTrue(cType v1alpha1.ConditionType, conditions []v1alpha1.Condition) bool {
-	for _, c := range conditions {
-		if c.Type == cType {
-			return c.Status == v1alpha1.TrueConditionStatus
-		}
-	}
-
 	return false
 }
 

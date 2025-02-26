@@ -49,6 +49,7 @@ import (
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reposync"
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
+	"kpt.dev/configsync/pkg/testing/testerrors"
 	"kpt.dev/configsync/pkg/util"
 	"kpt.dev/configsync/pkg/validate/raw/validate"
 	webhookconfiguration "kpt.dev/configsync/pkg/webhook/configuration"
@@ -373,7 +374,8 @@ func TestCreateAndUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 	controllerutil.AddFinalizer(wantRs, metadata.ReconcilerManagerFinalizer)
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
-	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(overrideReconcilerAndGitSyncResourceLimits, ReconcilerContainerResourceDefaults())
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
@@ -433,7 +435,8 @@ func TestCreateAndUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides = setContainerResourceDefaults(overrideReconcilerCPUAndGitSyncMemResources, ReconcilerContainerResourceDefaults())
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
@@ -471,7 +474,8 @@ func TestCreateAndUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides = setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
@@ -513,7 +517,8 @@ func TestUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 	controllerutil.AddFinalizer(wantRs, metadata.ReconcilerManagerFinalizer)
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
-	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
@@ -579,7 +584,8 @@ func TestUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides = setContainerResourceDefaults(overrideReconcilerAndGitSyncResources, ReconcilerContainerResourceDefaults())
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
@@ -637,7 +643,8 @@ func TestUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides = setContainerResourceDefaults(overrideReconcilerResources, ReconcilerContainerResourceDefaults())
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
@@ -687,7 +694,8 @@ func TestUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides = setContainerResourceDefaults(overrideGitSyncResources, ReconcilerContainerResourceDefaults())
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
@@ -724,7 +732,8 @@ func TestUpdateNamespaceReconcilerWithOverride(t *testing.T) {
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides = setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
@@ -766,7 +775,8 @@ func TestRepoSyncCreateWithNoSSLVerify(t *testing.T) {
 	controllerutil.AddFinalizer(wantRs, metadata.ReconcilerManagerFinalizer)
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
-	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
@@ -809,7 +819,8 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 	controllerutil.AddFinalizer(wantRs, metadata.ReconcilerManagerFinalizer)
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
-	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
@@ -926,7 +937,8 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 	reposync.ClearCondition(rs, v1beta1.RepoSyncReconciling)
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	updatedRepoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -996,7 +1008,8 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 	reposync.ClearCondition(wantRs, v1beta1.RepoSyncReconciling)
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -1053,7 +1066,8 @@ func TestRepoSyncUpdateNoSSLVerify(t *testing.T) {
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Updated: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -1117,7 +1131,8 @@ func TestRepoSyncCreateWithCACert(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnvs, err := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	nsSecretName := nsReconcilerName + "-" + secretName
 	nsCACertSecret := nsReconcilerName + "-" + caCertSecret
@@ -1158,7 +1173,8 @@ func TestRepoSyncUpdateCACert(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnvs, err := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	nsSecretName := nsReconcilerName + "-" + secretName
 	repoDeployment := repoSyncDeployment(nsReconcilerName,
@@ -1209,7 +1225,8 @@ func TestRepoSyncUpdateCACert(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnvs, err = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	nsCACertSecret := nsReconcilerName + "-" + caCertSecret
 	updatedRepoDeployment := repoSyncDeployment(nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -1240,7 +1257,8 @@ func TestRepoSyncUpdateCACert(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnvs, err = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	repoDeployment = repoSyncDeployment(nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		secretMutator(nsSecretName),
@@ -1392,7 +1410,8 @@ func TestRepoSyncCreateWithOverrideGitSyncDepth(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
@@ -1427,7 +1446,8 @@ func TestRepoSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
@@ -1461,7 +1481,8 @@ func TestRepoSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	updatedRepoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -1494,7 +1515,8 @@ func TestRepoSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	updatedRepoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -1526,7 +1548,8 @@ func TestRepoSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -1580,7 +1603,8 @@ func TestRepoSyncCreateWithOverrideReconcileTimeout(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
@@ -1615,7 +1639,8 @@ func TestRepoSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
@@ -1649,7 +1674,8 @@ func TestRepoSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	updatedRepoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -1681,7 +1707,8 @@ func TestRepoSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -1735,7 +1762,8 @@ func TestRepoSyncCreateWithOverrideAPIServerTimeout(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
@@ -1767,7 +1795,8 @@ func TestRepoSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
@@ -1801,7 +1830,8 @@ func TestRepoSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	updatedRepoDeployment := repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -1833,7 +1863,8 @@ func TestRepoSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -1902,7 +1933,8 @@ func TestRepoSyncSwitchAuthTypes(t *testing.T) {
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
 
-	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
@@ -1943,7 +1975,8 @@ func TestRepoSyncSwitchAuthTypes(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -1975,7 +2008,8 @@ func TestRepoSyncSwitchAuthTypes(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -2017,7 +2051,8 @@ func TestRepoSyncReconcilerRestart(t *testing.T) {
 	controllerutil.AddFinalizer(wantRs, metadata.ReconcilerManagerFinalizer)
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
-	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
@@ -2067,7 +2102,8 @@ func TestRepoSyncReconcilerRestart(t *testing.T) {
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -2159,7 +2195,8 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	roleBinding1.Subjects = addSubjectByName(roleBinding1.Subjects, nsReconcilerName)
 	wantRoleBindings := map[core.ID]*rbacv1.RoleBinding{core.IDOf(roleBinding1): roleBinding1}
 
-	repoContainerEnv1 := testReconciler.populateContainerEnvs(ctx, rs1, nsReconcilerName)
+	repoContainerEnv1, err := testReconciler.populateContainerEnvs(ctx, rs1, nsReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	repoDeployment1 := repoSyncDeployment(
 		nsReconcilerName,
@@ -2206,7 +2243,8 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
 
-	repoContainerEnv2 := testReconciler.populateContainerEnvs(ctx, rs2, nsReconcilerName2)
+	repoContainerEnv2, err := testReconciler.populateContainerEnvs(ctx, rs2, nsReconcilerName2)
+	require.NoError(t, err)
 	repoDeployment2 := repoSyncDeployment(
 		nsReconcilerName2,
 		setServiceAccountName(nsReconcilerName2),
@@ -2267,7 +2305,8 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
 
-	repoContainerEnv3 := testReconciler.populateContainerEnvs(ctx, rs3, nsReconcilerName3)
+	repoContainerEnv3, err := testReconciler.populateContainerEnvs(ctx, rs3, nsReconcilerName3)
+	require.NoError(t, err)
 	repoDeployment3 := repoSyncDeployment(
 		nsReconcilerName3,
 		setServiceAccountName(nsReconcilerName3),
@@ -2327,7 +2366,8 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
 
-	repoContainerEnv4 := testReconciler.populateContainerEnvs(ctx, rs4, nsReconcilerName4)
+	repoContainerEnv4, err := testReconciler.populateContainerEnvs(ctx, rs4, nsReconcilerName4)
+	require.NoError(t, err)
 	repoDeployment4 := repoSyncDeployment(
 		nsReconcilerName4,
 		setServiceAccountName(nsReconcilerName4),
@@ -2387,7 +2427,8 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
 
-	repoContainerEnv5 := testReconciler.populateContainerEnvs(ctx, rs5, nsReconcilerName5)
+	repoContainerEnv5, err := testReconciler.populateContainerEnvs(ctx, rs5, nsReconcilerName5)
+	require.NoError(t, err)
 	repoDeployment5 := repoSyncDeployment(
 		nsReconcilerName5,
 		setServiceAccountName(nsReconcilerName5),
@@ -2439,7 +2480,8 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs1, fakeClient)
 
-	repoContainerEnv1 = testReconciler.populateContainerEnvs(ctx, rs1, nsReconcilerName)
+	repoContainerEnv1, err = testReconciler.populateContainerEnvs(ctx, rs1, nsReconcilerName)
+	require.NoError(t, err)
 	repoDeployment1 = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -2475,7 +2517,8 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName2))
 	validateRepoSyncStatus(t, wantRs2, fakeClient)
 
-	repoContainerEnv2 = testReconciler.populateContainerEnvs(ctx, rs2, nsReconcilerName2)
+	repoContainerEnv2, err = testReconciler.populateContainerEnvs(ctx, rs2, nsReconcilerName2)
+	require.NoError(t, err)
 	repoDeployment2 = repoSyncDeployment(
 		nsReconcilerName2,
 		setServiceAccountName(nsReconcilerName2),
@@ -2511,7 +2554,8 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName3))
 	validateRepoSyncStatus(t, wantRs3, fakeClient)
 
-	repoContainerEnv3 = testReconciler.populateContainerEnvs(ctx, rs3, nsReconcilerName3)
+	repoContainerEnv3, err = testReconciler.populateContainerEnvs(ctx, rs3, nsReconcilerName3)
+	require.NoError(t, err)
 	repoDeployment3 = repoSyncDeployment(
 		nsReconcilerName3,
 		setServiceAccountName(nsReconcilerName3),
@@ -3025,7 +3069,8 @@ func TestInjectFleetWorkloadIdentityCredentialsToRepoSync(t *testing.T) {
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
-	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
@@ -3059,7 +3104,8 @@ func TestInjectFleetWorkloadIdentityCredentialsToRepoSync(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setAnnotations(map[string]string{
@@ -3100,7 +3146,8 @@ func TestInjectFleetWorkloadIdentityCredentialsToRepoSync(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -3133,7 +3180,8 @@ func TestInjectFleetWorkloadIdentityCredentialsToRepoSync(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -3189,7 +3237,8 @@ func TestRepoSyncWithHelm(t *testing.T) {
 		t.Errorf("ServiceAccount validation failed: %v", err)
 	}
 
-	repoContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnvs, err := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	repoDeployment := repoSyncDeployment(nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -3225,7 +3274,8 @@ func TestRepoSyncWithHelm(t *testing.T) {
 	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
 		t.Errorf("ServiceAccount validation failed: %v", err)
 	}
-	repoContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnvs, err = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	repoDeployment = repoSyncDeployment(nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
 		containersWithRepoVolumeMutator(noneHelmContainers()),
@@ -3266,7 +3316,8 @@ func TestRepoSyncWithHelm(t *testing.T) {
 		t.Errorf("ServiceAccount validation failed: %v", err)
 	}
 
-	repoContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnvs, err = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -3338,7 +3389,8 @@ func TestRepoSyncWithHelm(t *testing.T) {
 		t.Errorf("ServiceAccount validation failed: %v", err)
 	}
 
-	repoContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnvs, err = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setAnnotations(map[string]string{
@@ -3382,7 +3434,8 @@ func TestRepoSyncWithHelm(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	repoContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnvs, err = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides = setContainerResourceDefaults(overrideHelmSyncResources, ReconcilerContainerResourceDefaults())
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
@@ -3440,7 +3493,8 @@ func TestRepoSyncWithOCI(t *testing.T) {
 		t.Errorf("ServiceAccount validation failed: %v", err)
 	}
 
-	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
@@ -3475,7 +3529,8 @@ func TestRepoSyncWithOCI(t *testing.T) {
 		t.Errorf("ServiceAccount validation failed: %v", err)
 	}
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -3518,7 +3573,8 @@ func TestRepoSyncWithOCI(t *testing.T) {
 		t.Errorf("ServiceAccount validation failed: %v", err)
 	}
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -3553,7 +3609,8 @@ func TestRepoSyncWithOCI(t *testing.T) {
 	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
 		t.Errorf("ServiceAccount validation failed: %v", err)
 	}
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setAnnotations(map[string]string{
@@ -3592,7 +3649,8 @@ func TestRepoSyncWithOCI(t *testing.T) {
 	// test 5: validations
 	wantServiceAccounts[core.IDOf(ksaNoGSAAnnotation)] = ksaNoGSAAnnotation
 	ksaNoGSAAnnotation.ResourceVersion = "3"
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 
 	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
 		t.Errorf("ServiceAccount validation failed: %v", err)
@@ -3643,7 +3701,8 @@ func TestRepoSyncWithOCI(t *testing.T) {
 	}
 
 	// test 6: validations
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides = setContainerResourceDefaults(overrideOciSyncResources, ReconcilerContainerResourceDefaults())
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
@@ -3998,9 +4057,10 @@ func TestPopulateRepoContainerEnvs(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name     string
-		repoSync *v1beta1.RepoSync
-		expected map[string][]corev1.EnvVar
+		name        string
+		repoSync    *v1beta1.RepoSync
+		expected    map[string][]corev1.EnvVar
+		expectedErr error
 	}{
 		{
 			name: "no override uses default value",
@@ -4028,6 +4088,13 @@ func TestPopulateRepoContainerEnvs(t *testing.T) {
 				reconcilermanager.Reconciler: {reconcilermanager.RenderingEnabled: "true"},
 			}),
 		},
+		{
+			name: "with invalid secret type",
+			repoSync: repoSyncWithGit(reposyncNs, reposyncName,
+				reposyncSecretType("invalid-secret-type"),
+			),
+			expectedErr: fmt.Errorf("Unrecognized secret type \"invalid-secret-type\""),
+		},
 	}
 
 	ctx := context.Background()
@@ -4036,7 +4103,8 @@ func TestPopulateRepoContainerEnvs(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			_, _, testReconciler := setupNSReconciler(t, tc.repoSync, secretObj(t, reposyncSSHKey, configsync.AuthSSH, configsync.GitSource, core.Namespace(tc.repoSync.Namespace)))
 
-			env := testReconciler.populateContainerEnvs(ctx, tc.repoSync, nsReconcilerName)
+			env, err := testReconciler.populateContainerEnvs(ctx, tc.repoSync, nsReconcilerName)
+			testerrors.AssertEqual(t, tc.expectedErr, err)
 
 			for container, vars := range env {
 				if diff := cmp.Diff(tc.expected[container], vars, cmpopts.EquateEmpty(), cmpopts.SortSlices(func(a, b corev1.EnvVar) bool { return a.Name < b.Name })); diff != "" {
@@ -4069,7 +4137,8 @@ func TestUpdateNamespaceReconcilerLogLevelWithOverride(t *testing.T) {
 	controllerutil.AddFinalizer(wantRs, metadata.ReconcilerManagerFinalizer)
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
-	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
@@ -4137,7 +4206,9 @@ func TestUpdateNamespaceReconcilerLogLevelWithOverride(t *testing.T) {
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
+
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
 		setServiceAccountName(nsReconcilerName),
@@ -4177,7 +4248,8 @@ func TestCreateAndUpdateNamespaceReconcilerWithOverrideOnAutopilot(t *testing.T)
 	controllerutil.AddFinalizer(wantRs, metadata.ReconcilerManagerFinalizer)
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
-	repoContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaultsForAutopilot())
 	repoDeployment := repoSyncDeployment(
 		nsReconcilerName,
@@ -4237,7 +4309,8 @@ func TestCreateAndUpdateNamespaceReconcilerWithOverrideOnAutopilot(t *testing.T)
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides = setContainerResourceDefaults(overrideReconcilerCPUAndGitSyncMemResources, ReconcilerContainerResourceDefaultsForAutopilot())
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
@@ -4275,7 +4348,8 @@ func TestCreateAndUpdateNamespaceReconcilerWithOverrideOnAutopilot(t *testing.T)
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", nsReconcilerName))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
-	repoContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides = setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaultsForAutopilot())
 	repoDeployment = repoSyncDeployment(
 		nsReconcilerName,
@@ -4572,7 +4646,8 @@ For more information, see https://g.co/cloud/acm-errors#knv1061`))
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
-	repoContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	repoContainerEnvs, err := testReconciler.populateContainerEnvs(ctx, rs, nsReconcilerName)
+	require.NoError(t, err)
 	repoContainerEnvs[reconcilermanager.GitSync] = append(
 		repoContainerEnvs[reconcilermanager.GitSync],
 		corev1.EnvVar{Name: "GITSYNC_GITHUB_APP_CLIENT_ID", Value: "client-id-0"},

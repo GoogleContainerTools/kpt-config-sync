@@ -275,7 +275,10 @@ func (r *RepoSyncReconciler) upsertManagedObjects(ctx context.Context, reconcile
 		return fmt.Errorf("upserting helm config maps: %w", err)
 	}
 
-	containerEnvs := r.populateContainerEnvs(ctx, rs, reconcilerRef.Name)
+	containerEnvs, err := r.populateContainerEnvs(ctx, rs, reconcilerRef.Name)
+	if err != nil {
+		return fmt.Errorf("populating container environment variables: %w", err)
+	}
 	mut := r.mutationsFor(ctx, rs, containerEnvs)
 
 	// Upsert Namespace reconciler deployment.
@@ -881,7 +884,7 @@ func (r *RepoSyncReconciler) mapObjectToRepoSync(ctx context.Context, obj client
 	return requests
 }
 
-func (r *RepoSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1beta1.RepoSync, reconcilerName string) map[string][]corev1.EnvVar {
+func (r *RepoSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1beta1.RepoSync, reconcilerName string) (map[string][]corev1.EnvVar, error) {
 	result := map[string][]corev1.EnvVar{
 		reconcilermanager.HydrationController: hydrationEnvs(hydrationOptions{
 			sourceType:     rs.Spec.SourceType,
@@ -911,9 +914,12 @@ func (r *RepoSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 			webhookEnabled:           r.webhookEnabled,
 		}),
 	}
+
+	var err error
+
 	switch rs.Spec.SourceType {
 	case configsync.GitSource:
-		result[reconcilermanager.GitSync] = gitSyncEnvs(ctx, options{
+		result[reconcilermanager.GitSync], err = gitSyncEnvs(ctx, options{
 			ref:             rs.Spec.Git.Revision,
 			branch:          rs.Spec.Git.Branch,
 			repo:            rs.Spec.Git.Repo,
@@ -925,6 +931,9 @@ func (r *RepoSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 			caCertSecretRef: v1beta1.GetSecretName(rs.Spec.Git.CACertSecretRef),
 			knownHost:       r.isKnownHostsEnabled(rs.Spec.Git.Auth),
 		})
+		if err != nil {
+			return nil, err
+		}
 		if EnableAskpassSidecar(rs.Spec.SourceType, rs.Spec.Git.Auth) {
 			result[reconcilermanager.GCENodeAskpassSidecar] = gceNodeAskPassSidecarEnvs(rs.Spec.GCPServiceAccountEmail)
 		}
@@ -944,7 +953,7 @@ func (r *RepoSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 			caCertSecretRef: v1beta1.GetSecretName(rs.Spec.Helm.CACertSecretRef),
 		})
 	}
-	return result
+	return result, nil
 }
 
 // This check surfaces the RepoSync NN length constraint earlier as a validation error.

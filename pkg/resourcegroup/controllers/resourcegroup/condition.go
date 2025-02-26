@@ -42,6 +42,32 @@ func newStalledCondition(status v1alpha1.ConditionStatus, reason, message string
 	}
 }
 
+// updateCondition modifies and returns a list of conditions to update the
+// specified condition. This avoids updating the LastTransitionTime when there's
+// no other change.
+func updateCondition(conditions []v1alpha1.Condition, newCondition v1alpha1.Condition) []v1alpha1.Condition {
+	for i, condition := range conditions {
+		if condition.Type == newCondition.Type {
+			if !isConditionEqual(condition, newCondition) {
+				conditions[i] = newCondition
+			}
+			// assume no duplicate condition types
+			return conditions
+		}
+	}
+	// if not found, add it
+	conditions = append(conditions, newCondition)
+	return conditions
+}
+
+// isConditionEqual returns true if a == b, ignoring the LastTransitionTime.
+func isConditionEqual(a, b v1alpha1.Condition) bool {
+	return a.Type == b.Type &&
+		a.Status == b.Status &&
+		a.Reason == b.Reason &&
+		a.Message == b.Message
+}
+
 // adjustConditionOrder adjusts the order of the conditions to make sure that
 // the first condition in the slice is Reconciling;
 // the second condition in the slice is Stalled;

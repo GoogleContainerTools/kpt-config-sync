@@ -128,6 +128,7 @@ func TestReconcile(t *testing.T) {
 	resgroupKpt = waitForResourceGroupStatus(t, ctx, c, rgKey, 1, 0, expectedStatus)
 
 	// Push an event to the channel, which will cause trigger a reconciliation for resgroup
+	t.Log("Sending event to controller")
 	channelKpt <- event.GenericEvent{Object: resgroupKpt}
 
 	// Verify that the reconciliation modifies the ResourceGroupStatus field correctly
@@ -171,6 +172,7 @@ func TestReconcile(t *testing.T) {
 	expectedStatus.ObservedGeneration = 2
 	resgroupKpt = waitForResourceGroupStatus(t, ctx, c, rgKey, 2, 2, expectedStatus)
 
+	t.Log("Sending event to controller")
 	channelKpt <- event.GenericEvent{Object: resgroupKpt}
 
 	// Verify that the reconciliation modifies the ResourceGroupStatus field correctly
@@ -235,6 +237,7 @@ func TestReconcile(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, corev1.NamespaceActive, updatedNS.Status.Phase)
 
+	t.Log("Sending event to controller")
 	channelKpt <- event.GenericEvent{Object: resgroupKpt}
 
 	// Verify that the reconciliation modifies the ResourceGroupStatus field correctly
@@ -282,6 +285,7 @@ func TestReconcile(t *testing.T) {
 	expectedStatus.ObservedGeneration = 3
 	resgroupKpt = waitForResourceGroupStatus(t, ctx, c, rgKey, 3, 1, expectedStatus)
 
+	t.Log("Sending event to controller")
 	channelKpt <- event.GenericEvent{Object: resgroupKpt}
 
 	// Verify that the reconciliation modifies the ResourceGroupStatus field correctly

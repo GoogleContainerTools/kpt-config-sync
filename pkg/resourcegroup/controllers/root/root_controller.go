@@ -25,7 +25,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/util/retry"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
@@ -151,14 +150,12 @@ func (r *Reconciler) updateWatches(ctx context.Context, gks []schema.GroupKind) 
 func (r *Reconciler) reconcileDisabledResourceGroup(ctx context.Context, req ctrl.Request, resgroup *v1alpha1.ResourceGroup) (ctrl.Result, error) {
 	// clean the existing .status field
 	emptyStatus := v1alpha1.ResourceGroupStatus{}
-	err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
-		if apiequality.Semantic.DeepEqual(resgroup.Status, emptyStatus) {
-			return nil
-		}
-		resgroup.Status = emptyStatus
-		// Use `r.Status().Update()` here instead of `r.Update()` to update only resgroup.Status.
-		return r.client.Status().Update(ctx, resgroup, client.FieldOwner(resourcegroup.FieldManager))
-	})
+	if apiequality.Semantic.DeepEqual(resgroup.Status, emptyStatus) {
+		return ctrl.Result{}, nil
+	}
+	resgroup.Status = emptyStatus
+	// Use `r.Status().Update()` here instead of `r.Update()` to update only resgroup.Status.
+	err := r.client.Status().Update(ctx, resgroup, client.FieldOwner(resourcegroup.FieldManager))
 	if err != nil {
 		return ctrl.Result{}, err
 	}

@@ -99,16 +99,17 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, nil
 	}
 
-	newStatus := r.startReconcilingStatus(rgObj.Status)
-	if err := r.updateStatusKptGroup(ctx, rgObj, newStatus); err != nil {
-		r.Logger(ctx).Error(err, "failed to update ResourceGroup to start reconciling")
-		return ctrl.Result{Requeue: true}, err
-	}
+	// Since this controller doesn't perform any writes in any external systems,
+	// it doesn't need to set the Reconciling condition status to True before
+	// building the new status, because there are no possible side-effects that
+	// the user might need to know about when reconciling fails.
+	// So skip initializing the Reconciling & Stalled conditions and only set
+	// them when reconciling succeeds or fails.
 
 	id := getInventoryID(rgObj.Labels)
-	newStatus = r.endReconcilingStatus(ctx, id, req.NamespacedName, rgObj.Spec, rgObj.Status, rgObj.Generation)
+	newStatus := r.endReconcilingStatus(ctx, id, req.NamespacedName, rgObj.Spec, rgObj.Status, rgObj.Generation)
 	if err := r.updateStatusKptGroup(ctx, rgObj, newStatus); err != nil {
-		r.Logger(ctx).Error(err, "failed to update ResourceGroup to finish reconciling")
+		r.Logger(ctx).Error(err, "failed to update ResourceGroup")
 		return ctrl.Result{Requeue: true}, err
 	}
 
@@ -169,19 +170,6 @@ func (r *reconciler) updateStatusKptGroup(ctx context.Context, resgroup *v1alpha
 	return r.client.Status().Update(ctx, resgroup, client.FieldOwner(FieldManager))
 }
 
-func (r *reconciler) startReconcilingStatus(status v1alpha1.ResourceGroupStatus) v1alpha1.ResourceGroupStatus {
-	// Preserve existing status and only update fields that need to change.
-	// This avoids repeatedly updating the status just to update a timestamp.
-	// It also prevents fighting with other controllers updating the status.
-	newStatus := *status.DeepCopy()
-	// Update conditions, if they've changed
-	newStatus.Conditions = updateCondition(newStatus.Conditions,
-		newReconcilingCondition(v1alpha1.TrueConditionStatus, StartReconciling, startReconcilingMsg))
-	newStatus.Conditions = updateCondition(newStatus.Conditions,
-		newStalledCondition(v1alpha1.FalseConditionStatus, "", ""))
-	return newStatus
-}
-
 func (r *reconciler) endReconcilingStatus(
 	ctx context.Context,
 	id string,
@@ -205,19 +193,23 @@ func (r *reconciler) endReconcilingStatus(
 	}()
 	select {
 	case <-finish:
+		// Updating the ObservedGeneration should be a no-op, because the
+		// applier should have updated it already.
 		newStatus.ObservedGeneration = generation
-		// Update conditions, if they've changed
-		newStatus.Conditions = updateCondition(newStatus.Conditions,
-			newReconcilingCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg))
 		newStatus.Conditions = updateCondition(newStatus.Conditions,
 			aggregateResourceStatuses(newStatus.ResourceStatuses))
 	case <-time.After(reconcileTimeout):
-		// Update conditions, if they've changed
-		newStatus.Conditions = updateCondition(newStatus.Conditions,
-			newReconcilingCondition(v1alpha1.FalseConditionStatus, ExceedTimeout, exceedTimeoutMsg))
 		newStatus.Conditions = updateCondition(newStatus.Conditions,
 			newStalledCondition(v1alpha1.TrueConditionStatus, ExceedTimeout, exceedTimeoutMsg))
 	}
+
+	// Previously, the Reconciling condition toggled between True & False while
+	// this controller was reconciling, but this caused unnecessary churn and
+	// confusion, because it didn't reflect the reconciliation status of the
+	// managed objects in status.resourceStatuses. So now it's always set to
+	// False, for reverse compatibility, in case any clients were waiting it.
+	newStatus.Conditions = updateCondition(newStatus.Conditions,
+		newReconcilingCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg))
 
 	metrics.RecordReconcileDuration(ctx, newStatus.Conditions[1].Reason, startTime)
 	updateResourceMetrics(ctx, namespacedName, newStatus.ResourceStatuses)

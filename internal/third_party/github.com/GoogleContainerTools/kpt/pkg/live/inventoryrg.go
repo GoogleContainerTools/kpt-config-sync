@@ -239,10 +239,11 @@ func (icm *InventoryResourceGroup) GetObject() (*unstructured.Unstructured, erro
 		if err != nil {
 			return nil, err
 		}
-		generation := invCopy.GetGeneration()
-		err = unstructured.SetNestedField(invCopy.UnstructuredContent(),
-			generation, "status", "observedGeneration")
-		if err != nil {
+		// Update status.observedGeneration here for reverse-compatibility of GetObject.
+		// But since the caller has to fetch the ResourceGroup before updating the
+		// status to avoid resourceVersion conflict, the caller will have to update
+		// the status.observedGeneration again afterwards anyway.
+		if err = updateObservedGeneration(invCopy); err != nil {
 			return nil, err
 		}
 	}
@@ -266,20 +267,35 @@ func (icm *InventoryResourceGroup) Apply(dc dynamic.Interface, mapper meta.RESTM
 	var appliedObj *unstructured.Unstructured
 
 	if clusterObj == nil {
-		// Create cluster inventory object, if it does not exist on cluster.
+		klog.V(1).Infof("Apply: Creating inventory object: %s/%s\n", invInfo.GetNamespace(), invInfo.GetName())
 		appliedObj, err = namespacedClient.Create(context.TODO(), invInfo, metav1.CreateOptions{})
 	} else {
-		// Update the cluster inventory object instead.
+		klog.V(1).Infof("Apply: Updating inventory object: %s/%s\n", invInfo.GetNamespace(), invInfo.GetName())
 		appliedObj, err = namespacedClient.Update(context.TODO(), invInfo, metav1.UpdateOptions{})
 	}
 	if err != nil {
 		return err
 	}
 
-	// Update status.
+	// Update status, if status policy allows it.
 	if statusPolicy == inventory.StatusPolicyAll {
-		invInfo.SetResourceVersion(appliedObj.GetResourceVersion())
-		_, err = namespacedClient.UpdateStatus(context.TODO(), invInfo, metav1.UpdateOptions{})
+		// To avoid losing metadata or mutations from webhooks, copy the status
+		// from the desired state to the latest state after the previous update.
+		// Only copy the new status.resourceStatuses, to avoid overwriting
+		// other status fields modified by other controllers.
+		if err := deepCopyField(invInfo, appliedObj, "status", "resourceStatuses"); err != nil {
+			return err
+		}
+		// Update status.observedGeneration after spec update
+		if err = updateObservedGeneration(appliedObj); err != nil {
+			return err
+		}
+		klog.V(1).Infof("Apply: Updating inventory object status (observedGeneration: %d): %s/%s\n",
+			appliedObj.GetGeneration(), appliedObj.GetNamespace(), appliedObj.GetName())
+		_, err := namespacedClient.UpdateStatus(context.TODO(), appliedObj, metav1.UpdateOptions{})
+		if err != nil {
+			return err
+		}
 	}
 
 	return err
@@ -294,34 +310,51 @@ func (icm *InventoryResourceGroup) ApplyWithPrune(dc dynamic.Interface, mapper m
 	// Update the cluster inventory object.
 	// Since the ResourceGroup CRD specifies the status as a sub-resource, this
 	// will not update the status.
+	klog.V(1).Infof("ApplyWithPrune: Updating inventory object: %s/%s\n", invInfo.GetNamespace(), invInfo.GetName())
 	appliedObj, err := namespacedClient.Update(context.TODO(), invInfo, metav1.UpdateOptions{})
 	if err != nil {
 		return err
 	}
 
 	// Update status, if status policy allows it.
-	// To avoid losing modifications performed by mutating webhooks, copy the
-	// status from the desired state to the latest state after the previous update.
-	// This also ensures that the ResourceVersion matches the latest state, to
-	// avoid the update being rejected by the server.
 	if statusPolicy == inventory.StatusPolicyAll {
-		status, found, err := unstructured.NestedMap(invInfo.UnstructuredContent(), "status")
-		if err != nil {
+		// To avoid losing metadata or mutations from webhooks, copy the status
+		// from the desired state to the latest state after the previous update.
+		// Only copy the new status.resourceStatuses, to avoid overwriting
+		// other status fields modified by other controllers.
+		if err := deepCopyField(invInfo, appliedObj, "status", "resourceStatuses"); err != nil {
 			return err
 		}
-		if found {
-			err = unstructured.SetNestedField(appliedObj.UnstructuredContent(), status, "status")
-			if err != nil {
-				return err
-			}
-			_, err = namespacedClient.UpdateStatus(context.TODO(), appliedObj, metav1.UpdateOptions{})
-			if err != nil {
-				return err
-			}
+		// Update status.observedGeneration after spec update
+		if err = updateObservedGeneration(appliedObj); err != nil {
+			return err
+		}
+		klog.V(1).Infof("ApplyWithPrune: Updating inventory object status (observedGeneration: %d): %s/%s\n",
+			appliedObj.GetGeneration(), appliedObj.GetNamespace(), appliedObj.GetName())
+		_, err := namespacedClient.UpdateStatus(context.TODO(), appliedObj, metav1.UpdateOptions{})
+		if err != nil {
+			return err
 		}
 	}
 
 	return nil
+}
+
+// updateObservedGeneration sets `status.observedGeneration` to the value of
+// `metadata.generation`.
+func updateObservedGeneration(obj *unstructured.Unstructured) error {
+	return unstructured.SetNestedField(obj.UnstructuredContent(),
+		obj.GetGeneration(), "status", "observedGeneration")
+}
+
+// deepCopyField replaces the specified field in the "to" object with a deep
+// copy of the same field in the "from" object.
+func deepCopyField(from, to *unstructured.Unstructured, fields ...string) error {
+	status, _, err := unstructured.NestedFieldCopy(from.Object, fields...)
+	if err != nil {
+		return err
+	}
+	return unstructured.SetNestedField(to.Object, status, fields...)
 }
 
 func (icm *InventoryResourceGroup) getNamespacedClient(dc dynamic.Interface, mapper meta.RESTMapper) (*unstructured.Unstructured, dynamic.ResourceInterface, error) {

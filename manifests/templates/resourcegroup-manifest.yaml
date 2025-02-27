@@ -155,6 +155,7 @@ data:
   otel-agent-config.yaml: |
     receivers:
       opencensus:
+        endpoint: 0.0.0.0:55678
     exporters:
       opencensus:
         endpoint: otel-collector.config-management-monitoring:55678
@@ -168,6 +169,7 @@ data:
         detectors: [env, gcp]
     extensions:
       health_check:
+        endpoint: 0.0.0.0:13133
     service:
       extensions: [health_check]
       pipelines:
@@ -272,6 +274,7 @@ spec:
         ports:
         - containerPort: 55678
         - containerPort: 8888
+        - containerPort: 13133
         readinessProbe:
           httpGet:
             path: /
@@ -301,3 +304,4 @@ spec:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
+

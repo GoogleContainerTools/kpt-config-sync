@@ -54,8 +54,8 @@ func TestSurfaceFightError(t *testing.T) {
 	}()
 
 	nt.T.Log("The RootSync reports a fight error")
-	nt.WaitForRootSyncSyncError(configsync.RootSyncName, status.FightErrorCode,
-		"This may indicate Config Sync is fighting with another controller over the object.", nil)
+	nt.Must(nt.Watcher.WatchForRootSyncSyncError(configsync.RootSyncName, status.FightErrorCode,
+		"This may indicate Config Sync is fighting with another controller over the object.", nil))
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	rootSyncLabels, err := nomostest.MetricLabelsForRootSync(nt, rootSyncNN)

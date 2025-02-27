@@ -303,7 +303,7 @@ func TestForceRevert(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Remove("acme/system/repo.yaml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Cause source error"))
 
-	nt.WaitForRootSyncSourceError(configsync.RootSyncName, system.MissingRepoErrorCode, "")
+	nt.Must(nt.Watcher.WatchForRootSyncSourceError(configsync.RootSyncName, system.MissingRepoErrorCode, ""))
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	rootSyncLabels, err := nomostest.MetricLabelsForRootSync(nt, rootSyncNN)
@@ -361,7 +361,7 @@ func TestManageSelfRootSync(t *testing.T) {
 	sanitizedRs.Spec = rs.Spec
 	nt.Must(rootSyncGitRepo.Add("acme/root-sync.yaml", sanitizedRs))
 	nt.Must(rootSyncGitRepo.CommitAndPush("add the root-sync object that configures the reconciler"))
-	nt.WaitForRootSyncSourceError(configsync.RootSyncName, validate.SelfReconcileErrorCode, "RootSync config-management-system/root-sync must not manage itself in its repo")
+	nt.Must(nt.Watcher.WatchForRootSyncSourceError(configsync.RootSyncName, validate.SelfReconcileErrorCode, "RootSync config-management-system/root-sync must not manage itself in its repo"))
 }
 
 func hasRootSyncReconcilingStatus(r metav1.ConditionStatus) testpredicates.Predicate {

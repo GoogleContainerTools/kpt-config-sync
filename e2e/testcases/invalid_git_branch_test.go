@@ -36,7 +36,7 @@ func TestInvalidRootSyncBranchStatus(t *testing.T) {
 	// Update RootSync to invalid branch name
 	nomostest.SetRootSyncGitBranch(nt, configsync.RootSyncName, "invalid-branch")
 
-	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "")
+	nt.Must(nt.Watcher.WatchForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, ""))
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	rootSyncLabels, err := nomostest.MetricLabelsForRootSync(nt, rootSyncNN)
@@ -65,7 +65,7 @@ func TestInvalidRootSyncRevisionStatus(t *testing.T) {
 	// Update RootSync to invalid branch name
 	nomostest.SetRootSyncGitRevision(nt, configsync.RootSyncName, "invalid-branch")
 
-	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "")
+	nt.Must(nt.Watcher.WatchForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, ""))
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	rootSyncLabels, err := nomostest.MetricLabelsForRootSync(nt, rootSyncNN)
@@ -101,7 +101,7 @@ func TestInvalidRepoSyncBranchStatus(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(namespaceRepo, repoSync.Name), repoSync))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Update RepoSync to invalid branch name"))
 
-	nt.WaitForRepoSyncSourceError(namespaceRepo, configsync.RepoSyncName, status.SourceErrorCode, "")
+	nt.Must(nt.Watcher.WatchForRepoSyncSourceError(namespaceRepo, configsync.RepoSyncName, status.SourceErrorCode, ""))
 
 	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
@@ -155,7 +155,7 @@ func TestInvalidRepoSyncRevisionStatus(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(namespaceRepo, repoSync.Name), repoSync))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Update RepoSync to invalid branch name"))
 
-	nt.WaitForRepoSyncSourceError(namespaceRepo, configsync.RepoSyncName, status.SourceErrorCode, "")
+	nt.Must(nt.Watcher.WatchForRepoSyncSourceError(namespaceRepo, configsync.RepoSyncName, status.SourceErrorCode, ""))
 
 	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
@@ -226,7 +226,7 @@ func TestSyncFailureAfterSuccessfulSyncs(t *testing.T) {
 
 	// Make the sync fail by invalidating the source repo.
 	nt.Must(rootSyncGitRepo.RenameBranch(devBranch, "invalid-branch"))
-	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "")
+	nt.Must(nt.Watcher.WatchForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, ""))
 
 	// Change the remote branch name back to the original name.
 	nt.Must(rootSyncGitRepo.RenameBranch("invalid-branch", devBranch))

@@ -114,18 +114,18 @@ func validateRepoSyncRBAC(nt *nomostest.NT, ns string, nsRepo *gitproviders.Read
 	nt.T.Log("Add a deployment to the namespace repo without RBAC")
 	nt.Must(nsRepo.Copy(fmt.Sprintf("%s/deployment-helloworld.yaml", yamlDir), "acme/deployment.yaml"))
 	nt.Must(nsRepo.CommitAndPush("Add a deployment to the namespace repo"))
-	nt.WaitForRepoSyncSyncError(ns, configsync.RepoSyncName, applier.ApplierErrorCode,
-		`polling for status failed: failed to list apps/v1, Kind=Deployment: deployments.apps is forbidden: User "system:serviceaccount:config-management-system:ns-reconciler-bookstore" cannot list resource "deployments" in API group "apps" in the namespace "bookstore"`, nil)
+	nt.Must(nt.Watcher.WatchForRepoSyncSyncError(ns, configsync.RepoSyncName, applier.ApplierErrorCode,
+		`polling for status failed: failed to list apps/v1, Kind=Deployment: deployments.apps is forbidden: User "system:serviceaccount:config-management-system:ns-reconciler-bookstore" cannot list resource "deployments" in API group "apps" in the namespace "bookstore"`, nil))
 
 	nt.T.Log("Add 'list' permission")
 	configureRBAC(nt, ns, []string{"list"})
-	nt.WaitForRepoSyncSyncError(ns, configsync.RepoSyncName, applier.ApplierErrorCode,
-		`polling for status failed: deployments.apps is forbidden: User "system:serviceaccount:config-management-system:ns-reconciler-bookstore" cannot watch resource "deployments" in API group "apps" in the namespace "bookstore"`, nil)
+	nt.Must(nt.Watcher.WatchForRepoSyncSyncError(ns, configsync.RepoSyncName, applier.ApplierErrorCode,
+		`polling for status failed: deployments.apps is forbidden: User "system:serviceaccount:config-management-system:ns-reconciler-bookstore" cannot watch resource "deployments" in API group "apps" in the namespace "bookstore"`, nil))
 
 	// The unknown error is caused by missing `watch` permission and should be fixed upstream with more details.
 	nt.T.Log("Add 'watch' permission")
 	configureRBAC(nt, ns, []string{"list", "watch"})
-	nt.WaitForRepoSyncSyncError(ns, configsync.RepoSyncName, applier.ApplierErrorCode,
+	nt.Must(nt.Watcher.WatchForRepoSyncSyncError(ns, configsync.RepoSyncName, applier.ApplierErrorCode,
 		`failed to apply Deployment.apps, bookstore/hello-world: failed to get current object from cluster: deployments.apps "hello-world" is forbidden: User "system:serviceaccount:config-management-system:ns-reconciler-bookstore" cannot get resource "deployments" in API group "apps" in the namespace "bookstore"`+"\n\nsource: acme/deployment.yaml", []v1beta1.ResourceRef{{
 			SourcePath: "acme/deployment.yaml",
 			Name:       "hello-world",
@@ -135,11 +135,11 @@ func validateRepoSyncRBAC(nt *nomostest.NT, ns string, nsRepo *gitproviders.Read
 				Version: "v1",
 				Kind:    "Deployment",
 			},
-		}})
+		}}))
 
 	nt.T.Log("Add 'get' permission")
 	configureRBAC(nt, ns, []string{"list", "watch", "get"})
-	nt.WaitForRepoSyncSyncError(ns, configsync.RepoSyncName, applier.ApplierErrorCode,
+	nt.Must(nt.Watcher.WatchForRepoSyncSyncError(ns, configsync.RepoSyncName, applier.ApplierErrorCode,
 		`failed to apply Deployment.apps, bookstore/hello-world: deployments.apps "hello-world" is forbidden: User "system:serviceaccount:config-management-system:ns-reconciler-bookstore" cannot patch resource "deployments" in API group "apps" in the namespace "bookstore"`, []v1beta1.ResourceRef{{
 			SourcePath: "acme/deployment.yaml",
 			Name:       "hello-world",
@@ -149,7 +149,7 @@ func validateRepoSyncRBAC(nt *nomostest.NT, ns string, nsRepo *gitproviders.Read
 				Version: "v1",
 				Kind:    "Deployment",
 			},
-		}})
+		}}))
 
 	nt.T.Log("Add 'patch' permission")
 	configureRBAC(nt, ns, []string{"list", "watch", "get", "patch"})
@@ -157,7 +157,7 @@ func validateRepoSyncRBAC(nt *nomostest.NT, ns string, nsRepo *gitproviders.Read
 	// Prior updates don't need a restart because the retry backoff is within 1 minute
 	// A Pod restart on Autopilot may take longer than 1 minute
 	nomostest.DeletePodByLabel(nt, "configsync.gke.io/deployment-name", core.NsReconcilerName(ns, configsync.RepoSyncName), false)
-	nt.WaitForRepoSyncSyncError(ns, configsync.RepoSyncName, applier.ApplierErrorCode,
+	nt.Must(nt.Watcher.WatchForRepoSyncSyncError(ns, configsync.RepoSyncName, applier.ApplierErrorCode,
 		`failed to apply Deployment.apps, bookstore/hello-world: deployments.apps "hello-world" is forbidden: `, []v1beta1.ResourceRef{{
 			SourcePath: "acme/deployment.yaml",
 			Name:       "hello-world",
@@ -167,7 +167,7 @@ func validateRepoSyncRBAC(nt *nomostest.NT, ns string, nsRepo *gitproviders.Read
 				Version: "v1",
 				Kind:    "Deployment",
 			},
-		}})
+		}}))
 	nt.T.Log("Add 'create' permission")
 	configureRBAC(nt, ns, []string{"list", "watch", "get", "patch", "create"})
 	nt.Must(nt.WatchForAllSyncs())
@@ -177,8 +177,8 @@ func validateRepoSyncRBAC(nt *nomostest.NT, ns string, nsRepo *gitproviders.Read
 
 	nt.Must(nsRepo.Remove("acme/deployment.yaml"))
 	nt.Must(nsRepo.CommitAndPush("Removing Deployment"))
-	nt.WaitForRepoSyncSyncError(ns, configsync.RepoSyncName, applier.ApplierErrorCode,
-		`failed to prune Deployment.apps, bookstore/hello-world: deployments.apps "hello-world" is forbidden: User "system:serviceaccount:config-management-system:ns-reconciler-bookstore" cannot delete resource "deployments" in API group "apps" in the namespace "bookstore"`, nil)
+	nt.Must(nt.Watcher.WatchForRepoSyncSyncError(ns, configsync.RepoSyncName, applier.ApplierErrorCode,
+		`failed to prune Deployment.apps, bookstore/hello-world: deployments.apps "hello-world" is forbidden: User "system:serviceaccount:config-management-system:ns-reconciler-bookstore" cannot delete resource "deployments" in API group "apps" in the namespace "bookstore"`, nil))
 	nt.T.Log("Add 'delete' permission")
 	configureRBAC(nt, ns, []string{"list", "watch", "get", "patch", "create", "delete"})
 	nt.Must(nt.WatchForAllSyncs())
@@ -468,7 +468,7 @@ func TestManageSelfRepoSync(t *testing.T) {
 	sanitizedRs.Spec = rs.Spec
 	nt.Must(repoSyncGitRepo.Add("acme/repo-sync.yaml", sanitizedRs))
 	nt.Must(repoSyncGitRepo.CommitAndPush("add the repo-sync object that configures the reconciler"))
-	nt.WaitForRepoSyncSourceError(rs.Namespace, rs.Name, validate.SelfReconcileErrorCode, "RepoSync bookstore/repo-sync must not manage itself in its repo")
+	nt.Must(nt.Watcher.WatchForRepoSyncSourceError(rs.Namespace, rs.Name, validate.SelfReconcileErrorCode, "RepoSync bookstore/repo-sync must not manage itself in its repo"))
 }
 
 func getNsReconcilerSecrets(nt *nomostest.NT, ns string) []string {

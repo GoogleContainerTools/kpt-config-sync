@@ -267,7 +267,7 @@ func TestOciSyncWithDigest(t *testing.T) {
 	nt.T.Log("Wait for RootSync to have source error")
 	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSyncID.Name, configsync.ControllerNamespace,
 		testwatcher.WatchPredicates(testpredicates.RootSyncHasSourceError(status.SourceErrorCode, "failed to pull image"))))
-	nt.WaitForRootSyncSourceError(rootSyncID.Name, status.SourceErrorCode, "failed to pull image")
+	nt.Must(nt.Watcher.WatchForRootSyncSourceError(rootSyncID.Name, status.SourceErrorCode, "failed to pull image"))
 	// Specify image with digest
 	image, err = nt.BuildAndPushOCIImage(rootSyncKey, registryproviders.ImageInputObjects(nt.Scheme, bookinfoRole))
 	if err != nil {

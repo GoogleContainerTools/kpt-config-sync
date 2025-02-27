@@ -80,8 +80,8 @@ func TestConstraintTemplateAndConstraintInSameCommit(t *testing.T) {
 		}
 	})
 
-	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.UnknownKindErrorCode,
-		`No CustomResourceDefinition is defined for the type "K8sAllowedRepos.constraints.gatekeeper.sh" in the cluster`)
+	nt.Must(nt.Watcher.WatchForRootSyncSourceError(configsync.RootSyncName, status.UnknownKindErrorCode,
+		`No CustomResourceDefinition is defined for the type "K8sAllowedRepos.constraints.gatekeeper.sh" in the cluster`))
 
 	// Simulate Gatekeeper's controller behavior.
 	// Wait for the ConstraintTemplate to be applied, then apply the Constraint CRD.

@@ -48,7 +48,7 @@ func TestInvalidAuth(t *testing.T) {
 	if err := nomostest.SetupFakeSSHCreds(nt, rs.Kind, nomostest.RootSyncNN(rs.Name), configsync.AuthSSH, controllers.GitCredentialVolume); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "Permission denied")
+	nt.Must(nt.Watcher.WatchForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "Permission denied"))
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	rootSyncLabels, err := nomostest.MetricLabelsForRootSync(nt, rootSyncNN)

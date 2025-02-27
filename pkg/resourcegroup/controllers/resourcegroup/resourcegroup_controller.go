@@ -28,7 +28,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/util/retry"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/handler"
@@ -153,16 +152,21 @@ func updateResourceMetrics(ctx context.Context, nn types.NamespacedName, statuse
 	metrics.RecordKCCResourceCount(ctx, nn, int64(kccCount))
 }
 
+// updateStatusKptGroup updates the ResourceGroup status.
+// To avoid unnecessary updates, it sorts the conditions and checks for a diff.
+//
+// This method explicitly does not retry on conflict errors, to allow the
+// controller manager to handle retry backoff, which it does for all errors,
+// not just conflicts. This allows the reconciler to pick up new changes between
+// update attempts, instead of getting stuck here retrying endlessly.
 func (r *reconciler) updateStatusKptGroup(ctx context.Context, resgroup *v1alpha1.ResourceGroup, newStatus v1alpha1.ResourceGroupStatus) error {
 	newStatus.Conditions = adjustConditionOrder(newStatus.Conditions)
-	return retry.RetryOnConflict(retry.DefaultBackoff, func() error {
-		if apiequality.Semantic.DeepEqual(resgroup.Status, newStatus) {
-			return nil
-		}
-		resgroup.Status = newStatus
-		// Use `r.Status().Update()` here instead of `r.Update()` to update only resgroup.Status.
-		return r.client.Status().Update(ctx, resgroup, client.FieldOwner(FieldManager))
-	})
+	if apiequality.Semantic.DeepEqual(resgroup.Status, newStatus) {
+		return nil
+	}
+	resgroup.Status = newStatus
+	// Use `r.Status().Update()` here instead of `r.Update()` to update only resgroup.Status.
+	return r.client.Status().Update(ctx, resgroup, client.FieldOwner(FieldManager))
 }
 
 func (r *reconciler) startReconcilingStatus(status v1alpha1.ResourceGroupStatus) v1alpha1.ResourceGroupStatus {

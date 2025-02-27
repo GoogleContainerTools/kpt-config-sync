@@ -986,7 +986,7 @@ func RepoSyncHasRenderingError(errCode, errMessage string) Predicate {
 
 // RootSyncHasSyncError returns an error if the RootSync does not have the
 // specified Sync error code and (optional, partial) message.
-func RootSyncHasSyncError(errCode, errMessage string) Predicate {
+func RootSyncHasSyncError(errCode, errMessage string, resources []v1beta1.ResourceRef) Predicate {
 	return func(o client.Object) error {
 		if o == nil {
 			return ErrObjectNotFound
@@ -995,13 +995,13 @@ func RootSyncHasSyncError(errCode, errMessage string) Predicate {
 		if !ok {
 			return WrongTypeErr(o, &v1beta1.RootSync{})
 		}
-		return ValidateError(rs.Status.Sync.Errors, errCode, errMessage, nil)
+		return ValidateError(rs.Status.Sync.Errors, errCode, errMessage, resources)
 	}
 }
 
 // RepoSyncHasSyncError returns an error if the RootSync does not have the
 // specified Sync error code and (optional, partial) message.
-func RepoSyncHasSyncError(errCode, errMessage string) Predicate {
+func RepoSyncHasSyncError(errCode, errMessage string, resources []v1beta1.ResourceRef) Predicate {
 	return func(o client.Object) error {
 		if o == nil {
 			return ErrObjectNotFound
@@ -1010,7 +1010,7 @@ func RepoSyncHasSyncError(errCode, errMessage string) Predicate {
 		if !ok {
 			return WrongTypeErr(o, &v1beta1.RepoSync{})
 		}
-		return ValidateError(rs.Status.Sync.Errors, errCode, errMessage, nil)
+		return ValidateError(rs.Status.Sync.Errors, errCode, errMessage, resources)
 	}
 }
 
@@ -1494,6 +1494,58 @@ func ValidateError(errs []v1beta1.ConfigSyncError, code, message string, resourc
 	}
 
 	return fmt.Errorf("error %s not present: %s", code, log.AsJSON(errs))
+}
+
+// RootSyncHasErrorSourceRefs validates that the RootSync has the Syncing condition
+// with the provided errorSourceRefs
+func RootSyncHasErrorSourceRefs(expectedErrorSourceRefs []v1beta1.ErrorSource) Predicate {
+	return func(obj client.Object) error {
+		if obj == nil {
+			return ErrObjectNotFound
+		}
+		rs, ok := obj.(*v1beta1.RootSync)
+		if !ok {
+			return WrongTypeErr(obj, &v1beta1.RootSync{})
+		}
+
+		syncingCondition := rootsync.GetCondition(rs.Status.Conditions, v1beta1.RootSyncSyncing)
+		if syncingCondition == nil {
+			return fmt.Errorf("syncingCondition is nil")
+		}
+		if syncingCondition.Status == metav1.ConditionTrue {
+			return fmt.Errorf("status.conditions['Syncing'].status is True, expected false")
+		}
+		if !reflect.DeepEqual(syncingCondition.ErrorSourceRefs, expectedErrorSourceRefs) {
+			return fmt.Errorf("status.conditions['Syncing'].errorSourceRefs is %v, expected %v", syncingCondition.ErrorSourceRefs, expectedErrorSourceRefs)
+		}
+		return nil
+	}
+}
+
+// RepoSyncHasErrorSourceRefs validates that the RepoSync has the Syncing condition
+// with the provided errorSourceRefs
+func RepoSyncHasErrorSourceRefs(expectedErrorSourceRefs []v1beta1.ErrorSource) Predicate {
+	return func(obj client.Object) error {
+		if obj == nil {
+			return ErrObjectNotFound
+		}
+		rs, ok := obj.(*v1beta1.RepoSync)
+		if !ok {
+			return WrongTypeErr(obj, &v1beta1.RepoSync{})
+		}
+
+		syncingCondition := reposync.GetCondition(rs.Status.Conditions, v1beta1.RepoSyncSyncing)
+		if syncingCondition == nil {
+			return fmt.Errorf("syncingCondition is nil")
+		}
+		if syncingCondition.Status == metav1.ConditionTrue {
+			return fmt.Errorf("status.conditions['Syncing'].status is True, expected false")
+		}
+		if !reflect.DeepEqual(syncingCondition.ErrorSourceRefs, expectedErrorSourceRefs) {
+			return fmt.Errorf("status.conditions['Syncing'].errorSourceRefs is %v, expected %v", syncingCondition.ErrorSourceRefs, expectedErrorSourceRefs)
+		}
+		return nil
+	}
 }
 
 // ConfigMapHasData returns an error if the ConfigMap doesn't contain the given key value pair

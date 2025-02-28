@@ -17,6 +17,7 @@ package e2e
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/assert"
@@ -225,6 +226,7 @@ func TestHydrateHelmComponents(t *testing.T) {
 	nt := nomostest.New(t,
 		nomostesting.Hydration,
 		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured),
+		ntopts.WithReconcileTimeout(5*time.Minute),
 	)
 	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
 

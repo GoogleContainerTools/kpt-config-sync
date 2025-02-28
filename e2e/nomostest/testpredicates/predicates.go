@@ -1319,6 +1319,25 @@ func containerArgsContains(container *corev1.Container, expectedArg string) erro
 	return fmt.Errorf("expected arg not found: %s", expectedArg)
 }
 
+// ResourceGroupHasNoStatus verifies the status of the ResourceGroup is empty.
+func ResourceGroupHasNoStatus() Predicate {
+	return func(obj client.Object) error {
+		if obj == nil {
+			return ErrObjectNotFound
+		}
+		rg, ok := obj.(*v1alpha1.ResourceGroup)
+		if !ok {
+			return WrongTypeErr(obj, &v1alpha1.ResourceGroup{})
+		}
+		emptyStatus := v1alpha1.ResourceGroupStatus{}
+		if !equality.Semantic.DeepEqual(emptyStatus, rg.Status) {
+			return fmt.Errorf("found non-empty status in %s:\nDiff (- Expected, + Found)\n%s",
+				kinds.ObjectSummary(rg), log.AsYAMLDiff(emptyStatus, rg.Status))
+		}
+		return nil
+	}
+}
+
 // ResourceGroupStatusEquals checks that the RootSync's spec.override matches
 // the specified RootSyncOverrideSpec.
 func ResourceGroupStatusEquals(expected v1alpha1.ResourceGroupStatus) Predicate {

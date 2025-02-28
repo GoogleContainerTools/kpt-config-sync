@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -29,6 +30,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/reposync"
@@ -100,6 +102,14 @@ func SkipReadyCheck() WatchForAllSyncsOptions {
 	}
 }
 
+// SkipAllResourceGroupChecks is an optional parameter which specifies to skip
+// ResourceGroup checks for all RSyncs after they finish syncing.
+func SkipAllResourceGroupChecks() WatchForAllSyncsOptions {
+	return func(options *watchForAllSyncsOptions) {
+		options.watchForSyncOpts = append(options.watchForSyncOpts, SkipResourceGroupCheck())
+	}
+}
+
 // WatchForAllSyncs calls WatchForSync on all Syncs in nt.SyncSources.
 //
 // If you want to validate specific fields of a Sync object, use
@@ -159,7 +169,8 @@ func (nt *NT) WatchForAllSyncs(options ...WatchForAllSyncsOptions) error {
 }
 
 type watchForSyncOptions struct {
-	watchOptions []testwatcher.WatchOption
+	watchOptions           []testwatcher.WatchOption
+	skipResourceGroupCheck bool
 }
 
 // WatchForSyncOption is an optional parameter for WatchForSync.
@@ -170,6 +181,14 @@ type WatchForSyncOption func(*watchForSyncOptions)
 func WithWatchOptions(watchOpts ...testwatcher.WatchOption) WatchForSyncOption {
 	return func(options *watchForSyncOptions) {
 		options.watchOptions = append(options.watchOptions, watchOpts...)
+	}
+}
+
+// SkipResourceGroupCheck is an optional parameter to skip the ResourceGroup
+// watch after the RSync finishes syncing.
+func SkipResourceGroupCheck() WatchForSyncOption {
+	return func(options *watchForSyncOptions) {
+		options.skipResourceGroupCheck = true
 	}
 }
 
@@ -188,7 +207,8 @@ func (nt *NT) WatchForSync(
 ) error {
 	nt.T.Helper()
 	opts := watchForSyncOptions{
-		watchOptions: []testwatcher.WatchOption{},
+		skipResourceGroupCheck: false,
+		watchOptions:           []testwatcher.WatchOption{},
 	}
 	// Override defaults with specified options
 	for _, option := range options {
@@ -239,6 +259,26 @@ func (nt *NT) WatchForSync(
 		return fmt.Errorf("waiting for sync: %w", err)
 	}
 	nt.T.Logf("%s %s/%s is synced", gvk.Kind, namespace, name)
+	if opts.skipResourceGroupCheck {
+		return nil
+	}
+	rgWatchOptions := []testwatcher.WatchOption{
+		testwatcher.WatchPredicates([]testpredicates.Predicate{
+			// Wait until status.observedGeneration matches metadata.generation
+			testpredicates.HasObservedLatestGeneration(nt.Scheme),
+			// Wait until metadata.deletionTimestamp is missing, and conditions do not include Reconciling=True or Stalled=True
+			testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
+			// Make sure the ResourceGroup has the Stalled condition and it is "False"
+			// This ensures the condition exists and wasn't removed by the applier
+			testpredicates.HasConditionStatus(nt.Scheme, string(v1alpha1.Stalled), corev1.ConditionFalse),
+			// Wait until all resourceStatuses are consistent with spec and current/reconciled
+			resourceGroupHasReconciled(expectedCommit),
+		}...),
+	}
+	rgWatchOptions = append(rgWatchOptions, opts.watchOptions...)
+	if err := nt.Watcher.WatchObject(kinds.ResourceGroup(), name, namespace, rgWatchOptions...); err != nil {
+		return fmt.Errorf("waiting for ResourceGroup: %w", err)
+	}
 	return nil
 }
 

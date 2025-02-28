@@ -22,6 +22,15 @@ import (
 	"sigs.k8s.io/cli-utils/pkg/common"
 )
 
+const (
+	// SourceHashAnnotationKey is the name of the annotation which contains the source hash
+	SourceHashAnnotationKey = "configmanagement.gke.io/token"
+	// DisableStatusKey is the annotation key used for disabling ResourceGroup status
+	DisableStatusKey = "configsync.gke.io/status"
+	// DisableStatusValue is the annotation value used for disabling ResourceGroup status
+	DisableStatusValue = "disabled"
+)
+
 // Unstructured creates a ResourceGroup object
 func Unstructured(name, namespace, id string) *unstructured.Unstructured {
 	groupVersion := fmt.Sprintf("%s/%s", v1alpha1.SchemeGroupVersionKind().Group, v1alpha1.SchemeGroupVersionKind().Version)
@@ -42,4 +51,31 @@ func Unstructured(name, namespace, id string) *unstructured.Unstructured {
 		},
 	}
 	return inventoryObj
+}
+
+// GetSourceHash returns the source hash that is defined in the
+// source hash annotation.
+func GetSourceHash(annotations map[string]string) string {
+	if len(annotations) == 0 {
+		return ""
+	}
+	return TruncateSourceHash(annotations[SourceHashAnnotationKey])
+}
+
+// TruncateSourceHash truncates the provided source hash after the first 7 characters.
+func TruncateSourceHash(sourceHash string) string {
+	if len(sourceHash) > 7 {
+		return sourceHash[0:7]
+	}
+	return sourceHash
+}
+
+// IsStatusDisabled returns whether the ResourceGroup has disabled status updates.
+func IsStatusDisabled(resgroup *v1alpha1.ResourceGroup) bool {
+	annotations := resgroup.GetAnnotations()
+	if annotations == nil {
+		return false
+	}
+	val, found := annotations[DisableStatusKey]
+	return found && val == DisableStatusValue
 }

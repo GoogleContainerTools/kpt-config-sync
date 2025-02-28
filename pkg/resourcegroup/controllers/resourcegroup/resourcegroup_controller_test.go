@@ -474,65 +474,106 @@ func TestReconcileTimeout(t *testing.T) {
 	}
 }
 
-func TestActuationStatusToLegacy(t *testing.T) {
+func TestUpdateStatusToReflectActuation(t *testing.T) {
 	tests := []struct {
 		name      string
 		resStatus v1alpha1.ResourceStatus
 		want      v1alpha1.Status
 	}{
 		{
-			"Status should equal current status when actuation is status is successful",
-			v1alpha1.ResourceStatus{
+			name: "Status should equal current status when actuation is status is successful",
+			resStatus: v1alpha1.ResourceStatus{
 				Status:    v1alpha1.Current,
 				Actuation: v1alpha1.ActuationSucceeded,
 			},
-			v1alpha1.Current,
+			want: v1alpha1.Current,
 		},
 		{
-			"Return status field when actuation is status is empty",
-			v1alpha1.ResourceStatus{
+			name: "Return status field when actuation is status is empty",
+			resStatus: v1alpha1.ResourceStatus{
 				Status: v1alpha1.InProgress,
 			},
-			v1alpha1.InProgress,
+			want: v1alpha1.InProgress,
 		},
 		{
-			"Return unknown when actuation is not successful",
-			v1alpha1.ResourceStatus{
+			name: "Return unknown when actuation is not successful",
+			resStatus: v1alpha1.ResourceStatus{
 				Actuation: v1alpha1.ActuationPending,
 			},
-			v1alpha1.Unknown,
+			want: v1alpha1.Unknown,
 		},
 		{
-			"Return not found when status is not found already",
-			v1alpha1.ResourceStatus{
+			name: "Return not found when status is not found already",
+			resStatus: v1alpha1.ResourceStatus{
 				Status:    v1alpha1.NotFound,
 				Actuation: v1alpha1.ActuationPending,
 			},
-			v1alpha1.NotFound,
+			want: v1alpha1.NotFound,
 		},
 		{
-			"Return not found when status is not found already - disregard actuation success",
-			v1alpha1.ResourceStatus{
+			name: "Return not found when status is not found already - disregard actuation success",
+			resStatus: v1alpha1.ResourceStatus{
 				Status:    v1alpha1.NotFound,
 				Actuation: v1alpha1.ActuationSucceeded,
 			},
-			v1alpha1.NotFound,
+			want: v1alpha1.NotFound,
 		},
 		{
-			"Return Current if both Actuation and Reconcile succeeded",
-			v1alpha1.ResourceStatus{
-				Status:    v1alpha1.Unknown,
+			name: "Return Terminating when Terminating even if apply and reconcile previously succeeded",
+			resStatus: v1alpha1.ResourceStatus{
+				Status:    v1alpha1.Terminating,
+				Strategy:  v1alpha1.Apply,
 				Actuation: v1alpha1.ActuationSucceeded,
 				Reconcile: v1alpha1.ReconcileSucceeded,
 			},
-			v1alpha1.Current,
+			want: v1alpha1.Terminating,
+		},
+		{
+			name: "Return Terminating when Terminating even if delete and reconcile previously succeeded",
+			resStatus: v1alpha1.ResourceStatus{
+				Status:    v1alpha1.Terminating,
+				Strategy:  v1alpha1.Delete,
+				Actuation: v1alpha1.ActuationSucceeded,
+				Reconcile: v1alpha1.ReconcileSucceeded,
+			},
+			want: v1alpha1.Terminating,
+		},
+		{
+			name: "Return NotFound when NotFound even if apply and reconcile previously succeeded",
+			resStatus: v1alpha1.ResourceStatus{
+				Status:    v1alpha1.NotFound,
+				Strategy:  v1alpha1.Apply,
+				Actuation: v1alpha1.ActuationSucceeded,
+				Reconcile: v1alpha1.ReconcileSucceeded,
+			},
+			want: v1alpha1.NotFound,
+		},
+		{
+			name: "Return NotFound when NotFound when strategy is delete",
+			resStatus: v1alpha1.ResourceStatus{
+				Status:    v1alpha1.NotFound,
+				Strategy:  v1alpha1.Delete,
+				Actuation: v1alpha1.ActuationSucceeded,
+				Reconcile: v1alpha1.ReconcileSucceeded,
+			},
+			want: v1alpha1.NotFound,
+		},
+		{
+			name: "Return Terminating if status is Terminating and strategy is delete, even if reconcile previously succeeded",
+			resStatus: v1alpha1.ResourceStatus{
+				Status:    v1alpha1.Terminating,
+				Strategy:  v1alpha1.Delete,
+				Actuation: v1alpha1.ActuationSucceeded,
+				Reconcile: v1alpha1.ReconcileSucceeded,
+			},
+			want: v1alpha1.Terminating,
 		},
 	}
 	for _, tc := range tests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			if got := ActuationStatusToLegacy(tc.resStatus); got != tc.want {
+			if got := UpdateStatusToReflectActuation(tc.resStatus); got != tc.want {
 				t.Errorf("ActuationStatusToLegacy() = %v, want %v", got, tc.want)
 			}
 		})

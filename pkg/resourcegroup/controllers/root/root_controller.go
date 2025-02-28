@@ -267,11 +267,11 @@ func (ResourceGroupPredicate) Update(e event.UpdateEvent) bool {
 	return statusNeedsUpdate(rgNew.Status.ResourceStatuses)
 }
 
-// statusNeedsUpdate checks each resource status to ensure the legacy status field
-// aligns with the new actuation/reconcile status fields.
+// statusNeedsUpdate checks each resource status to ensure the status field
+// reflects the actuation status.
 func statusNeedsUpdate(statuses []v1alpha1.ResourceStatus) bool {
 	for _, s := range statuses {
-		if resourcegroup.ActuationStatusToLegacy(s) != s.Status {
+		if resourcegroup.UpdateStatusToReflectActuation(s) != s.Status {
 			return true
 		}
 	}

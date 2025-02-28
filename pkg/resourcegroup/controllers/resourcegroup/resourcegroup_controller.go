@@ -327,16 +327,16 @@ func (r *reconciler) computeStatus(
 			hasErr = true
 		}
 
-		// Update the legacy status field based on the actuation, strategy and reconcile
-		// statuses set by cli-utils. If the actuation is not successful, update the legacy
-		// status field to be of unknown status.
+		// Keep the existing object statuses written by cli-utils
 		aStatus, exists := actuationStatuses[resStatus.ObjMetadata]
 		if exists {
 			resStatus.Actuation = aStatus.Actuation
 			resStatus.Strategy = aStatus.Strategy
 			resStatus.Reconcile = aStatus.Reconcile
 
-			resStatus.Status = ActuationStatusToLegacy(resStatus)
+			// Update the status field to reflect source -> spec -> status,
+			// not just spec -> status.
+			resStatus.Status = UpdateStatusToReflectActuation(resStatus)
 		}
 
 		// add the resource status into resgroup
@@ -350,23 +350,45 @@ func (r *reconciler) computeStatus(
 	return statuses
 }
 
-// ActuationStatusToLegacy contains the logic/rules to convert from the actuation statuses
-// to the legacy status field. If conversion is not needed, the original status field is returned
-// instead.
-func ActuationStatusToLegacy(s v1alpha1.ResourceStatus) v1alpha1.Status {
-	if s.Status == v1alpha1.NotFound {
-		return v1alpha1.NotFound
+// UpdateStatusToReflectActuation updates the latest computed kstatus to reflect
+// the desired state in the source of truth, as much as possible, not just the
+// desired state that has been persisted to the Kubernetes API.
+//
+// This is necessary, because kstatus only reflects whether the object status
+// reflects the object spec. But in Config Sync, the desired state is actually
+// in the source or truth. So if the latest desired state has not yet been
+// successfully actuated (applied or deleted), then the current status is
+// Unknown, because neither Kubernetes nor this ResourceGroup controller knows
+// what the desired state is.
+func UpdateStatusToReflectActuation(s v1alpha1.ResourceStatus) v1alpha1.Status {
+	// When actuation is unknown, return the latest computed status.
+	// This should only ever happen when upgrading from an old version.
+	// It means the applier was last run with code that predates the addition
+	// of the strategy, actuation, and reconcile fields.
+	if s.Actuation == "" {
+		return s.Status
 	}
 
-	if s.Actuation != "" &&
-		s.Actuation != v1alpha1.ActuationSucceeded {
-		return v1alpha1.Unknown
+	// When actuation has succeeded, we know the object spec is up to date with
+	// the latest source, so the latest computed status should be correct.
+	if s.Actuation == v1alpha1.ActuationSucceeded {
+		return s.Status
 	}
 
-	if s.Actuation == v1alpha1.ActuationSucceeded && s.Reconcile == v1alpha1.ReconcileSucceeded {
-		return v1alpha1.Current
+	// When the latest computed status is Terminating or NotFound, keep it,
+	// even if actuation is Pending, Skipped, or Failed, because Terminating and
+	// NotFound are independent of the desired state in the source of truth,
+	// while InProgress, Current, and Failed depend on actuation having
+	// successfully updated the spec on the cluster.
+	if s.Status == v1alpha1.NotFound || s.Status == v1alpha1.Terminating {
+		return s.Status
 	}
-	return s.Status
+
+	// When actuation is not successful (Pending, Skipped, Failed), that means
+	// the object spec has not been updated to the desired spec from source yet,
+	// so the computed status can be ignored and the real status is Unknown,
+	// unless the latest computed status is NotFound or Terminating.
+	return v1alpha1.Unknown
 }
 
 // setResStatus updates a resource status struct using values within the cached status struct.

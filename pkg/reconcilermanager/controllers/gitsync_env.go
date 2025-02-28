@@ -21,7 +21,6 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
 )
 
@@ -242,7 +241,7 @@ func useCACert(caCertSecretRef string) bool {
 	return caCertSecretRef != ""
 }
 
-func gitSyncEnvs(_ context.Context, opts options) []corev1.EnvVar {
+func gitSyncEnvs(_ context.Context, opts options) ([]corev1.EnvVar, error) {
 	var result []corev1.EnvVar
 	result = append(result, corev1.EnvVar{
 		Name:  GitSyncRepo,
@@ -350,8 +349,7 @@ func gitSyncEnvs(_ context.Context, opts options) []corev1.EnvVar {
 			})
 		}
 	default:
-		// TODO b/168553377 Return error while setting up gitSyncData.
-		klog.Errorf("Unrecognized secret type %s", opts.secretType)
+		return nil, fmt.Errorf("Unrecognized secret type %q", opts.secretType)
 	}
-	return result
+	return result, nil
 }

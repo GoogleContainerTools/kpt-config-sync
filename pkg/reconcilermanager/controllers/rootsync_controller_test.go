@@ -49,6 +49,7 @@ import (
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/rootsync"
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
+	"kpt.dev/configsync/pkg/testing/testerrors"
 	"kpt.dev/configsync/pkg/util"
 	"kpt.dev/configsync/pkg/validate/raw/validate"
 	webhookconfiguration "kpt.dev/configsync/pkg/webhook/configuration"
@@ -417,7 +418,8 @@ func TestCreateAndUpdateRootReconcilerWithOverride(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs, err := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
@@ -472,7 +474,8 @@ func TestCreateAndUpdateRootReconcilerWithOverride(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs, err = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(overrideSelectedResources, ReconcilerContainerResourceDefaults())
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
@@ -505,7 +508,8 @@ func TestCreateAndUpdateRootReconcilerWithOverride(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs, err = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides = setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
@@ -541,7 +545,8 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs, err := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
@@ -605,7 +610,8 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs, err = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides = setContainerResourceDefaults(overrideAllContainerResources, ReconcilerContainerResourceDefaults())
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
@@ -661,7 +667,8 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs, err = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides = setContainerResourceDefaults(overrideReconcilerAndHydrationResources, ReconcilerContainerResourceDefaults())
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
@@ -707,7 +714,8 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs, err = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides = setContainerResourceDefaults(overrideGitSyncResources, ReconcilerContainerResourceDefaults())
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
@@ -741,7 +749,8 @@ func TestUpdateRootReconcilerWithOverride(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs, err = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides = setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
@@ -777,7 +786,8 @@ func TestRootSyncCreateWithNoSSLVerify(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs, err := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
@@ -815,7 +825,8 @@ func TestRootSyncUpdateNoSSLVerify(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	rootContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnv, err := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
@@ -871,7 +882,8 @@ func TestRootSyncUpdateNoSSLVerify(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	rootContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	updatedRootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
@@ -904,7 +916,8 @@ func TestRootSyncUpdateNoSSLVerify(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	rootContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
@@ -945,7 +958,8 @@ func TestRootSyncCreateWithCACertSecret(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs, err := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
@@ -987,7 +1001,8 @@ func TestRootSyncUpdateCACertSecret(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	rootContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnv, err := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
@@ -1040,7 +1055,8 @@ func TestRootSyncUpdateCACertSecret(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	rootContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	updatedRootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		caCertSecretMutator(secretName, caCertSecret),
@@ -1073,7 +1089,8 @@ func TestRootSyncUpdateCACertSecret(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	rootContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(secretName),
@@ -1224,7 +1241,8 @@ func TestRootSyncCreateWithOverrideGitSyncDepth(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs, err := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
@@ -1262,7 +1280,8 @@ func TestRootSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	rootContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnv, err := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
@@ -1295,7 +1314,8 @@ func TestRootSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	rootContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	updatedRootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
@@ -1330,7 +1350,8 @@ func TestRootSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	rootContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	updatedRootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
@@ -1364,7 +1385,8 @@ func TestRootSyncUpdateOverrideGitSyncDepth(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	rootContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
@@ -1420,7 +1442,8 @@ func TestRootSyncCreateWithOverrideReconcileTimeout(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs, err := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
@@ -1457,7 +1480,8 @@ func TestRootSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
-	rootContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnv, err := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
@@ -1492,7 +1516,8 @@ func TestRootSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	rootContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	updatedRootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
@@ -1526,7 +1551,8 @@ func TestRootSyncUpdateOverrideReconcileTimeout(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	rootContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
@@ -1582,7 +1608,8 @@ func TestRootSyncCreateWithOverrideAPIServerTimeout(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs, err := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
@@ -1616,7 +1643,8 @@ func TestRootSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
-	rootContainerEnv := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnv, err := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
@@ -1648,7 +1676,8 @@ func TestRootSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	rootContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	updatedRootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
@@ -1678,7 +1707,8 @@ func TestRootSyncUpdateOverrideAPIServerTimeout(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	rootContainerEnv = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnv, err = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
@@ -1976,7 +2006,8 @@ func TestRootSyncSwitchAuthTypes(t *testing.T) {
 		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
 	)
 
-	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs, err := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
@@ -2020,7 +2051,8 @@ func TestRootSyncSwitchAuthTypes(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs, err = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
@@ -2051,7 +2083,8 @@ func TestRootSyncSwitchAuthTypes(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
 	}
 
-	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs, err = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		containersWithRepoVolumeMutator(noneGitContainers()),
@@ -2087,7 +2120,8 @@ func TestRootSyncReconcilerRestart(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs, err := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
@@ -2226,7 +2260,8 @@ func TestMultipleRootSyncs(t *testing.T) {
 		}),
 	)
 	crb.Subjects = addSubjectByName(crb.Subjects, rootReconcilerName)
-	rootContainerEnv1 := testReconciler.populateContainerEnvs(ctx, rs1, rootReconcilerName)
+	rootContainerEnv1, err := testReconciler.populateContainerEnvs(ctx, rs1, rootReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	rootDeployment1 := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
@@ -2277,7 +2312,8 @@ func TestMultipleRootSyncs(t *testing.T) {
 		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
 
-	rootContainerEnv2 := testReconciler.populateContainerEnvs(ctx, rs2, rootReconcilerName2)
+	rootContainerEnv2, err := testReconciler.populateContainerEnvs(ctx, rs2, rootReconcilerName2)
+	require.NoError(t, err)
 	rootDeployment2 := rootSyncDeployment(rootReconcilerName2,
 		setServiceAccountName(rootReconcilerName2),
 		gceNodeMutator(),
@@ -2338,7 +2374,8 @@ func TestMultipleRootSyncs(t *testing.T) {
 		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
 
-	rootContainerEnv3 := testReconciler.populateContainerEnvs(ctx, rs3, rootReconcilerName3)
+	rootContainerEnv3, err := testReconciler.populateContainerEnvs(ctx, rs3, rootReconcilerName3)
+	require.NoError(t, err)
 	rootDeployment3 := rootSyncDeployment(rootReconcilerName3,
 		setServiceAccountName(rootReconcilerName3),
 		gceNodeMutator(),
@@ -2403,7 +2440,8 @@ func TestMultipleRootSyncs(t *testing.T) {
 		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
 
-	rootContainerEnvs4 := testReconciler.populateContainerEnvs(ctx, rs4, rootReconcilerName4)
+	rootContainerEnvs4, err := testReconciler.populateContainerEnvs(ctx, rs4, rootReconcilerName4)
+	require.NoError(t, err)
 	rootDeployment4 := rootSyncDeployment(rootReconcilerName4,
 		setServiceAccountName(rootReconcilerName4),
 		secretMutator(reposyncCookie),
@@ -2468,7 +2506,8 @@ func TestMultipleRootSyncs(t *testing.T) {
 		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
 	}
 
-	rootContainerEnvs5 := testReconciler.populateContainerEnvs(ctx, rs5, rootReconcilerName5)
+	rootContainerEnvs5, err := testReconciler.populateContainerEnvs(ctx, rs5, rootReconcilerName5)
+	require.NoError(t, err)
 	rootDeployment5 := rootSyncDeployment(rootReconcilerName5,
 		setServiceAccountName(rootReconcilerName5),
 		secretMutator(secretName),
@@ -2530,7 +2569,8 @@ func TestMultipleRootSyncs(t *testing.T) {
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", rootReconcilerName))
 	validateRootSyncStatus(t, wantRs1, fakeClient)
 
-	rootContainerEnv1 = testReconciler.populateContainerEnvs(ctx, rs1, rootReconcilerName)
+	rootContainerEnv1, err = testReconciler.populateContainerEnvs(ctx, rs1, rootReconcilerName)
+	require.NoError(t, err)
 	rootDeployment1 = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
@@ -2571,7 +2611,8 @@ func TestMultipleRootSyncs(t *testing.T) {
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", rootReconcilerName2))
 	validateRootSyncStatus(t, wantRs2, fakeClient)
 
-	rootContainerEnv2 = testReconciler.populateContainerEnvs(ctx, rs2, rootReconcilerName2)
+	rootContainerEnv2, err = testReconciler.populateContainerEnvs(ctx, rs2, rootReconcilerName2)
+	require.NoError(t, err)
 	rootDeployment2 = rootSyncDeployment(rootReconcilerName2,
 		setServiceAccountName(rootReconcilerName2),
 		gceNodeMutator(),
@@ -2610,7 +2651,8 @@ func TestMultipleRootSyncs(t *testing.T) {
 		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", rootReconcilerName3))
 	validateRootSyncStatus(t, wantRs3, fakeClient)
 
-	rootContainerEnv3 = testReconciler.populateContainerEnvs(ctx, rs3, rootReconcilerName3)
+	rootContainerEnv3, err = testReconciler.populateContainerEnvs(ctx, rs3, rootReconcilerName3)
+	require.NoError(t, err)
 	rootDeployment3 = rootSyncDeployment(rootReconcilerName3,
 		setServiceAccountName(rootReconcilerName3),
 		gceNodeMutator(),
@@ -2902,7 +2944,8 @@ func TestInjectFleetWorkloadIdentityCredentialsToRootSync(t *testing.T) {
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
-	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs, err := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
@@ -2978,7 +3021,8 @@ func TestInjectFleetWorkloadIdentityCredentialsToRootSync(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs, err = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
@@ -3012,7 +3056,8 @@ func TestInjectFleetWorkloadIdentityCredentialsToRootSync(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs, err = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		containersWithRepoVolumeMutator(noneGitContainers()),
@@ -3072,7 +3117,8 @@ func TestRootSyncWithHelm(t *testing.T) {
 		t.Errorf("ServiceAccount validation failed: %v", err)
 	}
 
-	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs, err := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
@@ -3107,7 +3153,8 @@ func TestRootSyncWithHelm(t *testing.T) {
 	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
 		t.Errorf("ServiceAccount validation failed: %v", err)
 	}
-	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs, err = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		containersWithRepoVolumeMutator(noneHelmContainers()),
@@ -3147,7 +3194,8 @@ func TestRootSyncWithHelm(t *testing.T) {
 	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
 		t.Errorf("ServiceAccount validation failed: %v", err)
 	}
-	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs, err = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		containersWithRepoVolumeMutator(noneHelmContainers()),
@@ -3215,8 +3263,8 @@ func TestRootSyncWithHelm(t *testing.T) {
 	// test 5: validations
 	wantServiceAccounts[core.IDOf(ksaNoGSAAnnotation)] = ksaNoGSAAnnotation
 	ksaNoGSAAnnotation.ResourceVersion = "3"
-	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
-
+	rootContainerEnvs, err = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
 		t.Errorf("ServiceAccount validation failed: %v", err)
 	}
@@ -3266,7 +3314,8 @@ func TestRootSyncWithHelm(t *testing.T) {
 	}
 	// test 6: validations
 	resourceOverrides = setContainerResourceDefaults(overrideHelmSyncResources, ReconcilerContainerResourceDefaults())
-	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs, err = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setAnnotations(map[string]string{
 			// `service_account_impersonation_url` is removed from the annotation,
@@ -3326,7 +3375,8 @@ func TestRootSyncWithOCI(t *testing.T) {
 		t.Errorf("ServiceAccount validation failed: %v", err)
 	}
 
-	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs, err := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
@@ -3359,7 +3409,8 @@ func TestRootSyncWithOCI(t *testing.T) {
 		t.Errorf("ServiceAccount validation failed: %v", err)
 	}
 
-	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs, err = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		containersWithRepoVolumeMutator(noneOciContainers()),
@@ -3400,7 +3451,8 @@ func TestRootSyncWithOCI(t *testing.T) {
 	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
 		t.Errorf("ServiceAccount validation failed: %v", err)
 	}
-	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs, err = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		containersWithRepoVolumeMutator(noneOciContainers()),
@@ -3468,8 +3520,8 @@ func TestRootSyncWithOCI(t *testing.T) {
 	// test 5: validations
 	wantServiceAccounts[core.IDOf(ksaNoGSAAnnotation)] = ksaNoGSAAnnotation
 	ksaNoGSAAnnotation.ResourceVersion = "3"
-	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
-
+	rootContainerEnvs, err = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
 		t.Errorf("ServiceAccount validation failed: %v", err)
 	}
@@ -3519,7 +3571,8 @@ func TestRootSyncWithOCI(t *testing.T) {
 	}
 
 	// test 6: validations
-	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs, err = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
 	resourceOverrides = setContainerResourceDefaults(overrideOciSyncResources, ReconcilerContainerResourceDefaults())
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
@@ -3879,9 +3932,10 @@ func TestPopulateRootContainerEnvs(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name     string
-		rootSync *v1beta1.RootSync
-		expected map[string][]corev1.EnvVar
+		name        string
+		rootSync    *v1beta1.RootSync
+		expected    map[string][]corev1.EnvVar
+		expectedErr error
 	}{
 		{
 			name: "no override uses default value",
@@ -3919,6 +3973,13 @@ func TestPopulateRootContainerEnvs(t *testing.T) {
 				reconcilermanager.Reconciler: {reconcilermanager.DynamicNSSelectorEnabled: "true"},
 			}),
 		},
+		{
+			name: "with invalid secret type",
+			rootSync: rootSyncWithGit(rootsyncName,
+				rootsyncSecretType("invalid-secret-type"),
+			),
+			expectedErr: fmt.Errorf("Unrecognized secret type \"invalid-secret-type\""),
+		},
 	}
 
 	ctx := context.Background()
@@ -3927,7 +3988,8 @@ func TestPopulateRootContainerEnvs(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			_, _, testReconciler := setupRootReconciler(t, tc.rootSync, secretObj(t, reposyncSSHKey, configsync.AuthSSH, configsync.GitSource, core.Namespace(tc.rootSync.Namespace)))
 
-			env := testReconciler.populateContainerEnvs(ctx, tc.rootSync, rootReconcilerName)
+			env, err := testReconciler.populateContainerEnvs(ctx, tc.rootSync, rootReconcilerName)
+			testerrors.AssertEqual(t, tc.expectedErr, err)
 
 			for container, vars := range env {
 				if diff := cmp.Diff(tc.expected[container], vars, cmpopts.EquateEmpty(), cmpopts.SortSlices(func(a, b corev1.EnvVar) bool { return a.Name < b.Name })); diff != "" {
@@ -3955,7 +4017,9 @@ func TestUpdateRootReconcilerLogLevelWithOverride(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs, err := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
+
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
@@ -4020,7 +4084,9 @@ func TestUpdateRootReconcilerLogLevelWithOverride(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs, err = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
+
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
 		secretMutator(rootsyncSSHKey),
@@ -4054,7 +4120,9 @@ func TestCreateAndUpdateRootReconcilerWithOverrideOnAutopilot(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs, err := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
+
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaultsForAutopilot())
 	rootDeployment := rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
@@ -4110,7 +4178,9 @@ func TestCreateAndUpdateRootReconcilerWithOverrideOnAutopilot(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs, err = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
+
 	resourceOverrides = setContainerResourceDefaults(overrideSelectedResources, ReconcilerContainerResourceDefaultsForAutopilot())
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
@@ -4143,7 +4213,9 @@ func TestCreateAndUpdateRootReconcilerWithOverrideOnAutopilot(t *testing.T) {
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 
-	rootContainerEnvs = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs, err = testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
+
 	resourceOverrides = setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaultsForAutopilot())
 	rootDeployment = rootSyncDeployment(rootReconcilerName,
 		setServiceAccountName(rootReconcilerName),
@@ -4259,7 +4331,9 @@ For more information, see https://g.co/cloud/acm-errors#knv1061`))
 		t.Fatalf("failed to get the root sync: %v", err)
 	}
 	resourceOverrides := setContainerResourceDefaults(nil, ReconcilerContainerResourceDefaults())
-	rootContainerEnvs := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	rootContainerEnvs, err := testReconciler.populateContainerEnvs(ctx, rs, rootReconcilerName)
+	require.NoError(t, err)
+
 	rootContainerEnvs[reconcilermanager.GitSync] = append(
 		rootContainerEnvs[reconcilermanager.GitSync],
 		corev1.EnvVar{Name: "GITSYNC_GITHUB_APP_CLIENT_ID", Value: "client-id-0"},

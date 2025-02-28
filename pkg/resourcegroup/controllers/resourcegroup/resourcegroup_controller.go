@@ -99,16 +99,17 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, nil
 	}
 
-	newStatus := r.startReconcilingStatus(rgObj.Status)
-	if err := r.updateStatusKptGroup(ctx, rgObj, newStatus); err != nil {
-		r.Logger(ctx).Error(err, "failed to update ResourceGroup to start reconciling")
-		return ctrl.Result{Requeue: true}, err
-	}
+	// Since this controller doesn't perform any writes in any external systems,
+	// it doesn't need to set the Reconciling condition status to True before
+	// building the new status, because there are no possible side-effects that
+	// the user might need to know about when reconciling fails.
+	// So skip initializing the Reconciling & Stalled conditions and only set
+	// them when reconciling succeeds or fails.
 
 	id := getInventoryID(rgObj.Labels)
-	newStatus = r.endReconcilingStatus(ctx, id, req.NamespacedName, rgObj.Spec, rgObj.Status, rgObj.Generation)
+	newStatus := r.endReconcilingStatus(ctx, id, req.NamespacedName, rgObj.Spec, rgObj.Status, rgObj.Generation)
 	if err := r.updateStatusKptGroup(ctx, rgObj, newStatus); err != nil {
-		r.Logger(ctx).Error(err, "failed to update ResourceGroup to finish reconciling")
+		r.Logger(ctx).Error(err, "failed to update ResourceGroup")
 		return ctrl.Result{Requeue: true}, err
 	}
 
@@ -169,19 +170,6 @@ func (r *reconciler) updateStatusKptGroup(ctx context.Context, resgroup *v1alpha
 	return r.client.Status().Update(ctx, resgroup, client.FieldOwner(FieldManager))
 }
 
-func (r *reconciler) startReconcilingStatus(status v1alpha1.ResourceGroupStatus) v1alpha1.ResourceGroupStatus {
-	// Preserve existing status and only update fields that need to change.
-	// This avoids repeatedly updating the status just to update a timestamp.
-	// It also prevents fighting with other controllers updating the status.
-	newStatus := *status.DeepCopy()
-	// Update conditions, if they've changed
-	newStatus.Conditions = updateCondition(newStatus.Conditions,
-		newReconcilingCondition(v1alpha1.TrueConditionStatus, StartReconciling, startReconcilingMsg))
-	newStatus.Conditions = updateCondition(newStatus.Conditions,
-		newStalledCondition(v1alpha1.FalseConditionStatus, "", ""))
-	return newStatus
-}
-
 func (r *reconciler) endReconcilingStatus(
 	ctx context.Context,
 	id string,
@@ -205,19 +193,23 @@ func (r *reconciler) endReconcilingStatus(
 	}()
 	select {
 	case <-finish:
+		// Updating the ObservedGeneration should be a no-op, because the
+		// applier should have updated it already.
 		newStatus.ObservedGeneration = generation
-		// Update conditions, if they've changed
-		newStatus.Conditions = updateCondition(newStatus.Conditions,
-			newReconcilingCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg))
 		newStatus.Conditions = updateCondition(newStatus.Conditions,
 			aggregateResourceStatuses(newStatus.ResourceStatuses))
 	case <-time.After(reconcileTimeout):
-		// Update conditions, if they've changed
-		newStatus.Conditions = updateCondition(newStatus.Conditions,
-			newReconcilingCondition(v1alpha1.FalseConditionStatus, ExceedTimeout, exceedTimeoutMsg))
 		newStatus.Conditions = updateCondition(newStatus.Conditions,
 			newStalledCondition(v1alpha1.TrueConditionStatus, ExceedTimeout, exceedTimeoutMsg))
 	}
+
+	// Previously, the Reconciling condition toggled between True & False while
+	// this controller was reconciling, but this caused unnecessary churn and
+	// confusion, because it didn't reflect the reconciliation status of the
+	// managed objects in status.resourceStatuses. So now it's always set to
+	// False, for reverse compatibility, in case any clients were waiting it.
+	newStatus.Conditions = updateCondition(newStatus.Conditions,
+		newReconcilingCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg))
 
 	metrics.RecordReconcileDuration(ctx, newStatus.Conditions[1].Reason, startTime)
 	updateResourceMetrics(ctx, namespacedName, newStatus.ResourceStatuses)
@@ -328,16 +320,26 @@ func (r *reconciler) computeStatus(
 		}
 
 		// Keep the existing object statuses written by cli-utils
-		aStatus, exists := actuationStatuses[resStatus.ObjMetadata]
-		if exists {
-			resStatus.Actuation = aStatus.Actuation
+		if aStatus, exists := actuationStatuses[resStatus.ObjMetadata]; exists {
 			resStatus.Strategy = aStatus.Strategy
+			resStatus.Actuation = aStatus.Actuation
 			resStatus.Reconcile = aStatus.Reconcile
+
+			// Update the reconcile status based on the Strategy & Actuation
+			// from the last apply attempt, and the newly computed kstatus.
+			if reconcile, err := UpdateReconcileStatusToReflectKstatus(resStatus); err != nil {
+				// Keep existing Reconcile status
+				log.Error(err, "Resource object status unknown: failed to compute")
+			} else {
+				resStatus.Reconcile = reconcile
+			}
 
 			// Update the status field to reflect source -> spec -> status,
 			// not just spec -> status.
 			resStatus.Status = UpdateStatusToReflectActuation(resStatus)
 		}
+
+		log.V(5).Info("Resource object status computed", "status", resStatus)
 
 		// add the resource status into resgroup
 		statuses = append(statuses, resStatus)
@@ -348,6 +350,73 @@ func (r *reconciler) computeStatus(
 		metrics.RecordPipelineError(ctx, nn, readinessComponent, hasErr)
 	}
 	return statuses
+}
+
+// UpdateReconcileStatusToReflectKstatus uses the current Strategy and Actuation
+// status from the applier and the newly computed kstatus to compute the
+// Reconcile status. Returns an error if one of the inputs is invalid.
+func UpdateReconcileStatusToReflectKstatus(status v1alpha1.ResourceStatus) (v1alpha1.Reconcile, error) {
+	switch status.Strategy {
+	case v1alpha1.Apply:
+		switch status.Actuation {
+		case v1alpha1.ActuationSucceeded:
+			switch status.Status {
+			case v1alpha1.Current:
+				return v1alpha1.ReconcileSucceeded, nil // Strategy=Apply + Actuation=Succeeded + kstatus=Current => Reconcile=Succeeded
+			case v1alpha1.InProgress:
+				return v1alpha1.ReconcilePending, nil // Strategy=Apply + Actuation=Succeeded + kstatus=InProgress => Reconcile=Pending
+			case v1alpha1.Failed:
+				return v1alpha1.ReconcileFailed, nil // Strategy=Apply + Actuation=Succeeded + kstatus=Failed => Reconcile=Failed
+			case v1alpha1.Terminating:
+				return v1alpha1.ReconcileFailed, nil // Strategy=Apply + Actuation=Succeeded + kstatus=Terminating => Reconcile=Failed // TODO: Should this be Pending?
+			case v1alpha1.NotFound:
+				return v1alpha1.ReconcileFailed, nil // Strategy=Apply + Actuation=Succeeded + kstatus=NotFound => Reconcile=Failed // TODO: Should this be Pending?
+			case v1alpha1.Unknown:
+				// Keep the old Reconcile status
+				return status.Reconcile, nil // Strategy=Apply + Actuation=Succeeded + kstatus=Unknown => Reconcile=???
+			default: // Invalid kstatus
+				return "", fmt.Errorf("invalid kstatus: %s", status.Status)
+			}
+		case v1alpha1.ActuationPending:
+			return v1alpha1.ReconcilePending, nil // Strategy=Apply + Actuation=Pending + kstatus=ANY => Reconcile=Pending
+		case v1alpha1.ActuationSkipped:
+			return v1alpha1.ReconcileSkipped, nil // Strategy=Apply + Actuation=Skipped + kstatus=ANY => Reconcile=Skipped
+		case v1alpha1.ActuationFailed:
+			return v1alpha1.ReconcileSkipped, nil // Strategy=Apply + Actuation=Failed + kstatus=ANY => Reconcile=Skipped
+		default: // Invalid Actuation status
+			return "", fmt.Errorf("invalid actuation status: %s", status.Actuation)
+		}
+
+	case v1alpha1.Delete:
+		switch status.Actuation {
+		case v1alpha1.ActuationSucceeded:
+			switch status.Status {
+			case v1alpha1.Current:
+				return v1alpha1.ReconcileFailed, nil // Strategy=Delete + Actuation=Succeeded + kstatus=Current => Reconcile=Failed // TODO: Should this be Pending?
+			case v1alpha1.InProgress:
+				return v1alpha1.ReconcileFailed, nil // Strategy=Delete + Actuation=Succeeded + kstatus=InProgress => Reconcile=Failed // TODO: Should this be Pending?
+			case v1alpha1.Failed:
+				return v1alpha1.ReconcileFailed, nil // Strategy=Delete + Actuation=Succeeded + kstatus=Failed => Reconcile=Failed // TODO: Should this be Pending?
+			case v1alpha1.Terminating:
+				return v1alpha1.ReconcilePending, nil // Strategy=Delete + Actuation=Succeeded + kstatus=Terminating => Reconcile=Pending
+			case v1alpha1.NotFound:
+				return v1alpha1.ReconcileSucceeded, nil // Strategy=Delete + Actuation=Succeeded + kstatus=NotFound => Reconcile=Succeeded
+			default: // Invalid kstatus
+				return "", fmt.Errorf("invalid kstatus: %s", status.Status)
+			}
+		case v1alpha1.ActuationPending:
+			return v1alpha1.ReconcilePending, nil // Strategy=Delete + Actuation=Pending + kstatus=ANY => Reconcile=Pending
+		case v1alpha1.ActuationSkipped:
+			return v1alpha1.ReconcileSkipped, nil // Strategy=Delete + Actuation=Skipped + kstatus=ANY => Reconcile=Skipped
+		case v1alpha1.ActuationFailed:
+			return v1alpha1.ReconcileSkipped, nil // Strategy=Delete + Actuation=Failed + kstatus=ANY => Reconcile=Skipped
+		default: // Invalid Actuation status
+			return "", fmt.Errorf("invalid actuation status: %s", status.Actuation)
+		}
+
+	default: // Invalid Strategy
+		return "", fmt.Errorf("invalid actuation strategy: %s", status.Strategy)
+	}
 }
 
 // UpdateStatusToReflectActuation updates the latest computed kstatus to reflect

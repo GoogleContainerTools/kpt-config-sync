@@ -679,7 +679,7 @@ func TestDontDeleteAllNamespaces(t *testing.T) {
 
 	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace,
 		testwatcher.WatchPredicates(
-			testpredicates.RootSyncHasSyncError(status.EmptySourceErrorCode, ""),
+			testpredicates.RootSyncHasSyncError(status.EmptySourceErrorCode, "", nil),
 		)))
 
 	// Wait 10 seconds before checking the namespaces.

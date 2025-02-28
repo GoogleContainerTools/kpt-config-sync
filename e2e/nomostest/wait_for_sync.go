@@ -233,86 +233,47 @@ func (nt *NT) WatchForSync(
 }
 
 // WaitForRootSyncSourceError waits until the given error (code and message) is present on the RootSync resource
-func (nt *NT) WaitForRootSyncSourceError(rsName, code string, message string, opts ...WaitOption) {
+func (nt *NT) WaitForRootSyncSourceError(rsName, code string, message string) error {
 	nt.T.Helper()
-	Wait(nt.T, fmt.Sprintf("RootSync %s source error code %s", rsName, code), nt.DefaultWaitTimeout,
-		func() error {
-			nt.T.Helper()
-			rs := k8sobjects.RootSyncObjectV1Beta1(rsName)
-			if err := nt.KubeClient.Get(rs.GetName(), rs.GetNamespace(), rs); err != nil {
-				return err
-			}
-			// Only validate the rendering status, not the Syncing condition
-			// TODO: Remove this hack once async sync status updates are fixed to reflect only the latest commit.
-			return testpredicates.ValidateError(rs.Status.Source.Errors, code, message, nil)
-			// syncingCondition := rootsync.GetCondition(rs.Status.Conditions, v1beta1.RootSyncSyncing)
-			// return validateRootSyncError(rs.Status.Source.Errors, syncingCondition, code, message, []v1beta1.ErrorSource{v1beta1.SourceError})
-		},
-		opts...,
-	)
+	predicates := []testpredicates.Predicate{
+		testpredicates.RootSyncHasSourceError(code, message),
+		testpredicates.RootSyncHasErrorSourceRefs([]v1beta1.ErrorSource{v1beta1.SourceError}),
+	}
+	return nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rsName, configsync.ControllerNamespace,
+		testwatcher.WatchPredicates(predicates...))
 }
 
 // WaitForRootSyncSyncError waits until the given error (code and message) is present on the RootSync resource
-func (nt *NT) WaitForRootSyncSyncError(rsName, code string, message string, resources []v1beta1.ResourceRef, opts ...WaitOption) {
+func (nt *NT) WaitForRootSyncSyncError(rsName, code string, message string, resources []v1beta1.ResourceRef) error {
 	nt.T.Helper()
-	Wait(nt.T, fmt.Sprintf("RootSync %s sync error code %s", rsName, code), nt.DefaultWaitTimeout,
-		func() error {
-			nt.T.Helper()
-			rs := k8sobjects.RootSyncObjectV1Beta1(rsName)
-			err := nt.KubeClient.Get(rs.GetName(), rs.GetNamespace(), rs)
-			if err != nil {
-				return err
-			}
-			// Only validate the sync status, not the Syncing condition
-			// TODO: Remove this hack once async sync status updates are fixed to reflect only the latest commit.
-			return testpredicates.ValidateError(rs.Status.Sync.Errors, code, message, resources)
-			// syncingCondition := rootsync.GetCondition(rs.Status.Conditions, v1beta1.RootSyncSyncing)
-			// return validateRootSyncError(rs.Status.Sync.Errors, syncingCondition, code, message, []v1beta1.ErrorSource{v1beta1.SyncError})
-		},
-		opts...,
-	)
+	predicates := []testpredicates.Predicate{
+		testpredicates.RootSyncHasSyncError(code, message, resources),
+		testpredicates.RootSyncHasErrorSourceRefs([]v1beta1.ErrorSource{v1beta1.SyncError}),
+	}
+	return nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rsName, configsync.ControllerNamespace,
+		testwatcher.WatchPredicates(predicates...))
 }
 
 // WaitForRepoSyncSyncError waits until the given error (code and message) is present on the RepoSync resource
-func (nt *NT) WaitForRepoSyncSyncError(ns, rsName, code string, message string, resources []v1beta1.ResourceRef, opts ...WaitOption) {
+func (nt *NT) WaitForRepoSyncSyncError(ns, rsName, code string, message string, resources []v1beta1.ResourceRef) error {
 	nt.T.Helper()
-	Wait(nt.T, fmt.Sprintf("RepoSync %s/%s sync error code %s", ns, rsName, code), nt.DefaultWaitTimeout,
-		func() error {
-			nt.T.Helper()
-			rs := k8sobjects.RepoSyncObjectV1Beta1(ns, rsName)
-			err := nt.KubeClient.Get(rs.GetName(), rs.GetNamespace(), rs)
-			if err != nil {
-				return err
-			}
-			// Only validate the sync status, not the Syncing condition
-			// TODO: Remove this hack once async sync status updates are fixed to reflect only the latest commit.
-			return testpredicates.ValidateError(rs.Status.Sync.Errors, code, message, resources)
-			// syncingCondition := reposync.GetCondition(rs.Status.Conditions, v1beta1.RepoSyncSyncing)
-			// return validateRepoSyncError(rs.Status.Sync.Errors, syncingCondition, code, message, []v1beta1.ErrorSource{v1beta1.SyncError})
-		},
-		opts...,
-	)
+	predicates := []testpredicates.Predicate{
+		testpredicates.RepoSyncHasSyncError(code, message, resources),
+		testpredicates.RepoSyncHasErrorSourceRefs([]v1beta1.ErrorSource{v1beta1.SyncError}),
+	}
+	return nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), rsName, ns,
+		testwatcher.WatchPredicates(predicates...))
 }
 
 // WaitForRepoSyncSourceError waits until the given error (code and message) is present on the RepoSync resource
-func (nt *NT) WaitForRepoSyncSourceError(ns, rsName, code, message string, opts ...WaitOption) {
+func (nt *NT) WaitForRepoSyncSourceError(ns, rsName, code, message string) error {
 	nt.T.Helper()
-	Wait(nt.T, fmt.Sprintf("RepoSync %s/%s source error code %s", ns, rsName, code), nt.DefaultWaitTimeout,
-		func() error {
-			nt.T.Helper()
-			rs := k8sobjects.RepoSyncObjectV1Beta1(ns, rsName)
-			err := nt.KubeClient.Get(rs.GetName(), rs.GetNamespace(), rs)
-			if err != nil {
-				return err
-			}
-			// Only validate the rendering status, not the Syncing condition
-			// TODO: Remove this hack once async sync status updates are fixed to reflect only the latest commit.
-			return testpredicates.ValidateError(rs.Status.Source.Errors, code, message, nil)
-			// syncingCondition := reposync.GetCondition(rs.Status.Conditions, v1beta1.RepoSyncSyncing)
-			// return validateRepoSyncError(rs.Status.Source.Errors, syncingCondition, code, message, []v1beta1.ErrorSource{v1beta1.SourceError})
-		},
-		opts...,
-	)
+	predicates := []testpredicates.Predicate{
+		testpredicates.RepoSyncHasSourceError(code, message),
+		testpredicates.RepoSyncHasErrorSourceRefs([]v1beta1.ErrorSource{v1beta1.SourceError}),
+	}
+	return nt.Watcher.WatchObject(kinds.RepoSyncV1Beta1(), rsName, ns,
+		testwatcher.WatchPredicates(predicates...))
 }
 
 // WaitForRootSyncStalledError waits until the given Stalled error is present on the RootSync resource.
@@ -378,37 +339,3 @@ func (nt *NT) WaitForRepoSyncStalledError(rsNamespace, rsName, reason, message s
 			return nil
 		})
 }
-
-// TODO: Uncomment when Syncing condition consistency is fixed
-// func validateRootSyncError(statusErrs []v1beta1.ConfigSyncError, syncingCondition *v1beta1.RootSyncCondition, code string, message string, expectedErrorSourceRefs []v1beta1.ErrorSource) error {
-// 	if err := testpredicates.ValidateError(statusErrs, code, message); err != nil {
-// 		return err
-// 	}
-// 	if syncingCondition == nil {
-// 		return fmt.Errorf("syncingCondition is nil")
-// 	}
-// 	if syncingCondition.Status == metav1.ConditionTrue {
-// 		return fmt.Errorf("status.conditions['Syncing'].status is True, expected false")
-// 	}
-// 	if !reflect.DeepEqual(syncingCondition.ErrorSourceRefs, expectedErrorSourceRefs) {
-// 		return fmt.Errorf("status.conditions['Syncing'].errorSourceRefs is %v, expected %v", syncingCondition.ErrorSourceRefs, expectedErrorSourceRefs)
-// 	}
-// 	return nil
-// }
-
-// TODO: Uncomment when Syncing condition consistency is fixed
-// func validateRepoSyncError(statusErrs []v1beta1.ConfigSyncError, syncingCondition *v1beta1.RepoSyncCondition, code string, message string, expectedErrorSourceRefs []v1beta1.ErrorSource) error {
-// 	if err := testpredicates.ValidateError(statusErrs, code, message); err != nil {
-// 		return err
-// 	}
-// 	if syncingCondition == nil {
-// 		return fmt.Errorf("syncingCondition is nil")
-// 	}
-// 	if syncingCondition.Status == metav1.ConditionTrue {
-// 		return fmt.Errorf("status.conditions['Syncing'].status is True, expected false")
-// 	}
-// 	if !reflect.DeepEqual(syncingCondition.ErrorSourceRefs, expectedErrorSourceRefs) {
-// 		return fmt.Errorf("status.conditions['Syncing'].errorSourceRefs is %v, expected %v", syncingCondition.ErrorSourceRefs, expectedErrorSourceRefs)
-// 	}
-// 	return nil
-// }

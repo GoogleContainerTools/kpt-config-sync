@@ -133,7 +133,11 @@ func GetSourceHash(annotations map[string]string) string {
 	if len(annotations) == 0 {
 		return ""
 	}
-	sourceHash := annotations[SourceHashAnnotationKey]
+	return TruncateSourceHash(annotations[SourceHashAnnotationKey])
+}
+
+// TruncateSourceHash truncates the provided source hash after the first 7 characters.
+func TruncateSourceHash(sourceHash string) string {
 	if len(sourceHash) > 7 {
 		return sourceHash[0:7]
 	}

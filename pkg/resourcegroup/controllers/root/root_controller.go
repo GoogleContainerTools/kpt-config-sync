@@ -100,7 +100,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	// Skip ResourceGroup status updates if the status is disabled and has
 	// already been removed.
-	if isStatusDisabled(resgroup) {
+	if IsStatusDisabled(resgroup) {
 		r.Logger(ctx).V(3).Info("Skipping update event: ResourceGroup status disabled")
 		return r.reconcileDisabledResourceGroup(ctx, req, resgroup)
 	}
@@ -163,7 +163,8 @@ func (r *Reconciler) reconcileDisabledResourceGroup(ctx context.Context, req ctr
 	return r.reconcile(ctx, req.NamespacedName, []v1alpha1.ObjMetadata{}, true)
 }
 
-func isStatusDisabled(resgroup *v1alpha1.ResourceGroup) bool {
+// IsStatusDisabled returns whether the ResourceGroup has disabled status updates.
+func IsStatusDisabled(resgroup *v1alpha1.ResourceGroup) bool {
 	annotations := resgroup.GetAnnotations()
 	if annotations == nil {
 		return false
@@ -253,7 +254,7 @@ func (ResourceGroupPredicate) Update(e event.UpdateEvent) bool {
 
 	// If a ResourceGroup has the status disabled annotation and it status field
 	// is not empty, it should trigger a reconcile to remove reset the status.
-	if isStatusDisabled(rgNew) {
+	if IsStatusDisabled(rgNew) {
 		return rgNew.Status.Conditions != nil
 	}
 

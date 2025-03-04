@@ -113,6 +113,8 @@ type Cluster interface {
 	Create() error
 	// Delete the k8s cluster
 	Delete() error
+	// WaitForReady waits until the k8s cluster is ready to use
+	WaitForReady() error
 	// Connect to the k8s cluster (generate kubeconfig)
 	Connect() error
 	// Hash returns the cluster hash.
@@ -131,12 +133,18 @@ func upsertCluster(t testing.NTB, cluster Cluster, opts *ntopts.New) (bool, erro
 	}
 	if exists && *e2e.CreateClusters == e2e.CreateClustersLazy {
 		t.Logf("cluster %s already exists, adopting (create-clusters=%s)", opts.ClusterName, *e2e.CreateClusters)
+		if err := cluster.WaitForReady(); err != nil {
+			return false, err
+		}
 		return false, nil
 	}
 	createStart := time.Now()
 	t.Logf("Creating %s cluster %s at %s",
 		*e2e.TestCluster, opts.ClusterName, createStart.Format(time.RFC3339))
 	if err := cluster.Create(); err != nil {
+		return true, err
+	}
+	if err := cluster.WaitForReady(); err != nil {
 		return true, err
 	}
 	t.Logf("took %s to create %s cluster %s",

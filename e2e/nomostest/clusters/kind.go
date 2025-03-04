@@ -137,6 +137,12 @@ func (c *KindCluster) Delete() error {
 	return nil
 }
 
+// WaitForReady waits for the kind cluster to be ready
+func (c *KindCluster) WaitForReady() error {
+	// TODO: wait for ready
+	return nil
+}
+
 // Connect to the kind cluster
 func (c *KindCluster) Connect() error {
 	c.initProvider()

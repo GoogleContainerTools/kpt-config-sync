@@ -133,7 +133,7 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 	nt.Must(rootSyncGitRepo.CommitAndPush("Modify Anvil CR"))
 	secondCommitHash := rootSyncGitRepo.MustHash(nt.T)
 
-	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.UnknownKindErrorCode, "")
+	nt.Must(nt.Watcher.WatchForRootSyncSourceError(configsync.RootSyncName, status.UnknownKindErrorCode, ""))
 
 	rootSyncLabels, err = nomostest.MetricLabelsForRootSync(nt, rootSyncNN)
 	if err != nil {

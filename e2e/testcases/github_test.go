@@ -71,8 +71,8 @@ func TestGithubAppRootSync(t *testing.T) {
 		Auth: configsync.AuthNone,
 	}
 	nt.Must(nt.KubeClient.Apply(rs))
-	nt.WaitForRootSyncSourceError(rootSyncNN.Name, status.SourceErrorCode,
-		`Authentication failed`)
+	nt.Must(nt.Watcher.WatchForRootSyncSourceError(rootSyncNN.Name, status.SourceErrorCode,
+		`Authentication failed`))
 	// Verify reconciler-manager checks existence of Secret
 	nt.T.Log("The reconciler-manager should report a validation error for missing Secret")
 	emptySecretNN := types.NamespacedName{Name: "empty-secret", Namespace: rootSyncNN.Namespace}
@@ -169,8 +169,8 @@ func TestGithubAppRepoSync(t *testing.T) {
 		Auth: configsync.AuthNone,
 	}
 	nt.Must(nt.KubeClient.Apply(rs))
-	nt.WaitForRepoSyncSourceError(repoSyncNN.Namespace, repoSyncNN.Name, status.SourceErrorCode,
-		`Authentication failed`)
+	nt.Must(nt.Watcher.WatchForRepoSyncSourceError(repoSyncNN.Namespace, repoSyncNN.Name, status.SourceErrorCode,
+		`Authentication failed`))
 	// Verify reconciler-manager checks existence of Secret
 	nt.T.Log("The reconciler-manager should report a validation error for missing Secret")
 	emptySecretNN := types.NamespacedName{

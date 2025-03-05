@@ -35,6 +35,8 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
 	"kpt.dev/configsync/e2e/nomostest/testlogger"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/util/log"
 	watchutil "kpt.dev/configsync/pkg/util/watch"
@@ -402,4 +404,44 @@ func (w *Watcher) WatchForCurrentStatus(gvk schema.GroupVersionKind, name, names
 func (w *Watcher) WatchForNotFound(gvk schema.GroupVersionKind, name, namespace string, opts ...WatchOption) error {
 	opts = append(opts, WatchPredicates(testpredicates.ObjectNotFoundPredicate(w.scheme)))
 	return w.WatchObject(gvk, name, namespace, opts...)
+}
+
+// WatchForRootSyncSourceError waits until the given error (code and message) is present on the RootSync resource
+func (w *Watcher) WatchForRootSyncSourceError(rsName, code string, message string, opts ...WatchOption) error {
+	predicates := []testpredicates.Predicate{
+		testpredicates.RootSyncHasSourceError(code, message),
+		testpredicates.RootSyncHasErrorSourceRefs([]v1beta1.ErrorSource{v1beta1.SourceError}),
+	}
+	opts = append(opts, WatchPredicates(predicates...))
+	return w.WatchObject(kinds.RootSyncV1Beta1(), rsName, configsync.ControllerNamespace, opts...)
+}
+
+// WatchForRootSyncSyncError waits until the given error (code and message) is present on the RootSync resource
+func (w *Watcher) WatchForRootSyncSyncError(rsName, code string, message string, resources []v1beta1.ResourceRef, opts ...WatchOption) error {
+	predicates := []testpredicates.Predicate{
+		testpredicates.RootSyncHasSyncError(code, message, resources),
+		testpredicates.RootSyncHasErrorSourceRefs([]v1beta1.ErrorSource{v1beta1.SyncError}),
+	}
+	opts = append(opts, WatchPredicates(predicates...))
+	return w.WatchObject(kinds.RootSyncV1Beta1(), rsName, configsync.ControllerNamespace, opts...)
+}
+
+// WatchForRepoSyncSyncError waits until the given error (code and message) is present on the RepoSync resource
+func (w *Watcher) WatchForRepoSyncSyncError(ns, rsName, code string, message string, resources []v1beta1.ResourceRef, opts ...WatchOption) error {
+	predicates := []testpredicates.Predicate{
+		testpredicates.RepoSyncHasSyncError(code, message, resources),
+		testpredicates.RepoSyncHasErrorSourceRefs([]v1beta1.ErrorSource{v1beta1.SyncError}),
+	}
+	opts = append(opts, WatchPredicates(predicates...))
+	return w.WatchObject(kinds.RepoSyncV1Beta1(), rsName, ns, opts...)
+}
+
+// WatchForRepoSyncSourceError waits until the given error (code and message) is present on the RepoSync resource
+func (w *Watcher) WatchForRepoSyncSourceError(ns, rsName, code, message string, opts ...WatchOption) error {
+	predicates := []testpredicates.Predicate{
+		testpredicates.RepoSyncHasSourceError(code, message),
+		testpredicates.RepoSyncHasErrorSourceRefs([]v1beta1.ErrorSource{v1beta1.SourceError}),
+	}
+	opts = append(opts, WatchPredicates(predicates...))
+	return w.WatchObject(kinds.RepoSyncV1Beta1(), rsName, ns, opts...)
 }

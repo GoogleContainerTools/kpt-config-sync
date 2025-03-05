@@ -802,7 +802,7 @@ func TestClusterSelectorAnnotationConflicts(t *testing.T) {
 	})
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add both cluster selector annotations to a role binding"))
-	nt.WaitForRootSyncSourceError(configsync.RootSyncName, selectors.ClusterSelectorAnnotationConflictErrorCode, "")
+	nt.Must(nt.Watcher.WatchForRootSyncSourceError(configsync.RootSyncName, selectors.ClusterSelectorAnnotationConflictErrorCode, ""))
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	rootSyncLabels, err := nomostest.MetricLabelsForRootSync(nt, rootSyncNN)

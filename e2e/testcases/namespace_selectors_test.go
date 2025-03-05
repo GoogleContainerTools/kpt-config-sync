@@ -106,7 +106,7 @@ func TestNamespaceSelectorHierarchicalFormat(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/cm-shoestore.yaml", shoestoreCM))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add Namespaces, NamespaceSelectors and Namespace-scoped resources"))
 
-	nt.WaitForRootSyncSourceError(configsync.RootSyncName, selectors.InvalidSelectorErrorCode, "NamespaceSelector MUST NOT use the dynamic mode with the hierarchy source format")
+	nt.Must(nt.Watcher.WatchForRootSyncSourceError(configsync.RootSyncName, selectors.InvalidSelectorErrorCode, "NamespaceSelector MUST NOT use the dynamic mode with the hierarchy source format"))
 
 	nt.T.Log("Update NamespaceSelector to use static mode with the hierarchy format")
 	bookstoreNSS.Spec.Mode = v1.NSSelectorStaticMode

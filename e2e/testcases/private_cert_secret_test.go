@@ -97,7 +97,7 @@ func TestCACertSecretRefV1Alpha1(t *testing.T) {
 	rootSyncHTTPS := "https://test-git-server.config-management-system-test/git/config-management-system/root-sync"
 	nt.MustMergePatch(rootSync, syncURLHTTPSPatch(rootSyncHTTPS))
 	// RootSync should fail without caCertSecret
-	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "server certificate verification failed")
+	nt.Must(nt.Watcher.WatchForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "server certificate verification failed"))
 	err = nt.Validate(rootSyncReconcilerName, configsync.ControllerNamespace, &appsv1.Deployment{}, testpredicates.DeploymentHasEnvVar(reconcilermanager.GitSync, controllers.GitSyncRepo, rootSyncHTTPS))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -120,7 +120,7 @@ func TestCACertSecretRefV1Alpha1(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(repoSyncID.Namespace, repoSyncID.Name), repoSyncBackend))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Update backend RepoSync use HTTPS"))
 	// RepoSync should fail without caCertSecret
-	nt.WaitForRepoSyncSourceError(repoSyncID.Namespace, repoSyncID.Name, status.SourceErrorCode, "server certificate verification failed")
+	nt.Must(nt.Watcher.WatchForRepoSyncSourceError(repoSyncID.Namespace, repoSyncID.Name, status.SourceErrorCode, "server certificate verification failed"))
 	err = nt.Validate(repoSyncReconcilerName, configsync.ControllerNamespace, &appsv1.Deployment{}, testpredicates.DeploymentHasEnvVar(reconcilermanager.GitSync, controllers.GitSyncRepo, repoSyncHTTPS))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -139,7 +139,7 @@ func TestCACertSecretRefV1Alpha1(t *testing.T) {
 	// Unset caCertSecret for RootSync
 	nt.MustMergePatch(rootSync, caCertSecretPatch(configsync.GitSource, ""))
 	// RootSync should fail without caCertSecret
-	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "server certificate verification failed")
+	nt.Must(nt.Watcher.WatchForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "server certificate verification failed"))
 	err = nt.Validate(rootSyncReconcilerName, configsync.ControllerNamespace, &appsv1.Deployment{}, testpredicates.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -159,7 +159,7 @@ func TestCACertSecretRefV1Alpha1(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(repoSyncID.Namespace, repoSyncID.Name), repoSyncBackend))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Update backend RepoSync unset caCertSecret"))
 	// RepoSync should fail without caCertSecret
-	nt.WaitForRepoSyncSourceError(repoSyncID.Namespace, repoSyncID.Name, status.SourceErrorCode, "server certificate verification failed")
+	nt.Must(nt.Watcher.WatchForRepoSyncSourceError(repoSyncID.Namespace, repoSyncID.Name, status.SourceErrorCode, "server certificate verification failed"))
 	err = nt.Validate(repoSyncReconcilerName, configsync.ControllerNamespace, &appsv1.Deployment{}, testpredicates.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -211,7 +211,7 @@ func TestCACertSecretRefV1Beta1(t *testing.T) {
 	rootSyncHTTPS := "https://test-git-server.config-management-system-test/git/config-management-system/root-sync"
 	nt.MustMergePatch(rootSync, syncURLHTTPSPatch(rootSyncHTTPS))
 	// RootSync should fail without caCertSecret
-	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "server certificate verification failed")
+	nt.Must(nt.Watcher.WatchForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "server certificate verification failed"))
 	err = nt.Validate(rootSyncReconcilerName, configsync.ControllerNamespace, &appsv1.Deployment{}, testpredicates.DeploymentHasEnvVar(reconcilermanager.GitSync, controllers.GitSyncRepo, rootSyncHTTPS))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -233,7 +233,7 @@ func TestCACertSecretRefV1Beta1(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(repoSyncID.Namespace, repoSyncID.Name), repoSyncBackend))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Update backend RepoSync use HTTPS"))
 	// RepoSync should fail without caCertSecret
-	nt.WaitForRepoSyncSourceError(repoSyncID.Namespace, repoSyncID.Name, status.SourceErrorCode, "server certificate verification failed")
+	nt.Must(nt.Watcher.WatchForRepoSyncSourceError(repoSyncID.Namespace, repoSyncID.Name, status.SourceErrorCode, "server certificate verification failed"))
 	err = nt.Validate(reconcilerName, configsync.ControllerNamespace, &appsv1.Deployment{}, testpredicates.DeploymentHasEnvVar(reconcilermanager.GitSync, controllers.GitSyncRepo, repoSyncHTTPS))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -258,7 +258,7 @@ func TestCACertSecretRefV1Beta1(t *testing.T) {
 	// Unset caCertSecret for RootSync
 	nt.MustMergePatch(rootSync, caCertSecretPatch(configsync.GitSource, ""))
 	// RootSync should fail without caCertSecret
-	nt.WaitForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "server certificate verification failed")
+	nt.Must(nt.Watcher.WatchForRootSyncSourceError(configsync.RootSyncName, status.SourceErrorCode, "server certificate verification failed"))
 	err = nt.Validate(rootSyncReconcilerName, configsync.ControllerNamespace, &appsv1.Deployment{}, testpredicates.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -278,7 +278,7 @@ func TestCACertSecretRefV1Beta1(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(repoSyncID.Namespace, repoSyncID.Name), repoSyncBackend))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Update backend RepoSync unset caCertSecret"))
 	// RepoSync should fail without caCertSecret
-	nt.WaitForRepoSyncSourceError(repoSyncID.Namespace, repoSyncID.Name, status.SourceErrorCode, "server certificate verification failed")
+	nt.Must(nt.Watcher.WatchForRepoSyncSourceError(repoSyncID.Namespace, repoSyncID.Name, status.SourceErrorCode, "server certificate verification failed"))
 	err = nt.Validate(reconcilerName, configsync.ControllerNamespace, &appsv1.Deployment{}, testpredicates.DeploymentMissingEnvVar(reconcilermanager.GitSync, key))
 	if err != nil {
 		nt.T.Fatal(err)
@@ -402,7 +402,7 @@ func TestOCICACertSecretRefRootRepo(t *testing.T) {
 	rs.Spec.Oci.CACertSecretRef = nil
 	nt.Must(nt.KubeClient.Apply(rs))
 
-	nt.WaitForRootSyncSourceError(rootSyncID.Name, status.SourceErrorCode, "tls: failed to verify certificate: x509: certificate signed by unknown authority")
+	nt.Must(nt.Watcher.WatchForRootSyncSourceError(rootSyncID.Name, status.SourceErrorCode, "tls: failed to verify certificate: x509: certificate signed by unknown authority"))
 
 	nt.T.Log("Add caCertSecretRef to RootSync")
 	nt.MustMergePatch(rs, caCertSecretPatch(configsync.OciSource, caCertSecret))
@@ -440,7 +440,7 @@ func TestOCICACertSecretRefNamespaceRepo(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(repoSyncID.Namespace, repoSyncID.Name), rs))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Set the RepoSync to use OCI without providing CA cert"))
 
-	nt.WaitForRepoSyncSourceError(repoSyncID.Namespace, repoSyncID.Name, status.SourceErrorCode, "tls: failed to verify certificate: x509: certificate signed by unknown authority")
+	nt.Must(nt.Watcher.WatchForRepoSyncSourceError(repoSyncID.Namespace, repoSyncID.Name, status.SourceErrorCode, "tls: failed to verify certificate: x509: certificate signed by unknown authority"))
 
 	nt.T.Log("Add caCertSecretRef to RepoSync")
 	rs.Spec.Oci.CACertSecretRef = &v1beta1.SecretReference{Name: caCertSecret}
@@ -488,7 +488,7 @@ func TestHelmCACertSecretRefRootRepo(t *testing.T) {
 	rs.Spec.Helm.Period = metav1.Duration{Duration: 15 * time.Second}
 	nt.Must(nt.KubeClient.Apply(rs))
 
-	nt.WaitForRootSyncSourceError(rootSyncID.Name, status.SourceErrorCode, "tls: failed to verify certificate: x509: certificate signed by unknown authority")
+	nt.Must(nt.Watcher.WatchForRootSyncSourceError(rootSyncID.Name, status.SourceErrorCode, "tls: failed to verify certificate: x509: certificate signed by unknown authority"))
 
 	nt.T.Log("Add caCertSecretRef to RootSync")
 	nt.MustMergePatch(rs, caCertSecretPatch(configsync.HelmSource, caCertSecret))
@@ -529,7 +529,7 @@ func TestHelmCACertSecretRefNamespaceRepo(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(repoSyncKey.Namespace, repoSyncKey.Name), rs))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Set the RepoSync to use Helm without providing CA cert"))
 
-	nt.WaitForRepoSyncSourceError(repoSyncKey.Namespace, repoSyncKey.Name, status.SourceErrorCode, "tls: failed to verify certificate: x509: certificate signed by unknown authority")
+	nt.Must(nt.Watcher.WatchForRepoSyncSourceError(repoSyncKey.Namespace, repoSyncKey.Name, status.SourceErrorCode, "tls: failed to verify certificate: x509: certificate signed by unknown authority"))
 
 	nt.T.Log("Add caCertSecretRef to RepoSync")
 	rs.Spec.Helm.CACertSecretRef = &v1beta1.SecretReference{Name: caCertSecret}

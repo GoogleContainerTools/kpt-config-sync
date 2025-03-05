@@ -482,7 +482,7 @@ func TestHelmNamespaceRepo(t *testing.T) {
 	rs := nt.RepoSyncObjectHelm(repoSyncNN, chart.HelmChartID)
 	nt.Must(rootSyncGitRepo.Add(nomostest.StructuredNSPath(repoSyncNN.Namespace, repoSyncNN.Name), rs))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Update RepoSync to sync from a Helm Chart with cluster-scoped resources"))
-	nt.WaitForRepoSyncSourceError(repoSyncNN.Namespace, repoSyncNN.Name, nonhierarchical.BadScopeErrCode, "must be Namespace-scoped type")
+	nt.Must(nt.Watcher.WatchForRepoSyncSourceError(repoSyncNN.Namespace, repoSyncNN.Name, nonhierarchical.BadScopeErrCode, "must be Namespace-scoped type"))
 
 	nt.T.Log("Update the helm chart with only a namespace-scope resource")
 	validChart, err := nt.BuildAndPushHelmPackage(repoSyncNN,

@@ -74,7 +74,7 @@ func TestNamespaceStrategy(t *testing.T) {
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add cm1"))
 
 	// check for error
-	nt.WaitForRootSyncSyncError(rootSyncNN.Name, applier.ApplierErrorCode,
+	nt.Must(nt.Watcher.WatchForRootSyncSyncError(rootSyncNN.Name, applier.ApplierErrorCode,
 		"failed to apply ConfigMap, foo-implicit/cm1: namespaces \"foo-implicit\" not found", []v1beta1.ResourceRef{{
 			SourcePath: "acme/cm1.yaml",
 			Name:       "cm1",
@@ -84,7 +84,7 @@ func TestNamespaceStrategy(t *testing.T) {
 				Version: "v1",
 				Kind:    "ConfigMap",
 			},
-		}})
+		}}))
 
 	// switch the mode to implicit
 	nt.MustMergePatch(rootSync, `{"spec": {"override": {"namespaceStrategy": "implicit"}}}`)
@@ -127,8 +127,8 @@ func TestNamespaceStrategy(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Remove("acme/namespace-foo.yaml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Prune namespace-foo"))
 	// check for error
-	nt.WaitForRootSyncSyncError(rootSyncNN.Name, applier.ApplierErrorCode,
-		"skipped delete of Namespace, /foo-implicit: namespace still in use: foo-implicit", nil)
+	nt.Must(nt.Watcher.WatchForRootSyncSyncError(rootSyncNN.Name, applier.ApplierErrorCode,
+		"skipped delete of Namespace, /foo-implicit: namespace still in use: foo-implicit", nil))
 	// prune the ConfigMap
 	nt.Must(rootSyncGitRepo.Remove("acme/cm1.yaml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Prune cm1"))
@@ -220,10 +220,10 @@ func TestNamespaceStrategyMultipleRootSyncs(t *testing.T) {
 	nt.Must(rootSyncYGitRepo.Add("acme/cm-y.yaml", cmY))
 	nt.Must(rootSyncYGitRepo.CommitAndPush("Add cm-y"))
 	// check for error
-	nt.WaitForRootSyncSyncError(rootSyncX.Name, applier.ApplierErrorCode,
-		"failed to apply ConfigMap, namespace-a/cm-x: namespaces \"namespace-a\" not found", nil)
-	nt.WaitForRootSyncSyncError(rootSyncY.Name, applier.ApplierErrorCode,
-		"failed to apply ConfigMap, namespace-a/cm-y: namespaces \"namespace-a\" not found", nil)
+	nt.Must(nt.Watcher.WatchForRootSyncSyncError(rootSyncX.Name, applier.ApplierErrorCode,
+		"failed to apply ConfigMap, namespace-a/cm-x: namespaces \"namespace-a\" not found", nil))
+	nt.Must(nt.Watcher.WatchForRootSyncSyncError(rootSyncY.Name, applier.ApplierErrorCode,
+		"failed to apply ConfigMap, namespace-a/cm-y: namespaces \"namespace-a\" not found", nil))
 	// declare the namespace in sync-a
 	nt.Must(rootSyncAGitRepo.Add("acme/namespace-a.yaml", namespaceA))
 	nt.Must(rootSyncAGitRepo.CommitAndPush("Add namespace-a"))

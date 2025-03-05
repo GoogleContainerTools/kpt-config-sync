@@ -42,7 +42,7 @@ github.com/Azure/go-ansiterm/winterm
 ## explicit; go 1.18
 github.com/BurntSushi/toml
 github.com/BurntSushi/toml/internal
-# github.com/GoogleContainerTools/kpt v1.0.0-beta.46
+# github.com/GoogleContainerTools/kpt v1.0.0-beta.46 => ./internal/third_party/github.com/GoogleContainerTools/kpt
 ## explicit; go 1.21
 github.com/GoogleContainerTools/kpt/internal/errors
 github.com/GoogleContainerTools/kpt/internal/pkg
@@ -1770,3 +1770,4 @@ sigs.k8s.io/structured-merge-diff/v4/value
 sigs.k8s.io/yaml
 sigs.k8s.io/yaml/goyaml.v2
 sigs.k8s.io/yaml/goyaml.v3
+# github.com/GoogleContainerTools/kpt => ./internal/third_party/github.com/GoogleContainerTools/kpt

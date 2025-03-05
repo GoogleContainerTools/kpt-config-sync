@@ -22,7 +22,7 @@ helmCharts:
   releaseName: my-wordpress
   namespace: wordpress
   valuesInline:
-    existingSecret: my-wordpress
+    wordpressPassword: abcdefg
     mariadb:
       auth:
         rootPassword: abcdefg

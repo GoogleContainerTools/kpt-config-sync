@@ -229,6 +229,17 @@ func (nt *NT) WatchForSync(
 		return fmt.Errorf("waiting for sync: %w", err)
 	}
 	nt.T.Logf("%s %s/%s is synced", gvk.Kind, namespace, name)
+	rgPredicates := []testpredicates.Predicate{
+		// Wait until status.observedGeneration matches metadata.generation
+		testpredicates.HasObservedLatestGeneration(nt.Scheme),
+		// Wait until metadata.deletionTimestamp is missing, and conditions do not iniclude Reconciling=True or Stalled=True
+		testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
+		// Wait until all resourceStatuses are consistent with spec and current/reconciled
+		resourceGroupHasReconciled(expectedCommit),
+	}
+	if err := nt.Watcher.WatchObject(kinds.ResourceGroup(), name, namespace, testwatcher.WatchPredicates(rgPredicates...)); err != nil {
+		return fmt.Errorf("waiting for ResourceGroup: %w", err)
+	}
 	return nil
 }
 

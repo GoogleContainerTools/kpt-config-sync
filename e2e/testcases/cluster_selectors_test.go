@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -131,13 +130,23 @@ func TestTargetingDifferentResourceQuotasToDifferentClusters(t *testing.T) {
 
 	renameCluster(nt, configMapName, testClusterName)
 	nt.Must(nt.WatchForAllSyncs())
-	require.NoError(nt.T,
+
+	// Wait for the ResourceQuota to be synced and reconciled to this cluster, now that the cluster name matches the cluster selector.
+	// We can't just immediately validate this, because there's no RSync status fields that we can use to validate that the cluster name change has been detected by the reconciler or that syncing happened afterwards.
+	// This is because the source commit didn't change, only the cluster name did.
+	// TODO: Add status fields to validate a cluster name change has been detected and synced (b/401069210)
+	nt.Must(
 		nt.Watcher.WatchObject(kinds.ResourceQuota(), rqLegacy.Name, rqLegacy.Namespace,
 			testwatcher.WatchPredicates(resourceQuotaHasHardPods(nt, testPodsQuota))))
 
 	renameCluster(nt, configMapName, prodClusterName)
 	nt.Must(nt.WatchForAllSyncs())
-	require.NoError(nt.T,
+
+	// Wait for the ResourceQuota to be synced and reconciled to this cluster, now that the cluster name matches the cluster selector.
+	// We can't just immediately validate this, because there's no RSync status fields that we can use to validate that the cluster name change has been detected by the reconciler or that syncing happened afterwards.
+	// This is because the source commit didn't change, only the cluster name did.
+	// TODO: Add status fields to validate a cluster name change has been detected and synced (b/401069210)
+	nt.Must(
 		nt.Watcher.WatchObject(kinds.ResourceQuota(), rqInline.Name, rqInline.Namespace,
 			testwatcher.WatchPredicates(resourceQuotaHasHardPods(nt, prodPodsQuota))))
 
@@ -183,6 +192,11 @@ func TestClusterSelectorOnObjects(t *testing.T) {
 
 	renameCluster(nt, configMapName, testClusterName)
 	nt.Must(nt.WatchForAllSyncs())
+
+	// Wait for the ResourceQuota to be synced and reconciled to this cluster, now that the cluster name matches the cluster selector.
+	// We can't just immediately validate this, because there's no RSync status fields that we can use to validate that the cluster name change has been detected by the reconciler or that syncing happened afterwards.
+	// This is because the source commit didn't change, only the cluster name did.
+	// TODO: Add status fields to validate a cluster name change has been detected and synced (b/401069210)
 	nt.Must(nt.Watcher.WatchForCurrentStatus(kinds.RoleBinding(), rb.Name, rb.Namespace))
 
 	nt.T.Log("Revert cluster selector to match prod cluster")
@@ -194,6 +208,11 @@ func TestClusterSelectorOnObjects(t *testing.T) {
 
 	renameCluster(nt, configMapName, prodClusterName)
 	nt.Must(nt.WatchForAllSyncs())
+
+	// Wait for the RoleBinding to be synced and reconciled to this cluster, now that the cluster name matches the cluster selector.
+	// We can't just immediately validate this, because there's no RSync status fields that we can use to validate that the cluster name change has been detected by the reconciler or that syncing happened afterwards.
+	// This is because the source commit didn't change, only the cluster name did.
+	// TODO: Add status fields to validate a cluster name change has been detected and synced (b/401069210)
 	nt.Must(nt.Watcher.WatchForCurrentStatus(kinds.RoleBinding(), rb.Name, rb.Namespace))
 
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
@@ -255,6 +274,11 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 
 	renameCluster(nt, configMapName, testClusterName)
 	nt.Must(nt.WatchForAllSyncs())
+
+	// Wait for the Namespace to be synced and reconciled to this cluster, now that the cluster name matches the cluster selector.
+	// We can't just immediately validate this, because there's no RSync status fields that we can use to validate that the cluster name change has been detected by the reconciler or that syncing happened afterwards.
+	// This is because the source commit didn't change, only the cluster name did.
+	// TODO: Add status fields to validate a cluster name change has been detected and synced (b/401069210)
 	nt.Must(t, nt.Watcher.WatchForCurrentStatus(kinds.Namespace(), namespace.Name, namespace.Namespace))
 	nt.Must(t, nt.Watcher.WatchForNotFound(kinds.RoleBinding(), rb.Name, rb.Namespace))
 
@@ -298,6 +322,11 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 
 	renameCluster(nt, configMapName, prodClusterName)
 	nt.Must(nt.WatchForAllSyncs())
+
+	// Wait for the Namespace to be synced and reconciled to this cluster, now that the cluster name matches the cluster selector.
+	// We can't just immediately validate this, because there's no RSync status fields that we can use to validate that the cluster name change has been detected by the reconciler or that syncing happened afterwards.
+	// This is because the source commit didn't change, only the cluster name did.
+	// TODO: Add status fields to validate a cluster name change has been detected and synced (b/401069210)
 	nt.Must(t, nt.Watcher.WatchForCurrentStatus(kinds.Namespace(), namespace.Name, namespace.Namespace))
 	nt.Must(t, nt.Watcher.WatchForCurrentStatus(kinds.RoleBinding(), rb.Name, rb.Namespace))
 
@@ -528,6 +557,11 @@ func TestInlineClusterSelectorFormat(t *testing.T) {
 
 	renameCluster(nt, configMapName, prodClusterName)
 	nt.Must(nt.WatchForAllSyncs())
+
+	// Wait for the RoleBinding to be synced and reconciled to this cluster, now that the cluster name matches the cluster selector.
+	// We can't just immediately validate this, because there's no RSync status fields that we can use to validate that the cluster name change has been detected by the reconciler or that syncing happened afterwards.
+	// This is because the source commit didn't change, only the cluster name did.
+	// TODO: Add status fields to validate a cluster name change has been detected and synced (b/401069210)
 	nt.Must(t, nt.Watcher.WatchForCurrentStatus(kinds.RoleBinding(), rb.Name, rb.Namespace))
 
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rb)

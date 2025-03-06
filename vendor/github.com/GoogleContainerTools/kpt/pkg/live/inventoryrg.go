@@ -266,10 +266,10 @@ func (icm *InventoryResourceGroup) Apply(dc dynamic.Interface, mapper meta.RESTM
 	var appliedObj *unstructured.Unstructured
 
 	if clusterObj == nil {
-		// Create cluster inventory object, if it does not exist on cluster.
+		klog.V(1).Infof("Apply: Creating inventory object: %s/%s\n", invInfo.GetNamespace(), invInfo.GetName())
 		appliedObj, err = namespacedClient.Create(context.TODO(), invInfo, metav1.CreateOptions{})
 	} else {
-		// Update the cluster inventory object instead.
+		klog.V(1).Infof("Apply: Updating inventory object: %s/%s\n", invInfo.GetNamespace(), invInfo.GetName())
 		appliedObj, err = namespacedClient.Update(context.TODO(), invInfo, metav1.UpdateOptions{})
 	}
 	if err != nil {
@@ -288,6 +288,8 @@ func (icm *InventoryResourceGroup) Apply(dc dynamic.Interface, mapper meta.RESTM
 		if err := deepCopyField(invInfo, appliedObj, "status", "observedGeneration"); err != nil {
 			return err
 		}
+		klog.V(1).Infof("Apply: Updating inventory object status (observedGeneration: %d): %s/%s\n",
+			appliedObj.GetGeneration(), appliedObj.GetNamespace(), appliedObj.GetName())
 		_, err := namespacedClient.UpdateStatus(context.TODO(), appliedObj, metav1.UpdateOptions{})
 		if err != nil {
 			return err
@@ -306,6 +308,7 @@ func (icm *InventoryResourceGroup) ApplyWithPrune(dc dynamic.Interface, mapper m
 	// Update the cluster inventory object.
 	// Since the ResourceGroup CRD specifies the status as a sub-resource, this
 	// will not update the status.
+	klog.V(1).Infof("ApplyWithPrune: Updating inventory object: %s/%s\n", invInfo.GetNamespace(), invInfo.GetName())
 	appliedObj, err := namespacedClient.Update(context.TODO(), invInfo, metav1.UpdateOptions{})
 	if err != nil {
 		return err
@@ -323,6 +326,8 @@ func (icm *InventoryResourceGroup) ApplyWithPrune(dc dynamic.Interface, mapper m
 		if err := deepCopyField(invInfo, appliedObj, "status", "observedGeneration"); err != nil {
 			return err
 		}
+		klog.V(1).Infof("ApplyWithPrune: Updating inventory object status (observedGeneration: %d): %s/%s\n",
+			appliedObj.GetGeneration(), appliedObj.GetNamespace(), appliedObj.GetName())
 		_, err := namespacedClient.UpdateStatus(context.TODO(), appliedObj, metav1.UpdateOptions{})
 		if err != nil {
 			return err

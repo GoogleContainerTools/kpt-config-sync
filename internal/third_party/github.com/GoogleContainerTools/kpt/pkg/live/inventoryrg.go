@@ -276,13 +276,25 @@ func (icm *InventoryResourceGroup) Apply(dc dynamic.Interface, mapper meta.RESTM
 		return err
 	}
 
-	// Update status.
+	// Update status, if status policy allows it.
 	if statusPolicy == inventory.StatusPolicyAll {
-		invInfo.SetResourceVersion(appliedObj.GetResourceVersion())
-		_, err = namespacedClient.UpdateStatus(context.TODO(), invInfo, metav1.UpdateOptions{})
+		// Use the appliedObj, instead of the invInfo, to avoid removing status
+		// fields managed by other controllers and webhooks.
+		// Only copy status fields populated by GetObject, to avoid overwriting
+		// other status fields modified by other controllers.
+		if err := deepCopyField(invInfo, appliedObj, "status", "resourceStatuses"); err != nil {
+			return err
+		}
+		if err := deepCopyField(invInfo, appliedObj, "status", "observedGeneration"); err != nil {
+			return err
+		}
+		_, err := namespacedClient.UpdateStatus(context.TODO(), appliedObj, metav1.UpdateOptions{})
+		if err != nil {
+			return err
+		}
 	}
 
-	return err
+	return nil
 }
 
 func (icm *InventoryResourceGroup) ApplyWithPrune(dc dynamic.Interface, mapper meta.RESTMapper, statusPolicy inventory.StatusPolicy, _ object.ObjMetadataSet) error {
@@ -300,28 +312,34 @@ func (icm *InventoryResourceGroup) ApplyWithPrune(dc dynamic.Interface, mapper m
 	}
 
 	// Update status, if status policy allows it.
-	// To avoid losing modifications performed by mutating webhooks, copy the
-	// status from the desired state to the latest state after the previous update.
-	// This also ensures that the ResourceVersion matches the latest state, to
-	// avoid the update being rejected by the server.
 	if statusPolicy == inventory.StatusPolicyAll {
-		status, found, err := unstructured.NestedMap(invInfo.UnstructuredContent(), "status")
-		if err != nil {
+		// Use the appliedObj, instead of the invInfo, to avoid removing status
+		// fields managed by other controllers and webhooks.
+		// Only copy status fields populated by GetObject, to avoid overwriting
+		// other status fields modified by other controllers.
+		if err := deepCopyField(invInfo, appliedObj, "status", "resourceStatuses"); err != nil {
 			return err
 		}
-		if found {
-			err = unstructured.SetNestedField(appliedObj.UnstructuredContent(), status, "status")
-			if err != nil {
-				return err
-			}
-			_, err = namespacedClient.UpdateStatus(context.TODO(), appliedObj, metav1.UpdateOptions{})
-			if err != nil {
-				return err
-			}
+		if err := deepCopyField(invInfo, appliedObj, "status", "observedGeneration"); err != nil {
+			return err
+		}
+		_, err := namespacedClient.UpdateStatus(context.TODO(), appliedObj, metav1.UpdateOptions{})
+		if err != nil {
+			return err
 		}
 	}
 
 	return nil
+}
+
+// deepCopyField replaces the specified field in the "to" object with a deep
+// copy of the same field in the "from" object.
+func deepCopyField(from, to *unstructured.Unstructured, fields ...string) error {
+	status, _, err := unstructured.NestedFieldCopy(from.Object, fields...)
+	if err != nil {
+		return err
+	}
+	return unstructured.SetNestedField(to.Object, status, fields...)
 }
 
 func (icm *InventoryResourceGroup) getNamespacedClient(dc dynamic.Interface, mapper meta.RESTMapper) (*unstructured.Unstructured, dynamic.ResourceInterface, error) {

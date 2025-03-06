@@ -320,16 +320,26 @@ func (r *reconciler) computeStatus(
 		}
 
 		// Keep the existing object statuses written by cli-utils
-		aStatus, exists := actuationStatuses[resStatus.ObjMetadata]
-		if exists {
-			resStatus.Actuation = aStatus.Actuation
+		if aStatus, exists := actuationStatuses[resStatus.ObjMetadata]; exists {
 			resStatus.Strategy = aStatus.Strategy
+			resStatus.Actuation = aStatus.Actuation
 			resStatus.Reconcile = aStatus.Reconcile
+
+			// Update the reconcile status based on the Strategy & Actuation
+			// from the last apply attempt, and the newly computed kstatus.
+			if reconcile, err := UpdateReconcileStatusToReflectKstatus(resStatus); err != nil {
+				// Keep existing Reconcile status
+				log.Error(err, "Resource object status unknown: failed to compute")
+			} else {
+				resStatus.Reconcile = reconcile
+			}
 
 			// Update the status field to reflect source -> spec -> status,
 			// not just spec -> status.
 			resStatus.Status = UpdateStatusToReflectActuation(resStatus)
 		}
+
+		log.V(5).Info("Resource object status computed", "status", resStatus)
 
 		// add the resource status into resgroup
 		statuses = append(statuses, resStatus)
@@ -340,6 +350,86 @@ func (r *reconciler) computeStatus(
 		metrics.RecordPipelineError(ctx, nn, readinessComponent, hasErr)
 	}
 	return statuses
+}
+
+// UpdateReconcileStatusToReflectKstatus uses the current Strategy and Actuation
+// status from the applier and the newly computed kstatus to compute the
+// Reconcile status. Returns an error if one of the inputs is invalid.
+func UpdateReconcileStatusToReflectKstatus(status v1alpha1.ResourceStatus) (v1alpha1.Reconcile, error) {
+	switch status.Strategy {
+	case v1alpha1.Apply:
+		switch status.Actuation {
+		case v1alpha1.ActuationSucceeded:
+			return computeReconcileStatusForSuccessfulApply(status.Status, status.Reconcile)
+		case v1alpha1.ActuationPending:
+			return v1alpha1.ReconcilePending, nil
+		case v1alpha1.ActuationSkipped:
+			return v1alpha1.ReconcileSkipped, nil
+		case v1alpha1.ActuationFailed:
+			return v1alpha1.ReconcileSkipped, nil
+		default:
+			return "", fmt.Errorf("invalid actuation status: %s", status.Actuation)
+		}
+	case v1alpha1.Delete:
+		switch status.Actuation {
+		case v1alpha1.ActuationSucceeded:
+			return computeReconcileStatusForSuccessfulDelete(status.Status, status.Reconcile)
+		case v1alpha1.ActuationPending:
+			return v1alpha1.ReconcilePending, nil
+		case v1alpha1.ActuationSkipped:
+			return v1alpha1.ReconcileSkipped, nil
+		case v1alpha1.ActuationFailed:
+			return v1alpha1.ReconcileSkipped, nil
+		default:
+			return "", fmt.Errorf("invalid actuation status: %s", status.Actuation)
+		}
+	default:
+		return "", fmt.Errorf("invalid actuation strategy: %s", status.Strategy)
+	}
+}
+
+// computeReconcileStatusForSuccessfulApply computes the Reconcile status from
+// the Status (aka kstatus), assuming Strategy=Apply + Actuation=Succeeded.
+// Returns an error if the input Status is invalid.
+func computeReconcileStatusForSuccessfulApply(newStatus v1alpha1.Status, oldReconcile v1alpha1.Reconcile) (v1alpha1.Reconcile, error) {
+	switch newStatus {
+	case v1alpha1.Current:
+		return v1alpha1.ReconcileSucceeded, nil
+	case v1alpha1.InProgress:
+		return v1alpha1.ReconcilePending, nil
+	case v1alpha1.Failed:
+		return v1alpha1.ReconcileFailed, nil
+	case v1alpha1.Terminating:
+		return v1alpha1.ReconcileFailed, nil // TODO: Should this be Pending?
+	case v1alpha1.NotFound:
+		return v1alpha1.ReconcileFailed, nil // TODO: Should this be Pending?
+	case v1alpha1.Unknown:
+		return oldReconcile, nil
+	default:
+		return "", fmt.Errorf("invalid kstatus: %s", newStatus)
+	}
+}
+
+// computeReconcileStatusForSuccessfulDelete computes the Reconcile status from
+// the Status (aka kstatus), assuming Strategy=Delete + Actuation=Succeeded.
+// Returns an error if the input Status is invalid.
+func computeReconcileStatusForSuccessfulDelete(newStatus v1alpha1.Status, oldReconcile v1alpha1.Reconcile) (v1alpha1.Reconcile, error) {
+	switch newStatus {
+	case v1alpha1.Current:
+		return v1alpha1.ReconcileFailed, nil // TODO: Should this be Pending?
+	case v1alpha1.InProgress:
+		return v1alpha1.ReconcileFailed, nil // TODO: Should this be Pending?
+	case v1alpha1.Failed:
+		return v1alpha1.ReconcileFailed, nil // TODO: Should this be Pending?
+	case v1alpha1.Terminating:
+		return v1alpha1.ReconcilePending, nil
+	case v1alpha1.NotFound:
+		return v1alpha1.ReconcileSucceeded, nil
+	case v1alpha1.Unknown:
+		return oldReconcile, nil
+	default:
+		return "", fmt.Errorf("invalid kstatus: %s", newStatus)
+	}
 }
 
 // UpdateStatusToReflectActuation updates the latest computed kstatus to reflect

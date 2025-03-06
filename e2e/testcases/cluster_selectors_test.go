@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -127,35 +126,27 @@ func TestTargetingDifferentResourceQuotasToDifferentClusters(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/eng/frontend/quota-legacy.yaml", rqLegacy))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add a valid cluster selector annotation to a resource quota"))
 	nt.Must(nt.WatchForAllSyncs())
-	if err := nt.Validate(resourceQuotaName, frontendNamespace, &corev1.ResourceQuota{}, resourceQuotaHasHardPods(nt, prodPodsQuota)); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(resourceQuotaName, frontendNamespace, &corev1.ResourceQuota{}, resourceQuotaHasHardPods(nt, prodPodsQuota)))
 
 	renameCluster(nt, configMapName, testClusterName)
 	nt.Must(nt.WatchForAllSyncs())
-	// TODO: Confirm that the change was Synced.
-	// This is not currently possible using the RootSync status API, because
-	// the commit didn't change, and the commit was already previously Synced.
-	// If sync state could be confirmed, the objects would already be updated,
-	// and we wouldn't need to wait for it.
-	// if err := nt.Validate(resourceQuotaName, frontendNamespace, &corev1.ResourceQuota{}, resourceQuotaHasHardPods(testPodsQuota)); err != nil {
-	// 	nt.T.Fatal(err)
-	// }
-	require.NoError(nt.T,
+
+	// Wait for the ResourceQuota to be synced and reconciled to this cluster, now that the cluster name matches the cluster selector.
+	// We can't just immediately validate this, because there's no RSync status fields that we can use to validate that the cluster name change has been detected by the reconciler or that syncing happened afterwards.
+	// This is because the source commit didn't change, only the cluster name did.
+	// TODO: Add status fields to validate a cluster name change has been detected and synced (b/401069210)
+	nt.Must(
 		nt.Watcher.WatchObject(kinds.ResourceQuota(), rqLegacy.Name, rqLegacy.Namespace,
 			testwatcher.WatchPredicates(resourceQuotaHasHardPods(nt, testPodsQuota))))
 
 	renameCluster(nt, configMapName, prodClusterName)
 	nt.Must(nt.WatchForAllSyncs())
-	// TODO: Confirm that the change was Synced.
-	// This is not currently possible using the RootSync status API, because
-	// the commit didn't change, and the commit was already previously Synced.
-	// If sync state could be confirmed, the objects would already be updated,
-	// and we wouldn't need to wait for it.
-	// if err := nt.Validate(resourceQuotaName, frontendNamespace, &corev1.ResourceQuota{}, resourceQuotaHasHardPods(prodPodsQuota)); err != nil {
-	// 	nt.T.Fatal(err)
-	// }
-	require.NoError(nt.T,
+
+	// Wait for the ResourceQuota to be synced and reconciled to this cluster, now that the cluster name matches the cluster selector.
+	// We can't just immediately validate this, because there's no RSync status fields that we can use to validate that the cluster name change has been detected by the reconciler or that syncing happened afterwards.
+	// This is because the source commit didn't change, only the cluster name did.
+	// TODO: Add status fields to validate a cluster name change has been detected and synced (b/401069210)
+	nt.Must(
 		nt.Watcher.WatchObject(kinds.ResourceQuota(), rqInline.Name, rqInline.Namespace,
 			testwatcher.WatchPredicates(resourceQuotaHasHardPods(nt, prodPodsQuota))))
 
@@ -163,12 +154,9 @@ func TestTargetingDifferentResourceQuotasToDifferentClusters(t *testing.T) {
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rqInline)
 
 	// Validate metrics.
-	err := nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: rootSyncNN,
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 }
 
 func TestClusterSelectorOnObjects(t *testing.T) {
@@ -186,9 +174,7 @@ func TestClusterSelectorOnObjects(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add a valid cluster selector annotation to a role binding"))
 	nt.Must(nt.WatchForAllSyncs())
-	if err := nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}))
 
 	nt.T.Log("Add test cluster, and cluster registry data")
 	testCluster := clusterObject(testClusterName, environmentLabelKey, testEnvironment)
@@ -202,57 +188,40 @@ func TestClusterSelectorOnObjects(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Change cluster selector to match test cluster"))
 	nt.Must(nt.WatchForAllSyncs())
-	if err := nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}))
 
 	renameCluster(nt, configMapName, testClusterName)
 	nt.Must(nt.WatchForAllSyncs())
-	// TODO: Confirm that the change was Synced.
-	// This is not currently possible using the RootSync status API, because
-	// the commit didn't change, and the commit was already previously Synced.
-	// If sync state could be confirmed, the objects would already be updated,
-	// and we wouldn't need to wait for it.
-	// if err := nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
-	// 	nt.T.Fatal(err)
-	// }
-	if err := nt.Watcher.WatchForCurrentStatus(kinds.RoleBinding(), rb.Name, rb.Namespace); err != nil {
-		nt.T.Fatal(err)
-	}
+
+	// Wait for the ResourceQuota to be synced and reconciled to this cluster, now that the cluster name matches the cluster selector.
+	// We can't just immediately validate this, because there's no RSync status fields that we can use to validate that the cluster name change has been detected by the reconciler or that syncing happened afterwards.
+	// This is because the source commit didn't change, only the cluster name did.
+	// TODO: Add status fields to validate a cluster name change has been detected and synced (b/401069210)
+	nt.Must(nt.Watcher.WatchForCurrentStatus(kinds.RoleBinding(), rb.Name, rb.Namespace))
 
 	nt.T.Log("Revert cluster selector to match prod cluster")
 	rb.Annotations = inlineProdClusterSelectorAnnotation
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Revert cluster selector to match prod cluster"))
 	nt.Must(nt.WatchForAllSyncs())
-	if err := nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}))
 
 	renameCluster(nt, configMapName, prodClusterName)
 	nt.Must(nt.WatchForAllSyncs())
-	// TODO: Confirm that the change was Synced.
-	// This is not currently possible using the RootSync status API, because
-	// the commit didn't change, and the commit was already previously Synced.
-	// If sync state could be confirmed, the objects would already be updated,
-	// and we wouldn't need to wait for it.
-	// if err := nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
-	// 	nt.T.Fatal(err)
-	// }
-	if err := nt.Watcher.WatchForCurrentStatus(kinds.RoleBinding(), rb.Name, rb.Namespace); err != nil {
-		nt.T.Fatal(err)
-	}
+
+	// Wait for the RoleBinding to be synced and reconciled to this cluster, now that the cluster name matches the cluster selector.
+	// We can't just immediately validate this, because there's no RSync status fields that we can use to validate that the cluster name change has been detected by the reconciler or that syncing happened afterwards.
+	// This is because the source commit didn't change, only the cluster name did.
+	// TODO: Add status fields to validate a cluster name change has been detected and synced (b/401069210)
+	nt.Must(nt.Watcher.WatchForCurrentStatus(kinds.RoleBinding(), rb.Name, rb.Namespace))
 
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rb)
 
 	// Validate metrics.
-	err := nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: rootSyncNN,
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 }
 
 func TestClusterSelectorOnNamespaces(t *testing.T) {
@@ -268,24 +237,17 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add a valid cluster selector annotation to a namespace and a role binding"))
 	nt.Must(nt.WatchForAllSyncs())
-	if err := nt.Validate(namespace.Name, namespace.Namespace, &corev1.Namespace{}); err != nil {
-		nt.T.Fatal(err)
-	}
-	if err := nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(namespace.Name, namespace.Namespace, &corev1.Namespace{}))
+	nt.Must(nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}))
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, namespace)
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rb)
 
 	// Validate metrics.
-	err := nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: rootSyncNN,
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	nt.T.Log("Add test cluster, and cluster registry data")
 	testCluster := clusterObject(testClusterName, environmentLabelKey, testEnvironment)
@@ -299,128 +261,82 @@ func TestClusterSelectorOnNamespaces(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/eng/backend/namespace.yaml", namespace))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Change namespace to match test cluster"))
 	nt.Must(nt.WatchForAllSyncs())
-	if err := nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
-		nt.T.Fatal(err)
-	}
-	if err := nt.Watcher.WatchForNotFound(kinds.Namespace(), namespace.Name, namespace.Namespace); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}))
+	nt.Must(nt.Watcher.WatchForNotFound(kinds.Namespace(), namespace.Name, namespace.Namespace))
 
 	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, namespace)
 	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, rb)
 
 	// Validate metrics.
-	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: rootSyncNN,
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	renameCluster(nt, configMapName, testClusterName)
 	nt.Must(nt.WatchForAllSyncs())
-	// TODO: Confirm that the change was Synced.
-	// This is not currently possible using the RootSync status API, because
-	// the commit didn't change, and the commit was already previously Synced.
-	// If sync state could be confirmed, the objects would already be updated,
-	// and we wouldn't need to wait for it.
-	// if err := nt.Validate(namespace.Name, namespace.Namespace, &corev1.Namespace{}); err != nil {
-	// 	nt.T.Fatal(err)
-	// }
-	// bob-rolebinding won't reappear in the backend namespace as the cluster is inactive in the cluster-selector
-	// if err := nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
-	// 	nt.T.Fatal(err)
-	// }
-	if err := nt.Watcher.WatchForCurrentStatus(kinds.Namespace(), namespace.Name, namespace.Namespace); err != nil {
-		nt.T.Fatal(err)
-	}
-	if err := nt.Watcher.WatchForNotFound(kinds.RoleBinding(), rb.Name, rb.Namespace); err != nil {
-		nt.T.Fatal(err)
-	}
+
+	// Wait for the Namespace to be synced and reconciled to this cluster, now that the cluster name matches the cluster selector.
+	// We can't just immediately validate this, because there's no RSync status fields that we can use to validate that the cluster name change has been detected by the reconciler or that syncing happened afterwards.
+	// This is because the source commit didn't change, only the cluster name did.
+	// TODO: Add status fields to validate a cluster name change has been detected and synced (b/401069210)
+	nt.Must(t, nt.Watcher.WatchForCurrentStatus(kinds.Namespace(), namespace.Name, namespace.Namespace))
+	nt.Must(t, nt.Watcher.WatchForNotFound(kinds.RoleBinding(), rb.Name, rb.Namespace))
 
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, namespace)
 	nt.MetricsExpectations.RemoveObject(configsync.RootSyncKind, rootSyncNN, rb)
 
 	// Validate metrics.
-	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: rootSyncNN,
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	nt.T.Log("Updating bob-rolebinding to NOT have cluster-selector")
 	rb.Annotations = map[string]string{}
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Update bob-rolebinding to NOT have cluster-selector"))
 	nt.Must(nt.WatchForAllSyncs())
-	if err := nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}))
 
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rb)
 
 	// Validate metrics.
-	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: rootSyncNN,
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	nt.T.Log("Revert namespace to match prod cluster")
 	namespace.Annotations = inlineProdClusterSelectorAnnotation
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/eng/backend/namespace.yaml", namespace))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Revert namespace to match prod cluster"))
 	nt.Must(nt.WatchForAllSyncs())
-	if err := nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
-		nt.T.Fatal(err)
-	}
-	if err := nt.Watcher.WatchForNotFound(kinds.Namespace(), backendNamespace, ""); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}))
+	nt.Must(nt.Watcher.WatchForNotFound(kinds.Namespace(), backendNamespace, ""))
 
 	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, namespace)
 	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, rb)
 
 	// Validate metrics.
-	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: rootSyncNN,
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	renameCluster(nt, configMapName, prodClusterName)
 	nt.Must(nt.WatchForAllSyncs())
-	// TODO: Confirm that the change was Synced.
-	// This is not currently possible using the RootSync status API, because
-	// the commit didn't change, and the commit was already previously Synced.
-	// If sync state could be confirmed, the objects would already be updated,
-	// and we wouldn't need to wait for it.
-	// if err := nt.Validate(namespace.Name, namespace.Namespace, &corev1.Namespace{}); err != nil {
-	// 	nt.T.Fatal(err)
-	// }
-	// if err := nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
-	// 	nt.T.Fatal(err)
-	// }
-	if err := nt.Watcher.WatchForCurrentStatus(kinds.Namespace(), namespace.Name, namespace.Namespace); err != nil {
-		nt.T.Fatal(err)
-	}
-	if err := nt.Watcher.WatchForCurrentStatus(kinds.RoleBinding(), rb.Name, rb.Namespace); err != nil {
-		nt.T.Fatal(err)
-	}
+
+	// Wait for the Namespace to be synced and reconciled to this cluster, now that the cluster name matches the cluster selector.
+	// We can't just immediately validate this, because there's no RSync status fields that we can use to validate that the cluster name change has been detected by the reconciler or that syncing happened afterwards.
+	// This is because the source commit didn't change, only the cluster name did.
+	// TODO: Add status fields to validate a cluster name change has been detected and synced (b/401069210)
+	nt.Must(t, nt.Watcher.WatchForCurrentStatus(kinds.Namespace(), namespace.Name, namespace.Namespace))
+	nt.Must(t, nt.Watcher.WatchForCurrentStatus(kinds.RoleBinding(), rb.Name, rb.Namespace))
 
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, namespace)
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rb)
 
 	// Validate metrics.
-	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: rootSyncNN,
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 }
 
 func TestObjectReactsToChangeInInlineClusterSelector(t *testing.T) {
@@ -435,40 +351,30 @@ func TestObjectReactsToChangeInInlineClusterSelector(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add a valid cluster selector annotation to a role binding"))
 	nt.Must(nt.WatchForAllSyncs())
-	if err := nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}))
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rb)
 
 	// Validate metrics.
-	err := nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	nt.T.Log("Modify the cluster selector to select an excluded cluster list")
 	rb.Annotations = map[string]string{metadata.ClusterNameSelectorAnnotationKey: "a, b, c"}
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Modify the cluster selector to select an excluded cluster list"))
 	nt.Must(nt.WatchForAllSyncs())
-	if err := nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}))
 
 	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, rb)
 
 	// Validate metrics.
-	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 }
 
 func TestObjectReactsToChangeInLegacyClusterSelector(t *testing.T) {
@@ -490,39 +396,29 @@ func TestObjectReactsToChangeInLegacyClusterSelector(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add a valid cluster selector annotation to a role binding"))
 	nt.Must(nt.WatchForAllSyncs())
-	if err := nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}))
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rb)
 
-	err := nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	nt.T.Log("Modify the cluster selector to select a different environment")
 	prodClusterWithADifferentSelector := clusterSelector(prodClusterSelectorName, environmentLabelKey, "other")
 	nt.Must(rootSyncGitRepo.Add("acme/clusterregistry/clusterselector-prod.yaml", prodClusterWithADifferentSelector))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Modify the cluster selector to select a different environment"))
 	nt.Must(nt.WatchForAllSyncs())
-	if err := nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}))
 
 	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, rb)
 
 	// Validate metrics.
-	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 }
 
 func TestImporterIgnoresNonSelectedCustomResources(t *testing.T) {
@@ -554,12 +450,9 @@ func TestImporterIgnoresNonSelectedCustomResources(t *testing.T) {
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
 
 	// Validate metrics.
-	err := nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 }
 
 func TestClusterSelectorOnNamespaceRepos(t *testing.T) {
@@ -577,39 +470,29 @@ func TestClusterSelectorOnNamespaceRepos(t *testing.T) {
 	nt.Must(repoSyncGitRepo.Add("acme/bob-rolebinding.yaml", rb))
 	nt.Must(repoSyncGitRepo.CommitAndPush("Add a valid cluster selector annotation to a role binding"))
 	nt.Must(nt.WatchForAllSyncs())
-	if err := nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}))
 
 	nt.MetricsExpectations.AddObjectApply(configsync.RepoSyncKind, repoSyncKey, rb)
 
 	// Validate metrics.
-	err := nomostest.ValidateStandardMetricsForRepoSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRepoSync(nt, metrics.Summary{
 		Sync: repoSyncKey,
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	nt.T.Log("Modify the cluster selector to select an excluded cluster list")
 	rb.Annotations = map[string]string{metadata.ClusterNameSelectorAnnotationKey: "a,b,,,c,d"}
 	nt.Must(repoSyncGitRepo.Add("acme/bob-rolebinding.yaml", rb))
 	nt.Must(repoSyncGitRepo.CommitAndPush("Modify the cluster selector to select an excluded cluster list"))
 	nt.Must(nt.WatchForAllSyncs())
-	if err := nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}))
 
 	// Delete the object, since it's no longer specified for this cluster
 	nt.MetricsExpectations.AddObjectDelete(configsync.RepoSyncKind, repoSyncKey, rb)
 
 	// Validate metrics.
-	err = nomostest.ValidateStandardMetricsForRepoSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRepoSync(nt, metrics.Summary{
 		Sync: repoSyncKey,
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	nt.T.Log("Switch to use ClusterSelector objects")
 	clusterObj := clusterObject(prodClusterName, environmentLabelKey, prodEnvironment)
@@ -620,21 +503,16 @@ func TestClusterSelectorOnNamespaceRepos(t *testing.T) {
 	nt.Must(repoSyncGitRepo.Add("acme/bob-rolebinding.yaml", rb))
 	nt.Must(repoSyncGitRepo.CommitAndPush("Add cluster registry data and use the legacy ClusterSelector"))
 	nt.Must(nt.WatchForAllSyncs())
-	if err := nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}))
 
 	// Expect ClusterObject & ClusterSelector to be excluded from declared
 	// resources and not applied.
 	nt.MetricsExpectations.AddObjectApply(configsync.RepoSyncKind, repoSyncKey, rb)
 
 	// Validate metrics.
-	err = nomostest.ValidateStandardMetricsForRepoSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRepoSync(nt, metrics.Summary{
 		Sync: repoSyncKey,
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 }
 
 func TestInlineClusterSelectorFormat(t *testing.T) {
@@ -652,140 +530,102 @@ func TestInlineClusterSelectorFormat(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add a role binding without any cluster selectors"))
 	nt.Must(nt.WatchForAllSyncs())
-	if err := nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}))
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, nsObj)
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rb)
 
 	// Validate metrics.
-	err := nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	nt.T.Logf("Add a prod cluster selector to the role binding")
 	rb.Annotations = inlineProdClusterSelectorAnnotation
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add a prod cluster selector to the role binding"))
 	nt.Must(nt.WatchForAllSyncs())
-	if err := nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}))
 
 	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, rb)
 
 	// Validate metrics.
-	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	renameCluster(nt, configMapName, prodClusterName)
 	nt.Must(nt.WatchForAllSyncs())
-	// TODO: Confirm that the change was Synced.
-	// This is not currently possible using the RootSync status API, because
-	// the commit didn't change, and the commit was already previously Synced.
-	// If sync state could be confirmed, the objects would already be updated,
-	// and we wouldn't need to wait for it.
-	// if err := nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
-	// 	nt.T.Fatal(err)
-	// }
-	if err := nt.Watcher.WatchForCurrentStatus(kinds.RoleBinding(), rb.Name, rb.Namespace); err != nil {
-		nt.T.Fatal(err)
-	}
+
+	// Wait for the RoleBinding to be synced and reconciled to this cluster, now that the cluster name matches the cluster selector.
+	// We can't just immediately validate this, because there's no RSync status fields that we can use to validate that the cluster name change has been detected by the reconciler or that syncing happened afterwards.
+	// This is because the source commit didn't change, only the cluster name did.
+	// TODO: Add status fields to validate a cluster name change has been detected and synced (b/401069210)
+	nt.Must(t, nt.Watcher.WatchForCurrentStatus(kinds.RoleBinding(), rb.Name, rb.Namespace))
 
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rb)
 
 	// Validate metrics.
-	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	nt.T.Log("Add an empty cluster selector annotation to a role binding")
 	rb.Annotations = map[string]string{metadata.ClusterNameSelectorAnnotationKey: ""}
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add an empty cluster selector annotation to a role binding"))
 	nt.Must(nt.WatchForAllSyncs())
-	if err := nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}))
 
 	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, rb)
 
 	// Validate metrics.
-	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	nt.T.Log("Add a cluster selector annotation to a role binding with a list of included clusters")
 	rb.Annotations = map[string]string{metadata.ClusterNameSelectorAnnotationKey: fmt.Sprintf("a,%s,b", prodClusterName)}
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add a cluster selector annotation to a role binding with a list of included clusters"))
 	nt.Must(nt.WatchForAllSyncs())
-	if err := nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}))
 
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rb)
 
 	// Validate metrics.
-	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	nt.T.Log("Add a cluster selector annotation to a role binding that does not include the current cluster")
 	rb.Annotations = map[string]string{metadata.ClusterNameSelectorAnnotationKey: "a,,b"}
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add a cluster selector annotation to a role binding with a list of excluded clusters"))
 	nt.Must(nt.WatchForAllSyncs())
-	if err := nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.ValidateNotFound(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}))
 
 	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, rb)
 
 	// Validate metrics.
-	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	nt.T.Log("Add a cluster selector annotation to a role binding with a list of included clusters (with spaces)")
 	rb.Annotations = map[string]string{metadata.ClusterNameSelectorAnnotationKey: fmt.Sprintf("a , %s , b", prodClusterName)}
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/eng/backend/bob-rolebinding.yaml", rb))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add a cluster selector annotation to a role binding with a list of included clusters (with spaces)"))
 	nt.Must(nt.WatchForAllSyncs())
-	if err := nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(rb.Name, rb.Namespace, &rbacv1.RoleBinding{}))
 
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, rb)
 
 	// Validate metrics.
-	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 }
 
 func TestClusterSelectorAnnotationConflicts(t *testing.T) {
@@ -829,20 +669,15 @@ func TestClusterSelectorForCRD(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Add("acme/cluster/anvil-crd.yaml", crd))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add a custom resource definition"))
 	nt.Must(nt.WatchForAllSyncs())
-	if err := nt.Validate(crd.Name, "", &apiextensionsv1.CustomResourceDefinition{}); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(crd.Name, "", &apiextensionsv1.CustomResourceDefinition{}))
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, crd)
 
 	// Validate metrics.
-	err := nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	// Test inline cluster-name-selector annotation
 	nt.T.Log("Set the cluster-name-selector annotation to a not-selected cluster")
@@ -852,39 +687,28 @@ func TestClusterSelectorForCRD(t *testing.T) {
 	nt.Must(nt.WatchForAllSyncs())
 	// CRD should be marked as deleted, but may not be NotFound yet, because its
 	// finalizer will block until all objects of that type are deleted.
-	err = nt.Watcher.WatchForNotFound(kinds.CustomResourceDefinitionV1(), crd.Name, crd.Namespace)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchForNotFound(kinds.CustomResourceDefinitionV1(), crd.Name, crd.Namespace))
 
 	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, crd)
 
 	// Validate metrics.
-	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	nt.T.Log("Set the cluster-name-selector annotation to a selected cluster")
 	crd.SetAnnotations(map[string]string{metadata.ClusterNameSelectorAnnotationKey: prodClusterName})
 	nt.Must(rootSyncGitRepo.Add("acme/cluster/anvil-crd.yaml", crd))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add a custom resource definition with an selected cluster-name-selector annotation"))
 	nt.Must(nt.WatchForAllSyncs())
-	if err := nt.Validate(crd.Name, "", &apiextensionsv1.CustomResourceDefinition{}); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(crd.Name, "", &apiextensionsv1.CustomResourceDefinition{}))
 
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, crd)
 
 	// Validate metrics.
-	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	// Test legacy ClusterSelectors
 	nt.T.Log("Add cluster, and cluster registry data")
@@ -903,39 +727,28 @@ func TestClusterSelectorForCRD(t *testing.T) {
 	nt.Must(nt.WatchForAllSyncs())
 	// CRD should be marked as deleted, but may not be NotFound yet, because its
 	// finalizer will block until all objects of that type are deleted.
-	err = nt.Watcher.WatchForNotFound(kinds.CustomResourceDefinitionV1(), crd.Name, crd.Namespace)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchForNotFound(kinds.CustomResourceDefinitionV1(), crd.Name, crd.Namespace))
 
 	nt.MetricsExpectations.AddObjectDelete(configsync.RootSyncKind, rootSyncNN, crd)
 
 	// Validate metrics.
-	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 
 	nt.T.Log("Set ClusterSelector to a selected cluster")
 	crd.SetAnnotations(map[string]string{metadata.LegacyClusterSelectorAnnotationKey: prodClusterSelectorName})
 	nt.Must(rootSyncGitRepo.Add("acme/cluster/anvil-crd.yaml", crd))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add a custom resource definition with an selected ClusterSelector"))
 	nt.Must(nt.WatchForAllSyncs())
-	if err := nt.Validate(crd.Name, "", &apiextensionsv1.CustomResourceDefinition{}); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(crd.Name, "", &apiextensionsv1.CustomResourceDefinition{}))
 
 	nt.MetricsExpectations.AddObjectApply(configsync.RootSyncKind, rootSyncNN, crd)
 
 	// Validate metrics.
-	err = nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
+	nt.Must(nomostest.ValidateStandardMetricsForRootSync(nt, metrics.Summary{
 		Sync: nomostest.RootSyncNN(configsync.RootSyncName),
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 }
 
 // renameCluster updates CLUSTER_NAME in the config map and restart the reconcilers.
@@ -956,10 +769,8 @@ func clusterNameConfigMapName(nt *nomostest.NT) string {
 	// The value is defined in manifests/templates/reconciler-manager.yaml
 	configMapName := reconcilermanager.ManagerName
 
-	if err := nt.Validate(configMapName, configmanagement.ControllerNamespace,
-		&corev1.ConfigMap{}, configMapHasClusterName(prodClusterName)); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(configMapName, configmanagement.ControllerNamespace,
+		&corev1.ConfigMap{}, configMapHasClusterName(prodClusterName)))
 	return configMapName
 }
 

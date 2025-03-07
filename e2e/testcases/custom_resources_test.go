@@ -27,9 +27,9 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/retry"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testutils"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
-	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/reconcilermanager"
@@ -51,12 +51,8 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 	nt.Must(nomostest.WaitForCRDs(nt, []string{"anvils.acme.com", "clusteranvils.acme.com"}))
 
 	nt.T.Log("Increase log level of reconciler to help debug failures")
-	rs := nomostest.RootSyncObjectV1Beta1FromRootRepo(nt, configsync.RootSyncName)
-	rs.Spec.SafeOverride().LogLevels = []v1beta1.ContainerLogLevelOverride{
-		{ContainerName: reconcilermanager.Reconciler, LogLevel: 5},
-	}
-	nt.Must(nt.KubeClient.Apply(rs))
-	nt.Must(nt.Watcher.WatchForCurrentStatus(kinds.RootSyncV1Beta1(), configsync.RootSyncName, configsync.ControllerNamespace))
+	nt.Must(testutils.UpdateRootSyncReconcilerLogLevel(nt,
+		configsync.RootSyncName, reconcilermanager.Reconciler, 5))
 
 	nsObj := k8sobjects.NamespaceObject("foo")
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/foo/ns.yaml", nsObj))

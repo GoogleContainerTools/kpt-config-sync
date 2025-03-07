@@ -202,6 +202,9 @@ type NT struct {
 
 	// repoSyncPermissions will grant a list of PolicyRules to NS reconcilers
 	repoSyncPermissions []rbacv1.PolicyRule
+
+	// testStartTime is a timestamp which records when the current test started
+	testStartTime time.Time
 }
 
 // Must not error.
@@ -463,7 +466,11 @@ func (nt *NT) MustKubectl(args ...string) []byte {
 func (nt *NT) PodLogs(namespace, deployment, container string, previousPodLog bool) {
 	nt.T.Helper()
 
-	args := []string{"logs", fmt.Sprintf("deployment/%s", deployment), "-n", namespace}
+	args := []string{"logs", fmt.Sprintf("deployment/%s", deployment),
+		"-n", namespace,
+		// truncate logs to avoid excessive log output from long-running containers such as reconciler-manager
+		"--since-time", nt.testStartTime.Format(time.RFC3339),
+	}
 	if previousPodLog {
 		args = append(args, "-p")
 	}

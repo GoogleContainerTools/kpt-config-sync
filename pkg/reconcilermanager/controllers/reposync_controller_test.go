@@ -41,6 +41,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	hubv1 "kpt.dev/configsync/pkg/api/hub/v1"
+	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/client/restconfig"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
@@ -48,6 +49,7 @@ import (
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reposync"
+	"kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/testerrors"
 	"kpt.dev/configsync/pkg/util"
@@ -295,6 +297,20 @@ func rolebinding(name, roleName, roleKind string, opts ...core.MetaMutator) *rba
 	result.RoleRef.APIGroup = "rbac.authorization.k8s.io"
 
 	return result
+}
+
+func repoResourceGroup(rs *v1beta1.RepoSync) *v1alpha1.ResourceGroup {
+	// Create a ResourceGroup object which does not include any resources
+	return &v1alpha1.ResourceGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      rs.Name,
+			Namespace: rs.Namespace,
+			Labels:    map[string]string{},
+		},
+		Spec: v1alpha1.ResourceGroupSpec{
+			Resources: []v1alpha1.ObjMetadata{},
+		},
+	}
 }
 
 func setupNSReconciler(t *testing.T, objs ...client.Object) (*syncerFake.Client, *syncerFake.DynamicClient, *RepoSyncReconciler) {
@@ -2135,23 +2151,28 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	ns2 := "videoinfo"
 	rs1 := repoSyncWithGit(reposyncNs, reposyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthSSH), reposyncSecretRef(reposyncSSHKey))
 	reqNamespacedName1 := namespacedName(rs1.Name, rs1.Namespace)
+	rg1 := repoResourceGroup(rs1)
 
 	rs2 := repoSyncWithGit(ns2, configsync.RepoSyncName, reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthGCENode))
 	reqNamespacedName2 := namespacedName(rs2.Name, rs2.Namespace)
+	rg2 := repoResourceGroup(rs2)
 
 	rs3 := repoSyncWithGit(ns2, "my-rs-3", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthGCPServiceAccount), reposyncGCPSAEmail(gcpSAEmail))
 	reqNamespacedName3 := namespacedName(rs3.Name, rs3.Namespace)
+	rg3 := repoResourceGroup(rs3)
 
 	rs4 := repoSyncWithGit(reposyncNs, "my-rs-4", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthCookieFile), reposyncSecretRef(reposyncCookie))
 	secret4 := secretObjWithProxy(t, reposyncCookie, "cookie_file", core.Namespace(rs4.Namespace))
 	reqNamespacedName4 := namespacedName(rs4.Name, rs4.Namespace)
+	rg4 := repoResourceGroup(rs4)
 
 	rs5 := repoSyncWithGit(reposyncNs, "my-rs-5", reposyncRef(gitRevision), reposyncBranch(branch), reposyncSecretType(configsync.AuthToken), reposyncSecretRef(secretName))
 	reqNamespacedName5 := namespacedName(rs5.Name, rs5.Namespace)
 	secret5 := secretObjWithProxy(t, secretName, GitSecretConfigKeyToken, core.Namespace(rs5.Namespace))
 	secret5.Data[GitSecretConfigKeyTokenUsername] = []byte("test-user")
+	rg5 := repoResourceGroup(rs5)
 
-	fakeClient, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs1, secretObj(t, reposyncSSHKey, configsync.AuthSSH, configsync.GitSource, core.Namespace(rs1.Namespace)))
+	fakeClient, fakeDynamicClient, testReconciler := setupNSReconciler(t, rs1, secretObj(t, reposyncSSHKey, configsync.AuthSSH, configsync.GitSource, core.Namespace(rs1.Namespace)), rg1)
 
 	nsReconcilerName2 := core.NsReconcilerName(rs2.Namespace, rs2.Name)
 	nsReconcilerName3 := core.NsReconcilerName(rs3.Namespace, rs3.Name)
@@ -2224,6 +2245,9 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	if err := fakeClient.Create(ctx, rs2, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
+	if err := fakeClient.Create(ctx, rg2, client.FieldOwner(fake.FieldManager)); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName2); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
@@ -2284,6 +2308,9 @@ func TestMultipleRepoSyncs(t *testing.T) {
 
 	// Test reconciler rs3: my-rs-3
 	if err := fakeClient.Create(ctx, rs3, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
+		t.Fatal(err)
+	}
+	if err := fakeClient.Create(ctx, rg3, client.FieldOwner(fake.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName3); err != nil {
@@ -2347,6 +2374,9 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	if err := fakeClient.Create(ctx, secret4, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
+	if err := fakeClient.Create(ctx, rg4, client.FieldOwner(fake.FieldManager)); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName4); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
@@ -2406,6 +2436,9 @@ func TestMultipleRepoSyncs(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := fakeClient.Create(ctx, secret5, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
+		t.Fatal(err)
+	}
+	if err := fakeClient.Create(ctx, rg5, client.FieldOwner(fake.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName5); err != nil {
@@ -2585,6 +2618,9 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	if err := validateResourceDeleted(core.IDOf(rs1), fakeClient); err != nil {
 		t.Error(err)
 	}
+	if err := validateResourceDeleted(core.IDOf(rg1), fakeClient); err != nil {
+		t.Error(err)
+	}
 
 	// Subject for rs1 is removed from RoleBinding.Subjects
 	roleBinding1.Subjects = deleteSubjectByName(roleBinding1.Subjects, nsReconcilerName)
@@ -2603,6 +2639,9 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	}
 
 	if err := validateResourceDeleted(core.IDOf(rs2), fakeClient); err != nil {
+		t.Error(err)
+	}
+	if err := validateResourceDeleted(core.IDOf(rg2), fakeClient); err != nil {
 		t.Error(err)
 	}
 
@@ -2626,6 +2665,9 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	if err := validateResourceDeleted(core.IDOf(rs3), fakeClient); err != nil {
 		t.Error(err)
 	}
+	if err := validateResourceDeleted(core.IDOf(rg3), fakeClient); err != nil {
+		t.Fatalf("failed to delete the resource group, got error: %v, want error: nil", err)
+	}
 
 	// roleBinding2 is deleted because there are no more RepoSyncs in the namespace.
 	if err := validateResourceDeleted(core.IDOf(roleBinding2), fakeClient); err != nil {
@@ -2648,6 +2690,9 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	if err := validateResourceDeleted(core.IDOf(rs4), fakeClient); err != nil {
 		t.Error(err)
 	}
+	if err := validateResourceDeleted(core.IDOf(rg4), fakeClient); err != nil {
+		t.Fatalf("failed to delete the resource group, got error: %v, want error: nil", err)
+	}
 
 	// Subject for rs4 is removed from RoleBinding.Subjects
 	roleBinding1.Subjects = deleteSubjectByName(roleBinding1.Subjects, nsReconcilerName4)
@@ -2667,6 +2712,9 @@ func TestMultipleRepoSyncs(t *testing.T) {
 
 	if err := validateResourceDeleted(core.IDOf(rs5), fakeClient); err != nil {
 		t.Error(err)
+	}
+	if err := validateResourceDeleted(core.IDOf(rg5), fakeClient); err != nil {
+		t.Fatalf("failed to delete the resource group, got error: %v, want error: nil", err)
 	}
 
 	// Verify the RoleBinding is deleted after all RepoSyncs are deleted in the namespace.

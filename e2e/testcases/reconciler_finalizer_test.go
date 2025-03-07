@@ -50,7 +50,8 @@ import (
 )
 
 // TestReconcilerFinalizer_Orphan tests that the reconciler's finalizer
-// correctly handles Orphan deletion propagation.
+// correctly handles Orphan deletion propagation. It also validates that
+// when the RootSync is recreated, no objects are accidentally pruned
 func TestReconcilerFinalizer_Orphan(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.MultiRepos)
 	rootSyncID := nomostest.DefaultRootSyncID
@@ -127,9 +128,20 @@ func TestReconcilerFinalizer_Orphan(t *testing.T) {
 				testpredicates.HasLabel(metadata.ApplySetPartOfLabel, applySetID),
 			))
 	})
-	if err := tg.Wait(); err != nil {
-		nt.T.Fatal(err)
-	}
+
+	nt.Must(tg.Wait())
+
+	resetExpectedGitSync(nt, rootSyncID)
+
+	// Recreate the RootSync
+	rootSync = nomostest.RootSyncObjectV1Beta1FromRootRepo(nt, rootSyncKey.Name)
+	nomostest.RemoveDeletionPropagationPolicy(rootSync)
+	nt.Must(nt.KubeClient.Create(rootSync))
+	nt.Must(nt.WatchForAllSyncs())
+
+	// Validate that the objects were not deleted
+	nt.Must(nt.Validate(namespace1.GetName(), "", &corev1.Namespace{}))
+	nt.Must(nt.Validate(deployment1.GetName(), deployment1.GetNamespace(), &appsv1.Deployment{}))
 }
 
 // TestReconcilerFinalizer_Foreground tests that the reconciler's finalizer
@@ -201,12 +213,15 @@ func TestReconcilerFinalizer_Foreground(t *testing.T) {
 	}
 
 	tg := taskgroup.New()
-	// Deleting the RootSync should trigger the RootSync's finalizer to delete the Deployment1 and Namespace
+	// Deleting the RootSync should trigger the RootSync's finalizer to delete the Deployment1, Namespace and ResourceGroup
 	tg.Go(func() error {
 		return nt.Watcher.WatchForNotFound(kinds.Deployment(), deployment1.GetName(), deployment1.GetNamespace())
 	})
 	tg.Go(func() error {
 		return nt.Watcher.WatchForNotFound(kinds.Namespace(), namespace1.GetName(), namespace1.GetNamespace())
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchForNotFound(kinds.ResourceGroup(), rootSync.GetName(), rootSync.GetNamespace())
 	})
 	tg.Go(func() error {
 		// After Deployment1 is deleted, the RootSync should have its finalizer removed and be garbage collected
@@ -690,7 +705,7 @@ func deleteSyncWithOrphanPolicy(nt *nomostest.NT, obj client.Object) error {
 		return err
 	}
 
-	err = nt.KubeClient.Get(key.Name, key.Name, obj)
+	err = nt.KubeClient.Get(key.Name, key.Namespace, obj)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil

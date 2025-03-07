@@ -40,6 +40,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	hubv1 "kpt.dev/configsync/pkg/api/hub/v1"
+	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/client/restconfig"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
@@ -48,6 +49,7 @@ import (
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/rootsync"
+	"kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/testerrors"
 	"kpt.dev/configsync/pkg/util"
@@ -337,6 +339,20 @@ func rootSync(name string, opts ...func(*v1beta1.RootSync)) *v1beta1.RootSync {
 		opt(rs)
 	}
 	return rs
+}
+
+func resourceGroup(rs *v1beta1.RootSync) *v1alpha1.ResourceGroup {
+	// Create a ResourceGroup object which does not include any resources
+	return &v1alpha1.ResourceGroup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      rs.Name,
+			Namespace: rs.Namespace,
+			Labels:    map[string]string{},
+		},
+		Spec: v1alpha1.ResourceGroupSpec{
+			Resources: []v1alpha1.ObjMetadata{},
+		},
+	}
 }
 
 func rootSyncWithGit(name string, opts ...func(*v1beta1.RootSync)) *v1beta1.RootSync {
@@ -2194,23 +2210,28 @@ func TestMultipleRootSyncs(t *testing.T) {
 
 	rs1 := rootSyncWithGit(rootsyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(GitSecretConfigKeySSH), rootsyncSecretRef(rootsyncSSHKey))
 	reqNamespacedName1 := namespacedName(rs1.Name, rs1.Namespace)
+	rg1 := resourceGroup(rs1)
 
 	rs2 := rootSyncWithGit(configsync.RootSyncName, rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(configsync.AuthGCENode))
 	reqNamespacedName2 := namespacedName(rs2.Name, rs2.Namespace)
+	rg2 := resourceGroup(rs2)
 
 	rs3 := rootSyncWithGit("my-rs-3", rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(configsync.AuthGCPServiceAccount), rootsyncGCPSAEmail(gcpSAEmail))
 	reqNamespacedName3 := namespacedName(rs3.Name, rs3.Namespace)
+	rg3 := resourceGroup(rs3)
 
 	rs4 := rootSyncWithGit("my-rs-4", rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(configsync.AuthCookieFile), rootsyncSecretRef(reposyncCookie))
 	reqNamespacedName4 := namespacedName(rs4.Name, rs4.Namespace)
 	secret4 := secretObjWithProxy(t, reposyncCookie, "cookie_file", core.Namespace(rs4.Namespace))
+	rg4 := resourceGroup(rs4)
 
 	rs5 := rootSyncWithGit("my-rs-5", rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(configsync.AuthToken), rootsyncSecretRef(secretName))
 	reqNamespacedName5 := namespacedName(rs5.Name, rs5.Namespace)
 	secret5 := secretObjWithProxy(t, secretName, GitSecretConfigKeyToken, core.Namespace(rs5.Namespace))
 	secret5.Data[GitSecretConfigKeyTokenUsername] = []byte("test-user")
+	rg5 := resourceGroup(rs5)
 
-	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs1, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, configsync.GitSource, core.Namespace(rs1.Namespace)))
+	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs1, rg1, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, configsync.GitSource, core.Namespace(rs1.Namespace)))
 
 	rootReconcilerName2 := core.RootReconcilerName(rs2.Name)
 	rootReconcilerName3 := core.RootReconcilerName(rs3.Name)
@@ -2290,6 +2311,9 @@ func TestMultipleRootSyncs(t *testing.T) {
 	if err := fakeClient.Create(ctx, rs2, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
+	if err := fakeClient.Create(ctx, rg2, client.FieldOwner(fake.FieldManager)); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName2); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
@@ -2350,6 +2374,9 @@ func TestMultipleRootSyncs(t *testing.T) {
 
 	// Test reconciler rs3: my-rs-3
 	if err := fakeClient.Create(ctx, rs3, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
+		t.Fatal(err)
+	}
+	if err := fakeClient.Create(ctx, rg3, client.FieldOwner(fake.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName3); err != nil {
@@ -2418,6 +2445,9 @@ func TestMultipleRootSyncs(t *testing.T) {
 	if err := fakeClient.Create(ctx, secret4, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
+	if err := fakeClient.Create(ctx, rg4, client.FieldOwner(fake.FieldManager)); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName4); err != nil {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
@@ -2478,10 +2508,14 @@ func TestMultipleRootSyncs(t *testing.T) {
 	t.Log("Deployments, ServiceAccounts, and ClusterRoleBindings successfully created")
 
 	// Test reconciler rs5: my-rs-5
+	t.Log("Deployments, ServiceAccounts, and ClusterRoleBindings successfully created")
 	if err := fakeClient.Create(ctx, rs5, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
 	if err := fakeClient.Create(ctx, secret5, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
+		t.Fatal(err)
+	}
+	if err := fakeClient.Create(ctx, rg5, client.FieldOwner(fake.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName5); err != nil {
@@ -2681,6 +2715,9 @@ func TestMultipleRootSyncs(t *testing.T) {
 	if err := validateResourceDeleted(core.IDOf(rs1), fakeClient); err != nil {
 		t.Error(err)
 	}
+	if err := validateResourceDeleted(core.IDOf(rg1), fakeClient); err != nil {
+		t.Error(err)
+	}
 
 	// Subject for rs1 is removed from ClusterRoleBinding.Subjects
 	crb.Subjects = deleteSubjectByName(crb.Subjects, rootReconcilerName)
@@ -2704,6 +2741,9 @@ func TestMultipleRootSyncs(t *testing.T) {
 	}
 
 	if err := validateResourceDeleted(core.IDOf(rs2), fakeClient); err != nil {
+		t.Error(err)
+	}
+	if err := validateResourceDeleted(core.IDOf(rg2), fakeClient); err != nil {
 		t.Error(err)
 	}
 
@@ -2731,6 +2771,9 @@ func TestMultipleRootSyncs(t *testing.T) {
 	if err := validateResourceDeleted(core.IDOf(rs3), fakeClient); err != nil {
 		t.Error(err)
 	}
+	if err := validateResourceDeleted(core.IDOf(rg3), fakeClient); err != nil {
+		t.Error(err)
+	}
 
 	// Subject for rs3 is removed from ClusterRoleBinding.Subjects
 	crb.Subjects = deleteSubjectByName(crb.Subjects, rootReconcilerName3)
@@ -2756,6 +2799,9 @@ func TestMultipleRootSyncs(t *testing.T) {
 	if err := validateResourceDeleted(core.IDOf(rs4), fakeClient); err != nil {
 		t.Error(err)
 	}
+	if err := validateResourceDeleted(core.IDOf(rg4), fakeClient); err != nil {
+		t.Error(err)
+	}
 
 	// Subject for rs4 is removed from ClusterRoleBinding.Subjects
 	crb.Subjects = deleteSubjectByName(crb.Subjects, rootReconcilerName4)
@@ -2779,6 +2825,9 @@ func TestMultipleRootSyncs(t *testing.T) {
 	}
 
 	if err := validateResourceDeleted(core.IDOf(rs5), fakeClient); err != nil {
+		t.Error(err)
+	}
+	if err := validateResourceDeleted(core.IDOf(rg5), fakeClient); err != nil {
 		t.Error(err)
 	}
 

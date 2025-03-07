@@ -414,6 +414,10 @@ func (r *RootSyncReconciler) deleteManagedObjects(ctx context.Context, reconcile
 		return fmt.Errorf("deleting service account: %w", err)
 	}
 
+	if err := r.deleteResourceGroup(ctx, rsRef); err != nil {
+		return fmt.Errorf("deleting resource group: %w", err)
+	}
+
 	return nil
 }
 

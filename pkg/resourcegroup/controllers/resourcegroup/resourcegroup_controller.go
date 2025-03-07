@@ -391,6 +391,11 @@ func UpdateReconcileStatusToReflectKstatus(status v1alpha1.ResourceStatus) (v1al
 // computeReconcileStatusForSuccessfulApply computes the Reconcile status from
 // the Status (aka kstatus), assuming Strategy=Apply + Actuation=Succeeded.
 // Returns an error if the input Status is invalid.
+//
+// If apply succeeded, but the object was later deleted, return Failed.
+// It's possible that the remediator or next apply attempt will fix the issue,
+// but it's also possible that it won't, if there's a controller fight.
+// So return Failed to surface the problem to the user.
 func computeReconcileStatusForSuccessfulApply(newStatus v1alpha1.Status, oldReconcile v1alpha1.Reconcile) (v1alpha1.Reconcile, error) {
 	switch newStatus {
 	case v1alpha1.Current:
@@ -400,9 +405,9 @@ func computeReconcileStatusForSuccessfulApply(newStatus v1alpha1.Status, oldReco
 	case v1alpha1.Failed:
 		return v1alpha1.ReconcileFailed, nil
 	case v1alpha1.Terminating:
-		return v1alpha1.ReconcileFailed, nil // TODO: Should this be Pending?
+		return v1alpha1.ReconcileFailed, nil
 	case v1alpha1.NotFound:
-		return v1alpha1.ReconcileFailed, nil // TODO: Should this be Pending?
+		return v1alpha1.ReconcileFailed, nil
 	case v1alpha1.Unknown:
 		return oldReconcile, nil
 	default:
@@ -413,14 +418,19 @@ func computeReconcileStatusForSuccessfulApply(newStatus v1alpha1.Status, oldReco
 // computeReconcileStatusForSuccessfulDelete computes the Reconcile status from
 // the Status (aka kstatus), assuming Strategy=Delete + Actuation=Succeeded.
 // Returns an error if the input Status is invalid.
+//
+// If delete succeeded, but the object was later re-created, return Failed.
+// It's possible that the remediator or next apply attempt will fix the issue,
+// but it's also possible that it won't, if there's a controller fight.
+// So return Failed to surface the problem to the user.
 func computeReconcileStatusForSuccessfulDelete(newStatus v1alpha1.Status, oldReconcile v1alpha1.Reconcile) (v1alpha1.Reconcile, error) {
 	switch newStatus {
 	case v1alpha1.Current:
-		return v1alpha1.ReconcileFailed, nil // TODO: Should this be Pending?
+		return v1alpha1.ReconcileFailed, nil
 	case v1alpha1.InProgress:
-		return v1alpha1.ReconcileFailed, nil // TODO: Should this be Pending?
+		return v1alpha1.ReconcileFailed, nil
 	case v1alpha1.Failed:
-		return v1alpha1.ReconcileFailed, nil // TODO: Should this be Pending?
+		return v1alpha1.ReconcileFailed, nil
 	case v1alpha1.Terminating:
 		return v1alpha1.ReconcilePending, nil
 	case v1alpha1.NotFound:

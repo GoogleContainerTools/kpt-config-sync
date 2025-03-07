@@ -24,7 +24,6 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
-	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
@@ -68,9 +67,7 @@ func TestProfilingResourcesByObjectCount(t *testing.T) {
 
 		// Validate that the resources sync without the reconciler running out of
 		// memory, getting OOMKilled, and crash looping.
-		nt.Must(nt.WatchForAllSyncs(nomostest.WithPredicates(
-			testpredicates.AllResourcesReconciled(nt.Scheme)),
-		))
+		nt.Must(nt.WatchForAllSyncs())
 
 		nt.T.Logf("Verify the number of Deployment objects")
 		nt.Must(validateNumberOfObjectsEquals(nt, kinds.Deployment(), deployCount,
@@ -83,9 +80,7 @@ func TestProfilingResourcesByObjectCount(t *testing.T) {
 
 		// Validate that the resources sync without the reconciler running out of
 		// memory, getting OOMKilled, and crash looping.
-		nt.Must(nt.WatchForAllSyncs(nomostest.WithPredicates(
-			testpredicates.AllResourcesReconciled(nt.Scheme)),
-		))
+		nt.Must(nt.WatchForAllSyncs())
 	}
 }
 
@@ -158,9 +153,7 @@ func TestProfilingResourcesByObjectCountWithMultiSync(t *testing.T) {
 
 		// Validate that the resources sync without the reconciler running out of
 		// memory, getting OOMKilled, and crash looping.
-		nt.Must(nt.WatchForAllSyncs(nomostest.WithPredicates(
-			testpredicates.AllResourcesReconciled(nt.Scheme)),
-		))
+		nt.Must(nt.WatchForAllSyncs())
 
 		nt.T.Logf("Verify the number of Deployment objects")
 		nt.Must(validateNumberOfObjectsEquals(nt, kinds.Deployment(), totalDeployCount,
@@ -179,9 +172,7 @@ func TestProfilingResourcesByObjectCountWithMultiSync(t *testing.T) {
 
 		// Validate that the resources sync without the reconciler running out of
 		// memory, getting OOMKilled, and crash looping.
-		nt.Must(nt.WatchForAllSyncs(nomostest.WithPredicates(
-			testpredicates.AllResourcesReconciled(nt.Scheme)),
-		))
+		nt.Must(nt.WatchForAllSyncs())
 
 		nt.T.Logf("Verify all Deployments deleted")
 		nt.Must(validateNumberOfObjectsEquals(nt, kinds.Deployment(), 0,
@@ -277,9 +268,7 @@ func TestProfilingByObjectCountAndSyncCount(t *testing.T) {
 
 		// Validate that the resources sync without the reconciler running out of
 		// memory, getting OOMKilled, and crash looping.
-		nt.Must(nt.WatchForAllSyncs(nomostest.WithPredicates(
-			testpredicates.AllResourcesReconciled(nt.Scheme)),
-		))
+		nt.Must(nt.WatchForAllSyncs())
 
 		nt.T.Logf("Verify the number of Deployment objects")
 		nt.Must(validateNumberOfObjectsEquals(nt, kinds.Deployment(), totalDeployCount,

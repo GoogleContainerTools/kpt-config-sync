@@ -37,13 +37,12 @@ import (
 )
 
 type watchForAllSyncsOptions struct {
-	timeout            time.Duration
 	readyCheck         bool
 	syncRootRepos      bool
 	syncNamespaceRepos bool
 	skipRootRepos      map[string]bool
 	skipNonRootRepos   map[types.NamespacedName]bool
-	predicates         []testpredicates.Predicate
+	watchForSyncOpts   []WatchForSyncOption
 }
 
 // WatchForAllSyncsOptions is an optional parameter for WaitForRepoSyncs.
@@ -52,14 +51,8 @@ type WatchForAllSyncsOptions func(*watchForAllSyncsOptions)
 // WithTimeout provides the timeout to WaitForRepoSyncs.
 func WithTimeout(timeout time.Duration) WatchForAllSyncsOptions {
 	return func(options *watchForAllSyncsOptions) {
-		options.timeout = timeout
-	}
-}
-
-// WithPredicates adds additional predicates for all reconcilers to WaitForRepoSyncs.
-func WithPredicates(predicates ...testpredicates.Predicate) WatchForAllSyncsOptions {
-	return func(options *watchForAllSyncsOptions) {
-		options.predicates = append(predicates, predicates...)
+		options.watchForSyncOpts = append(options.watchForSyncOpts,
+			WithWatchOptions(testwatcher.WatchTimeout(timeout)))
 	}
 }
 
@@ -114,13 +107,12 @@ func SkipReadyCheck() WatchForAllSyncsOptions {
 func (nt *NT) WatchForAllSyncs(options ...WatchForAllSyncsOptions) error {
 	nt.T.Helper()
 	opts := watchForAllSyncsOptions{
-		timeout:            nt.DefaultWaitTimeout,
 		readyCheck:         true,
 		syncRootRepos:      true,
 		syncNamespaceRepos: true,
 		skipRootRepos:      make(map[string]bool),
 		skipNonRootRepos:   make(map[types.NamespacedName]bool),
-		predicates:         []testpredicates.Predicate{},
+		watchForSyncOpts:   []WatchForSyncOption{},
 	}
 	// Override defaults with specified options
 	for _, option := range options {
@@ -131,13 +123,6 @@ func (nt *NT) WatchForAllSyncs(options ...WatchForAllSyncsOptions) error {
 		if err := WaitForConfigSyncReady(nt); err != nil {
 			return err
 		}
-	}
-
-	watchOptions := []testwatcher.WatchOption{
-		testwatcher.WatchTimeout(opts.timeout),
-	}
-	if len(opts.predicates) > 0 {
-		watchOptions = append(watchOptions, testwatcher.WatchPredicates(opts.predicates...))
 	}
 
 	tg := taskgroup.New()
@@ -151,7 +136,7 @@ func (nt *NT) WatchForAllSyncs(options ...WatchForAllSyncsOptions) error {
 			tg.Go(func() error {
 				return nt.WatchForSync(
 					kinds.RootSyncV1Beta1(), idPtr.Name, idPtr.Namespace, source,
-					watchOptions...)
+					opts.watchForSyncOpts...)
 			})
 		}
 	}
@@ -165,12 +150,27 @@ func (nt *NT) WatchForAllSyncs(options ...WatchForAllSyncsOptions) error {
 			tg.Go(func() error {
 				return nt.WatchForSync(
 					kinds.RepoSyncV1Beta1(), idPtr.Name, idPtr.Namespace, source,
-					watchOptions...)
+					opts.watchForSyncOpts...)
 			})
 		}
 	}
 
 	return tg.Wait()
+}
+
+type watchForSyncOptions struct {
+	watchOptions []testwatcher.WatchOption
+}
+
+// WatchForSyncOption is an optional parameter for WatchForSync.
+type WatchForSyncOption func(*watchForSyncOptions)
+
+// WithWatchOptions is an optional parameter to specify WatchOptions used for
+// both the RSync watch and ResourceGroup watch.
+func WithWatchOptions(watchOpts ...testwatcher.WatchOption) WatchForSyncOption {
+	return func(options *watchForSyncOptions) {
+		options.watchOptions = append(options.watchOptions, watchOpts...)
+	}
 }
 
 // WatchForSync watches the specified sync object until it's synced.
@@ -184,9 +184,16 @@ func (nt *NT) WatchForSync(
 	gvk schema.GroupVersionKind,
 	name, namespace string,
 	source syncsource.SyncSource,
-	opts ...testwatcher.WatchOption,
+	options ...WatchForSyncOption,
 ) error {
 	nt.T.Helper()
+	opts := watchForSyncOptions{
+		watchOptions: []testwatcher.WatchOption{},
+	}
+	// Override defaults with specified options
+	for _, option := range options {
+		option(&opts)
+	}
 	if namespace == "" {
 		// If namespace is empty, use the default namespace
 		namespace = configsync.ControllerNamespace
@@ -222,9 +229,12 @@ func (nt *NT) WatchForSync(
 				testpredicates.ErrWrongType, gvk.Kind))
 	}
 
-	opts = append(opts, testwatcher.WatchPredicates(predicates...))
+	rsyncWatchOptions := []testwatcher.WatchOption{
+		testwatcher.WatchPredicates(predicates...),
+	}
+	rsyncWatchOptions = append(rsyncWatchOptions, opts.watchOptions...)
 
-	err = nt.Watcher.WatchObject(gvk, name, namespace, opts...)
+	err = nt.Watcher.WatchObject(gvk, name, namespace, rsyncWatchOptions...)
 	if err != nil {
 		return fmt.Errorf("waiting for sync: %w", err)
 	}

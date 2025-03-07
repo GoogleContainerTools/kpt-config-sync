@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"testing"
 
+	"k8s.io/apimachinery/pkg/api/equality"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
@@ -82,9 +83,9 @@ func resourceGroupHasStatus(obj client.Object) error {
 	if !ok {
 		return testpredicates.WrongTypeErr(obj, &resourcegroupv1alpha1.ResourceGroup{})
 	}
-	// When status is enabled, the resource statuses are computed and populated.
-	if len(rg.Status.ResourceStatuses) == 0 {
-		return fmt.Errorf("found empty status in %s", core.IDOf(obj))
+	emptyStatus := resourcegroupv1alpha1.ResourceGroupStatus{}
+	if equality.Semantic.DeepEqual(emptyStatus, rg.Status) {
+		return fmt.Errorf("found empty status in %s", kinds.ObjectSummary(rg))
 	}
 	return nil
 }

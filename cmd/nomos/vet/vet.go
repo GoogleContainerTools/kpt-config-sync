@@ -20,11 +20,13 @@ import (
 	"github.com/spf13/cobra"
 	"kpt.dev/configsync/cmd/nomos/flags"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/importer/analyzer/validation/system"
 )
 
 var (
 	namespaceValue string
 	keepOutput     bool
+	threshold      int
 	outPath        string
 )
 
@@ -42,6 +44,13 @@ func init() {
 
 	Cmd.Flags().BoolVar(&keepOutput, "keep-output", false,
 		`If enabled, keep the hydrated output`)
+
+	Cmd.Flags().IntVar(&threshold, "threshold", system.DefaultMaxObjectCount,
+		`If greater than zero, error if any repository contains more than the specified number of objects `)
+	// Set value to zero when `--threshold` is passed without a value.
+	// This requires the flag and value to be sent in the same argument, like
+	// `--threshold=1000`, instead of `--threshold 1000`.
+	Cmd.Flags().Lookup("threshold").NoOptDefVal = "0"
 
 	Cmd.Flags().StringVar(&outPath, "output", flags.DefaultHydrationOutput,
 		`Location of the hydrated output`)
@@ -64,6 +73,11 @@ returns a non-zero error code if any issues are found.
 		// Don't show usage on error, as argument validation passed.
 		cmd.SilenceUsage = true
 
-		return runVet(cmd.Context(), namespaceValue, configsync.SourceFormat(flags.SourceFormat), flags.APIServerTimeout)
+		return runVet(cmd.Context(), vetOptions{
+			Namespace:        namespaceValue,
+			SourceFormat:     configsync.SourceFormat(flags.SourceFormat),
+			APIServerTimeout: flags.APIServerTimeout,
+			MaxObjectCount:   threshold,
+		})
 	},
 }

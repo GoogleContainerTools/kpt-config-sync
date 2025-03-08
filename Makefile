@@ -47,7 +47,7 @@ DEBIAN_BASE_IMAGE := gcr.io/gke-release/debian-base:bookworm-v1.0.4-gke.4
 # Base image used for gcloud install, primarily for test images.
 # We use -slim for a smaller base image where we can choose which components to install.
 # https://cloud.google.com/sdk/docs/downloads-docker#docker_image_options
-GCLOUD_IMAGE_VERSION := 449.0.0
+GCLOUD_IMAGE_VERSION := 513.0.0
 GCLOUD_IMAGE := gcr.io/google.com/cloudsdktool/google-cloud-cli:$(GCLOUD_IMAGE_VERSION)-slim
 # Base image used for docker cli install, primarily used for test images.
 DOCKER_CLI_IMAGE_VERSION := 20.10.14

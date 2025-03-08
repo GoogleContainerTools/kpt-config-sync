@@ -486,7 +486,9 @@ func TestConflictingDefinitions_NamespaceToRoot(t *testing.T) {
 	nt.T.Logf("Remove the Role from the Namespace repo %s", repoSyncKey)
 	nt.Must(repoSyncGitRepo.Remove(podRoleFilePath))
 	nt.Must(repoSyncGitRepo.CommitAndPush("remove conflicting pod role from Namespace repo"))
-	nt.Must(nt.WatchForAllSyncs())
+	// rs-test tries to delete the Role, but since it is also being managed by root-sync
+	// it may Timeout waiting for the deletion to reconcile.
+	nt.Must(nt.WatchForAllSyncs(nomostest.SkipAllResourceGroupChecks()))
 
 	nt.T.Logf("Ensure the Role still matches the one in the Root repo %s", rootSyncKey.Name)
 	err = nt.Validate("pods", testNs, &rbacv1.Role{},
@@ -620,7 +622,9 @@ func TestConflictingDefinitions_RootToRoot(t *testing.T) {
 	nt.T.Logf("Remove the declaration from RootSync %s", rootSyncID.Name)
 	nt.Must(rootSyncGitRepo.Remove(podRoleFilePath))
 	nt.Must(rootSyncGitRepo.CommitAndPush("remove conflicting pod role"))
-	nt.Must(nt.WatchForAllSyncs())
+	// root-sync tries to delete the Role, but since it is also being managed by root-test
+	// it may Timeout waiting for the deletion to reconcile.
+	nt.Must(nt.WatchForAllSyncs(nomostest.SkipAllResourceGroupChecks()))
 
 	nt.T.Logf("Ensure the Role is managed by RootSync %s", rootSync2ID.Name)
 	// The pod role may be deleted from the cluster after it was removed from the `root-sync` Root repo.

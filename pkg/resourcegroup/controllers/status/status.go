@@ -21,6 +21,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/klog/v2"
+	"kpt.dev/configsync/pkg/resourcegroup"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/resourcemap"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/yaml"
@@ -30,8 +31,6 @@ import (
 
 const (
 	owningInventoryKey = "config.k8s.io/owning-inventory"
-	// SourceHashAnnotationKey is the name of the annotation which contains the source hash
-	SourceHashAnnotationKey = "configmanagement.gke.io/token"
 )
 
 // ComputeStatus computes the status and conditions that should be
@@ -68,7 +67,7 @@ func ComputeStatus(obj *unstructured.Unstructured) *resourcemap.CachedStatus {
 		}
 	}
 
-	hash := GetSourceHash(obj.GetAnnotations())
+	hash := resourcegroup.GetSourceHash(obj.GetAnnotations())
 	if hash != "" {
 		resStatus.SourceHash = hash
 	}
@@ -125,19 +124,6 @@ func ReadKCCResourceConditions(obj *unstructured.Unstructured) ([]v1alpha1.Condi
 	results := make([]v1alpha1.Condition, len(conditions))
 	err = yaml.Unmarshal(data, &results)
 	return results, err
-}
-
-// GetSourceHash returns the source hash that is defined in the
-// source hash annotation.
-func GetSourceHash(annotations map[string]string) string {
-	if len(annotations) == 0 {
-		return ""
-	}
-	sourceHash := annotations[SourceHashAnnotationKey]
-	if len(sourceHash) > 7 {
-		return sourceHash[0:7]
-	}
-	return sourceHash
 }
 
 func getOwningInventory(annotations map[string]string) string {

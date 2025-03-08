@@ -181,6 +181,7 @@ func SharedTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		HelmProvider:            sharedNt.HelmProvider,
 		HelmClient:              sharedNt.HelmClient,
 		OCIClient:               sharedNt.OCIClient,
+		testStartTime:           time.Now(),
 	}
 
 	t.Logf("using shared test env: %s, cluster version: %s, cluster hash: %s, support bursting: %t", nt.ClusterName, nt.ClusterVersion, nt.ClusterHash, nt.ClusterSupportsBursting)
@@ -274,6 +275,7 @@ func FreshTestEnv(t nomostesting.NTB, opts *ntopts.New) *NT {
 		HelmProvider:            registryproviders.NewHelmProvider(*e2e.HelmProvider, opts.ClusterName, shell, helmClient),
 		HelmClient:              helmClient,
 		OCIClient:               ociClient,
+		testStartTime:           time.Now(),
 	}
 
 	nt.detectClusterVersion()

@@ -21,8 +21,10 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/parse"
 	"kpt.dev/configsync/pkg/reposync"
+	"kpt.dev/configsync/pkg/resourcegroup"
 	"kpt.dev/configsync/pkg/rootsync"
 	"kpt.dev/configsync/pkg/util/log"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -260,6 +262,61 @@ func statusHasSyncDirAndNoErrors(status v1beta1.Status, sourceType configsync.So
 		if helmChart := status.Rendering.Helm.Chart; helmChart != syncPath {
 			return fmt.Errorf("status.rendering.helm.chart %q does not match the expected chart %q", helmChart, syncPath)
 		}
+	}
+	return nil
+}
+
+func resourceGroupHasReconciled(sourceHash string) testpredicates.Predicate {
+	return func(o client.Object) error {
+		if o == nil {
+			return testpredicates.ErrObjectNotFound
+		}
+		rg, ok := o.(*v1alpha1.ResourceGroup)
+		if !ok {
+			return testpredicates.WrongTypeErr(o, &v1alpha1.ResourceGroup{})
+		}
+
+		// Status is disabled for this ResourceGroup, skip all status checks
+		if resourcegroup.IsStatusDisabled(rg) {
+			return testpredicates.ResourceGroupHasNoStatus()(o)
+		}
+
+		if len(rg.Spec.Resources) != len(rg.Status.ResourceStatuses) {
+			return fmt.Errorf("length of spec.resources (%d) does not equal length of status.resourceStatuses (%d)",
+				len(rg.Spec.Resources), len(rg.Status.ResourceStatuses))
+		}
+
+		resourceCount := make(map[v1alpha1.ObjMetadata]int)
+		for _, s := range rg.Status.ResourceStatuses {
+			if err := resourceStatusIsCurrent(s, sourceHash); err != nil {
+				return fmt.Errorf("object %s is not current: %w", s.ObjMetadata, err)
+			}
+			resourceCount[s.ObjMetadata]++
+		}
+
+		for _, o := range rg.Spec.Resources {
+			if count, ok := resourceCount[o]; ok && count > 0 {
+				resourceCount[o]--
+			} else {
+				return fmt.Errorf("spec.resources does not equal status.resourceStatuses")
+			}
+		}
+		return nil
+	}
+}
+
+func resourceStatusIsCurrent(rs v1alpha1.ResourceStatus, sourceHash string) error {
+	if rs.Status != v1alpha1.Current {
+		return fmt.Errorf("resourceStatus.status is not %s. Got %s", v1alpha1.Current, rs.Status)
+	}
+	if rs.Actuation != v1alpha1.ActuationSucceeded {
+		return fmt.Errorf("resourceStatus.actuation is not %s. Got %s", v1alpha1.ActuationSucceeded, rs.Actuation)
+	}
+	if rs.Reconcile != v1alpha1.ReconcileSucceeded {
+		return fmt.Errorf("resourceStatus.reconcile is not %s. Got %s", v1alpha1.ReconcileSucceeded, rs.Reconcile)
+	}
+	if rs.SourceHash != resourcegroup.TruncateSourceHash(sourceHash) {
+		return fmt.Errorf("resourceStatus.sourceHash is not %s. Got %s", sourceHash, rs.SourceHash)
 	}
 	return nil
 }

@@ -111,7 +111,7 @@ func TestSyncDeploymentAndReplicaSet(t *testing.T) {
 	nt.T.Log("Add a corresponding deployment")
 	nt.Must(rootSyncGitRepo.Copy(fmt.Sprintf("%s/deployment-helloworld.yaml", yamlDir), "acme/namespaces/dir/deployment.yaml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add corresponding deployment"))
-	nt.Must(nt.WatchForAllSyncs())
+	nt.Must(nt.WatchForAllSyncs(nomostest.SkipAllResourceGroupChecks()))
 
 	nt.T.Log("check that the deployment was created")
 	if err := nt.Validate("hello-world", "dir", &appsv1.Deployment{}); err != nil {

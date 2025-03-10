@@ -28,8 +28,9 @@ import (
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
+	"kpt.dev/configsync/pkg/resourcegroup"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/handler"
-	"kpt.dev/configsync/pkg/resourcegroup/controllers/resourcegroup"
+	resourcegroupcontroller "kpt.dev/configsync/pkg/resourcegroup/controllers/resourcegroup"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/resourcemap"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/typeresolver"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/watch"
@@ -42,9 +43,7 @@ import (
 
 //nolint:revive // TODO: add comments for public constants and enable linting
 const (
-	KptGroup           = "kpt"
-	DisableStatusKey   = "configsync.gke.io/status"
-	DisableStatusValue = "disabled"
+	KptGroup = "kpt"
 )
 
 // Reconciler reconciles a ResourceGroup object
@@ -100,7 +99,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	// Skip ResourceGroup status updates if the status is disabled and has
 	// already been removed.
-	if isStatusDisabled(resgroup) {
+	if resourcegroup.IsStatusDisabled(resgroup) {
 		r.Logger(ctx).V(3).Info("Skipping update event: ResourceGroup status disabled")
 		return r.reconcileDisabledResourceGroup(ctx, req, resgroup)
 	}
@@ -155,21 +154,12 @@ func (r *Reconciler) reconcileDisabledResourceGroup(ctx context.Context, req ctr
 	}
 	resgroup.Status = emptyStatus
 	// Use `r.Status().Update()` here instead of `r.Update()` to update only resgroup.Status.
-	err := r.client.Status().Update(ctx, resgroup, client.FieldOwner(resourcegroup.FieldManager))
+	err := r.client.Status().Update(ctx, resgroup, client.FieldOwner(resourcegroupcontroller.FieldManager))
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	// update the resMap
 	return r.reconcile(ctx, req.NamespacedName, []v1alpha1.ObjMetadata{}, true)
-}
-
-func isStatusDisabled(resgroup *v1alpha1.ResourceGroup) bool {
-	annotations := resgroup.GetAnnotations()
-	if annotations == nil {
-		return false
-	}
-	val, found := annotations[DisableStatusKey]
-	return found && val == DisableStatusValue
 }
 
 // NewController creates a new Reconciler and registers it with the provided manager

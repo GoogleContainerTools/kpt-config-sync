@@ -96,7 +96,7 @@ func TestOverrideReconcileTimeout(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Add("acme/pod-1.yaml", pod1))
 	nt.Must(rootSyncGitRepo.Add("acme/ns-1.yaml", k8sobjects.NamespaceObject(namespaceName)))
 	nt.Must(rootSyncGitRepo.CommitAndPush(fmt.Sprintf("Add namespace/%s & pod/%s (never ready)", namespaceName, pod1Name)))
-	nt.Must(nt.WatchForAllSyncs())
+	nt.Must(nt.WatchForAllSyncs(nomostest.SkipAllResourceGroupChecks()))
 	expectActuationStatus := "Succeeded"
 	expectReconcileStatus := "Timeout"
 	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(), "root-sync", "config-management-system",

@@ -16,7 +16,6 @@ package e2e
 
 import (
 	"fmt"
-	"reflect"
 	"testing"
 
 	"kpt.dev/configsync/e2e/nomostest"
@@ -46,18 +45,18 @@ func TestStatusEnabledAndDisabled(t *testing.T) {
 	rootSync := k8sobjects.RootSyncObjectV1Alpha1(configsync.RootSyncName)
 	// Override the statusMode for root-reconciler
 	nt.MustMergePatch(rootSync, `{"spec": {"override": {"statusMode": "disabled"}}}`)
-	nt.Must(nt.WatchForAllSyncs())
+	nt.Must(nt.WatchForAllSyncs(nomostest.SkipAllResourceGroupChecks()))
 
 	namespaceName := "status-test"
 	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespaceObject(namespaceName, nil)))
 	nt.Must(rootSyncGitRepo.Add("acme/cm1.yaml", k8sobjects.ConfigMapObject(core.Name("cm1"), core.Namespace(namespaceName))))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add a namespace and a configmap"))
-	nt.Must(nt.WatchForAllSyncs())
+	nt.Must(nt.WatchForAllSyncs(nomostest.SkipAllResourceGroupChecks()))
 
 	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(),
 		configsync.RootSyncName, configsync.ControllerNamespace,
 		testwatcher.WatchPredicates(
-			resourceGroupHasNoStatus,
+			testpredicates.ResourceGroupHasNoStatus(),
 			testpredicates.HasLabel(common.InventoryLabel, id),
 		),
 		testwatcher.WatchTimeout(nt.DefaultWaitTimeout)))
@@ -73,24 +72,6 @@ func TestStatusEnabledAndDisabled(t *testing.T) {
 			testpredicates.HasLabel(common.InventoryLabel, id),
 		),
 		testwatcher.WatchTimeout(nt.DefaultWaitTimeout)))
-}
-
-func resourceGroupHasNoStatus(obj client.Object) error {
-	if obj == nil {
-		return testpredicates.ErrObjectNotFound
-	}
-	rg, ok := obj.(*resourcegroupv1alpha1.ResourceGroup)
-	if !ok {
-		return testpredicates.WrongTypeErr(obj, &resourcegroupv1alpha1.ResourceGroup{})
-	}
-	// We can't check that the status field is missing, because the
-	// ResourceGroup object doesn't use a pointer for status.
-	// But we can check that the status is empty, which is what we really care
-	// about, to reduce the size of the object in etcd.
-	if !reflect.ValueOf(rg.Status).IsZero() {
-		return fmt.Errorf("found non-empty status in %s", core.IDOf(obj))
-	}
-	return nil
 }
 
 func resourceGroupHasStatus(obj client.Object) error {

@@ -26,8 +26,8 @@ import (
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/metadata"
-	"kpt.dev/configsync/pkg/resourcegroup/controllers/resourcegroup"
-	"kpt.dev/configsync/pkg/resourcegroup/controllers/status"
+	"kpt.dev/configsync/pkg/resourcegroup"
+	resourcegroupcontroller "kpt.dev/configsync/pkg/resourcegroup/controllers/resourcegroup"
 	"sigs.k8s.io/cli-utils/pkg/common"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -75,13 +75,13 @@ func EmptyStatus() v1alpha1.ResourceGroupStatus {
 			{
 				Type:    v1alpha1.Reconciling,
 				Status:  v1alpha1.FalseConditionStatus,
-				Reason:  resourcegroup.FinishReconciling,
+				Reason:  resourcegroupcontroller.FinishReconciling,
 				Message: "finish reconciling",
 			},
 			{
 				Type:    v1alpha1.Stalled,
 				Status:  v1alpha1.FalseConditionStatus,
-				Reason:  resourcegroup.FinishReconciling,
+				Reason:  resourcegroupcontroller.FinishReconciling,
 				Message: "finish reconciling",
 			},
 		},
@@ -112,8 +112,8 @@ func CreateOrUpdateResources(kubeClient *testkubeclient.KubeClient, resources []
 			Kind:    r.Kind,
 		})
 		u.SetAnnotations(map[string]string{
-			"config.k8s.io/owning-inventory": id,
-			status.SourceHashAnnotationKey:   "1234567890",
+			"config.k8s.io/owning-inventory":      id,
+			resourcegroup.SourceHashAnnotationKey: "1234567890",
 		})
 
 		err := kubeClient.Get(r.Name, r.Namespace, u.DeepCopy())

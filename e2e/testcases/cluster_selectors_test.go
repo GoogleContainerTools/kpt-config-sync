@@ -433,13 +433,13 @@ func TestImporterIgnoresNonSelectedCustomResources(t *testing.T) {
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add test cluster and cluster registry data"))
 
 	nt.T.Log("Add CRs (not targeted to this cluster) without its CRD")
-	cr := anvilCR("v1", "e2e-test-anvil", 10)
+	cr := newAnvilObject("v1", "e2e-test-anvil", 10)
 	cr.SetAnnotations(map[string]string{metadata.ClusterNameSelectorAnnotationKey: testClusterSelectorName})
 	nsObj := namespaceObject(backendNamespace, map[string]string{})
 	nt.Must(rootSyncGitRepo.Add(
 		fmt.Sprintf("acme/namespaces/eng/%s/namespace.yaml", backendNamespace), nsObj))
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/eng/backend/anvil.yaml", cr))
-	cr2 := anvilCR("v1", "e2e-test-anvil-2", 10)
+	cr2 := newAnvilObject("v1", "e2e-test-anvil-2", 10)
 	cr2.SetAnnotations(legacyTestClusterSelectorAnnotation)
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/eng/backend/anvil-2.yaml", cr2))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add a custom resource without its CRD"))

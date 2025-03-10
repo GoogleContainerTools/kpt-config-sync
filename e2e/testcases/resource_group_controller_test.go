@@ -266,7 +266,7 @@ func TestResourceGroupCustomResource(t *testing.T) {
 		)))
 
 	nt.T.Log("Add an Anvil object to the ResourceGroup spec")
-	anvilGVK := anvilGVK("v1")
+	anvilGVK := newAnvilGVK("v1")
 	resources := []v1alpha1.ObjMetadata{
 		{
 			Name:      "example",
@@ -306,11 +306,11 @@ func TestResourceGroupCustomResource(t *testing.T) {
 
 	nt.T.Log("Create Anvil object")
 	nt.T.Cleanup(func() {
-		anvilObj := anvilCR("v1", resources[0].Name, 10)
+		anvilObj := newAnvilObject("v1", resources[0].Name, 10)
 		anvilObj.SetNamespace(resources[0].Namespace)
 		nt.Must(kubeDeleteIgnoreNotFound(nt, anvilObj))
 	})
-	anvilObj := anvilCR("v1", resources[0].Name, 10)
+	anvilObj := newAnvilObject("v1", resources[0].Name, 10)
 	anvilObj.SetNamespace(resources[0].Namespace)
 	nt.Must(nt.KubeClient.Create(anvilObj))
 

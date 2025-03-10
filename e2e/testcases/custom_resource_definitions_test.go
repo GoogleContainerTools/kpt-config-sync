@@ -43,7 +43,7 @@ func mustRemoveCustomResourceWithDefinition(nt *nomostest.NT, crd client.Object)
 	nt.Must(rootSyncGitRepo.Add("acme/cluster/anvil-crd.yaml", crd))
 	nsObj := k8sobjects.NamespaceObject("foo")
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/foo/ns.yaml", nsObj))
-	anvilObj := anvilCR("v1", "heavy", 10)
+	anvilObj := newAnvilObject("v1", "heavy", 10)
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/foo/anvil-v1.yaml", anvilObj))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Adding Anvil CRD and one Anvil CR"))
 	nt.Must(nt.WatchForAllSyncs())
@@ -55,7 +55,7 @@ func mustRemoveCustomResourceWithDefinition(nt *nomostest.NT, crd client.Object)
 		nt.T.Fatal(err)
 	}
 
-	err = nt.Validate("heavy", "foo", anvilCR("v1", "", 0))
+	err = nt.Validate("heavy", "foo", newAnvilObject("v1", "", 0))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -128,13 +128,13 @@ func addAndRemoveCustomResource(nt *nomostest.NT, dir string, crd string) {
 	crdObj := rootSyncGitRepo.MustGet(nt.T, "acme/cluster/anvil-crd.yaml")
 	nsObj := k8sobjects.NamespaceObject("prod")
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/prod/ns.yaml", nsObj))
-	anvilObj := anvilCR("v1", "e2e-test-anvil", 10)
+	anvilObj := newAnvilObject("v1", "e2e-test-anvil", 10)
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/prod/anvil.yaml", anvilObj))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Adding Anvil CRD and one Anvil CR"))
 	nt.Must(nt.WatchForAllSyncs())
 	nt.RenewClient()
 
-	err = nt.Validate("e2e-test-anvil", "prod", anvilCR("v1", "", 10))
+	err = nt.Validate("e2e-test-anvil", "prod", newAnvilObject("v1", "", 10))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -155,7 +155,7 @@ func addAndRemoveCustomResource(nt *nomostest.NT, dir string, crd string) {
 	nt.Must(rootSyncGitRepo.Remove("acme/namespaces/prod/anvil.yaml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Removing Anvil CR but leaving Anvil CRD"))
 	nt.Must(nt.WatchForAllSyncs())
-	err = nt.ValidateNotFound("e2e-test-anvil", "prod", anvilCR("v1", "", 10))
+	err = nt.ValidateNotFound("e2e-test-anvil", "prod", newAnvilObject("v1", "", 10))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -225,7 +225,7 @@ func mustRemoveUnManagedCustomResource(nt *nomostest.NT, dir string, crd string)
 	}
 
 	// Apply the CustomResource.
-	cr := anvilCR("v1", "e2e-test-anvil", 100)
+	cr := newAnvilObject("v1", "e2e-test-anvil", 100)
 	cr.SetNamespace("prod")
 	err = nt.KubeClient.Create(cr)
 	if err != nil {
@@ -341,7 +341,7 @@ func addUpdateNamespaceScopedCRD(nt *nomostest.NT, dir string, crd string) {
 	}
 	nt.Must(rootSyncGitRepo.AddFile("acme/cluster/anvil-crd.yaml", crdContent))
 	crdObj := rootSyncGitRepo.MustGet(nt.T, "acme/cluster/anvil-crd.yaml")
-	anvilObj := anvilCR("v1", "e2e-test-anvil", 10)
+	anvilObj := newAnvilObject("v1", "e2e-test-anvil", 10)
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/prod/anvil.yaml", anvilObj))
 	nsObj := k8sobjects.NamespaceObject("prod")
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/prod/ns.yaml", nsObj))
@@ -349,7 +349,7 @@ func addUpdateNamespaceScopedCRD(nt *nomostest.NT, dir string, crd string) {
 	nt.Must(nt.WatchForAllSyncs())
 	nt.RenewClient()
 
-	err = nt.Validate("e2e-test-anvil", "prod", anvilCR("v1", "", 10))
+	err = nt.Validate("e2e-test-anvil", "prod", newAnvilObject("v1", "", 10))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -376,7 +376,7 @@ func addUpdateNamespaceScopedCRD(nt *nomostest.NT, dir string, crd string) {
 	nt.Must(rootSyncGitRepo.CommitAndPush("Updating the Anvil CRD"))
 	nt.Must(nt.WatchForAllSyncs())
 
-	err = nt.Validate("e2e-test-anvil", "prod", anvilCR("v2", "", 10))
+	err = nt.Validate("e2e-test-anvil", "prod", newAnvilObject("v2", "", 10))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -392,7 +392,7 @@ func addUpdateNamespaceScopedCRD(nt *nomostest.NT, dir string, crd string) {
 		nt.T.Fatal(err)
 	}
 	nt.Must(rootSyncGitRepo.AddFile("acme/cluster/anvil-crd.yaml", crdContent))
-	nt.Must(rootSyncGitRepo.Add("acme/namespaces/prod/anvil.yaml", anvilCR("v2", "e2e-test-anvil", 10)))
+	nt.Must(rootSyncGitRepo.Add("acme/namespaces/prod/anvil.yaml", newAnvilObject("v2", "e2e-test-anvil", 10)))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Update the Anvil CRD and CR"))
 	nt.Must(nt.WatchForAllSyncs())
 
@@ -401,7 +401,7 @@ func addUpdateNamespaceScopedCRD(nt *nomostest.NT, dir string, crd string) {
 		nt.T.Fatal(err)
 	}
 
-	err = nt.Validate("e2e-test-anvil", "prod", anvilCR("v2", "", 10))
+	err = nt.Validate("e2e-test-anvil", "prod", newAnvilObject("v2", "", 10))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -501,7 +501,7 @@ func hasTwoVersions(obj client.Object) error {
 }
 
 func clusteranvilCR(version, name string, weight int64) *unstructured.Unstructured {
-	u := anvilCR(version, name, weight)
+	u := newAnvilObject(version, name, weight)
 	gvk := u.GroupVersionKind()
 	gvk.Kind = "ClusterAnvil"
 	u.SetGroupVersionKind(gvk)

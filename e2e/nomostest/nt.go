@@ -58,6 +58,7 @@ import (
 	ocmetrics "kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
+	"kpt.dev/configsync/pkg/resourcegroup"
 	"kpt.dev/configsync/pkg/util"
 	"kpt.dev/configsync/pkg/util/log"
 	"kpt.dev/configsync/pkg/webhook/configuration"
@@ -526,7 +527,7 @@ func (nt *NT) testLogs(previousPodLog bool) {
 	// temporarily to see how presubmit responds.
 	nt.PodLogs(configmanagement.ControllerNamespace, reconcilermanager.ManagerName, reconcilermanager.ManagerName, previousPodLog)
 	nt.PodLogs(configmanagement.ControllerNamespace, configuration.ShortName, configuration.ShortName, previousPodLog)
-	nt.PodLogs(configmanagement.RGControllerNamespace, configmanagement.RGControllerName, "manager", previousPodLog)
+	nt.PodLogs(configmanagement.RGControllerNamespace, configmanagement.RGControllerName, resourcegroup.ManagerContainerName, previousPodLog)
 	for id := range nt.SyncSources {
 		var reconcilerName string
 		switch id.Kind {

@@ -78,12 +78,12 @@ func (tc *KubeClient) Get(name, namespace string, obj client.Object) error {
 	return tc.Client.Get(tc.Context, client.ObjectKey{Name: name, Namespace: namespace}, obj)
 }
 
-// List is identical to List defined for clietc.Client, but without requiring Context.
+// List is identical to List defined for client.Client, but without requiring Context.
 func (tc *KubeClient) List(obj client.ObjectList, opts ...client.ListOption) error {
 	return tc.Client.List(tc.Context, obj, opts...)
 }
 
-// Create is identical to Create defined for clietc.Client, but without requiring Context.
+// Create is identical to Create defined for client.Client, but without requiring Context.
 func (tc *KubeClient) Create(obj client.Object, opts ...client.CreateOption) error {
 	if err := tc.ObjectTypeMustExist(obj); err != nil {
 		return err
@@ -94,7 +94,7 @@ func (tc *KubeClient) Create(obj client.Object, opts ...client.CreateOption) err
 	return tc.Client.Create(tc.Context, obj, opts...)
 }
 
-// Update is identical to Update defined for clietc.Client, but without requiring Context.
+// Update is identical to Update defined for client.Client, but without requiring Context.
 // All fields will be adopted by the nomostest field manager.
 func (tc *KubeClient) Update(obj client.Object, opts ...client.UpdateOption) error {
 	if err := tc.ObjectTypeMustExist(obj); err != nil {
@@ -103,6 +103,18 @@ func (tc *KubeClient) Update(obj client.Object, opts ...client.UpdateOption) err
 	tc.Logger.Debugf("updating %s", fmtObj(obj))
 	opts = append(opts, client.FieldOwner(FieldManager))
 	return tc.Client.Update(tc.Context, obj, opts...)
+}
+
+// UpdateStatus is identical to Status().Update defined for client.Client, but
+// without requiring Context.
+// All fields will be adopted by the nomostest field manager.
+func (tc *KubeClient) UpdateStatus(obj client.Object, opts ...client.SubResourceUpdateOption) error {
+	if err := tc.ObjectTypeMustExist(obj); err != nil {
+		return err
+	}
+	tc.Logger.Debugf("updating status %s", fmtObj(obj))
+	opts = append(opts, client.FieldOwner(FieldManager))
+	return tc.Client.Status().Update(tc.Context, obj, opts...)
 }
 
 // Apply wraps Patch to perform a server-side apply.

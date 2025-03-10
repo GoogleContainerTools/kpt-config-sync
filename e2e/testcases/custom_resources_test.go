@@ -56,7 +56,7 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 
 	nsObj := k8sobjects.NamespaceObject("foo")
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/foo/ns.yaml", nsObj))
-	anvilObj := anvilCR("v1", "heavy", 10)
+	anvilObj := newAnvilObject("v1", "heavy", 10)
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/foo/anvil-v1.yaml", anvilObj))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Adding Anvil CR"))
 	firstCommitHash := rootSyncGitRepo.MustHash(nt.T)
@@ -72,7 +72,7 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 	// Use Retry & Validate instead of WatchForCurrentStatus, because
 	// watching would require creating API objects and updating the scheme.
 	nt.Must(retry.Retry(60*time.Second, func() error {
-		return nt.Validate("heavy", "foo", anvilCR("v1", "", 0),
+		return nt.Validate("heavy", "foo", newAnvilObject("v1", "", 0),
 			testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus))
 	}))
 
@@ -124,7 +124,7 @@ func TestCRDDeleteBeforeRemoveCustomResourceV1(t *testing.T) {
 
 	// Modify the Anvil yaml to trigger immediate re-sync, instead of waiting
 	// for automatic retry (1hr default).
-	anvilObj = anvilCR("v1", "heavy", 100)
+	anvilObj = newAnvilObject("v1", "heavy", 100)
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/foo/anvil-v1.yaml", anvilObj))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Modify Anvil CR"))
 	secondCommitHash := rootSyncGitRepo.MustHash(nt.T)
@@ -187,23 +187,23 @@ func TestSyncUpdateCustomResource(t *testing.T) {
 		testwatcher.WatchTimeout(30*time.Second)))
 
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/foo/ns.yaml", k8sobjects.NamespaceObject("foo")))
-	nt.Must(rootSyncGitRepo.Add("acme/namespaces/foo/anvil-v1.yaml", anvilCR("v1", "heavy", 10)))
+	nt.Must(rootSyncGitRepo.Add("acme/namespaces/foo/anvil-v1.yaml", newAnvilObject("v1", "heavy", 10)))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Adding Anvil CR"))
 	nt.Must(nt.WatchForAllSyncs())
 	nt.RenewClient()
 
-	err = nt.Validate("heavy", "foo", anvilCR("v1", "", 0), weightEqual10)
+	err = nt.Validate("heavy", "foo", newAnvilObject("v1", "", 0), weightEqual10)
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
 	// Update CustomResource
-	nt.Must(rootSyncGitRepo.Add("acme/namespaces/foo/anvil-v1.yaml", anvilCR("v1", "heavy", 100)))
+	nt.Must(rootSyncGitRepo.Add("acme/namespaces/foo/anvil-v1.yaml", newAnvilObject("v1", "heavy", 100)))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Updating Anvil CR"))
 	nt.Must(nt.WatchForAllSyncs())
 	nt.RenewClient()
 
-	err = nt.Validate("heavy", "foo", anvilCR("v1", "", 0), weightEqual100)
+	err = nt.Validate("heavy", "foo", newAnvilObject("v1", "", 0), weightEqual100)
 	if err != nil {
 		nt.T.Fatal(err)
 	}

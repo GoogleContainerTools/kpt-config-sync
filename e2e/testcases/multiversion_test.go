@@ -48,35 +48,35 @@ func TestMultipleVersions_CustomResourceV1(t *testing.T) {
 	// Add the v1 Anvils and verify they are created.
 	nsObj := k8sobjects.NamespaceObject("foo")
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/foo/ns.yaml", nsObj))
-	anvilv1Obj := anvilCR("v1", "first", 10)
+	anvilv1Obj := newAnvilObject("v1", "first", 10)
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/foo/anvilv1.yaml", anvilv1Obj))
-	anvilv2Obj := anvilCR("v2", "second", 100)
+	anvilv2Obj := newAnvilObject("v2", "second", 100)
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/foo/anvilv2.yaml", anvilv2Obj))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Adding v1 and v2 Anvil CRs"))
 	nt.Must(nt.WatchForAllSyncs())
 
-	err := nt.Validate("first", "foo", anvilCR("v1", "", 0))
+	err := nt.Validate("first", "foo", newAnvilObject("v1", "", 0))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	err = nt.Validate("second", "foo", anvilCR("v2", "", 0))
+	err = nt.Validate("second", "foo", newAnvilObject("v2", "", 0))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
 
 	// Modify the v1 Anvils and verify they are updated.
-	anvilv1Obj = anvilCR("v1", "first", 20)
+	anvilv1Obj = newAnvilObject("v1", "first", 20)
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/foo/anvilv1.yaml", anvilv1Obj))
-	anvilv2Obj = anvilCR("v2", "second", 200)
+	anvilv2Obj = newAnvilObject("v2", "second", 200)
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/foo/anvilv2.yaml", anvilv2Obj))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Modifying v1 and v2 Anvil CRs"))
 	nt.Must(nt.WatchForAllSyncs())
 
-	err = nt.Validate("first", "foo", anvilCR("v1", "", 0))
+	err = nt.Validate("first", "foo", newAnvilObject("v1", "", 0))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	err = nt.Validate("second", "foo", anvilCR("v2", "", 0))
+	err = nt.Validate("second", "foo", newAnvilObject("v2", "", 0))
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -155,9 +155,9 @@ func anvilV1CRD() *apiextensionsv1.CustomResourceDefinition {
 	return crd
 }
 
-func anvilCR(version, name string, weight int64) *unstructured.Unstructured {
+func newAnvilObject(version, name string, weight int64) *unstructured.Unstructured {
 	u := &unstructured.Unstructured{}
-	u.SetGroupVersionKind(anvilGVK(version))
+	u.SetGroupVersionKind(newAnvilGVK(version))
 	if name != "" {
 		u.SetName(name)
 	}
@@ -169,7 +169,7 @@ func anvilCR(version, name string, weight int64) *unstructured.Unstructured {
 	return u
 }
 
-func anvilGVK(version string) schema.GroupVersionKind {
+func newAnvilGVK(version string) schema.GroupVersionKind {
 	return schema.GroupVersionKind{
 		Group:   "acme.com",
 		Version: version,

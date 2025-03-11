@@ -95,6 +95,10 @@ func TestResourceGroupControllerInKptGroup(t *testing.T) {
 	rg := testresourcegroup.New(rgNN, resourceID)
 	nt.Must(nt.KubeClient.Create(rg))
 
+	nt.T.Log("Update the ResourceGroup status to simulate the Reconciler")
+	rg.Status.ObservedGeneration = rg.Generation
+	nt.Must(nt.KubeClient.UpdateStatus(rg))
+
 	nt.T.Log("Wait for the ResourceGroupController to update the ResourceGroup status")
 	expectedStatus := testresourcegroup.EmptyStatus()
 	expectedStatus.ObservedGeneration = 1
@@ -118,6 +122,10 @@ func TestResourceGroupControllerInKptGroup(t *testing.T) {
 	nt.Must(nt.KubeClient.Get(rgNN.Name, rgNN.Namespace, rg))
 	rg.Spec.Resources = resources
 	nt.Must(nt.KubeClient.Update(rg))
+
+	nt.T.Log("Update the ResourceGroup status to simulate the Reconciler")
+	rg.Status.ObservedGeneration = rg.Generation
+	nt.Must(nt.KubeClient.UpdateStatus(rg))
 
 	nt.T.Log("Wait for the ResourceGroupController to update the ResourceGroup status")
 	expectedStatus.ObservedGeneration = 2
@@ -154,6 +162,10 @@ func TestResourceGroupControllerInKptGroup(t *testing.T) {
 		},
 	}
 	nt.Must(nt.KubeClient.Update(rg))
+
+	nt.T.Log("Update the ResourceGroup status to simulate the Reconciler")
+	rg.Status.ObservedGeneration = rg.Generation
+	nt.Must(nt.KubeClient.UpdateStatus(rg))
 
 	nt.T.Log("Wait for the ResourceGroupController to update the ResourceGroup status")
 	expectedStatus.ObservedGeneration = 3
@@ -257,6 +269,10 @@ func TestResourceGroupCustomResource(t *testing.T) {
 	rg := testresourcegroup.New(rgNN, resourceID)
 	nt.Must(nt.KubeClient.Create(rg))
 
+	nt.T.Log("Update the ResourceGroup status to simulate the Reconciler")
+	rg.Status.ObservedGeneration = rg.Generation
+	nt.Must(nt.KubeClient.UpdateStatus(rg))
+
 	nt.T.Log("Wait for the ResourceGroupController to update the ResourceGroup status")
 	expectedStatus := testresourcegroup.EmptyStatus()
 	expectedStatus.ObservedGeneration = 1
@@ -281,6 +297,10 @@ func TestResourceGroupCustomResource(t *testing.T) {
 	nt.Must(nt.KubeClient.Get(rgNN.Name, rgNN.Namespace, rg))
 	rg.Spec.Resources = resources
 	nt.Must(nt.KubeClient.Update(rg))
+
+	nt.T.Log("Update the ResourceGroup status to simulate the Reconciler")
+	rg.Status.ObservedGeneration = rg.Generation
+	nt.Must(nt.KubeClient.UpdateStatus(rg))
 
 	nt.T.Log("Wait for the ResourceGroupController to update the ResourceGroup status")
 	expectedStatus.ObservedGeneration = 2
@@ -378,6 +398,10 @@ func TestResourceGroupApplyStatus(t *testing.T) {
 	rg := testresourcegroup.New(rgNN, resourceID)
 	nt.Must(nt.KubeClient.Create(rg))
 
+	nt.T.Log("Update the ResourceGroup status to simulate the Reconciler")
+	rg.Status.ObservedGeneration = rg.Generation
+	nt.Must(nt.KubeClient.UpdateStatus(rg))
+
 	nt.T.Log("Wait for the ResourceGroupController to update the ResourceGroup status")
 	expectedStatus := testresourcegroup.EmptyStatus()
 	expectedStatus.ObservedGeneration = 1
@@ -453,6 +477,10 @@ func TestResourceGroupApplyStatus(t *testing.T) {
 	nt.Must(nt.KubeClient.Get(rgNN.Name, rgNN.Namespace, rg))
 	rg.Spec.Resources = resources
 	nt.Must(nt.KubeClient.Update(rg))
+
+	nt.T.Log("Update the ResourceGroup status to simulate the Reconciler")
+	rg.Status.ObservedGeneration = rg.Generation
+	nt.Must(nt.KubeClient.UpdateStatus(rg))
 
 	nt.T.Log("Wait for the ResourceGroupController to update the ResourceGroup status")
 	expectedStatus.ObservedGeneration = 2

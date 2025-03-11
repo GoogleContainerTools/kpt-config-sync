@@ -99,6 +99,16 @@ func (r *reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, nil
 	}
 
+	// Skip ResourceGroup status updates if the applier hasn't updated the
+	// status to reflect the spec yet. This usually happens back to back in the
+	// inventory client, and will trigger another watch event. Otherwise, if we
+	// update the status first, the status update in the applier may fail due to
+	// ResourceVersion conflict
+	if rgObj.Status.ObservedGeneration != rgObj.Generation {
+		r.Logger(ctx).V(3).Info("Skipping ResourceGroup status update: ResourceGroup status update pending by applier")
+		return ctrl.Result{}, nil
+	}
+
 	// Since this controller doesn't perform any writes in any external systems,
 	// it doesn't need to set the Reconciling condition status to True before
 	// building the new status, because there are no possible side-effects that

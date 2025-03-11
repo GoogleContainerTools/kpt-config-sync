@@ -609,23 +609,20 @@ func TestManagingReconciler(t *testing.T) {
 type updateFunc func(deployment *appsv1.Deployment)
 
 func mustUpdateRootReconciler(nt *nomostest.NT, f updateFunc) {
-	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+	nt.Must(retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		d := &appsv1.Deployment{}
 		if err := nt.KubeClient.Get(nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace, d); err != nil {
 			return err
 		}
 		f(d)
 		return nt.KubeClient.Update(d)
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 }
 
 func mustUpdateReconcilerTemplateConfigMap(nt *nomostest.NT, f updateFunc) {
 	decoder := serializer.NewCodecFactory(nt.Scheme).UniversalDeserializer()
 	yamlSerializer := jserializer.NewYAMLSerializer(jserializer.DefaultMetaFactory, nt.Scheme, nt.Scheme)
-	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+	nt.Must(retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		// Get ConfigMap
 		rmConfigMap := &corev1.ConfigMap{}
 		if err := nt.KubeClient.Get(controllers.ReconcilerTemplateConfigMapName, configsync.ControllerNamespace, rmConfigMap); err != nil {
@@ -651,10 +648,7 @@ func mustUpdateReconcilerTemplateConfigMap(nt *nomostest.NT, f updateFunc) {
 
 		// Update ConfigMap
 		return nt.KubeClient.Update(rmConfigMap)
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	}))
 }
 
 func resetReconcilerDeploymentManifests(nt *nomostest.NT, containerName string, pullPolicy corev1.PullPolicy) {

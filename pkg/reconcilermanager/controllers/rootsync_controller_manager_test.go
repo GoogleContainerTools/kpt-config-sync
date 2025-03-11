@@ -547,10 +547,24 @@ func testDriftProtection(t *testing.T, fakeClient *syncerFake.Client, testReconc
 	require.NoError(t, err)
 
 	// Update object to apply unwanted drift
-	err = modify(obj)
-	require.NoError(t, err)
-	// reconciler-manager makes async changes, so retry on conflict
+	// The reconciler-manager makes async changes, so retry on conflict
 	err = retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		// Construct a new object, to reset the metadata before retrying
+		rObj, err := kinds.NewObjectForGVK(gvk, fakeClient.Scheme())
+		if err != nil {
+			return err
+		}
+		obj, err := kinds.ObjectAsClientObject(rObj)
+		if err != nil {
+			return err
+		}
+		// Get the latest resource version
+		if err := fakeClient.Get(ctx, key, obj); err != nil {
+			return err
+		}
+		if err := modify(obj); err != nil {
+			return err
+		}
 		return fakeClient.Update(ctx, obj, client.FieldOwner(syncerFake.FieldManager))
 	})
 	require.NoError(t, err)

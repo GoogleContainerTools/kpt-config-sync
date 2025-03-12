@@ -257,7 +257,8 @@ func TestStressLargeRequest(t *testing.T) {
 	nomostest.SetExpectedGitCommit(nt, rootSyncID, commit)
 
 	nt.T.Logf("Wait for the sync to complete")
-	nt.Must(nt.WatchForAllSyncs())
+	// Skip ResourceGroup checks because the managed objects do not reconcile
+	nt.Must(nt.WatchForAllSyncs(nomostest.SkipAllResourceGroupChecks()))
 }
 
 // TestStress100CRDs applies 100 CRDs and validates that syncing still works.
@@ -341,7 +342,8 @@ func TestStressManyDeployments(t *testing.T) {
 
 	// Validate that the resources sync without the reconciler running out of
 	// memory, getting OOMKilled, and crash looping.
-	nt.Must(nt.WatchForAllSyncs())
+	// Skip ResourceGroup checks because it takes too long for this many Deployments to reconcile
+	nt.Must(nt.WatchForAllSyncs(nomostest.SkipAllResourceGroupChecks()))
 
 	nt.T.Logf("Verify the number of Deployment objects")
 	nt.Must(validateNumberOfObjectsEquals(nt, kinds.Deployment(), deployCount,

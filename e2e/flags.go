@@ -211,11 +211,13 @@ var GKEClusterVersion = flag.String("gke-cluster-version", util.EnvString("GKE_C
 	"GKE cluster version to use when creating GKE clusters. Defaults to GKE_CLUSTER_VERSION env var.")
 
 // GKEMachineType is the GKE machine type to use when creating GKE clusters.
-var GKEMachineType = flag.String("gke-machine-type", util.EnvString("GKE_MACHINE_TYPE", DefaultGKEMachineType),
+// See testcases.setDefaultArgs for dynamic defaults.
+var GKEMachineType = flag.String("gke-machine-type", "",
 	"GKE machine type to use when creating GKE clusters. Defaults to GKE_MACHINE_TYPE env var.")
 
 // GKEDiskSize is the GKE disk size to use when creating GKE clusters.
-var GKEDiskSize = flag.String("gke-disk-size", util.EnvString("GKE_DISK_SIZE", DefaultGKEDiskSize),
+// See testcases.setDefaultArgs for dynamic defaults.
+var GKEDiskSize = flag.String("gke-disk-size", "",
 	"GKE disk size to use when creating GKE clusters. Defaults to GKE_DISK_SIZE env var.")
 
 // GKEDiskType is the GKE disk type to use when creating GKE clusters.
@@ -223,7 +225,8 @@ var GKEDiskType = flag.String("gke-disk-type", util.EnvString("GKE_DISK_TYPE", D
 	"GKE disk type to use when creating GKE clusters. Defaults to GKE_DISK_TYPE env var.")
 
 // GKENumNodes is the number of nodes to use when creating GKE clusters.
-var GKENumNodes = flag.Int("gke-num-nodes", util.EnvInt("GKE_NUM_NODES", DefaultGKENumNodes),
+// See testcases.setDefaultArgs for dynamic defaults.
+var GKENumNodes = flag.Int("gke-num-nodes", 0,
 	"Number of node to use when creating GKE clusters. Defaults to GKE_NUM_NODES env var.")
 
 // GKEAutopilot indicates whether to enable autopilot when creating GKE clusters.
@@ -257,12 +260,21 @@ const (
 	DefaultGKEChannel = "regular"
 	// DefaultGKEMachineType is the default GKE machine type to use when creating a cluster
 	DefaultGKEMachineType = "n2-standard-8"
+	// DefaultGKEMachineTypeForStress is the default GKE machine type to
+	// use when creating a GKE cluster for stress tests.
+	DefaultGKEMachineTypeForStress = "n2-standard-4"
 	// DefaultGKENumNodes is the default number of nodes to use when creating a GKE cluster
 	DefaultGKENumNodes = 1
+	// DefaultGKENumNodesForStress is the default number of nodes to use
+	// when creating a GKE cluster for stress tests.
+	DefaultGKENumNodesForStress = 4
 	// DefaultGKEDiskType is the default disk type to use when creating a cluster
 	DefaultGKEDiskType = "pd-ssd"
 	// DefaultGKEDiskSize is the default disk size to use when creating a GKE cluster
 	DefaultGKEDiskSize = "50Gb"
+	// DefaultGKEDiskSizeForStress is the default disk size to use when creating
+	// a GKE cluster for stress tests.
+	DefaultGKEDiskSizeForStress = "25Gb"
 	// CreateClustersEnabled indicates that clusters should be created and error
 	// if the cluster already exists.
 	CreateClustersEnabled = "true"

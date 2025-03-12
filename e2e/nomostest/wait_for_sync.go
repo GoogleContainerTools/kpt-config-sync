@@ -19,7 +19,6 @@ import (
 	"strings"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -30,7 +29,6 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
-	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/reposync"
@@ -263,17 +261,7 @@ func (nt *NT) WatchForSync(
 		return nil
 	}
 	rgWatchOptions := []testwatcher.WatchOption{
-		testwatcher.WatchPredicates([]testpredicates.Predicate{
-			// Wait until status.observedGeneration matches metadata.generation
-			testpredicates.HasObservedLatestGeneration(nt.Scheme),
-			// Wait until metadata.deletionTimestamp is missing, and conditions do not include Reconciling=True or Stalled=True
-			testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
-			// Make sure the ResourceGroup has the Stalled condition and it is "False"
-			// This ensures the condition exists and wasn't removed by the applier
-			testpredicates.HasConditionStatus(nt.Scheme, string(v1alpha1.Stalled), corev1.ConditionFalse),
-			// Wait until all resourceStatuses are consistent with spec and current/reconciled
-			resourceGroupHasReconciled(expectedCommit),
-		}...),
+		testwatcher.WatchPredicates(resourceGroupHasReconciled(expectedCommit, nt.Scheme)),
 	}
 	rgWatchOptions = append(rgWatchOptions, opts.watchOptions...)
 	if err := nt.Watcher.WatchObject(kinds.ResourceGroup(), name, namespace, rgWatchOptions...); err != nil {

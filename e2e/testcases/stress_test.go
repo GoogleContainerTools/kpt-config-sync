@@ -605,24 +605,21 @@ func TestStressResourceGroup(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.ACMController, ntopts.StressTest)
 
 	namespace := "resourcegroup-e2e"
+	nt.T.Logf("Create test Namespace: %s", namespace)
 	nt.T.Cleanup(func() {
-		// all test resources are created in this namespace
-		if err := nt.KubeClient.Delete(k8sobjects.NamespaceObject(namespace)); err != nil {
-			nt.T.Error(err)
-		}
+		ns := k8sobjects.NamespaceObject(namespace)
+		nt.Must(kubeDeleteIgnoreNotFound(nt, ns))
 	})
-	if err := nt.KubeClient.Create(k8sobjects.NamespaceObject(namespace)); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.KubeClient.Create(k8sobjects.NamespaceObject(namespace)))
+
 	rgNN := types.NamespacedName{
 		Name:      "group-a",
 		Namespace: namespace,
 	}
-	resourceID := rgNN.Name
-	rg := testresourcegroup.New(rgNN, resourceID)
-	if err := nt.KubeClient.Create(rg); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.T.Logf("Create test ResourceGroup: %s", rgNN)
+	inventoryID := rgNN.Name
+	rg := testresourcegroup.New(rgNN, inventoryID)
+	nt.Must(nt.KubeClient.Create(rg))
 
 	numConfigMaps := 1000
 	var resources []v1alpha1.ObjMetadata
@@ -637,28 +634,29 @@ func TestStressResourceGroup(t *testing.T) {
 		})
 	}
 
-	err := testresourcegroup.UpdateResourceGroup(nt.KubeClient, rgNN, func(rg *v1alpha1.ResourceGroup) {
-		rg.Spec.Resources = resources
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.T.Logf("Update the ResourceGroup spec to add %d ConfigMaps", numConfigMaps)
+	rg.Spec.Resources = resources
+	nt.Must(nt.KubeClient.Update(rg))
+
+	nt.T.Log("Update the ResourceGroup status to simulate the applier")
+	rg.Status.ObservedGeneration = rg.Generation
+	nt.Must(nt.KubeClient.UpdateStatus(rg))
+
+	nt.T.Log("Watch for ResourceGroup controller to update the ResourceGroup status")
 	expectedStatus := testresourcegroup.EmptyStatus()
 	expectedStatus.ObservedGeneration = 2
 	expectedStatus.ResourceStatuses = testresourcegroup.GenerateResourceStatus(resources, v1alpha1.NotFound, "")
-
 	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace,
 		testwatcher.WatchPredicates(
 			testpredicates.ResourceGroupStatusEquals(expectedStatus),
 		)))
 
-	if err := testresourcegroup.CreateOrUpdateResources(nt.KubeClient, resources, resourceID); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.T.Logf("Create %d ConfigMaps", numConfigMaps)
+	nt.Must(testresourcegroup.CreateOrUpdateResources(nt.KubeClient, resources, inventoryID))
 
+	nt.T.Log("Watch for ResourceGroup controller to update the ResourceGroup status")
 	expectedStatus.ObservedGeneration = 2
 	expectedStatus.ResourceStatuses = testresourcegroup.GenerateResourceStatus(resources, v1alpha1.Current, "1234567")
-
 	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace,
 		testwatcher.WatchPredicates(
 			testpredicates.ResourceGroupStatusEquals(expectedStatus),
@@ -668,9 +666,10 @@ func TestStressResourceGroup(t *testing.T) {
 	arbitraryConfigMapToDelete := v1.ConfigMap{}
 	arbitraryConfigMapToDelete.Name = resources[index].Name
 	arbitraryConfigMapToDelete.Namespace = resources[index].Namespace
-	if err := nt.KubeClient.Delete(&arbitraryConfigMapToDelete); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.T.Logf("Delete ConfigMap: %s", arbitraryConfigMapToDelete.Name)
+	nt.Must(nt.KubeClient.Delete(&arbitraryConfigMapToDelete))
+
+	nt.T.Log("Watch for ResourceGroup controller to update the ResourceGroup status")
 	expectedStatus.ResourceStatuses[index] = v1alpha1.ResourceStatus{
 		Status:      v1alpha1.NotFound,
 		ObjMetadata: resources[index],
@@ -683,20 +682,16 @@ func TestStressResourceGroup(t *testing.T) {
 			},
 		},
 	}
-
 	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace,
 		testwatcher.WatchPredicates(
 			testpredicates.ResourceGroupStatusEquals(expectedStatus),
 		)))
 
 	nt.T.Log("Delete the ResourceGroup")
-	if err := nt.KubeClient.Delete(rg); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.KubeClient.Delete(rg))
+
 	nt.T.Log("Assert that the controller pods did not restart")
-	if err := testresourcegroup.ValidateNoControllerPodRestarts(nt.KubeClient); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(testresourcegroup.ValidateNoControllerPodRestarts(nt.KubeClient))
 }
 
 func fakeCRD(kind, group string) *apiextensionsv1.CustomResourceDefinition {

@@ -18,6 +18,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -26,6 +27,7 @@ import (
 	"go.uber.org/multierr"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
+	"kpt.dev/configsync/pkg/util"
 )
 
 // This is a bit of a hack to enforce our --num-clusters flag over the --test.parallel
@@ -38,6 +40,9 @@ func setParallelFlag() error {
 }
 
 func setDefaultArgs() {
+	// Force lower case to match enums
+	*e2e.TestCluster = strings.ToLower(*e2e.TestCluster)
+
 	// backwards compatibility for GCPCLuster arg
 	if *e2e.GCPCluster != "" {
 		fmt.Printf("GCP_CLUSTER provided. Setting CLUSTER_NAMES to [%s]\n", *e2e.GCPCluster)
@@ -57,6 +62,63 @@ func setDefaultArgs() {
 	if *e2e.TestCluster == e2e.Kind && len(*e2e.ClusterNames) == 0 {
 		*e2e.CreateClusters = e2e.CreateClustersEnabled
 	}
+
+	// GKE Standard dynamic defaults.
+	// flag > environment variable > stress default > regular default.
+	// This allows us to use special defaults for stress tests.
+	// TestStressManyDeployments needs at least 10 nodes to schedule 1,000 pods,
+	// due to 110 pod limit per node. Having more nodes also helps prime the
+	// control plane auto-scaler to handle higher load.
+	// Smaller nodes help keep cost down when using more of them.
+	if *e2e.TestCluster == e2e.GKE && !*e2e.GKEAutopilot {
+		*e2e.GKEMachineType = flagEnvVarStressDefaultString(*e2e.GKEMachineType,
+			"GKE_MACHINE_TYPE",
+			e2e.DefaultGKEMachineTypeForStress,
+			e2e.DefaultGKEMachineType)
+
+		*e2e.GKEDiskSize = flagEnvVarStressDefaultString(*e2e.GKEDiskSize,
+			"GKE_DISK_SIZE",
+			e2e.DefaultGKEDiskSizeForStress,
+			e2e.DefaultGKEDiskSize)
+
+		*e2e.GKENumNodes = flagEnvVarStressDefaultInt(*e2e.GKENumNodes,
+			"GKE_NUM_NODES",
+			e2e.DefaultGKENumNodesForStress,
+			e2e.DefaultGKENumNodes)
+	}
+}
+
+func flagEnvVarStressDefaultString(flagValue, envVarName, stressDefault, elseDefault string) string {
+	reflect.ValueOf(flagValue)
+	if flagValue != "" {
+		return flagValue
+	}
+	return util.EnvString(envVarName,
+		ifStressString(stressDefault,
+			elseDefault))
+}
+
+func flagEnvVarStressDefaultInt(flagValue int, envVarName string, stressDefault, elseDefault int) int {
+	if flagValue != 0 {
+		return flagValue
+	}
+	return util.EnvInt(envVarName,
+		ifStressInt(stressDefault,
+			elseDefault))
+}
+
+func ifStressString(yes, no string) string {
+	if *e2e.Stress {
+		return yes
+	}
+	return no
+}
+
+func ifStressInt(yes, no int) int {
+	if *e2e.Stress {
+		return yes
+	}
+	return no
 }
 
 func validateArgs() error {

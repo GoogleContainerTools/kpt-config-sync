@@ -317,6 +317,9 @@ func TestStress100CRDs(t *testing.T) {
 // This ensures that Config Sync can apply resources while the cluster control
 // plane is autoscaling up to meet demand. This requires cluster autoscaling to
 // be enabled.
+//
+// This test needs at least 10 nodes on GKE, due to the 110 pods per node limit.
+// See DefaultGKENumNodesForStressTests for the exact number of nodes per zone.
 func TestStressManyDeployments(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1, ntopts.StressTest,
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),

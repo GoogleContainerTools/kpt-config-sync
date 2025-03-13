@@ -17,7 +17,6 @@ package nomostest
 import (
 	"fmt"
 	"path/filepath"
-	"strings"
 	"time"
 
 	admissionv1 "k8s.io/api/admissionregistration/v1"
@@ -153,7 +152,7 @@ func RestConfig(t testing.NTB, opts *ntopts.New) {
 	t.Logf("Connect to %s cluster using:\nexport KUBECONFIG=%s", *e2e.TestCluster, opts.KubeconfigPath)
 	opts.ClusterName = opts.Name
 	var cluster Cluster
-	switch strings.ToLower(*e2e.TestCluster) {
+	switch *e2e.TestCluster {
 	case e2e.Kind:
 		cluster = &clusters.KindCluster{
 			T:                 t,

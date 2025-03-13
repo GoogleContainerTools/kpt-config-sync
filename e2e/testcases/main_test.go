@@ -18,7 +18,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -89,7 +88,6 @@ func setDefaultArgs() {
 }
 
 func flagEnvVarStressDefaultString(flagValue, envVarName, stressDefault, elseDefault string) string {
-	reflect.ValueOf(flagValue)
 	if flagValue != "" {
 		return flagValue
 	}

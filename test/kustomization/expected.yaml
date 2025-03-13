@@ -5618,9 +5618,10 @@ data:
   otel-collector-config.yaml: |
     receivers:
       opencensus:
+        endpoint: 0.0.0.0:55678
     exporters:
       prometheus:
-        endpoint: :8675
+        endpoint: 0.0.0.0:8675
         namespace: config_sync
         resource_to_telemetry_conversion:
           enabled: true
@@ -5628,6 +5629,7 @@ data:
       batch:
     extensions:
       health_check:
+        endpoint: 0.0.0.0:13133
     service:
       extensions: [health_check]
       pipelines:
@@ -5650,6 +5652,45 @@ data:
   otel-agent-config.yaml: |
     receivers:
       opencensus:
+        endpoint: 0.0.0.0:55678
+    exporters:
+      opencensus:
+        endpoint: otel-collector.config-management-monitoring:55678
+        tls:
+          insecure: true
+    processors:
+      batch:
+      resourcedetection:
+        detectors: [env, gcp]
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+    service:
+      extensions: [health_check]
+      pipelines:
+        metrics:
+          receivers: [opencensus]
+          processors: [batch, resourcedetection]
+          exporters: [opencensus]
+      telemetry:
+        logs:
+          level: "INFO"
+kind: ConfigMap
+metadata:
+  labels:
+    app: opentelemetry
+    component: otel-agent
+    configmanagement.gke.io/arch: csmr
+    configmanagement.gke.io/system: "true"
+  name: otel-agent
+  namespace: config-management-system
+---
+apiVersion: v1
+data:
+  otel-agent-reconciler-config.yaml: |
+    receivers:
+      opencensus:
+        endpoint: 0.0.0.0:55678
     exporters:
       opencensus:
         endpoint: otel-collector.config-management-monitoring:55678
@@ -5667,13 +5708,13 @@ data:
         actions:
           - key: configsync.sync.kind
             action: upsert
-            value: $CONFIGSYNC_SYNC_KIND
+            value: ${CONFIGSYNC_SYNC_KIND}
           - key: configsync.sync.name
             action: upsert
-            value: $CONFIGSYNC_SYNC_NAME
+            value: ${CONFIGSYNC_SYNC_NAME}
           - key: configsync.sync.namespace
             action: upsert
-            value: $CONFIGSYNC_SYNC_NAMESPACE
+            value: ${CONFIGSYNC_SYNC_NAMESPACE}
       batch:
       # Populate resource attributes from OTEL_RESOURCE_ATTRIBUTES env var and
       # the GCE metadata service, if available.
@@ -5681,6 +5722,7 @@ data:
         detectors: [env, gcp]
     extensions:
       health_check:
+        endpoint: 0.0.0.0:13133
     service:
       extensions: [health_check]
       pipelines:
@@ -5698,7 +5740,7 @@ metadata:
     component: otel-agent
     configmanagement.gke.io/arch: csmr
     configmanagement.gke.io/system: "true"
-  name: otel-agent
+  name: otel-agent-reconciler
   namespace: config-management-system
 ---
 apiVersion: v1
@@ -5857,7 +5899,7 @@ data:
             command:
             - /otelcontribcol
             args:
-            - "--config=/conf/otel-agent-config.yaml"
+            - "--config=/conf/otel-agent-reconciler-config.yaml"
             # The prometheus transformer appends `_ratio` to gauge metrics: https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/v0.86.0/pkg/translator/prometheus/normalize_name.go#L149
             # Add the feature gate to enable metric suffix trimming.
             - "--feature-gates=-pkg.translator.prometheus.NormalizeName"
@@ -5872,8 +5914,10 @@ data:
               protocol: TCP
             - containerPort: 8888  # Metrics.
               protocol: TCP
+            - containerPort: 13133 # Health check
+              protocol: TCP
             volumeMounts:
-            - name: otel-agent-config-vol
+            - name: otel-agent-config-reconciler-vol
               mountPath: /conf
             readinessProbe:
               httpGet:
@@ -5964,9 +6008,9 @@ data:
             secret:
               secretName: git-creds
               defaultMode: 288
-          - name: otel-agent-config-vol
+          - name: otel-agent-config-reconciler-vol
             configMap:
-              name: otel-agent
+              name: otel-agent-reconciler
               defaultMode: 420
           - name: service-account
             emptyDir: {}
@@ -5990,6 +6034,7 @@ data:
   otel-agent-config.yaml: |
     receivers:
       opencensus:
+        endpoint: 0.0.0.0:55678
     exporters:
       opencensus:
         endpoint: otel-collector.config-management-monitoring:55678
@@ -6003,6 +6048,7 @@ data:
         detectors: [env, gcp]
     extensions:
       health_check:
+        endpoint: 0.0.0.0:13133
     service:
       extensions: [health_check]
       pipelines:
@@ -6049,6 +6095,8 @@ spec:
     port: 8888
   - name: metrics
     port: 8675
+  - name: health-check
+    port: 13133
   selector:
     app: opentelemetry
     component: otel-collector
@@ -6121,6 +6169,7 @@ spec:
         - containerPort: 55678
         - containerPort: 8888
         - containerPort: 8675
+        - containerPort: 13133
         readinessProbe:
           httpGet:
             path: /
@@ -6332,6 +6381,7 @@ spec:
         ports:
         - containerPort: 55678
         - containerPort: 8888
+        - containerPort: 13133
         readinessProbe:
           httpGet:
             path: /
@@ -6455,6 +6505,7 @@ spec:
         ports:
         - containerPort: 55678
         - containerPort: 8888
+        - containerPort: 13133
         readinessProbe:
           httpGet:
             path: /

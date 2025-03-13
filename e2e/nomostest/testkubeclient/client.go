@@ -24,6 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"kpt.dev/configsync/e2e/nomostest/retry"
 	"kpt.dev/configsync/e2e/nomostest/testlogger"
+	"kpt.dev/configsync/pkg/kinds"
 
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -41,10 +42,6 @@ type KubeClient struct {
 	Client client.Client
 	// Logger for methods to use.
 	Logger *testlogger.TestLogger
-}
-
-func fmtObj(obj client.Object) string {
-	return fmt.Sprintf("%s/%s %T", obj.GetNamespace(), obj.GetName(), obj)
 }
 
 // ObjectTypeMustExist returns an error if the passed type is not declared in
@@ -88,7 +85,7 @@ func (tc *KubeClient) Create(obj client.Object, opts ...client.CreateOption) err
 	if err := tc.ObjectTypeMustExist(obj); err != nil {
 		return err
 	}
-	tc.Logger.Debugf("creating %s", fmtObj(obj))
+	tc.Logger.Debugf("creating %s", kinds.ObjectSummary(obj))
 	AddTestLabel(obj)
 	opts = append(opts, client.FieldOwner(FieldManager))
 	return tc.Client.Create(tc.Context, obj, opts...)
@@ -100,7 +97,7 @@ func (tc *KubeClient) Update(obj client.Object, opts ...client.UpdateOption) err
 	if err := tc.ObjectTypeMustExist(obj); err != nil {
 		return err
 	}
-	tc.Logger.Debugf("updating %s", fmtObj(obj))
+	tc.Logger.Debugf("updating %s", kinds.ObjectSummary(obj))
 	opts = append(opts, client.FieldOwner(FieldManager))
 	return tc.Client.Update(tc.Context, obj, opts...)
 }
@@ -112,7 +109,7 @@ func (tc *KubeClient) UpdateStatus(obj client.Object, opts ...client.SubResource
 	if err := tc.ObjectTypeMustExist(obj); err != nil {
 		return err
 	}
-	tc.Logger.Debugf("updating status %s", fmtObj(obj))
+	tc.Logger.Debugf("updating status %s", kinds.ObjectSummary(obj))
 	opts = append(opts, client.FieldOwner(FieldManager))
 	return tc.Client.Status().Update(tc.Context, obj, opts...)
 }
@@ -123,7 +120,7 @@ func (tc *KubeClient) Apply(obj client.Object, opts ...client.PatchOption) error
 	if err := tc.ObjectTypeMustExist(obj); err != nil {
 		return err
 	}
-	tc.Logger.Debugf("applying %s", fmtObj(obj))
+	tc.Logger.Debugf("applying %s", kinds.ObjectSummary(obj))
 	AddTestLabel(obj)
 	opts = append(opts, client.FieldOwner(FieldManager), client.ForceOwnership)
 	return tc.Client.Patch(tc.Context, obj, client.Apply, opts...)
@@ -134,7 +131,7 @@ func (tc *KubeClient) Delete(obj client.Object, opts ...client.DeleteOption) err
 	if err := tc.ObjectTypeMustExist(obj); err != nil {
 		return err
 	}
-	tc.Logger.Debugf("deleting %s", fmtObj(obj))
+	tc.Logger.Debugf("deleting %s", kinds.ObjectSummary(obj))
 	return tc.Client.Delete(tc.Context, obj, opts...)
 }
 

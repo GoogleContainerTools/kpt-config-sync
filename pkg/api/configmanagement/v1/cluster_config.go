@@ -15,60 +15,9 @@
 package v1
 
 import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"kpt.dev/configsync/pkg/api/configmanagement"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-// NewClusterConfig initializes a ClusterConfig.
-func NewClusterConfig(importToken string, loadTime metav1.Time) *ClusterConfig {
-	return &ClusterConfig{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: SchemeGroupVersion.String(),
-			Kind:       configmanagement.ClusterConfigKind,
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: ClusterConfigName,
-		},
-		Spec: ClusterConfigSpec{
-			Token:      importToken,
-			ImportTime: loadTime,
-		},
-	}
-}
-
-// NewCRDClusterConfig initializes a CRD Clusterconfig.
-func NewCRDClusterConfig(importToken string, loadTime metav1.Time) *ClusterConfig {
-	result := NewClusterConfig(importToken, loadTime)
-	result.Name = CRDClusterConfigName
-	return result
-}
-
-// NewNamespaceConfig initializes a Namespace cluster config.
-func NewNamespaceConfig(
-	name string,
-	annotations map[string]string,
-	labels map[string]string,
-	importToken string,
-	loadTime metav1.Time,
-) *NamespaceConfig {
-	return &NamespaceConfig{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: SchemeGroupVersion.String(),
-			Kind:       configmanagement.NamespaceConfigKind,
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        name,
-			Annotations: annotations,
-			Labels:      labels,
-		},
-		Spec: NamespaceConfigSpec{
-			Token:      importToken,
-			ImportTime: loadTime,
-		},
-	}
-}
 
 // AddResource adds a client.Object to this ClusterConfig.
 func (c *ClusterConfig) AddResource(o client.Object) {

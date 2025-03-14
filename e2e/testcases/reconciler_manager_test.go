@@ -45,6 +45,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
@@ -396,6 +397,11 @@ func validateRootSyncDependencies(nt *nomostest.NT, rsName string) []client.Obje
 	setNN(rootSyncSA, client.ObjectKeyFromObject(rootSyncReconciler))
 	rootSyncDependencies = append(rootSyncDependencies, rootSyncSA)
 
+	resourceGroup := &v1alpha1.ResourceGroup{}
+	resourceGroup.Name = rsName
+	resourceGroup.Namespace = configsync.ControllerNamespace
+	rootSyncDependencies = append(rootSyncDependencies, resourceGroup)
+
 	for _, obj := range rootSyncDependencies {
 		err := nt.Validate(obj.GetName(), obj.GetNamespace(), obj)
 		require.NoError(nt.T, err)
@@ -422,6 +428,12 @@ func validateRepoSyncDependencies(nt *nomostest.NT, ns, rsName string) []client.
 	repoSyncSA := &corev1.ServiceAccount{}
 	setNN(repoSyncSA, client.ObjectKeyFromObject(repoSyncReconciler))
 	repoSyncDependencies = append(repoSyncDependencies, repoSyncSA)
+
+	resourceGroup := &v1alpha1.ResourceGroup{}
+	resourceGroup.Name = rsName
+	resourceGroup.Namespace = ns
+
+	repoSyncDependencies = append(repoSyncDependencies, resourceGroup)
 
 	// See nomostest.CreateNamespaceSecrets for creation of user secrets.
 	// The Secret is neither needed nor created when using CSR as the Git provider.

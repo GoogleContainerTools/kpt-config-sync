@@ -21,12 +21,12 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest/retry"
 	"kpt.dev/configsync/e2e/nomostest/testlogger"
 	"kpt.dev/configsync/pkg/kinds"
-
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -54,7 +54,7 @@ func (tc *KubeClient) ObjectTypeMustExist(o client.Object) error {
 	return nil
 }
 
-// Get is identical to Get defined for clietc.Client, except:
+// Get is identical to Get defined for client.Client, except:
 //
 // 1) Context implicitly uses the one created for the test case.
 // 2) name and namespace are strings instead of requiring client.ObjectKey.
@@ -126,7 +126,7 @@ func (tc *KubeClient) Apply(obj client.Object, opts ...client.PatchOption) error
 	return tc.Client.Patch(tc.Context, obj, client.Apply, opts...)
 }
 
-// Delete is identical to Delete defined for clietc.Client, but without requiring Context.
+// Delete is identical to Delete defined for client.Client, but without requiring Context.
 func (tc *KubeClient) Delete(obj client.Object, opts ...client.DeleteOption) error {
 	if err := tc.ObjectTypeMustExist(obj); err != nil {
 		return err
@@ -135,7 +135,18 @@ func (tc *KubeClient) Delete(obj client.Object, opts ...client.DeleteOption) err
 	return tc.Client.Delete(tc.Context, obj, opts...)
 }
 
-// DeleteAllOf is identical to DeleteAllOf defined for clietc.Client, but without requiring Context.
+// DeleteIfExists wraps Delete and ignores NotFound errors.
+// Does not ignore NoMatchFound errors, which could indicate a misconfiguration.
+func (tc *KubeClient) DeleteIfExists(obj client.Object, opts ...client.DeleteOption) error {
+	if err := tc.Delete(obj, opts...); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return err
+		}
+	}
+	return nil
+}
+
+// DeleteAllOf is identical to DeleteAllOf defined for client.Client, but without requiring Context.
 func (tc *KubeClient) DeleteAllOf(obj client.Object, opts ...client.DeleteAllOfOption) error {
 	if err := tc.ObjectTypeMustExist(obj); err != nil {
 		return err

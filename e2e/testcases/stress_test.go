@@ -609,7 +609,7 @@ func TestStressResourceGroup(t *testing.T) {
 	nt.T.Logf("Create test Namespace: %s", namespace)
 	nt.T.Cleanup(func() {
 		ns := k8sobjects.NamespaceObject(namespace)
-		nt.Must(kubeDeleteIgnoreNotFound(nt, ns))
+		nt.Must(nt.KubeClient.DeleteIfExists(ns))
 	})
 	nt.Must(nt.KubeClient.Create(k8sobjects.NamespaceObject(namespace)))
 
@@ -619,6 +619,10 @@ func TestStressResourceGroup(t *testing.T) {
 	}
 	nt.T.Logf("Create test ResourceGroup: %s", rgNN)
 	inventoryID := rgNN.Name
+	nt.T.Cleanup(func() {
+		rg := testresourcegroup.New(rgNN, inventoryID)
+		nt.Must(nt.KubeClient.DeleteIfExists(rg))
+	})
 	rg := testresourcegroup.New(rgNN, inventoryID)
 	nt.Must(nt.KubeClient.Create(rg))
 
@@ -687,9 +691,6 @@ func TestStressResourceGroup(t *testing.T) {
 		testwatcher.WatchPredicates(
 			testpredicates.ResourceGroupStatusEquals(expectedStatus),
 		)))
-
-	nt.T.Log("Delete the ResourceGroup")
-	nt.Must(nt.KubeClient.Delete(rg))
 
 	nt.T.Log("Assert that the controller pods did not restart")
 	nt.Must(testresourcegroup.ValidateNoControllerPodRestarts(nt.KubeClient))

@@ -141,23 +141,23 @@ func TestKCCResourceGroup(t *testing.T) {
 
 	namespace := "resourcegroup-e2e"
 	nt.T.Cleanup(func() {
-		// all test resources are created in this namespace
-		if err := nt.KubeClient.Delete(k8sobjects.NamespaceObject(namespace)); err != nil {
-			nt.T.Error(err)
-		}
+		ns := k8sobjects.NamespaceObject(namespace)
+		nt.Must(nt.KubeClient.DeleteIfExists(ns))
 	})
-	if err := nt.KubeClient.Create(k8sobjects.NamespaceObject(namespace)); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.KubeClient.Create(k8sobjects.NamespaceObject(namespace)))
+
 	rgNN := types.NamespacedName{
 		Name:      "group-kcc",
 		Namespace: namespace,
 	}
+	nt.T.Logf("Create test ResourceGroup: %s", rgNN)
 	resourceID := rgNN.Name
+	nt.T.Cleanup(func() {
+		rg := testresourcegroup.New(rgNN, resourceID)
+		nt.Must(nt.KubeClient.DeleteIfExists(rg))
+	})
 	rg := testresourcegroup.New(rgNN, resourceID)
-	if err := nt.KubeClient.Create(rg); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.KubeClient.Create(rg))
 
 	nt.T.Log("Create a KCC object and verify the ResourceGroup status")
 	kccObj := &unstructured.Unstructured{
@@ -181,16 +181,16 @@ func TestKCCResourceGroup(t *testing.T) {
 		Namespace: kccObj.GetNamespace(),
 		Name:      kccObj.GetName(),
 	}
-	if err := nt.KubeClient.Create(kccObj); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.KubeClient.Create(kccObj))
+
 	nt.T.Log("Add the KCC object to the ResourceGroup")
-	err := testresourcegroup.UpdateResourceGroup(nt.KubeClient, rgNN, func(rg *v1alpha1.ResourceGroup) {
-		rg.Spec.Resources = []v1alpha1.ObjMetadata{resource}
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	rg.Spec.Resources = []v1alpha1.ObjMetadata{resource}
+	nt.Must(nt.KubeClient.Update(rg))
+
+	nt.T.Log("Update the ResourceGroup status to simulate the Reconciler")
+	rg.Status.ObservedGeneration = rg.Generation
+	nt.Must(nt.KubeClient.UpdateStatus(rg))
+
 	nt.T.Log("Verifying the resourcegroup status: It can surface the kcc resource status.conditions")
 	expectedStatus := testresourcegroup.EmptyStatus()
 	expectedStatus.ObservedGeneration = 2

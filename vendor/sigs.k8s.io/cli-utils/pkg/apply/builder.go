@@ -28,6 +28,7 @@ type commonBuilder struct {
 	unstructuredClientForMapping func(*meta.RESTMapping) (resource.RESTClient, error)
 	statusWatcher                watcher.StatusWatcher
 	statusWatcherFilters         *watcher.Filters
+	statusPolicy                 inventory.StatusPolicy
 }
 
 func (cb *commonBuilder) finalize() (*commonBuilder, error) {

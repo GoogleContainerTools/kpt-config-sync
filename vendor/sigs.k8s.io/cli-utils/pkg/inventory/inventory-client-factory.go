@@ -17,10 +17,8 @@ type ClientFactory interface {
 }
 
 // ClusterClientFactory is a factory that creates instances of ClusterClient inventory client.
-type ClusterClientFactory struct {
-	StatusPolicy StatusPolicy
-}
+type ClusterClientFactory struct{}
 
 func (ccf ClusterClientFactory) NewClient(factory cmdutil.Factory) (Client, error) {
-	return NewClient(factory, WrapInventoryObj, InvInfoToConfigMap, ccf.StatusPolicy, ConfigMapGVK)
+	return NewUnstructuredClient(factory, configMapToInventory, inventoryToConfigMap, ConfigMapGVK)
 }

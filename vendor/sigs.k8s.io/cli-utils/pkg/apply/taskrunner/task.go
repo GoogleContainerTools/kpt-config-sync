@@ -38,7 +38,7 @@ type Task interface {
 func NewWaitTask(name string, ids object.ObjMetadataSet, cond Condition, timeout time.Duration, mapper meta.RESTMapper) *WaitTask {
 	return &WaitTask{
 		TaskName:  name,
-		Ids:       ids,
+		IDs:       ids,
 		Condition: cond,
 		Timeout:   timeout,
 		Mapper:    mapper,
@@ -55,8 +55,8 @@ func NewWaitTask(name string, ids object.ObjMetadataSet, cond Condition, timeout
 type WaitTask struct {
 	// TaskName allows providing a name for the task.
 	TaskName string
-	// Ids is the full list of resources that we are waiting for.
-	Ids object.ObjMetadataSet
+	// IDs is the full list of resources that we are waiting for.
+	IDs object.ObjMetadataSet
 	// Condition defines the status we want all resources to reach
 	Condition Condition
 	// Timeout defines how long we are willing to wait for the condition
@@ -85,14 +85,14 @@ func (w *WaitTask) Action() event.ResourceAction {
 }
 
 func (w *WaitTask) Identifiers() object.ObjMetadataSet {
-	return w.Ids
+	return w.IDs
 }
 
 // Start kicks off the task. For the wait task, this just means
 // setting up the timeout timer.
 func (w *WaitTask) Start(taskContext *TaskContext) {
 	klog.V(2).Infof("wait task starting (name: %q, objects: %d)",
-		w.Name(), len(w.Ids))
+		w.Name(), len(w.IDs))
 
 	// TODO: inherit context from task runner, passed through the TaskContext
 	ctx := context.Background()
@@ -149,10 +149,10 @@ func (w *WaitTask) startInner(taskContext *TaskContext) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	klog.V(3).Infof("wait task progress: %d/%d", 0, len(w.Ids))
+	klog.V(3).Infof("wait task progress: %d/%d", 0, len(w.IDs))
 
 	pending := object.ObjMetadataSet{}
-	for _, id := range w.Ids {
+	for _, id := range w.IDs {
 		switch {
 		case w.skipped(taskContext, id):
 			err := taskContext.InventoryManager().SetSkippedReconcile(id)
@@ -183,7 +183,7 @@ func (w *WaitTask) startInner(taskContext *TaskContext) {
 	}
 	w.pending = pending
 
-	klog.V(3).Infof("wait task progress: %d/%d", len(w.Ids)-len(w.pending), len(w.Ids))
+	klog.V(3).Infof("wait task progress: %d/%d", len(w.IDs)-len(w.pending), len(w.IDs))
 
 	if len(pending) == 0 {
 		// all reconciled - clear pending and exit
@@ -351,7 +351,7 @@ func (w *WaitTask) StatusUpdate(taskContext *TaskContext, id object.ObjMetadata)
 			w.sendEvent(taskContext, id, event.ReconcileFailed)
 			// default - still pending
 		}
-	case !w.Ids.Contains(id):
+	case !w.IDs.Contains(id):
 		// not in wait group - ignore
 		return
 	case w.skipped(taskContext, id):
@@ -398,7 +398,7 @@ func (w *WaitTask) StatusUpdate(taskContext *TaskContext, id object.ObjMetadata)
 		// else - still reconciled
 	}
 
-	klog.V(3).Infof("wait task progress: %d/%d", len(w.Ids)-len(w.pending), len(w.Ids))
+	klog.V(3).Infof("wait task progress: %d/%d", len(w.IDs)-len(w.pending), len(w.IDs))
 
 	// If we no longer have any pending resources, the WaitTask
 	// can be completed.
@@ -415,7 +415,7 @@ func (w *WaitTask) StatusUpdate(taskContext *TaskContext, id object.ObjMetadata)
 // Resetting the mapper requires all CRDs to be queried again.
 func (w *WaitTask) updateRESTMapper(taskContext *TaskContext) {
 	foundCRD := false
-	for _, id := range w.Ids {
+	for _, id := range w.IDs {
 		if id.GroupKind == crdGK && !w.skipped(taskContext, id) {
 			foundCRD = true
 			break

@@ -2,14 +2,16 @@ module kpt.dev/configsync
 
 go 1.23.0
 
-replace github.com/GoogleContainerTools/kpt => ./internal/third_party/github.com/GoogleContainerTools/kpt
+// TODO: replace this once cli-utils change is submitted
+replace sigs.k8s.io/cli-utils => github.com/sdowell/cli-utils v0.26.1-0.20250314181537-64c8ce4a058e
+
+//replace sigs.k8s.io/cli-utils => ../../../sigs.k8s.io/cli-utils
 
 require (
 	cloud.google.com/go/compute/metadata v0.5.1
 	cloud.google.com/go/monitoring v1.21.0
 	cloud.google.com/go/trace v1.11.0
 	contrib.go.opencensus.io/exporter/ocagent v0.7.0
-	github.com/GoogleContainerTools/kpt v1.0.0-beta.46
 	github.com/GoogleContainerTools/kpt-functions-catalog/functions/go/set-namespace v0.4.1-0.20220713210718-d955e7d3a800
 	github.com/GoogleContainerTools/kpt-functions-sdk/go/fn v0.0.0-20220706221933-7181f451a663
 	github.com/Masterminds/semver v1.5.0

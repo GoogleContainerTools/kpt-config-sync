@@ -4,6 +4,7 @@
 package filter
 
 import (
+	"context"
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -30,7 +31,7 @@ func (lnf LocalNamespacesFilter) Name() string {
 
 // Filter returns a NamespaceInUseError if the object prune/delete should be
 // skipped.
-func (lnf LocalNamespacesFilter) Filter(obj *unstructured.Unstructured) error {
+func (lnf LocalNamespacesFilter) Filter(_ context.Context, obj *unstructured.Unstructured) error {
 	id := object.UnstructuredToObjMetadata(obj)
 	if id.GroupKind == namespaceGK &&
 		lnf.LocalNamespaces.Has(id.Name) {

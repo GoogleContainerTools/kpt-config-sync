@@ -44,6 +44,7 @@ func (b *ApplierBuilder) Build() (*Applier, error) {
 		openAPIGetter: bx.discoClient,
 		mapper:        bx.mapper,
 		infoHelper:    info.NewHelper(bx.mapper, bx.unstructuredClientForMapping),
+		statusPolicy:  bx.statusPolicy,
 	}, nil
 }
 
@@ -89,5 +90,10 @@ func (b *ApplierBuilder) WithStatusWatcher(statusWatcher watcher.StatusWatcher) 
 
 func (b *ApplierBuilder) WithStatusWatcherFilters(filters *watcher.Filters) *ApplierBuilder {
 	b.statusWatcherFilters = filters
+	return b
+}
+
+func (b *ApplierBuilder) WithStatusPolicy(statusPolicy inventory.StatusPolicy) *ApplierBuilder {
+	b.statusPolicy = statusPolicy
 	return b
 }

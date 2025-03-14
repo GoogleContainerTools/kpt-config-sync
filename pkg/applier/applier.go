@@ -21,7 +21,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GoogleContainerTools/kpt/pkg/live"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -130,7 +129,7 @@ type supervisor struct {
 	// inventory policy for configuring the inventory status
 	policy inventory.Policy
 	// inventory ResourceGroup used to track managed objects
-	inventory *live.InventoryResourceGroup
+	inventory *inventory.UnstructuredInventory
 	// clientSet wraps multiple API server clients
 	clientSet *ClientSet
 	// syncKind is the Kind of the RSync object: RootSync or RepoSync
@@ -171,7 +170,7 @@ func NewNamespaceSupervisor(cs *ClientSet, namespace declared.Scope, syncName st
 		return nil, err
 	}
 	klog.Infof("successfully annotate the ResourceGroup object with the status mode %s", cs.StatusMode)
-	inv, err := wrapInventoryObj(invObj)
+	inv, err := inventoryFromUnstructured(invObj)
 	if err != nil {
 		return nil, err
 	}
@@ -200,7 +199,7 @@ func NewRootSupervisor(cs *ClientSet, syncName string, reconcileTimeout time.Dur
 		return nil, err
 	}
 	klog.Infof("successfully annotate the ResourceGroup object with the status mode %s", cs.StatusMode)
-	inv, err := wrapInventoryObj(u)
+	inv, err := inventoryFromUnstructured(u)
 	if err != nil {
 		return nil, err
 	}
@@ -215,14 +214,6 @@ func NewRootSupervisor(cs *ClientSet, syncName string, reconcileTimeout time.Dur
 	}
 	klog.V(4).Infof("Root Supervisor %s is initialized and synced with the API server", syncName)
 	return a, nil
-}
-
-func wrapInventoryObj(obj *unstructured.Unstructured) (*live.InventoryResourceGroup, error) {
-	inv, ok := live.WrapInventoryObj(obj).(*live.InventoryResourceGroup)
-	if !ok {
-		return nil, errors.New("failed to create an ResourceGroup object")
-	}
-	return inv, nil
 }
 
 func (s *supervisor) processApplyEvent(ctx context.Context, e event.ApplyEvent, syncStats *stats.ApplyEventStats, objectStatusMap ObjectStatusMap, unknownTypeResources map[core.ID]struct{}, resourceMap map[core.ID]client.Object) status.Error {
@@ -765,7 +756,7 @@ func InventoryID(name, namespace string) string {
 // then disables them, one by one, by removing the ConfigSync metadata.
 // Returns the number of objects which are disabled successfully, and any errors
 // encountered.
-func (s *supervisor) handleDisabledObjects(ctx context.Context, rg *live.InventoryResourceGroup, objs []client.Object) (uint64, status.MultiError) {
+func (s *supervisor) handleDisabledObjects(ctx context.Context, rg *inventory.UnstructuredInventory, objs []client.Object) (uint64, status.MultiError) {
 	// disabledCount tracks the number of objects which are disabled successfully
 	var disabledCount uint64
 	err := s.removeFromInventory(rg, objs)
@@ -796,29 +787,16 @@ func (s *supervisor) handleDisabledObjects(ctx context.Context, rg *live.Invento
 
 // removeFromInventory removes the specified objects from the inventory, if it
 // exists.
-func (s *supervisor) removeFromInventory(rg *live.InventoryResourceGroup, objs []client.Object) error {
-	clusterInv, err := s.clientSet.InvClient.GetClusterInventoryInfo(rg)
-	if err != nil {
-		return err
-	}
-	if clusterInv == nil {
-		// If inventory does not exist, there is nothing to remove
+func (s *supervisor) removeFromInventory(rg inventory.Info, objs []client.Object) error {
+	clusterInventory, err := s.clientSet.InvClient.Get(context.TODO(), rg, inventory.GetOptions{})
+	if apierrors.IsNotFound(err) {
 		return nil
-	}
-	wrappedInv, err := wrapInventoryObj(clusterInv)
-	if err != nil {
+	} else if err != nil {
 		return err
 	}
-	oldObjs, err := wrappedInv.Load()
-	if err != nil {
-		return err
-	}
-	newObjs := removeFrom(oldObjs, objs)
-	err = rg.Store(newObjs, nil)
-	if err != nil {
-		return err
-	}
-	return s.clientSet.InvClient.Replace(rg, newObjs, nil, common.DryRunNone)
+	newObjs := removeFrom(clusterInventory.Objects(), objs)
+	clusterInventory.SetObjects(newObjs)
+	return s.clientSet.InvClient.CreateOrUpdate(context.TODO(), clusterInventory, inventory.UpdateOptions{})
 }
 
 // abandonObject removes ConfigSync labels and annotations from an object,

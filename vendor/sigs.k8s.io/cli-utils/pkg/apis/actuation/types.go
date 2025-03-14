@@ -4,30 +4,8 @@
 package actuation
 
 import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
-
-// Inventory represents the inventory object in memory.
-// Inventory is currently only used for in-memory storage and not serialized to
-// disk or to the API server.
-type Inventory struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-
-	Spec   InventorySpec   `json:"spec,omitempty"`
-	Status InventoryStatus `json:"status,omitempty"`
-}
-
-// InventorySpec is the specification of the desired/expected inventory state.
-type InventorySpec struct {
-	Objects []ObjectReference `json:"objects,omitempty"`
-}
-
-// InventoryStatus is the status of the current/last-known inventory state.
-type InventoryStatus struct {
-	Objects []ObjectStatus `json:"objects,omitempty"`
-}
 
 // ObjectReference is a reference to a KRM resource by name and kind.
 //

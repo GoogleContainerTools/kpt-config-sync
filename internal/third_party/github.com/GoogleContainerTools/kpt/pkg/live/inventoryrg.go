@@ -60,7 +60,7 @@ var ResourceGroupGVK = schema.GroupVersionKind{
 // the Inventory and InventoryInfo interface. This wrapper loads and stores the
 // object metadata (inventory) to and from the wrapped ResourceGroup.
 type InventoryResourceGroup struct {
-	inv       *unstructured.Unstructured
+	*unstructured.Unstructured
 	objMetas  []object.ObjMetadata
 	objStatus []actuation.ObjectStatus
 }
@@ -79,20 +79,20 @@ func WrapInventoryObj(obj *unstructured.Unstructured) inventory.Storage {
 	if obj != nil {
 		klog.V(4).Infof("wrapping Inventory obj: %s/%s\n", obj.GetNamespace(), obj.GetName())
 	}
-	return &InventoryResourceGroup{inv: obj}
+	return &InventoryResourceGroup{Unstructured: obj}
 }
 
 func WrapInventoryInfoObj(obj *unstructured.Unstructured) inventory.Info {
 	if obj != nil {
 		klog.V(4).Infof("wrapping InventoryInfo obj: %s/%s\n", obj.GetNamespace(), obj.GetName())
 	}
-	return &InventoryResourceGroup{inv: obj}
+	return &InventoryResourceGroup{Unstructured: obj}
 }
 
 func InvToUnstructuredFunc(inv inventory.Info) *unstructured.Unstructured {
 	switch invInfo := inv.(type) {
 	case *InventoryResourceGroup:
-		return invInfo.inv
+		return invInfo.Unstructured
 	default:
 		return nil
 	}
@@ -101,15 +101,15 @@ func InvToUnstructuredFunc(inv inventory.Info) *unstructured.Unstructured {
 // Name(), Namespace(), and ID() are InventoryResourceGroup functions to
 // implement the InventoryInfo interface.
 func (icm *InventoryResourceGroup) Name() string {
-	return icm.inv.GetName()
+	return icm.Unstructured.GetName()
 }
 
 func (icm *InventoryResourceGroup) Namespace() string {
-	return icm.inv.GetNamespace()
+	return icm.Unstructured.GetNamespace()
 }
 
 func (icm *InventoryResourceGroup) ID() string {
-	labels := icm.inv.GetLabels()
+	labels := icm.Unstructured.GetLabels()
 	if val, found := labels[common.InventoryLabel]; found {
 		return val
 	}
@@ -120,11 +120,11 @@ func (icm *InventoryResourceGroup) ID() string {
 // object metadata from the wrapped ResourceGroup, or an error.
 func (icm *InventoryResourceGroup) Load() (object.ObjMetadataSet, error) {
 	objs := object.ObjMetadataSet{}
-	if icm.inv == nil {
+	if icm.Unstructured == nil {
 		return objs, fmt.Errorf("inventory info is nil")
 	}
 	klog.V(4).Infof("loading inventory...")
-	items, exists, err := unstructured.NestedSlice(icm.inv.Object, "spec", "resources")
+	items, exists, err := unstructured.NestedSlice(icm.Unstructured.Object, "spec", "resources")
 	if err != nil {
 		err := fmt.Errorf("error retrieving object metadata from inventory object")
 		return objs, err
@@ -179,7 +179,7 @@ func (icm *InventoryResourceGroup) Store(objMetas object.ObjMetadataSet, status 
 // GetObject returns the wrapped object (ResourceGroup) as a resource.Info
 // or an error if one occurs.
 func (icm *InventoryResourceGroup) GetObject() (*unstructured.Unstructured, error) {
-	if icm.inv == nil {
+	if icm.Unstructured == nil {
 		return nil, fmt.Errorf("inventory info is nil")
 	}
 	objStatusMap := map[object.ObjMetadata]actuation.ObjectStatus{}
@@ -191,7 +191,7 @@ func (icm *InventoryResourceGroup) GetObject() (*unstructured.Unstructured, erro
 	klog.V(4).Infof("Creating list of %d resources", len(icm.objMetas))
 	var objs []interface{}
 	for _, objMeta := range icm.objMetas {
-		klog.V(4).Infof("storing inventory obj refercence: %s/%s", objMeta.Namespace, objMeta.Name)
+		klog.V(4).Infof("storing inventory obj reference: %s/%s", objMeta.Namespace, objMeta.Name)
 		objs = append(objs, map[string]interface{}{
 			"group":     objMeta.GroupKind.Group,
 			"kind":      objMeta.GroupKind.Kind,
@@ -204,13 +204,13 @@ func (icm *InventoryResourceGroup) GetObject() (*unstructured.Unstructured, erro
 	for _, objMeta := range icm.objMetas {
 		status, found := objStatusMap[objMeta]
 		if found {
-			klog.V(4).Infof("storing inventory obj refercence and its status: %s/%s", objMeta.Namespace, objMeta.Name)
+			klog.V(4).Infof("storing inventory obj reference and its status: %s/%s", objMeta.Namespace, objMeta.Name)
 			objStatus = append(objStatus, map[string]interface{}{
 				"group":     objMeta.GroupKind.Group,
 				"kind":      objMeta.GroupKind.Kind,
 				"namespace": objMeta.Namespace,
 				"name":      objMeta.Name,
-				"status":    "Unknown",
+				"status":    ActuationStatusToKstatus(status).String(),
 				"strategy":  status.Strategy.String(),
 				"actuation": status.Actuation.String(),
 				"reconcile": status.Reconcile.String(),
@@ -219,7 +219,7 @@ func (icm *InventoryResourceGroup) GetObject() (*unstructured.Unstructured, erro
 	}
 
 	// Create the inventory object by copying the template.
-	invCopy := icm.inv.DeepCopy()
+	invCopy := icm.Unstructured.DeepCopy()
 	// Adds or clears the inventory ObjMetadata to the ResourceGroup "spec.resources" section
 	if len(objs) == 0 {
 		klog.V(4).Infoln("clearing inventory resources")
@@ -258,7 +258,7 @@ func (icm *InventoryResourceGroup) Apply(dc dynamic.Interface, mapper meta.RESTM
 		return err
 	}
 
-	// Get cluster object, if exsists.
+	// Get cluster object, if exists.
 	clusterObj, err := namespacedClient.Get(context.TODO(), invInfo.GetName(), metav1.GetOptions{})
 	if err != nil && !apierrors.IsNotFound(err) {
 		return err
@@ -276,6 +276,14 @@ func (icm *InventoryResourceGroup) Apply(dc dynamic.Interface, mapper meta.RESTM
 	if err != nil {
 		return err
 	}
+	// Store the result from the server.
+	// Store to icm.Unstructured, because invInfo is a deep copy.
+	if err := deepCopyField(appliedObj, icm.Unstructured, "metadata"); err != nil {
+		return err
+	}
+	if err := deepCopyField(appliedObj, icm.Unstructured, "spec"); err != nil {
+		return err
+	}
 
 	// Update status, if status policy allows it.
 	if statusPolicy == inventory.StatusPolicyAll {
@@ -287,13 +295,18 @@ func (icm *InventoryResourceGroup) Apply(dc dynamic.Interface, mapper meta.RESTM
 			return err
 		}
 		// Update status.observedGeneration after spec update
-		if err = updateObservedGeneration(appliedObj); err != nil {
+		if err := updateObservedGeneration(appliedObj); err != nil {
 			return err
 		}
 		klog.V(1).Infof("Apply: Updating inventory object status (observedGeneration: %d): %s/%s\n",
 			appliedObj.GetGeneration(), appliedObj.GetNamespace(), appliedObj.GetName())
-		_, err := namespacedClient.UpdateStatus(context.TODO(), appliedObj, metav1.UpdateOptions{})
+		appliedObj2, err := namespacedClient.UpdateStatus(context.TODO(), appliedObj, metav1.UpdateOptions{})
 		if err != nil {
+			return err
+		}
+		// Store the result from the server.
+		// Store to icm.Unstructured, because invInfo is a deep copy.
+		if err := deepCopyField(appliedObj2, icm.Unstructured, "status"); err != nil {
 			return err
 		}
 	}
@@ -315,6 +328,14 @@ func (icm *InventoryResourceGroup) ApplyWithPrune(dc dynamic.Interface, mapper m
 	if err != nil {
 		return err
 	}
+	// Store the result from the server.
+	// Store to icm.Unstructured, because invInfo is a deep copy.
+	if err := deepCopyField(appliedObj, icm.Unstructured, "metadata"); err != nil {
+		return err
+	}
+	if err := deepCopyField(appliedObj, icm.Unstructured, "spec"); err != nil {
+		return err
+	}
 
 	// Update status, if status policy allows it.
 	if statusPolicy == inventory.StatusPolicyAll {
@@ -331,8 +352,13 @@ func (icm *InventoryResourceGroup) ApplyWithPrune(dc dynamic.Interface, mapper m
 		}
 		klog.V(1).Infof("ApplyWithPrune: Updating inventory object status (observedGeneration: %d): %s/%s\n",
 			appliedObj.GetGeneration(), appliedObj.GetNamespace(), appliedObj.GetName())
-		_, err := namespacedClient.UpdateStatus(context.TODO(), appliedObj, metav1.UpdateOptions{})
+		appliedObj2, err := namespacedClient.UpdateStatus(context.TODO(), appliedObj, metav1.UpdateOptions{})
 		if err != nil {
+			return err
+		}
+		// Store the result from the server.
+		// Store to icm.Unstructured, because invInfo is a deep copy.
+		if err := deepCopyField(appliedObj2, icm.Unstructured, "status"); err != nil {
 			return err
 		}
 	}

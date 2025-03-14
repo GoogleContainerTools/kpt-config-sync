@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -468,18 +469,26 @@ func reconcilerStatusFromRSyncStatus(rsyncStatus v1beta1.Status, sourceType conf
 func (p *rootSyncStatusClient) SetSyncStatus(ctx context.Context, newStatus *SyncStatus) status.Error {
 	p.mux.Lock()
 	defer p.mux.Unlock()
-	return p.setSyncStatusWithRetries(ctx, newStatus, defaultDenominator)
+	err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		return p.setSyncStatusWithRetries(ctx, newStatus, defaultDenominator)
+	})
+	if err != nil {
+		// setSyncStatusWithRetries only returns API errors
+		return status.APIServerErrorWrap(err)
+	}
+	return nil
 }
 
-func (p *rootSyncStatusClient) setSyncStatusWithRetries(ctx context.Context, newStatus *SyncStatus, denominator int) status.Error {
+func (p *rootSyncStatusClient) setSyncStatusWithRetries(ctx context.Context, newStatus *SyncStatus, denominator int) error {
 	if denominator <= 0 {
-		return status.InternalErrorf("denominator must be positive: %d", denominator)
+		klog.Fatalf("denominator must be positive: %d", denominator)
 	}
 	opts := p.options
 
+	rsKey := rootsync.ObjectKey(opts.SyncName)
 	rs := &v1beta1.RootSync{}
-	if err := opts.Client.Get(ctx, rootsync.ObjectKey(opts.SyncName), rs); err != nil {
-		return status.APIServerError(err, "failed to get RootSync")
+	if err := opts.Client.Get(ctx, rsKey, rs); err != nil {
+		return fmt.Errorf("failed to get RootSync %s: %w", rsKey, err)
 	}
 
 	currentRS := rs.DeepCopy()
@@ -506,7 +515,7 @@ func (p *rootSyncStatusClient) setSyncStatusWithRetries(ctx context.Context, new
 
 	// Avoid unnecessary status updates.
 	if !currentRS.Status.Sync.LastUpdate.IsZero() && cmp.Equal(currentRS.Status, rs.Status, compare.IgnoreTimestampUpdates) {
-		klog.V(5).Infof("Skipping sync status update for RootSync %s/%s", rs.Namespace, rs.Name)
+		klog.V(5).Infof("Skipping sync status update for RootSync %s", rsKey)
 		return nil
 	}
 
@@ -514,8 +523,7 @@ func (p *rootSyncStatusClient) setSyncStatusWithRetries(ctx context.Context, new
 	metrics.RecordReconcilerErrors(ctx, "sync", csErrs)
 	metrics.RecordPipelineError(ctx, configsync.RootSyncName, "sync", len(csErrs))
 	if len(csErrs) > 0 {
-		klog.Infof("New sync errors for RootSync %s/%s: %+v",
-			rs.Namespace, rs.Name, csErrs)
+		klog.Infof("New sync errors for RootSync %s: %+v", rsKey, csErrs)
 	}
 	// Only update the LastSyncTimestamp metric immediately after a sync attempt
 	if !newStatus.Syncing && rs.Status.Sync.Commit != "" && lastSyncStatus != "" {
@@ -523,17 +531,18 @@ func (p *rootSyncStatusClient) setSyncStatusWithRetries(ctx context.Context, new
 	}
 
 	if klog.V(5).Enabled() {
-		klog.V(5).Infof("Updating sync status:\nDiff (- Removed, + Added):\n%s",
-			cmp.Diff(currentRS.Status, rs.Status))
+		klog.V(5).Infof("Updating RootSync %s sync status:\nDiff (- Removed, + Added):\n%s",
+			rsKey, cmp.Diff(currentRS.Status, rs.Status))
 	}
 
 	if err := opts.Client.Status().Update(ctx, rs, client.FieldOwner(configsync.FieldManager)); err != nil {
 		// If the update failure was caused by the size of the RootSync object, we would truncate the errors and retry.
 		if isRequestTooLargeError(err) {
-			klog.Infof("Failed to update RootSync sync status (total error count: %d, denominator: %d): %s.", rs.Status.Sync.ErrorSummary.TotalCount, denominator, err)
+			klog.Infof("Failed to update RootSync %s sync status (total error count: %d, denominator: %d): %v",
+				rsKey, rs.Status.Sync.ErrorSummary.TotalCount, denominator, err)
 			return p.setSyncStatusWithRetries(ctx, newStatus, denominator*2)
 		}
-		return status.APIServerError(err, "failed to update RootSync sync status")
+		return fmt.Errorf("failed to update RootSync %s sync status %w", rsKey, err)
 	}
 	return nil
 }

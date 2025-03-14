@@ -40,58 +40,67 @@ const (
 	CMSNamespace = "config-management-system"
 )
 
+func record(ctx context.Context, ms ...stats.Measurement) {
+	stats.Record(ctx, ms...)
+	if klog.V(5).Enabled() {
+		for _, m := range ms {
+			klog.Infof("Metric recorded: { \"Name\": %q, \"Value\": %#v, \"Tags\": %s }", m.Measure().Name(), m.Value(), tag.FromContext(ctx))
+		}
+	}
+}
+
 // RecordReconcileDuration produces a measurement for the ReconcileDuration view.
 func RecordReconcileDuration(ctx context.Context, stallStatus string, startTime time.Time) {
 	tagCtx, _ := tag.New(ctx, tag.Upsert(KeyStallReason, stallStatus))
 	measurement := ReconcileDuration.M(time.Since(startTime).Seconds())
-	stats.Record(tagCtx, measurement)
+	record(tagCtx, measurement)
 }
 
 // RecordReadyResourceCount produces a measurement for the ReadyResourceCount view.
 func RecordReadyResourceCount(ctx context.Context, nn types.NamespacedName, count int64) {
 	tagCtx, _ := tag.New(ctx, tag.Upsert(KeyResourceGroup, nn.String()))
 	measurement := ReadyResourceCount.M(count)
-	stats.Record(tagCtx, measurement)
+	record(tagCtx, measurement)
 }
 
 // RecordKCCResourceCount produces a measurement for the KCCResourceCount view.
 func RecordKCCResourceCount(ctx context.Context, nn types.NamespacedName, count int64) {
 	tagCtx, _ := tag.New(ctx, tag.Upsert(KeyResourceGroup, nn.String()))
 	measurement := KCCResourceCount.M(count)
-	stats.Record(tagCtx, measurement)
+	record(tagCtx, measurement)
 }
 
 // RecordResourceCount produces a measurement for the ResourceCount view.
 func RecordResourceCount(ctx context.Context, nn types.NamespacedName, count int64) {
 	tagCtx, _ := tag.New(ctx, tag.Upsert(KeyResourceGroup, nn.String()))
 	measurement := ResourceCount.M(count)
-	stats.Record(tagCtx, measurement)
+	record(tagCtx, measurement)
 }
 
 // RecordResourceGroupTotal produces a measurement for the ResourceGroupTotalView
 func RecordResourceGroupTotal(ctx context.Context, count int64) {
-	stats.Record(ctx, ResourceGroupTotal.M(count))
+	record(ctx, ResourceGroupTotal.M(count))
 }
 
 // RecordNamespaceCount produces a measurement for the NamespaceCount view.
 func RecordNamespaceCount(ctx context.Context, nn types.NamespacedName, count int64) {
 	tagCtx, _ := tag.New(ctx, tag.Upsert(KeyResourceGroup, nn.String()))
 	measurement := NamespaceCount.M(count)
-	stats.Record(tagCtx, measurement)
+	record(tagCtx, measurement)
 }
 
 // RecordClusterScopedResourceCount produces a measurement for ClusterScopedResourceCount view
 func RecordClusterScopedResourceCount(ctx context.Context, nn types.NamespacedName, count int64) {
 	tagCtx, _ := tag.New(ctx, tag.Upsert(KeyResourceGroup, nn.String()))
 	measurement := ClusterScopedResourceCount.M(count)
-	stats.Record(tagCtx, measurement)
+	record(tagCtx, measurement)
 }
 
 // RecordCRDCount produces a measurement for RecordCRDCount view
 func RecordCRDCount(ctx context.Context, nn types.NamespacedName, count int64) {
 	tagCtx, _ := tag.New(ctx, tag.Upsert(KeyResourceGroup, nn.String()))
 	measurement := CRDCount.M(count)
-	stats.Record(tagCtx, measurement)
+	record(tagCtx, measurement)
 }
 
 // RecordPipelineError produces a measurement for PipelineErrorView
@@ -105,9 +114,7 @@ func RecordPipelineError(ctx context.Context, nn types.NamespacedName, component
 	} else {
 		metricVal = 0
 	}
-	stats.Record(tagCtx, PipelineError.M(metricVal))
-	klog.Infof("Recording %s metric at component: %s, namespace: %s, reconciler: %s, sync type: %s with value %v",
-		PipelineErrorView.Name, component, nn.Namespace, reconcilerName, nn.Name, metricVal)
+	record(tagCtx, PipelineError.M(metricVal))
 }
 
 // ComputeReconcilerNameType computes the reconciler name from the ResourceGroup CR name

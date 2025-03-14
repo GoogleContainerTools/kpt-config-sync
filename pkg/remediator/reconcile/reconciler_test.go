@@ -16,7 +16,6 @@ package reconcile
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -592,9 +591,7 @@ func TestRemediator_Reconcile_Metrics(t *testing.T) {
 			m := testmetrics.RegisterMetrics(views...)
 
 			err := reconciler.Remediate(context.Background(), core.IDOf(obj), tc.actual)
-			if !errors.Is(err, tc.wantError) {
-				t.Errorf("Unexpected error: want:\n%v\ngot:\n%v", tc.wantError, err)
-			}
+			testerrors.AssertEqual(t, tc.wantError, err)
 
 			if tc.want == nil {
 				fakeClient.Check(t)

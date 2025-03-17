@@ -87,6 +87,8 @@ func TestReconcilerManagerNormalTeardown(t *testing.T) {
 
 	t.Log("Validate the RootSync reconciler and its dependencies")
 	rootSyncDependencies := validateRootSyncDependencies(nt, rootSync.Name)
+	rootSyncRG, err := validateRootSyncResourceGroup(nt, rootSync.Name)
+	require.NoError(nt.T, err)
 
 	t.Log("Validate the RepoSync")
 	repoSync := &v1beta1.RepoSync{}
@@ -99,12 +101,15 @@ func TestReconcilerManagerNormalTeardown(t *testing.T) {
 
 	t.Log("Validate the RepoSync reconciler and its dependencies")
 	repoSyncDependencies := validateRepoSyncDependencies(nt, repoSync.Namespace, repoSync.Name)
+	repoSyncRG, err := validateRepoSyncResourceGroup(nt, repoSync.Namespace, repoSync.Name)
+	require.NoError(nt.T, err)
 
 	t.Log("Delete the RootSync and wait for it to be not found")
 	err = nomostest.DeleteObjectsAndWait(nt, rootSync)
 	require.NoError(t, err)
 
 	t.Log("Validate the RootSync reconciler and its dependencies were deleted")
+	rootSyncDependencies = append(rootSyncDependencies, rootSyncRG)
 	for _, obj := range rootSyncDependencies {
 		validateObjectNotFound(nt, obj)
 	}
@@ -114,6 +119,7 @@ func TestReconcilerManagerNormalTeardown(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Log("Validate the RepoSync reconciler and its dependencies were deleted")
+	repoSyncDependencies = append(repoSyncDependencies, repoSyncRG)
 	for _, obj := range repoSyncDependencies {
 		validateObjectNotFound(nt, obj)
 	}
@@ -147,6 +153,8 @@ func TestReconcilerManagerTeardownInvalidRSyncs(t *testing.T) {
 
 	t.Log("Validate the RootSync reconciler and its dependencies")
 	rootSyncDependencies := validateRootSyncDependencies(nt, rootSync.Name)
+	rootSyncRG, err := validateRootSyncResourceGroup(nt, rootSync.Name)
+	require.NoError(nt.T, err)
 
 	t.Log("Reset spec.git.auth to make RootSync invalid")
 	t.Cleanup(func() {
@@ -175,6 +183,8 @@ func TestReconcilerManagerTeardownInvalidRSyncs(t *testing.T) {
 
 	t.Log("Validate the RepoSync reconciler and its dependencies")
 	repoSyncDependencies := validateRepoSyncDependencies(nt, repoSync.Namespace, repoSync.Name)
+	repoSyncRG, err := validateRepoSyncResourceGroup(nt, repoSync.Namespace, repoSync.Name)
+	require.NoError(nt.T, err)
 
 	t.Log("Reset spec.git.auth to make RepoSync invalid")
 	t.Cleanup(func() {
@@ -198,6 +208,7 @@ func TestReconcilerManagerTeardownInvalidRSyncs(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Log("Validate the RootSync reconciler and its dependencies were deleted")
+	rootSyncDependencies = append(rootSyncDependencies, rootSyncRG)
 	for _, obj := range rootSyncDependencies {
 		validateObjectNotFound(nt, obj)
 	}
@@ -207,6 +218,7 @@ func TestReconcilerManagerTeardownInvalidRSyncs(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Log("Validate the RepoSync reconciler and its dependencies were deleted")
+	repoSyncDependencies = append(repoSyncDependencies, repoSyncRG)
 	for _, obj := range repoSyncDependencies {
 		validateObjectNotFound(nt, obj)
 	}
@@ -227,6 +239,8 @@ func TestReconcilerManagerTeardownRootSyncWithReconcileTimeout(t *testing.T) {
 	rootSyncReconcilerNN := core.RootReconcilerObjectKey(rootSync.Name)
 	nt.T.Log("Validate the RootSync reconciler and its dependencies")
 	rootSyncDependencies := validateRootSyncDependencies(nt, rootSync.Name)
+	rootSyncRG, err := validateRootSyncResourceGroup(nt, rootSync.Name)
+	require.NoError(nt.T, err)
 
 	nt.T.Log("Inject a fake finalizer in the Deployment to prevent deletion")
 	nt.T.Cleanup(func() {
@@ -289,6 +303,7 @@ func TestReconcilerManagerTeardownRootSyncWithReconcileTimeout(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	nt.T.Log("Validate the RootSync reconciler and its dependencies were deleted")
+	rootSyncDependencies = append(rootSyncDependencies, rootSyncRG)
 	for _, obj := range rootSyncDependencies {
 		validateObjectNotFound(nt, obj)
 	}
@@ -311,6 +326,8 @@ func TestReconcilerManagerTeardownRepoSyncWithReconcileTimeout(t *testing.T) {
 	repoSyncReconcilerNN := core.NsReconcilerObjectKey(repoSync.Namespace, repoSync.Name)
 	nt.T.Log("Validate the RepoSync reconciler and its dependencies")
 	repoSyncDependencies := validateRepoSyncDependencies(nt, repoSync.Namespace, repoSync.Name)
+	repoSyncRG, err := validateRepoSyncResourceGroup(nt, repoSync.Namespace, repoSync.Name)
+	require.NoError(nt.T, err)
 
 	nt.T.Log("Inject a fake finalizer in the Deployment to prevent deletion")
 	nt.T.Cleanup(func() {
@@ -373,6 +390,7 @@ func TestReconcilerManagerTeardownRepoSyncWithReconcileTimeout(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	nt.T.Log("Validate the RepoSync reconciler and its dependencies were deleted")
+	repoSyncDependencies = append(repoSyncDependencies, repoSyncRG)
 	for _, obj := range repoSyncDependencies {
 		validateObjectNotFound(nt, obj)
 	}
@@ -396,11 +414,6 @@ func validateRootSyncDependencies(nt *nomostest.NT, rsName string) []client.Obje
 	rootSyncSA := &corev1.ServiceAccount{}
 	setNN(rootSyncSA, client.ObjectKeyFromObject(rootSyncReconciler))
 	rootSyncDependencies = append(rootSyncDependencies, rootSyncSA)
-
-	resourceGroup := &v1alpha1.ResourceGroup{}
-	resourceGroup.Name = rsName
-	resourceGroup.Namespace = configsync.ControllerNamespace
-	rootSyncDependencies = append(rootSyncDependencies, resourceGroup)
 
 	for _, obj := range rootSyncDependencies {
 		err := nt.Validate(obj.GetName(), obj.GetNamespace(), obj)
@@ -428,12 +441,6 @@ func validateRepoSyncDependencies(nt *nomostest.NT, ns, rsName string) []client.
 	repoSyncSA := &corev1.ServiceAccount{}
 	setNN(repoSyncSA, client.ObjectKeyFromObject(repoSyncReconciler))
 	repoSyncDependencies = append(repoSyncDependencies, repoSyncSA)
-
-	resourceGroup := &v1alpha1.ResourceGroup{}
-	resourceGroup.Name = rsName
-	resourceGroup.Namespace = ns
-
-	repoSyncDependencies = append(repoSyncDependencies, resourceGroup)
 
 	// See nomostest.CreateNamespaceSecrets for creation of user secrets.
 	// The Secret is neither needed nor created when using CSR as the Git provider.
@@ -463,6 +470,28 @@ func validateRepoSyncDependencies(nt *nomostest.NT, ns, rsName string) []client.
 	}
 
 	return repoSyncDependencies
+}
+
+func validateRootSyncResourceGroup(nt *nomostest.NT, rsName string) (*v1alpha1.ResourceGroup, error) {
+	rg := &v1alpha1.ResourceGroup{}
+	rg.Name = rsName
+	rg.Namespace = configsync.ControllerNamespace
+
+	if err := nt.Validate(rg.GetName(), rg.GetNamespace(), rg); err != nil {
+		return rg, err
+	}
+	return rg, nil
+}
+
+func validateRepoSyncResourceGroup(nt *nomostest.NT, ns, rsName string) (*v1alpha1.ResourceGroup, error) {
+	rg := &v1alpha1.ResourceGroup{}
+	rg.Name = rsName
+	rg.Namespace = ns
+
+	if err := nt.Validate(rg.GetName(), rg.GetNamespace(), rg); err != nil {
+		return rg, err
+	}
+	return rg, nil
 }
 
 func validateObjectNotFound(nt *nomostest.NT, o client.Object) {

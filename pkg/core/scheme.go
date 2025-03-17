@@ -40,7 +40,7 @@ import (
 	configsyncv1alpha1 "kpt.dev/configsync/pkg/api/configsync/v1alpha1"
 	configsyncv1beta1 "kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	hubv1 "kpt.dev/configsync/pkg/api/hub/v1"
-	kptdevv1alpha1 "kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
+	kptv1alpha1 "kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 )
 
 // Scheme is a reference to the global scheme.
@@ -76,7 +76,7 @@ func init() {
 	utilruntime.Must(hubv1.AddToScheme(scheme.Scheme))
 
 	// ResourceGroup
-	utilruntime.Must(kptdevv1alpha1.AddToScheme(scheme.Scheme))
+	utilruntime.Must(kptv1alpha1.AddToScheme(scheme.Scheme))
 }
 
 func mustRegisterKubernetesResources() {

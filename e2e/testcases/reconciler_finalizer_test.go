@@ -128,6 +128,10 @@ func TestReconcilerFinalizer_Orphan(t *testing.T) {
 				testpredicates.HasLabel(metadata.ApplySetPartOfLabel, applySetID),
 			))
 	})
+	tg.Go(func() error {
+		// ResourceGroup SHOULD have been deleted
+		return nt.Watcher.WatchForNotFound(kinds.ResourceGroup(), rootSync.GetName(), rootSync.GetNamespace())
+	})
 
 	nt.Must(tg.Wait())
 
@@ -348,6 +352,9 @@ func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
 		return nt.Watcher.WatchForNotFound(kinds.Namespace(), namespace1.GetName(), namespace1.GetNamespace())
 	})
 	tg.Go(func() error {
+		return nt.Watcher.WatchForNotFound(kinds.ResourceGroup(), rootSync.GetName(), rootSync.GetNamespace())
+	})
+	tg.Go(func() error {
 		return nt.Watcher.WatchForNotFound(kinds.RootSyncV1Beta1(), rootSync.GetName(), rootSync.GetNamespace())
 	})
 	if err := tg.Wait(); err != nil {
@@ -462,6 +469,9 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 	tg.Go(func() error {
 		// RepoSync should delete quickly without finalizing
 		return nt.Watcher.WatchForNotFound(kinds.RepoSyncV1Beta1(), repoSync.GetName(), repoSync.GetNamespace())
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchForNotFound(kinds.ResourceGroup(), rootSync.GetName(), rootSync.GetNamespace())
 	})
 	tg.Go(func() error {
 		// After RepoSync and Deployment1 are deleted, the RootSync should have its finalizer removed and be garbage collected

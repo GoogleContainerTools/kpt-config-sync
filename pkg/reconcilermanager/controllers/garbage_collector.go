@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
@@ -144,6 +145,13 @@ func (r *reconcilerBase) deleteServiceAccount(ctx context.Context, reconcilerRef
 	sa.Name = reconcilerRef.Name
 	sa.Namespace = reconcilerRef.Namespace
 	return r.cleanup(ctx, sa)
+}
+
+func (r *reconcilerBase) deleteResourceGroup(ctx context.Context, rsRef types.NamespacedName) error {
+	rg := &v1alpha1.ResourceGroup{}
+	rg.Name = rsRef.Name
+	rg.Namespace = rsRef.Namespace
+	return r.cleanup(ctx, rg)
 }
 
 func (r *RepoSyncReconciler) deleteSharedRoleBinding(ctx context.Context, reconcilerRef, rsRef types.NamespacedName) error {

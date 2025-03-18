@@ -99,6 +99,20 @@ var GCMMetricTypes = []string{
 	rgmetrics.CRDCountName,
 }
 
+// ReconcilerMetricTypes is a minimal set of reconciler metrics used for sync label validation in tests.
+// This subset reduces the number of GCM API calls, as sync-related labels are injected via environment variables
+// and will appear on all reconciler metrics if present on any. Thus, validating this subset is sufficient.
+var ReconcilerMetricTypes = []string{
+	csmetrics.DeclaredResourcesName,
+	csmetrics.ApplyOperationsName,
+}
+
+var syncLabels = map[string]string{
+	"configsync_sync_name":      configsync.RootSyncName,
+	"configsync_sync_kind":      configsync.RootSyncKind,
+	"configsync_sync_namespace": configmanagement.ControllerNamespace,
+}
+
 // TestOtelCollectorDeployment validates that metrics reporting works for
 // Google Cloud Monitoring using either workload identity or node identity.
 //
@@ -143,18 +157,7 @@ func TestOtelCollectorDeployment(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	// retry for 2 minutes until metric is accessible from GCM
-	_, err = retry.Retry(120*time.Second, func() error {
-		var err error
-		for _, metricType := range DefaultGCMMetricTypes {
-			descriptor := fmt.Sprintf("%s/%s", GCMMetricPrefix, metricType)
-			it := listMetricInGCM(ctx, nt, client, startTime, descriptor)
-			err = multierr.Append(err, validateMetricInGCM(nt, it, descriptor, nt.ClusterName))
-		}
-		return err
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(validateMetricTypes(ctx, nt, client, startTime, DefaultGCMMetricTypes))
 
 	nt.T.Log("Checking the otel-collector log contains no failure...")
 	err = validateDeploymentLogHasNoFailure(nt, csmetrics.OtelCollectorName, configmanagement.MonitoringNamespace, MetricExportErrorCaption)
@@ -192,18 +195,7 @@ func TestOtelCollectorDeployment(t *testing.T) {
 	nt.Must(nt.WatchForAllSyncs())
 
 	// retry for 2 minutes until metric is accessible from GCM
-	_, err = retry.Retry(120*time.Second, func() error {
-		var err error
-		for _, metricType := range DefaultGCMMetricTypes {
-			descriptor := fmt.Sprintf("%s/%s", GCMMetricPrefix, metricType)
-			it := listMetricInGCM(ctx, nt, client, startTime, descriptor)
-			err = multierr.Append(err, validateMetricInGCM(nt, it, descriptor, nt.ClusterName))
-		}
-		return err
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(validateMetricTypes(ctx, nt, client, startTime, DefaultGCMMetricTypes))
 
 	nt.T.Log("Checking the otel-collector log contains no failure...")
 	err = validateDeploymentLogHasNoFailure(nt, csmetrics.OtelCollectorName, configmanagement.MonitoringNamespace, MetricExportErrorCaption)
@@ -254,18 +246,11 @@ func TestGCMMetrics(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	_, err = retry.Retry(120*time.Second, func() error {
-		var err error
-		for _, metricType := range GCMMetricTypes {
-			descriptor := fmt.Sprintf("%s/%s", GCMMetricPrefix, metricType)
-			it := listMetricInGCM(ctx, nt, client, startTime, descriptor)
-			err = multierr.Append(err, validateMetricInGCM(nt, it, descriptor, nt.ClusterName))
-		}
-		return err
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.T.Log("validate all metrics are present in GCM")
+	nt.Must(validateMetricTypes(ctx, nt, client, startTime, GCMMetricTypes))
+
+	nt.T.Log("validate sync labels are present on reconciler metrics")
+	nt.Must(validateMetricTypes(ctx, nt, client, startTime, ReconcilerMetricTypes, metricHasLabels(syncLabels)))
 
 	nt.T.Log("Adding test namespace")
 	namespace := k8sobjects.NamespaceObject("foo")
@@ -274,14 +259,7 @@ func TestGCMMetrics(t *testing.T) {
 	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("Checking resource related metrics after adding test resource")
-	_, err = retry.Retry(nt.DefaultWaitTimeout, func() error {
-		descriptor := fmt.Sprintf("%s/%s", GCMMetricPrefix, csmetrics.DeclaredResourcesName)
-		it := listMetricInGCM(ctx, nt, client, startTime, descriptor)
-		return validateMetricInGCM(nt, it, descriptor, nt.ClusterName, metricHasValue(3))
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(validateMetricTypes(ctx, nt, client, startTime, []string{csmetrics.DeclaredResourcesName}, metricHasValue(3)))
 
 	nt.T.Log("Remove the test resource")
 	nt.Must(rootSyncGitRepo.Remove("acme/ns.yaml"))
@@ -289,14 +267,7 @@ func TestGCMMetrics(t *testing.T) {
 	nt.Must(nt.WatchForAllSyncs())
 
 	nt.T.Log("Checking resource related metrics after removing test resource")
-	_, err = retry.Retry(nt.DefaultWaitTimeout, func() error {
-		descriptor := fmt.Sprintf("%s/%s", GCMMetricPrefix, csmetrics.DeclaredResourcesName)
-		it := listMetricInGCM(ctx, nt, client, startTime, descriptor)
-		return validateMetricInGCM(nt, it, descriptor, nt.ClusterName, metricHasLatestValue(2))
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(validateMetricTypes(ctx, nt, client, startTime, []string{csmetrics.DeclaredResourcesName}, metricHasLatestValue(2)))
 }
 
 // TestOtelCollectorGCMLabelAggregation validates that Google Cloud Monitoring
@@ -337,19 +308,7 @@ func TestOtelCollectorGCMLabelAggregation(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	// retry for 2 minutes until metric is accessible from GCM
-	_, err = retry.Retry(120*time.Second, func() error {
-		var err error
-		for _, metricType := range metricsWithCommitLabel {
-			descriptor := fmt.Sprintf("%s/%s", GCMMetricPrefix, metricType)
-			it := listMetricInGCM(ctx, nt, client, startTime, descriptor)
-			err = multierr.Append(err, validateMetricInGCM(nt, it, descriptor, nt.ClusterName,
-				metricDoesNotHaveLabel(metrics.KeyCommit.Name())))
-		}
-		return err
-	})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(validateMetricTypes(ctx, nt, client, startTime, metricsWithCommitLabel, metricDoesNotHaveLabel(metrics.KeyCommit.Name())))
 }
 
 func setupMetricsServiceAccount(nt *nomostest.NT) {
@@ -465,6 +424,21 @@ func listMetricInGCM(ctx context.Context, nt *nomostest.NT, client *monitoringv2
 
 type metricValidatorFunc func(series *monitoringpb.TimeSeries) error
 
+func metricHasLabels(labelMap map[string]string) metricValidatorFunc {
+	return func(series *monitoringpb.TimeSeries) error {
+		metricLabels := series.GetMetric().GetLabels()
+		for label, value := range labelMap {
+			actual, found := metricLabels[label]
+			if !found {
+				return fmt.Errorf("expected metric to have label %s=%s, but found none", label, value)
+			} else if actual != value {
+				return fmt.Errorf("expected metric to have label %s=%s, but found %s=%s", label, value, label, actual)
+			}
+		}
+		return nil
+	}
+}
+
 func metricDoesNotHaveLabel(label string) metricValidatorFunc {
 	return func(series *monitoringpb.TimeSeries) error {
 		labels := series.GetResource().GetLabels()
@@ -493,6 +467,9 @@ func metricHasValue(expectedValue int64) metricValidatorFunc {
 func metricHasLatestValue(expectedValue int64) metricValidatorFunc {
 	return func(series *monitoringpb.TimeSeries) error {
 		points := series.GetPoints()
+		if len(points) == 0 {
+			return fmt.Errorf("expected metric to have at least one point, but got none")
+		}
 		lastPoint := points[len(points)-1]
 		value := lastPoint.GetValue().GetInt64Value()
 		if value == expectedValue {
@@ -502,9 +479,23 @@ func metricHasLatestValue(expectedValue int64) metricValidatorFunc {
 	}
 }
 
+// validateMetricTypes checks all provided metric types in GCM for the given cluster, using the provided validator function for each metric.
+func validateMetricTypes(ctx context.Context, nt *nomostest.NT, client *monitoringv2.MetricClient, startTime time.Time, metricTypes []string, valFns ...metricValidatorFunc) error {
+	_, err := retry.Retry(120*time.Second, func() error {
+		var err error
+		for _, metricType := range metricTypes {
+			descriptor := fmt.Sprintf("%s/%s", GCMMetricPrefix, metricType)
+			it := listMetricInGCM(ctx, nt, client, startTime, descriptor)
+			err = multierr.Append(err, validateMetricSeries(nt, it, descriptor, valFns...))
+		}
+		return err
+	})
+	return err
+}
+
 // Validates a metricType from a specific cluster_name can be found within given
 // TimeSeries
-func validateMetricInGCM(nt *nomostest.NT, it *monitoringv2.TimeSeriesIterator, metricType, clusterName string, valFns ...metricValidatorFunc) error {
+func validateMetricSeries(nt *nomostest.NT, it *monitoringv2.TimeSeriesIterator, metricType string, valFns ...metricValidatorFunc) error {
 	for {
 		resp, err := it.Next()
 		if err == iterator.Done {
@@ -513,13 +504,16 @@ func validateMetricInGCM(nt *nomostest.NT, it *monitoringv2.TimeSeriesIterator, 
 		if err != nil {
 			return err
 		}
+		if resp == nil {
+			return fmt.Errorf("received nil TimeSeries response for metric %s", metricType)
+		}
 		metric := resp.GetMetric()
 		resource := resp.GetResource()
 		nt.Logger.Debugf(`GCM metric result: { "type": %q, "labels": %+v, "resource.type": %q, "resource.labels": %+v }`,
 			metric.Type, metric.Labels, resource.Type, resource.Labels)
 		if metric.GetType() == metricType {
 			labels := resource.GetLabels()
-			if labels["cluster_name"] == clusterName {
+			if labels["cluster_name"] == nt.ClusterName {
 				for _, valFn := range valFns {
 					if err := valFn(resp); err != nil {
 						return fmt.Errorf("GCM metric %s failed validation (cluster_name=%s): %w", metricType, nt.ClusterName, err)

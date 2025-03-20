@@ -239,3 +239,10 @@ func (r *Resources) DeclaredCRDs(scheme *runtime.Scheme) ([]*apiextensionsv1.Cus
 	}
 	return crds, nil
 }
+
+// GetCommit returns the source commit connected with the declared resources.
+func (r *Resources) GetCommit() string {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+	return r.commit
+}

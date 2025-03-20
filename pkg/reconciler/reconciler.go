@@ -38,6 +38,7 @@ import (
 	"kpt.dev/configsync/pkg/parse/events"
 	"kpt.dev/configsync/pkg/reconciler/finalizer"
 	"kpt.dev/configsync/pkg/reconciler/namespacecontroller"
+	"kpt.dev/configsync/pkg/reconciler/stabilizing"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/remediator"
 	"kpt.dev/configsync/pkg/remediator/conflict"
@@ -357,6 +358,15 @@ func Run(opts Options) {
 		mgr.GetCache(), mapper, crdControllerLogger)
 	if err := crdMetaController.Register(mgr); err != nil {
 		klog.Fatalf("Instantiating CRD Controller: %v", err)
+	}
+
+	// Register the Stabilizing Controller
+	stabilizingControllerLogger := opts.Logger.WithName("controllers").WithName("stabilizing")
+	syncID := declared.SyncIDFromScope(opts.ReconcilerScope, opts.SyncName)
+	stabilizingController := stabilizing.NewController(mgr.GetClient(),
+		stabilizingControllerLogger, syncID)
+	if err := stabilizingController.Register(mgr); err != nil {
+		klog.Fatalf("Instantiating Stabilizing Controller: %v", err)
 	}
 
 	// This cancelFunc will be used by the Finalizer to stop all the other

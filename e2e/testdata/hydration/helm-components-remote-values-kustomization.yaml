@@ -26,5 +26,7 @@ helmCharts:
     service:
       type: ClusterIP
 
-commonLabels:
-  test-case: hydration
+labels:
+- includeSelectors: true
+  pairs:
+    test-case: hydration

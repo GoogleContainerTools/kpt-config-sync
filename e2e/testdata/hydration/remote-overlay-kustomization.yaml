@@ -15,5 +15,7 @@
 resources:
 - github.com/config-sync-examples/kustomize-components/tenant-b?ref=main
 
-commonLabels:
-  test-case: hydration
+labels:
+- includeSelectors: true
+  pairs:
+    test-case: hydration

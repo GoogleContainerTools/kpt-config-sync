@@ -16,5 +16,7 @@ resources:
 - github.com/config-sync-examples/kustomize-components?ref=main
 - namespace_tenant-a.yaml
 
-commonLabels:
-  test-case: hydration
+labels:
+- includeSelectors: true
+  pairs:
+    test-case: hydration

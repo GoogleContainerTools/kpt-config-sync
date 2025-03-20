@@ -15,5 +15,7 @@
 resources:
 - overlay
 
-commonLabels:
-  test-case: hydration
+labels:
+- includeSelectors: true
+  pairs:
+    test-case: hydration

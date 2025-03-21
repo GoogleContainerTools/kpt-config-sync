@@ -15,7 +15,7 @@
 namespace: tenant-a
 
 resources:
-- github.com/config-sync-examples/kustomize-components/base?ref=main
+- ../../kustomize-components/base
 
 patches:
 - target:

@@ -6,7 +6,7 @@
 			"kind": "Namespace",
 			"metadata": {
 				"annotations": {
-					"config.kubernetes.io/origin": "path: base/namespace.yaml\nrepo: https://github.com/config-sync-examples/kustomize-components\nref: main\n"
+					"config.kubernetes.io/origin": "path: ../kustomize-components/base/namespace.yaml\n"
 				},
 				"labels": {
 					"test-case": "hydration"

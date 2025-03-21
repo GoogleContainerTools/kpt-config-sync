@@ -793,14 +793,6 @@ func TestNomosHydrateAndVetDryRepos(t *testing.T) {
 			hydrateArgs = append(hydrateArgs, args...)
 			out, err := exec.Command("nomos", hydrateArgs...).CombinedOutput()
 
-			// 'nomos hydrate' and 'nomos vet' might pull remote Helm charts locally.
-			// Below deletes the generated charts after the test.
-			chartsDir := filepath.Join(tc.path, "charts")
-			if _, err := os.Stat(chartsDir); os.IsNotExist(err) {
-				defer func() {
-					_ = os.RemoveAll(chartsDir)
-				}()
-			}
 			if len(tc.expectedErrMsg) != 0 && err == nil {
 				tw.Errorf("%s: expected error '%s', but got no error", tc.name, tc.expectedErrMsg)
 			}

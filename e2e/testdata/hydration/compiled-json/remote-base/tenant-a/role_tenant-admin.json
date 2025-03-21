@@ -6,7 +6,7 @@
 			"kind": "Role",
 			"metadata": {
 				"annotations": {
-					"config.kubernetes.io/origin": "path: base/role.yaml\nrepo: https://github.com/config-sync-examples/kustomize-components\nref: main\n"
+					"config.kubernetes.io/origin": "path: ../kustomize-components/base/role.yaml\n"
 				},
 				"labels": {
 					"test-case": "hydration"
@@ -21,28 +21,6 @@
 					],
 					"resources": [
 						"deployments"
-					],
-					"verbs": [
-						"*"
-					]
-				},
-				{
-					"apiGroups": [
-						""
-					],
-					"resources": [
-						"configmaps"
-					],
-					"verbs": [
-						"*"
-					]
-				},
-				{
-					"apiGroups": [
-						""
-					],
-					"resources": [
-						"serviceaccounts"
 					],
 					"verbs": [
 						"*"

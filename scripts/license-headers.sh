@@ -26,6 +26,7 @@ cd "${REPO_ROOT}"
 ignores=(
   "-ignore=vendor/**"
   "-ignore=e2e/testdata/helm-charts/**"
+  "-ignore=e2e/testdata/hydration/**"
   "-ignore=test/kustomization/expected.yaml"
   "-ignore=.output/**"
   "-ignore=e2e/testdata/*.xml"

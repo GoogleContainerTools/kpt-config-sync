@@ -6,7 +6,7 @@
 			"kind": "RoleBinding",
 			"metadata": {
 				"annotations": {
-					"config.kubernetes.io/origin": "path: base/rolebinding.yaml\nrepo: https://github.com/config-sync-examples/kustomize-components\nref: main\n"
+					"config.kubernetes.io/origin": "path: ../kustomize-components/base/rolebinding.yaml\n"
 				},
 				"labels": {
 					"test-case": "hydration"

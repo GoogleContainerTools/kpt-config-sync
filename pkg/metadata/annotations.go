@@ -17,6 +17,7 @@ package metadata
 import (
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"sigs.k8s.io/cli-utils/pkg/inventory"
 	"sigs.k8s.io/kustomize/kyaml/kio/filters"
 )
 
@@ -150,6 +151,19 @@ const (
 	// This annotation is set by Config Sync on the RootSync/RepoSync object
 	// to indicate the exact image that should be synced.
 	ImageToSyncAnnotationKey = configsync.ConfigSyncPrefix + "image-to-sync"
+
+	// StatusEnabled is used to allow kpt applier to inject the actuation status
+	// into the ResourceGroup object.
+	StatusEnabled = "enabled"
+	// StatusDisabled is used to stop kpt applier to inject the actuation status
+	// into the ResourceGroup object.
+	StatusDisabled = "disabled"
+
+	// StatusModeKey annotates a ResourceGroup CR
+	// to communicate with the ResourceGroup controller.
+	// When the value is set to "disabled", the ResourceGroup controller
+	// ignores the ResourceGroup CR.
+	StatusModeKey = configsync.ConfigSyncPrefix + "status"
 )
 
 // Lifecycle annotations
@@ -175,7 +189,7 @@ const (
 // OwningInventoryKey is the annotation key for marking the owning-inventory object.
 // This annotation is needed because the kpt library cannot apply a single resource.
 // This annotation is set by Config Sync on a managed resource.
-const OwningInventoryKey = "config.k8s.io/owning-inventory"
+const OwningInventoryKey = inventory.OwningInventoryKey
 
 // HNCManagedBy is the annotation that indicates the namespace hierarchy is
 // not managed by the Hierarchical Namespace Controller (http://bit.ly/k8s-hnc-design) but

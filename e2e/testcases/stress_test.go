@@ -48,7 +48,6 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
-	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
@@ -233,7 +232,7 @@ func TestStressLargeRequest(t *testing.T) {
 	rootSync := nt.RootSyncObjectGit(rootSyncID.Name, repo, gitproviders.MainBranch, "", "configs", configsync.SourceFormatUnstructured)
 	rootSync.Spec.Git.Auth = configsync.AuthNone
 	rootSync.Spec.SecretRef = nil
-	rootSync.Spec.SafeOverride().OverrideSpec.StatusMode = applier.StatusDisabled
+	rootSync.Spec.SafeOverride().OverrideSpec.StatusMode = metadata.StatusDisabled
 	rootSync.Spec.SafeOverride().OverrideSpec.Resources = []v1beta1.ContainerResourcesSpec{reconcilerOverride}
 	nt.T.Logf("Apply the RootSync object to sync to %s", rootSync.Spec.Git.Repo)
 	nt.Must(nt.KubeClient.Apply(rootSync))

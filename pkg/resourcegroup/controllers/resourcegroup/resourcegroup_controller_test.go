@@ -33,6 +33,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
+	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/resourcemap"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/typeresolver"
 	"kpt.dev/configsync/pkg/syncer/syncertest/fake"
@@ -200,7 +201,7 @@ func TestReconcile(t *testing.T) {
 			Name:      res2.Name,
 			Namespace: res2.Namespace,
 			Annotations: map[string]string{
-				owningInventoryKey: "other",
+				metadata.OwningInventoryKey: "other",
 			},
 		},
 		Spec: corev1.PodSpec{
@@ -226,7 +227,7 @@ func TestReconcile(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: res1.Name,
 			Annotations: map[string]string{
-				owningInventoryKey: inventoryID,
+				metadata.OwningInventoryKey: inventoryID,
 			},
 		},
 	}

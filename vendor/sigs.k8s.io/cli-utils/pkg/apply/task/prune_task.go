@@ -61,9 +61,9 @@ func (p *PruneTask) Start(taskContext *taskrunner.TaskContext) {
 		}
 		p.Filters = append(p.Filters, uidFilter)
 		err := p.Pruner.Prune(
+			taskContext,
 			p.Objects,
 			p.Filters,
-			taskContext,
 			p.Name(),
 			prune.Options{
 				DryRunStrategy:    p.DryRunStrategy,

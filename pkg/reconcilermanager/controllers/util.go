@@ -24,9 +24,9 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	hubv1 "kpt.dev/configsync/pkg/api/hub/v1"
-	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/filesystem"
+	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 
 	corev1 "k8s.io/api/core/v1"
@@ -116,7 +116,7 @@ func reconcilerEnvs(opts reconcilerOptions) []corev1.EnvVar {
 	var result []corev1.EnvVar
 	statusMode := opts.statusMode
 	if statusMode == "" {
-		statusMode = applier.StatusEnabled
+		statusMode = metadata.StatusEnabled
 	}
 	var syncRepo string
 	var syncBranch string

@@ -20,7 +20,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/declared"
@@ -176,7 +175,7 @@ func TestRemoveFrom(t *testing.T) {
 }
 
 func TestGetObjectSize(t *testing.T) {
-	u := newInventoryUnstructured(configsync.RootSyncKind, "inv-1", "test", "disabled")
+	u := newInventoryUnstructured("inv-1", "test")
 	size, err := getObjectSize(u)
 	if err != nil {
 		t.Fatal(err)

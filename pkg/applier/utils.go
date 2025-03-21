@@ -183,7 +183,7 @@ func annotateStatusMode(ctx context.Context, c client.Client, u *unstructured.Un
 	if annotations == nil {
 		annotations = make(map[string]string)
 	}
-	annotations[StatusModeKey] = statusMode
+	annotations[metadata.StatusModeKey] = statusMode
 	u.SetAnnotations(annotations)
 	return c.Update(ctx, u, client.FieldOwner(configsync.FieldManager))
 }

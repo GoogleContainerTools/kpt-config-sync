@@ -54,7 +54,6 @@ const (
 	componentFailedMsgPrefix = "The following components failed:"
 	ExceedTimeout            = "ExceedTimeout"
 	exceedTimeoutMsg         = "Exceed timeout, the .status.observedGeneration and .status.resourceStatuses fields are old."
-	owningInventoryKey       = "config.k8s.io/owning-inventory"
 	readinessComponent       = "readiness"
 )
 

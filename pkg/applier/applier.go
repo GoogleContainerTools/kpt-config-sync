@@ -750,7 +750,7 @@ func newInventoryUnstructured(kind, name, namespace, statusMode string) *unstruc
 	core.SetLabel(u, metadata.SyncNameLabel, name)
 	core.SetLabel(u, metadata.SyncKindLabel, kind)
 	core.SetAnnotation(u, metadata.ResourceManagementKey, metadata.ResourceManagementEnabled)
-	core.SetAnnotation(u, StatusModeKey, statusMode)
+	core.SetAnnotation(u, metadata.StatusModeKey, statusMode)
 	return u
 }
 

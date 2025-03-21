@@ -742,13 +742,15 @@ func TestNomosHydrateAndVetDryRepos(t *testing.T) {
 			sourceFormat:    string(configsync.SourceFormatUnstructured),
 			expectedOutPath: "../testdata/hydration/compiled/helm-overlay",
 		},
-		{
-			name:            "hydrate a DRY repo with remote base",
-			path:            "../testdata/hydration/remote-base",
-			outPath:         "remote-base/compiled",
-			sourceFormat:    string(configsync.SourceFormatUnstructured),
-			expectedOutPath: "../testdata/hydration/compiled/remote-base",
-		},
+		// remote-base relies on external public helm chart, which occasionally
+		// results in flaky DNS lookups in the presubmit job
+		//{
+		//	name:            "hydrate a DRY repo with remote base",
+		//	path:            "../testdata/hydration/remote-base",
+		//	outPath:         "remote-base/compiled",
+		//	sourceFormat:    string(configsync.SourceFormatUnstructured),
+		//	expectedOutPath: "../testdata/hydration/compiled/remote-base",
+		//},
 		{
 			name:            "hydrate a DRY repo with relative path",
 			path:            "../testdata/hydration/relative-path/overlays/dev",
@@ -793,14 +795,6 @@ func TestNomosHydrateAndVetDryRepos(t *testing.T) {
 			hydrateArgs = append(hydrateArgs, args...)
 			out, err := exec.Command("nomos", hydrateArgs...).CombinedOutput()
 
-			// 'nomos hydrate' and 'nomos vet' might pull remote Helm charts locally.
-			// Below deletes the generated charts after the test.
-			chartsDir := filepath.Join(tc.path, "charts")
-			if _, err := os.Stat(chartsDir); os.IsNotExist(err) {
-				defer func() {
-					_ = os.RemoveAll(chartsDir)
-				}()
-			}
 			if len(tc.expectedErrMsg) != 0 && err == nil {
 				tw.Errorf("%s: expected error '%s', but got no error", tc.name, tc.expectedErrMsg)
 			}

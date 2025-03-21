@@ -13,7 +13,7 @@
 # limitations under the License.
 
 resources:
-- github.com/config-sync-examples/kustomize-components?ref=main
+- ../kustomize-components
 - namespace_tenant-a.yaml
 
 labels:

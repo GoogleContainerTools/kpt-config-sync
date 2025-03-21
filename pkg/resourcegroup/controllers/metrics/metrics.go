@@ -20,8 +20,6 @@ import (
 	"go.opencensus.io/stats"
 )
 
-const namespace = "resourcegroup"
-
 const (
 	// RGReconcileDurationName is the name of resource group reconcile duration metric
 	RGReconcileDurationName = "rg_reconcile_duration_seconds"

@@ -19,16 +19,8 @@ import (
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
+	"kpt.dev/configsync/pkg/metadata"
 	"sigs.k8s.io/cli-utils/pkg/common"
-)
-
-const (
-	// SourceHashAnnotationKey is the name of the annotation which contains the source hash
-	SourceHashAnnotationKey = "configmanagement.gke.io/token"
-	// DisableStatusKey is the annotation key used for disabling ResourceGroup status
-	DisableStatusKey = "configsync.gke.io/status"
-	// DisableStatusValue is the annotation value used for disabling ResourceGroup status
-	DisableStatusValue = "disabled"
 )
 
 // Unstructured creates a ResourceGroup object
@@ -59,7 +51,7 @@ func GetSourceHash(annotations map[string]string) string {
 	if len(annotations) == 0 {
 		return ""
 	}
-	return TruncateSourceHash(annotations[SourceHashAnnotationKey])
+	return TruncateSourceHash(annotations[metadata.SyncTokenAnnotationKey])
 }
 
 // TruncateSourceHash truncates the provided source hash after the first 7 characters.
@@ -76,6 +68,6 @@ func IsStatusDisabled(resgroup *v1alpha1.ResourceGroup) bool {
 	if annotations == nil {
 		return false
 	}
-	val, found := annotations[DisableStatusKey]
-	return found && val == DisableStatusValue
+	val, found := annotations[metadata.StatusModeKey]
+	return found && val == metadata.StatusDisabled
 }

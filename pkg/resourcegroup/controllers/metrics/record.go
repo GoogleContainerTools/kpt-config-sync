@@ -16,28 +16,14 @@ package metrics
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"go.opencensus.io/stats"
 	"go.opencensus.io/tag"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
-)
-
-const (
-	// NsReconcilerPrefix is the prefix used for all Namespace reconcilers.
-	NsReconcilerPrefix = "ns-reconciler"
-	// RootReconcilerPrefix is the prefix usef for all Root reconcilers.
-	RootReconcilerPrefix = "root-reconciler"
-	// RepoSyncName is the expected name of any RepoSync CR.
-	RepoSyncName = "repo-sync"
-	// RootSyncName is the expected name of any RootSync CR.
-	RootSyncName = "root-sync"
-
-	//nolint:gosec // ignore the false-positive alert for G101: Potential hardcoded credentials
-	// CMSNamespace is the name of the Config Sync controller's namespace
-	CMSNamespace = "config-management-system"
+	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/core"
 )
 
 // RecordReconcileDuration produces a measurement for the ReconcileDuration view.
@@ -112,14 +98,8 @@ func RecordPipelineError(ctx context.Context, nn types.NamespacedName, component
 
 // ComputeReconcilerNameType computes the reconciler name from the ResourceGroup CR name
 func ComputeReconcilerNameType(nn types.NamespacedName) (reconcilerName, reconcilerType string) {
-	if nn.Namespace == CMSNamespace {
-		if nn.Name == RootSyncName {
-			return RootReconcilerPrefix, RootSyncName
-		}
-		return fmt.Sprintf("%s-%s", RootReconcilerPrefix, nn.Name), RootSyncName
+	if nn.Namespace == configsync.ControllerNamespace {
+		return core.RootReconcilerName(nn.Name), configsync.RootSyncName
 	}
-	if nn.Name == RepoSyncName {
-		return fmt.Sprintf("%s-%s", NsReconcilerPrefix, namespace), RepoSyncName
-	}
-	return fmt.Sprintf("%s-%s-%s-%d", NsReconcilerPrefix, namespace, nn.Name, len(nn.Name)), RepoSyncName
+	return core.NsReconcilerName(nn.Namespace, nn.Name), configsync.RepoSyncName
 }

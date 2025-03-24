@@ -63,11 +63,10 @@ type ResourceGroupStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// observedGeneration is the most recent generation observed.
-	// It corresponds to the Object's generation, which is updated on
-	// mutation by the API Server.
-	// Everytime the controller does a successful reconcile, it sets
-	// observedGeneration to match ResourceGroup.metadata.generation.
+	// observedGeneration is updated to the latest metadata.generation every
+	// time the status is updated, so you can tell whether the current status
+	// reflects the current metadata and spec. It defaults to zero when created
+	// so you can tell whether any controller has acted on the spec yet or not.
 	// +optional
 	// +kubebuilder:default:=0
 	ObservedGeneration int64 `json:"observedGeneration"`

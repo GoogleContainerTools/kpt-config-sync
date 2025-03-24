@@ -175,11 +175,10 @@ spec:
               observedGeneration:
                 default: 0
                 description: |-
-                  observedGeneration is the most recent generation observed.
-                  It corresponds to the Object's generation, which is updated on
-                  mutation by the API Server.
-                  Everytime the controller does a successful reconcile, it sets
-                  observedGeneration to match ResourceGroup.metadata.generation.
+                  observedGeneration is updated to the latest metadata.generation every
+                  time the status is updated, so you can tell whether the current status
+                  reflects the current metadata and spec. It defaults to zero when created
+                  so you can tell whether any controller has acted on the spec yet or not.
                 format: int64
                 type: integer
               resourceStatuses:

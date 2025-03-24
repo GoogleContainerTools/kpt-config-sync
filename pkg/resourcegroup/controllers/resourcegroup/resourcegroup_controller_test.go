@@ -133,7 +133,6 @@ func TestReconcile(t *testing.T) {
 	channelKpt <- event.GenericEvent{Object: resgroupKpt}
 
 	// Verify that the reconciliation modifies the ResourceGroupStatus field correctly
-	expectedStatus.ObservedGeneration = 1
 	expectedStatus.Conditions = []v1alpha1.Condition{
 		newReconcilingCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg),
 		newStalledCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg),
@@ -187,7 +186,6 @@ func TestReconcile(t *testing.T) {
 			Status:      v1alpha1.NotFound,
 		},
 	}
-	expectedStatus.ObservedGeneration = 2
 	expectedStatus.Conditions = []v1alpha1.Condition{
 		newReconcilingCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg),
 		newStalledCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg),
@@ -296,7 +294,6 @@ func TestReconcile(t *testing.T) {
 			Status:      v1alpha1.Current,
 		},
 	}
-	expectedStatus.ObservedGeneration = 3
 	expectedStatus.Conditions = []v1alpha1.Condition{
 		newReconcilingCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg),
 		newStalledCondition(v1alpha1.FalseConditionStatus, FinishReconciling, finishReconcilingMsg),

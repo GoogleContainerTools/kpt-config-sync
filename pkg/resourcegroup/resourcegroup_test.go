@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"kpt.dev/configsync/pkg/metadata"
 )
 
 func TestGetSourceHash(t *testing.T) {
@@ -40,8 +41,8 @@ func TestGetSourceHash(t *testing.T) {
 		},
 		"should return commit when annotation key exists": {
 			annotations: map[string]string{
-				"foo":                   "bar",
-				SourceHashAnnotationKey: "1234567890",
+				"foo":                           "bar",
+				metadata.SyncTokenAnnotationKey: "1234567890",
 			},
 			expectedCommit: "1234567",
 		},

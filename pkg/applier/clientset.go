@@ -63,7 +63,7 @@ func NewClientSet(c client.Client, configFlags *genericclioptions.ConfigFlags, s
 	f := util.NewFactory(matchVersionKubeConfigFlags)
 
 	var statusPolicy inventory.StatusPolicy
-	if statusMode == StatusEnabled {
+	if statusMode == metadata.StatusEnabled {
 		klog.Infof("Enabled status reporting")
 		statusPolicy = inventory.StatusPolicyAll
 	} else {

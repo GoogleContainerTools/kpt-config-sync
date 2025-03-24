@@ -21,16 +21,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/klog/v2"
+	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/resourcegroup"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/resourcemap"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/yaml"
 
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
-)
-
-const (
-	owningInventoryKey = "config.k8s.io/owning-inventory"
 )
 
 // ComputeStatus computes the status and conditions that should be
@@ -130,5 +127,5 @@ func getOwningInventory(annotations map[string]string) string {
 	if len(annotations) == 0 {
 		return ""
 	}
-	return annotations[owningInventoryKey]
+	return annotations[metadata.OwningInventoryKey]
 }

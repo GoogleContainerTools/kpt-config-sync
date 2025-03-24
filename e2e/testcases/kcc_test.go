@@ -34,6 +34,7 @@ import (
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
+	"kpt.dev/configsync/pkg/metadata"
 )
 
 // This file includes tests for KCC resources from a cloud source repository.
@@ -168,7 +169,7 @@ func TestKCCResourceGroup(t *testing.T) {
 				"name":      "pubsub.googleapis.com",
 				"namespace": namespace,
 				"annotations": map[string]interface{}{
-					"config.k8s.io/owning-inventory": resourceID,
+					metadata.OwningInventoryKey: resourceID,
 				},
 			},
 		},

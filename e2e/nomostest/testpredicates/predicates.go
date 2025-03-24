@@ -809,17 +809,20 @@ func StatusEquals(scheme *runtime.Scheme, expected status.Status) Predicate {
 		}
 		uObj, err := kinds.ToUnstructured(obj, scheme)
 		if err != nil {
-			return fmt.Errorf("failed to convert %T %s to unstructured: %w", obj, core.ObjectNamespacedName(obj), err)
+			return fmt.Errorf("failed to convert %T %s to unstructured: %w",
+				obj, core.ObjectNamespacedName(obj), err)
 		}
 		gvk := obj.GetObjectKind().GroupVersionKind()
 
 		result, err := status.Compute(uObj)
 		if err != nil {
-			return fmt.Errorf("failed to compute status for %s %s: %w", gvk.Kind, core.ObjectNamespacedName(obj), err)
+			return fmt.Errorf("failed to compute status for %s %s: %w",
+				gvk.Kind, core.ObjectNamespacedName(obj), err)
 		}
 
 		if result.Status != expected {
-			return fmt.Errorf("expected %s %s to have status %q, but got %q", gvk.Kind, core.ObjectNamespacedName(obj), expected, result.Status)
+			return fmt.Errorf("expected %s %s to have status %q, but got %q: %#v",
+				gvk.Kind, core.ObjectNamespacedName(obj), expected, result.Status, result)
 		}
 		return nil
 	}

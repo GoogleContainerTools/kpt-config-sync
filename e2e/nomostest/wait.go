@@ -19,11 +19,11 @@ import (
 	"sync"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/e2e/nomostest/retry"
 	"kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/pkg/kinds"
 	"sigs.k8s.io/cli-utils/pkg/kstatus/status"
 )
 
@@ -101,26 +101,16 @@ func WaitForNamespace(nt *NT, timeout time.Duration, namespace string) {
 	// Wait for the repository to report it is synced.
 	took, err := retry.Retry(timeout, func() error {
 		obj := &unstructured.Unstructured{}
-		obj.SetGroupVersionKind(schema.GroupVersionKind{
-			Group:   corev1.SchemeGroupVersion.Group,
-			Version: corev1.SchemeGroupVersion.Version,
-			Kind:    "Namespace",
-		})
+		obj.SetGroupVersionKind(kinds.Namespace())
 		obj.SetName(namespace)
 		if err := nt.KubeClient.Get(namespace, "", obj); err != nil {
 			return fmt.Errorf("namespace %q GET failed: %w", namespace, err)
 		}
-		result, err := status.Compute(obj)
-		if err != nil {
-			return fmt.Errorf("namespace %q status could not be computed: %w", namespace, err)
-		}
-		if result.Status != status.CurrentStatus {
-			return fmt.Errorf("namespace %q not reconciled: status is %q: %s", namespace, result.Status, result.Message)
-		}
-		return nil
+		return testpredicates.StatusEquals(nt.Scheme, status.CurrentStatus)(obj)
 	})
 	if err != nil {
-		nt.T.Logf("failed after %v to wait for namespace %q to be ready", took, namespace)
+		nt.T.Logf("failed after %v to wait for namespace %q to be ready",
+			took, namespace)
 		nt.T.Fatal(err)
 	}
 	nt.T.Logf("took %v to wait for namespace %q to be ready", took, namespace)

@@ -59,10 +59,9 @@ spec:
     spec:
       containers:
       - name: hello
-        image: "gcr.io/google-samples/hello-app:2.0"
-        env:
-        - name: "PORT"
-          value: "50000"
+        image: "us-docker.pkg.dev/google-samples/containers/gke/hello-app:2.0"
+        ports:
+        - containerPort: 8080
 `
 
 func TestStatus(t *testing.T) {

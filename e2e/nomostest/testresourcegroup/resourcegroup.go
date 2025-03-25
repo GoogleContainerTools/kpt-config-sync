@@ -71,6 +71,7 @@ func GenerateResourceStatus(resources []v1alpha1.ObjMetadata, s v1alpha1.Status,
 func EmptyStatus() v1alpha1.ResourceGroupStatus {
 	return v1alpha1.ResourceGroupStatus{
 		Conditions: []v1alpha1.Condition{
+			// Reconciling condition is deprecated and will always be False.
 			{
 				Type:    v1alpha1.Reconciling,
 				Status:  v1alpha1.FalseConditionStatus,

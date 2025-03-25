@@ -17,15 +17,13 @@ package nomostest
 import (
 	"fmt"
 
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testresourcegroup"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
-	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/parse"
 	"kpt.dev/configsync/pkg/reposync"
 	"kpt.dev/configsync/pkg/resourcegroup"
@@ -281,34 +279,24 @@ func resourceGroupHasReconciled(commit string, scheme *runtime.Scheme) testpredi
 			return testpredicates.WrongTypeErr(o, &v1alpha1.ResourceGroup{})
 		}
 
+		// Test that metadata.deletionTimestamp is not set
+		if err := testpredicates.NotPendingDeletion(o); err != nil {
+			return err
+		}
+
 		// If status is disabled for this ResourceGroup, skip all status checks
 		if resourcegroup.IsStatusDisabled(rg) {
 			return testpredicates.ResourceGroupHasNoStatus()(o)
 		}
 
-		// Test status.observedGeneration matches metadata.generation
-		if err := testpredicates.HasObservedLatestGeneration(scheme)(o); err != nil {
-			return err
-		}
-
-		// Test that metadata.deletionTimestamp is missing, and conditions do not include Reconciling=True or Stalled=True
-		if err := testpredicates.StatusEquals(scheme, kstatus.CurrentStatus)(o); err != nil {
-			return err
-		}
-
-		// Test that Stalled condition exists and is "False".
-		// This ensures the condition wasn't removed by the applier.
-		if err := testpredicates.HasConditionStatus(scheme, string(v1alpha1.Stalled), corev1.ConditionFalse)(o); err != nil {
-			return err
-		}
-
-		// Test that all the spec.resources exist in the status.resourceStatuses,
-		// and that all deleted objects were removed by the applier.
+		// Generate the full expected status for comparison and diffing.
+		// This makes it easier to debug failures, than checking each field independently.
+		expectedStatus := testresourcegroup.EmptyStatus() // includes conditions
+		expectedStatus.ObservedGeneration = rg.GetGeneration()
 		shortCommit := resourcegroup.TruncateSourceHash(commit)
-		found := rg.Status.ResourceStatuses
-		expected := make([]v1alpha1.ResourceStatus, len(rg.Spec.Resources))
+		expectedStatus.ResourceStatuses = make([]v1alpha1.ResourceStatus, len(rg.Spec.Resources))
 		for i, resource := range rg.Spec.Resources {
-			expected[i] = v1alpha1.ResourceStatus{
+			expectedStatus.ResourceStatuses[i] = v1alpha1.ResourceStatus{
 				ObjMetadata: *resource.DeepCopy(),
 				Status:      v1alpha1.Current,
 				Strategy:    v1alpha1.Apply,
@@ -318,12 +306,16 @@ func resourceGroupHasReconciled(commit string, scheme *runtime.Scheme) testpredi
 				Conditions:  nil,
 			}
 		}
-		if !equality.Semantic.DeepEqual(found, expected) {
-			return fmt.Errorf("status.resourceStatuses does not match expected value in %s:\nDiff (- Expected, + Found)\n%s",
-				kinds.ObjectSummary(o), log.AsYAMLDiff(expected, found))
+		// Note: expectedStatus.SubgroupStatuses is unused by Config Sync.
+		if err := testpredicates.ResourceGroupStatusEquals(expectedStatus)(rg); err != nil {
+			return err
 		}
 
-		// Note: status.subgroupStatuses is ignored
+		// Double-check that kstatus computes the expected status as Current
+		if err := testpredicates.StatusEquals(scheme, kstatus.CurrentStatus)(o); err != nil {
+			return err
+		}
+
 		return nil
 	}
 }

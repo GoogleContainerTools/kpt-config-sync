@@ -15,13 +15,13 @@
 package validate
 
 import (
-	"errors"
 	"testing"
 
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/status"
+	"kpt.dev/configsync/pkg/testing/testerrors"
 )
 
 func auth(authType configsync.AuthType) func(*v1beta1.RepoSync) {
@@ -177,17 +177,17 @@ func TestValidateRepoSyncSpec(t *testing.T) {
 		{
 			name:    "missing git repo",
 			obj:     repoSyncWithGit(auth(configsync.AuthNone), missingRepo),
-			wantErr: status.FakeError(InvalidSyncCode),
+			wantErr: MissingGitRepo(repoSyncWithGit(auth(configsync.AuthNone), missingRepo)),
 		},
 		{
 			name:    "invalid git auth type",
 			obj:     repoSyncWithGit(auth("invalid auth")),
-			wantErr: status.FakeError(InvalidSyncCode),
+			wantErr: InvalidGitAuthType(repoSyncWithGit(auth("invalid auth"))),
 		},
 		{
 			name:    "no op proxy",
 			obj:     repoSyncWithGit(auth(configsync.AuthGCENode), proxy("no-op proxy")),
-			wantErr: status.FakeError(InvalidSyncCode),
+			wantErr: NoOpProxy(repoSyncWithGit(auth(configsync.AuthGCENode), proxy("no-op proxy"))),
 		},
 		{
 			name: "valid proxy with none auth type",
@@ -204,32 +204,32 @@ func TestValidateRepoSyncSpec(t *testing.T) {
 		{
 			name:    "illegal secret",
 			obj:     repoSyncWithGit(auth(configsync.AuthNone), secret("illegal secret")),
-			wantErr: status.FakeError(InvalidSyncCode),
+			wantErr: IllegalSecretRef(configsync.GitSource, repoSyncWithGit(auth(configsync.AuthNone), secret("illegal secret"))),
 		},
 		{
 			name:    "missing secret",
 			obj:     repoSyncWithGit(auth(configsync.AuthSSH)),
-			wantErr: status.FakeError(InvalidSyncCode),
+			wantErr: MissingSecretRef(configsync.GitSource, repoSyncWithGit(auth(configsync.AuthSSH))),
 		},
 		{
 			name:    "invalid GCP serviceaccount email",
 			obj:     repoSyncWithGit(auth(configsync.AuthGCPServiceAccount), gcpSAEmail("invalid_gcp_sa@gserviceaccount.com")),
-			wantErr: status.FakeError(InvalidSyncCode),
+			wantErr: InvalidGCPSAEmail(configsync.GitSource, repoSyncWithGit(auth(configsync.AuthGCPServiceAccount), gcpSAEmail("invalid_gcp_sa@gserviceaccount.com"))),
 		},
 		{
 			name:    "invalid GCP serviceaccount email with correct suffix",
 			obj:     repoSyncWithGit(auth(configsync.AuthGCPServiceAccount), gcpSAEmail("foo@my-project.iam.gserviceaccount.com")),
-			wantErr: status.FakeError(InvalidSyncCode),
+			wantErr: InvalidGCPSAEmail(configsync.GitSource, repoSyncWithGit(auth(configsync.AuthGCPServiceAccount), gcpSAEmail("foo@my-project.iam.gserviceaccount.com"))),
 		},
 		{
 			name:    "invalid GCP serviceaccount email without domain",
 			obj:     repoSyncWithGit(auth(configsync.AuthGCPServiceAccount), gcpSAEmail("my-project")),
-			wantErr: status.FakeError(InvalidSyncCode),
+			wantErr: InvalidGCPSAEmail(configsync.GitSource, repoSyncWithGit(auth(configsync.AuthGCPServiceAccount), gcpSAEmail("my-project"))),
 		},
 		{
 			name:    "missing GCP serviceaccount email for git",
 			obj:     repoSyncWithGit(auth(configsync.AuthGCPServiceAccount)),
-			wantErr: status.FakeError(InvalidSyncCode),
+			wantErr: MissingGCPSAEmail(configsync.GitSource, repoSyncWithGit(auth(configsync.AuthGCPServiceAccount))),
 		},
 		// Validate OCI spec
 		{
@@ -239,32 +239,32 @@ func TestValidateRepoSyncSpec(t *testing.T) {
 		{
 			name:    "missing oci image",
 			obj:     repoSyncWithOci(ociAuth(configsync.AuthNone), missingImage),
-			wantErr: status.FakeError(InvalidSyncCode),
+			wantErr: MissingOciImage(repoSyncWithOci(ociAuth(configsync.AuthNone), missingImage)),
 		},
 		{
 			name:    "invalid auth type",
 			obj:     repoSyncWithOci(ociAuth("invalid auth")),
-			wantErr: status.FakeError(InvalidSyncCode),
+			wantErr: InvalidOciAuthType(repoSyncWithOci(ociAuth("invalid auth"))),
 		},
 		{
 			name:    "missing GCP serviceaccount email for Oci",
 			obj:     repoSyncWithOci(ociAuth(configsync.AuthGCPServiceAccount)),
-			wantErr: status.FakeError(InvalidSyncCode),
+			wantErr: MissingGCPSAEmail(configsync.OciSource, repoSyncWithOci(ociAuth(configsync.AuthGCPServiceAccount))),
 		},
 		{
 			name:    "invalid source type",
 			obj:     k8sobjects.RepoSyncObjectV1Beta1("test-ns", configsync.RepoSyncName, k8sobjects.WithRepoSyncSourceType("invalid")),
-			wantErr: status.FakeError(InvalidSyncCode),
+			wantErr: InvalidSourceType(k8sobjects.RepoSyncObjectV1Beta1("test-ns", configsync.RepoSyncName, k8sobjects.WithRepoSyncSourceType("invalid"))),
 		},
 		{
 			name:    "redundant OCI spec",
 			obj:     repoSyncWithGit(withOci()),
-			wantErr: status.FakeError(InvalidSyncCode),
+			wantErr: InvalidGitAuthType(repoSyncWithGit(withOci())),
 		},
 		{
 			name:    "redundant Git spec",
 			obj:     repoSyncWithOci(withGit()),
-			wantErr: status.FakeError(InvalidSyncCode),
+			wantErr: InvalidOciAuthType(repoSyncWithOci(withGit())),
 		},
 		// Validate Helm spec
 		{
@@ -274,36 +274,34 @@ func TestValidateRepoSyncSpec(t *testing.T) {
 		{
 			name:    "missing helm repo",
 			obj:     repoSyncWithHelm(helmAuth(configsync.AuthNone), missingHelmRepo),
-			wantErr: status.FakeError(InvalidSyncCode),
+			wantErr: MissingHelmRepo(repoSyncWithHelm(helmAuth(configsync.AuthNone), missingHelmRepo)),
 		},
 		{
 			name:    "missing helm chart",
 			obj:     repoSyncWithHelm(helmAuth(configsync.AuthNone), missingHelmChart),
-			wantErr: status.FakeError(InvalidSyncCode),
+			wantErr: MissingHelmChart(repoSyncWithHelm(helmAuth(configsync.AuthNone), missingHelmChart)),
 		},
 		{
 			name:    "invalid auth type",
 			obj:     repoSyncWithHelm(helmAuth("invalid auth")),
-			wantErr: status.FakeError(InvalidSyncCode),
+			wantErr: InvalidHelmAuthType(repoSyncWithHelm(helmAuth("invalid auth"))),
 		},
 		{
 			name:    "missing GCP serviceaccount email for Helm",
 			obj:     repoSyncWithHelm(helmAuth(configsync.AuthGCPServiceAccount)),
-			wantErr: status.FakeError(InvalidSyncCode),
+			wantErr: MissingGCPSAEmail(configsync.HelmSource, repoSyncWithHelm(helmAuth(configsync.AuthGCPServiceAccount))),
 		},
 		{
 			name:    "redundant Helm spec",
 			obj:     repoSyncWithGit(withHelm()),
-			wantErr: status.FakeError(InvalidSyncCode),
+			wantErr: InvalidGitAuthType(repoSyncWithGit(withHelm())),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			err := RepoSyncSpec(tc.obj.Spec.SourceType, tc.obj.Spec.Git, tc.obj.Spec.Oci, tc.obj.Spec.Helm, tc.obj)
-			if !errors.Is(err, tc.wantErr) {
-				t.Errorf("Got RepoSyncSpec() error %v, want %v", err, tc.wantErr)
-			}
+			testerrors.AssertEqual(t, tc.wantErr, err)
 		})
 	}
 }
@@ -318,16 +316,14 @@ func TestValidateRootSyncSpec(t *testing.T) {
 		{
 			name:    "valid git",
 			obj:     rootSyncWithHelm(helmNsAndDeployNS()),
-			wantErr: status.FakeError(InvalidSyncCode),
+			wantErr: InvalidHelmAuthType(rootSyncWithHelm(helmNsAndDeployNS())),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			err := RootSyncSpec(tc.obj.Spec.SourceType, tc.obj.Spec.Git, tc.obj.Spec.Oci, tc.obj.Spec.Helm, tc.obj)
-			if !errors.Is(err, tc.wantErr) {
-				t.Errorf("Got RootSyncSpec() error %v, want %v", err, tc.wantErr)
-			}
+			testerrors.AssertEqual(t, tc.wantErr, err)
 		})
 	}
 }

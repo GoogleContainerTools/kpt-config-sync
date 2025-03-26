@@ -146,6 +146,8 @@ type RootOptions struct {
 
 // Run configures and starts the various components of a reconciler process.
 func Run(opts Options) {
+	// Start listening to signals
+	signalCtx := signals.SetupSignalHandler()
 	fight.SetFightThreshold(opts.FightDetectionThreshold)
 
 	// Get a config to talk to the apiserver.
@@ -203,9 +205,9 @@ func Run(opts Options) {
 	if err != nil {
 		klog.Fatalf("Error creating clients: %v", err)
 	}
-	supervisor, err := applier.NewSupervisor(clientSet, opts.ReconcilerScope, opts.SyncName, reconcileTimeout)
-	if err != nil {
-		klog.Fatalf("Error creating applier: %v", err)
+	supervisor := applier.NewSupervisor(clientSet, opts.ReconcilerScope, opts.SyncName, reconcileTimeout)
+	if err := supervisor.UpdateStatusMode(signalCtx); err != nil {
+		klog.Fatalf("Error setting status mode on ResourceGroup: %v", err)
 	}
 
 	// Configure the Remediator.
@@ -323,9 +325,6 @@ func Run(opts Options) {
 	} else {
 		reconciler = parse.NewRepoSyncReconciler(reconcilerOpts, parseOpts)
 	}
-
-	// Start listening to signals
-	signalCtx := signals.SetupSignalHandler()
 
 	// Create the ControllerManager
 	mgrOptions := ctrl.Options{

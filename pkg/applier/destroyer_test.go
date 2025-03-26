@@ -20,7 +20,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/applier/stats"
@@ -256,8 +255,7 @@ func TestDestroy(t *testing.T) {
 				// TODO: Add tests to cover disabling objects
 				// TODO: Add tests to cover status mode
 			}
-			destroyer, err := NewNamespaceSupervisor(cs, "test-namespace", "rs", 5*time.Minute)
-			require.NoError(t, err)
+			destroyer := NewSupervisor(cs, "test-namespace", "rs", 5*time.Minute)
 
 			var errs status.MultiError
 			eventHandler := func(event Event) {

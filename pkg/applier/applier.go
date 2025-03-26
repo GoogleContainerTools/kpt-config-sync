@@ -121,6 +121,7 @@ func (e ErrorEvent) Type() EventType {
 type Supervisor interface {
 	Applier
 	Destroyer
+	UpdateStatusMode(ctx context.Context) error
 }
 
 // supervisor is the default implementation of the Supervisor interface.
@@ -150,77 +151,59 @@ var _ Supervisor = &supervisor{}
 
 // NewSupervisor constructs either a cluster-level or namespace-level Supervisor,
 // based on the specified scope.
-func NewSupervisor(cs *ClientSet, scope declared.Scope, syncName string, reconcileTimeout time.Duration) (Supervisor, error) {
+func NewSupervisor(cs *ClientSet, scope declared.Scope, syncName string, reconcileTimeout time.Duration) Supervisor {
+	syncKind := scope.SyncKind()
+	syncNamespace := scope.SyncNamespace()
+	invInfo := inventory.NewSingleObjectInfo(
+		inventory.ID(InventoryID(syncName, syncNamespace)),
+		types.NamespacedName{
+			Name:      syncName,
+			Namespace: syncNamespace,
+		},
+	)
+	policy := inventory.PolicyAdoptIfNoInventory
 	if scope == declared.RootScope {
-		return NewRootSupervisor(cs, syncName, reconcileTimeout)
+		policy = inventory.PolicyAdoptAll
 	}
-	return NewNamespaceSupervisor(cs, scope, syncName, reconcileTimeout)
-}
-
-// NewNamespaceSupervisor constructs a Supervisor that can manage resource
-// objects in a single namespace.
-func NewNamespaceSupervisor(cs *ClientSet, namespace declared.Scope, syncName string, reconcileTimeout time.Duration) (Supervisor, error) {
-	syncKind := configsync.RepoSyncKind
-	syncNamespace := namespace.SyncNamespace()
-	invObj := newInventoryUnstructured(syncName, syncNamespace)
-	// If the ResourceGroup object exists, annotate the status mode on the
-	// existing object.
-	if err := annotateStatusMode(context.TODO(), cs.Client, invObj, cs.StatusMode); err != nil {
-		klog.Errorf("failed to annotate the ResourceGroup object with the status mode %s", cs.StatusMode)
-		return nil, err
-	}
-	klog.Infof("successfully annotate the ResourceGroup object with the status mode %s", cs.StatusMode)
-	invInfo := inventory.NewSingleObjectInfo(
-		inventory.ID(InventoryID(syncName, syncNamespace)),
-		types.NamespacedName{
-			Name:      syncName,
-			Namespace: syncNamespace,
-		},
-	)
 	a := &supervisor{
 		invInfo:          invInfo,
 		clientSet:        cs,
-		policy:           inventory.PolicyAdoptIfNoInventory,
+		policy:           policy,
 		syncKind:         syncKind,
 		syncName:         syncName,
 		syncNamespace:    syncNamespace,
 		reconcileTimeout: reconcileTimeout,
 	}
-	klog.V(4).Infof("Namespace Supervisor %s/%s is initialized", namespace, syncName)
-	return a, nil
+	klog.V(4).Infof("%s Supervisor %s/%s is initialized", syncKind, syncNamespace, syncName)
+	return a
 }
 
-// NewRootSupervisor constructs a Supervisor that can manage both cluster-level
-// and namespace-level resource objects in a single cluster.
-func NewRootSupervisor(cs *ClientSet, syncName string, reconcileTimeout time.Duration) (Supervisor, error) {
-	syncKind := configsync.RootSyncKind
-	syncNamespace := configsync.ControllerNamespace
-	u := newInventoryUnstructured(syncName, syncNamespace)
-	// If the ResourceGroup object exists, annotate the status mode on the
-	// existing object.
-	if err := annotateStatusMode(context.TODO(), cs.Client, u, cs.StatusMode); err != nil {
-		klog.Errorf("failed to annotate the ResourceGroup object with the status mode %s", cs.StatusMode)
-		return nil, err
+// UpdateStatusMode sets the status mode annotation on the ResourceGroup object
+// if it exists.
+// This is invoked once before the applier runs so that ResourceGroups which are
+// too large can have their status cleared by the resource-group-controller before
+// trying to add any new resources from source.
+func (s *supervisor) UpdateStatusMode(ctx context.Context) error {
+	u := newInventoryUnstructured(s.syncName, s.syncNamespace)
+	err := s.clientSet.Client.Get(ctx, client.ObjectKey{Name: u.GetName(), Namespace: u.GetNamespace()}, u)
+	if err != nil {
+		// RG doesn't exist, it will be created by applier with appropriate status mode
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return err
 	}
-	klog.Infof("successfully annotate the ResourceGroup object with the status mode %s", cs.StatusMode)
-	invInfo := inventory.NewSingleObjectInfo(
-		inventory.ID(InventoryID(syncName, syncNamespace)),
-		types.NamespacedName{
-			Name:      syncName,
-			Namespace: syncNamespace,
-		},
-	)
-	a := &supervisor{
-		invInfo:          invInfo,
-		clientSet:        cs,
-		policy:           inventory.PolicyAdoptAll,
-		syncKind:         syncKind,
-		syncName:         syncName,
-		syncNamespace:    syncNamespace,
-		reconcileTimeout: reconcileTimeout,
+	annotations := u.GetAnnotations()
+	if annotations == nil {
+		annotations = make(map[string]string)
 	}
-	klog.V(4).Infof("Root Supervisor %s is initialized and synced with the API server", syncName)
-	return a, nil
+	if annotations[metadata.StatusModeKey] == s.clientSet.StatusMode {
+		return nil // annotation already consistent, no need to update
+	}
+	annotations[metadata.StatusModeKey] = s.clientSet.StatusMode
+	u.SetAnnotations(annotations)
+	klog.Infof("annotate the ResourceGroup object with the status mode %s", s.clientSet.StatusMode)
+	return s.clientSet.Client.Update(ctx, u, client.FieldOwner(configsync.FieldManager))
 }
 
 func (s *supervisor) processApplyEvent(ctx context.Context, e event.ApplyEvent, syncStats *stats.ApplyEventStats, objectStatusMap ObjectStatusMap, unknownTypeResources map[core.ID]struct{}, resourceMap map[core.ID]client.Object) status.Error {

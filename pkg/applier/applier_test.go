@@ -23,10 +23,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/pkg/api/configmanagement"
+	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/applier/stats"
@@ -374,8 +377,7 @@ func TestApply(t *testing.T) {
 				Mapper:     fakeClient.RESTMapper(),
 				// TODO: Add tests to cover status mode
 			}
-			applier, err := NewNamespaceSupervisor(cs, syncScope, syncName, 5*time.Minute)
-			require.NoError(t, err)
+			applier := NewSupervisor(cs, syncScope, syncName, 5*time.Minute)
 
 			var errs status.MultiError
 			eventHandler := func(event Event) {
@@ -390,7 +392,7 @@ func TestApply(t *testing.T) {
 
 			ctx := context.Background()
 			resources := &declared.Resources{}
-			_, err = resources.UpdateDeclared(ctx, objs, "")
+			_, err := resources.UpdateDeclared(ctx, objs, "")
 			require.NoError(t, err)
 
 			objectStatusMap, syncStats := applier.Apply(context.Background(), eventHandler, resources)
@@ -632,11 +634,10 @@ func TestApplyMutationIgnoredObjects(t *testing.T) {
 				}
 			}
 
-			applier, err := NewNamespaceSupervisor(cs, syncScope, syncName, 5*time.Minute)
-			require.NoError(t, err)
+			applier := NewSupervisor(cs, syncScope, syncName, 5*time.Minute)
 
 			resources := &declared.Resources{}
-			_, err = resources.UpdateDeclared(context.Background(), tc.declaredObjs, "")
+			_, err := resources.UpdateDeclared(context.Background(), tc.declaredObjs, "")
 			require.NoError(t, err)
 			resources.UpdateIgnored(tc.cachedIgnoredObjs...)
 
@@ -644,6 +645,146 @@ func TestApplyMutationIgnoredObjects(t *testing.T) {
 
 			testutil.AssertEqual(t, tc.expectedObjsToApply, fakeKptApplier.objsToApply)
 			testutil.AssertEqual(t, tc.expectedItemsInIgnoreCache, resources.IgnoredObjects())
+		})
+	}
+}
+
+func TestNewSupervisor(t *testing.T) {
+	testCases := map[string]struct {
+		scope               declared.Scope
+		syncName            string
+		wantInventoryPolicy inventory.Policy
+		wantSyncKind        string
+		wantSyncName        string
+		wantSyncNamespace   string
+		wantInvInfo         *inventory.SingleObjectInfo
+	}{
+		"RootSync": {
+			scope:               declared.RootScope,
+			syncName:            "my-root-sync",
+			wantInventoryPolicy: inventory.PolicyAdoptAll,
+			wantSyncKind:        configsync.RootSyncKind,
+			wantSyncName:        "my-root-sync",
+			wantSyncNamespace:   configsync.ControllerNamespace,
+			wantInvInfo: inventory.NewSingleObjectInfo(
+				"config-management-system_my-root-sync",
+				types.NamespacedName{
+					Name:      "my-root-sync",
+					Namespace: configsync.ControllerNamespace,
+				},
+			),
+		},
+		"RepoSync": {
+			scope:               declared.Scope("my-tenant-ns"),
+			syncName:            "my-repo-sync",
+			wantInventoryPolicy: inventory.PolicyAdoptIfNoInventory,
+			wantSyncKind:        configsync.RepoSyncKind,
+			wantSyncName:        "my-repo-sync",
+			wantSyncNamespace:   "my-tenant-ns",
+			wantInvInfo: inventory.NewSingleObjectInfo(
+				"my-tenant-ns_my-repo-sync",
+				types.NamespacedName{
+					Name:      "my-repo-sync",
+					Namespace: "my-tenant-ns",
+				},
+			),
+		},
+	}
+	for name, tc := range testCases {
+		t.Run(name, func(t *testing.T) {
+			s := NewSupervisor(nil, tc.scope, tc.syncName, 5*time.Minute)
+			ts := s.(*supervisor)
+			require.Equal(t, tc.wantInventoryPolicy, ts.policy)
+			require.Equal(t, tc.wantSyncKind, ts.syncKind)
+			require.Equal(t, tc.wantSyncName, ts.syncName)
+			require.Equal(t, tc.wantSyncNamespace, ts.syncNamespace)
+			require.Equal(t, tc.wantInvInfo, ts.invInfo)
+		})
+	}
+}
+
+func TestUpdateStatusMode(t *testing.T) {
+	syncName := "my-rs"
+	syncScope := declared.RootScope
+	syncNamespace := syncScope.SyncNamespace()
+
+	testcases := map[string]struct {
+		rgObj         client.Object
+		newStatusMode string
+	}{
+		"ResourceGroup does not exist": {
+			rgObj:         nil,
+			newStatusMode: metadata.StatusEnabled,
+		},
+		"ResourceGroup unchanged from enabled": {
+			rgObj: k8sobjects.ResourceGroupObject(
+				core.Name(syncName),
+				core.Namespace(syncNamespace),
+				core.Annotation(metadata.StatusModeKey, metadata.StatusEnabled),
+			),
+			newStatusMode: metadata.StatusEnabled,
+		},
+		"ResourceGroup unchanged from disabled": {
+			rgObj: k8sobjects.ResourceGroupObject(
+				core.Name(syncName),
+				core.Namespace(syncNamespace),
+				core.Annotation(metadata.StatusModeKey, metadata.StatusDisabled),
+			),
+			newStatusMode: metadata.StatusDisabled,
+		},
+		"ResourceGroup switching from status enabled to disabled": {
+			rgObj: k8sobjects.ResourceGroupObject(
+				core.Name(syncName),
+				core.Namespace(syncNamespace),
+				core.Annotation(metadata.StatusModeKey, metadata.StatusEnabled),
+			),
+			newStatusMode: metadata.StatusDisabled,
+		},
+		"ResourceGroup switching from status disabled to enabled": {
+			rgObj: k8sobjects.ResourceGroupObject(
+				core.Name(syncName),
+				core.Namespace(syncNamespace),
+				core.Annotation(metadata.StatusModeKey, metadata.StatusDisabled),
+			),
+			newStatusMode: metadata.StatusEnabled,
+		},
+	}
+
+	for name, tc := range testcases {
+		t.Run(name, func(t *testing.T) {
+			var objs []client.Object
+			if tc.rgObj != nil {
+				objs = append(objs, tc.rgObj)
+			}
+			fakeClient := testingfake.NewClient(t, core.Scheme, objs...)
+			fakeApplier := newFakeKptApplier([]event.Event{})
+			cs := &ClientSet{
+				KptApplier: fakeApplier,
+				Client:     fakeClient,
+				Mapper:     fakeClient.RESTMapper(),
+				StatusMode: tc.newStatusMode,
+			}
+
+			applier := NewSupervisor(cs, syncScope, syncName, 5*time.Minute)
+
+			err := applier.UpdateStatusMode(context.Background())
+			require.NoError(t, err)
+
+			key := client.ObjectKey{
+				Name:      syncName,
+				Namespace: syncScope.SyncNamespace(),
+			}
+			rg := k8sobjects.ResourceGroupObject()
+			err = fakeClient.Get(context.Background(), key, rg)
+			if tc.rgObj == nil {
+				if !apierrors.IsNotFound(err) {
+					t.Fatalf("want NotFound but got %v", err)
+				}
+				return
+			}
+			require.NoError(t, err)
+			annotations := rg.GetAnnotations()
+			require.Equal(t, tc.newStatusMode, annotations[metadata.StatusModeKey])
 		})
 	}
 }

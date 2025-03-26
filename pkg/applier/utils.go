@@ -15,16 +15,13 @@
 package applier
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
 
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
@@ -169,23 +166,6 @@ func getObjectSize(u *unstructured.Unstructured) (int, error) {
 		return 0, err
 	}
 	return len(data), nil
-}
-
-func annotateStatusMode(ctx context.Context, c client.Client, u *unstructured.Unstructured, statusMode string) error {
-	err := c.Get(ctx, client.ObjectKey{Name: u.GetName(), Namespace: u.GetNamespace()}, u)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return nil
-		}
-		return err
-	}
-	annotations := u.GetAnnotations()
-	if annotations == nil {
-		annotations = make(map[string]string)
-	}
-	annotations[metadata.StatusModeKey] = statusMode
-	u.SetAnnotations(annotations)
-	return c.Update(ctx, u, client.FieldOwner(configsync.FieldManager))
 }
 
 func refsFromIDs(ids ...core.ID) []mutation.ResourceReference {

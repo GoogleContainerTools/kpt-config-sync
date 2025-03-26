@@ -26,6 +26,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/applier/stats"
@@ -184,26 +185,28 @@ func NewSupervisor(cs *ClientSet, scope declared.Scope, syncName string, reconci
 // too large can have their status cleared by the resource-group-controller before
 // trying to add any new resources from source.
 func (s *supervisor) UpdateStatusMode(ctx context.Context) error {
-	u := newInventoryUnstructured(s.syncName, s.syncNamespace)
-	err := s.clientSet.Client.Get(ctx, client.ObjectKey{Name: u.GetName(), Namespace: u.GetNamespace()}, u)
-	if err != nil {
-		// RG doesn't exist, it will be created by applier with appropriate status mode
-		if apierrors.IsNotFound(err) {
-			return nil
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		u := newInventoryUnstructured(s.syncName, s.syncNamespace)
+		err := s.clientSet.Client.Get(ctx, client.ObjectKey{Name: u.GetName(), Namespace: u.GetNamespace()}, u)
+		if err != nil {
+			// RG doesn't exist, it will be created by applier with appropriate status mode
+			if apierrors.IsNotFound(err) {
+				return nil
+			}
+			return err
 		}
-		return err
-	}
-	annotations := u.GetAnnotations()
-	if annotations == nil {
-		annotations = make(map[string]string)
-	}
-	if annotations[metadata.StatusModeKey] == s.clientSet.StatusMode {
-		return nil // annotation already consistent, no need to update
-	}
-	annotations[metadata.StatusModeKey] = s.clientSet.StatusMode
-	u.SetAnnotations(annotations)
-	klog.Infof("annotate the ResourceGroup object with the status mode %s", s.clientSet.StatusMode)
-	return s.clientSet.Client.Update(ctx, u, client.FieldOwner(configsync.FieldManager))
+		annotations := u.GetAnnotations()
+		if annotations == nil {
+			annotations = make(map[string]string)
+		}
+		if annotations[metadata.StatusModeKey] == s.clientSet.StatusMode {
+			return nil // annotation already consistent, no need to update
+		}
+		annotations[metadata.StatusModeKey] = s.clientSet.StatusMode
+		u.SetAnnotations(annotations)
+		klog.Infof("annotate the ResourceGroup object with the status mode %s", s.clientSet.StatusMode)
+		return s.clientSet.Client.Update(ctx, u, client.FieldOwner(configsync.FieldManager))
+	})
 }
 
 func (s *supervisor) processApplyEvent(ctx context.Context, e event.ApplyEvent, syncStats *stats.ApplyEventStats, objectStatusMap ObjectStatusMap, unknownTypeResources map[core.ID]struct{}, resourceMap map[core.ID]client.Object) status.Error {

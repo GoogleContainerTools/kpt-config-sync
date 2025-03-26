@@ -199,7 +199,7 @@ func Run(opts Options) {
 	if reconcileTimeout < 0 {
 		klog.Fatalf("Invalid reconcileTimeout: %v, timeout should not be negative", reconcileTimeout)
 	}
-	clientSet, err := applier.NewClientSet(cl, configFlags, opts.StatusMode, applySetID)
+	clientSet, err := applier.NewClientSet(cl, configFlags, opts.ReconcilerScope, opts.SyncName, opts.StatusMode, applySetID)
 	if err != nil {
 		klog.Fatalf("Error creating clients: %v", err)
 	}

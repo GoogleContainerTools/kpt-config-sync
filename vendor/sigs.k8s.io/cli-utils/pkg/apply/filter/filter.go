@@ -4,6 +4,8 @@
 package filter
 
 import (
+	"context"
+
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -16,5 +18,5 @@ type ValidationFilter interface {
 	Name() string
 	// Filter returns an error if validation fails, indicating that actuation
 	// should be skipped for this object.
-	Filter(obj *unstructured.Unstructured) error
+	Filter(ctx context.Context, obj *unstructured.Unstructured) error
 }

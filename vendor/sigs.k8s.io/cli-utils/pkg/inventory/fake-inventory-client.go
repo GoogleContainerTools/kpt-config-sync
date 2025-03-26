@@ -6,23 +6,28 @@ package inventory
 import (
 	"context"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
-	"sigs.k8s.io/cli-utils/pkg/apis/actuation"
-	"sigs.k8s.io/cli-utils/pkg/common"
 	"sigs.k8s.io/cli-utils/pkg/object"
+)
+
+const (
+	// TestInventoryName is the name of the fake inventory used for unit tests
+	TestInventoryName = "test-inventory"
+	// TestInventoryNamespace is the namespace of the fake inventory used for unit tests
+	TestInventoryNamespace = "test-namespace"
 )
 
 // FakeClient is a testing implementation of the Client interface.
 type FakeClient struct {
-	Objs   object.ObjMetadataSet
-	Status []actuation.ObjectStatus
-	Err    error
+	Inv Inventory
+	Err error
 }
 
 var (
 	_ Client        = &FakeClient{}
 	_ ClientFactory = FakeClientFactory{}
+
+	_ Inventory = &FakeInventory{}
 )
 
 type FakeClientFactory object.ObjMetadataSet
@@ -32,58 +37,58 @@ func (f FakeClientFactory) NewClient(cmdutil.Factory) (Client, error) {
 }
 
 // NewFakeClient returns a FakeClient.
-func NewFakeClient(initObjs object.ObjMetadataSet) *FakeClient {
+func NewFakeClient(objs object.ObjMetadataSet) *FakeClient {
 	return &FakeClient{
-		Objs: initObjs,
-		Err:  nil,
+		Inv: &FakeInventory{
+			InventoryID:        TestInventoryName,
+			InventoryNamespace: TestInventoryNamespace,
+			InventoryContents: InventoryContents{
+				ObjectRefs: objs,
+			},
+		},
+		Err: nil,
 	}
 }
 
-// GetClusterObjs returns currently stored set of objects.
-func (fic *FakeClient) GetClusterObjs(Info) (object.ObjMetadataSet, error) {
+// NewInventory returns a new empty inventory object
+func (fic *FakeClient) NewInventory(id Info) (Inventory, error) {
+	inv := &FakeInventory{
+		InventoryID:        id.GetID(),
+		InventoryNamespace: id.GetNamespace(),
+	}
+	return inv, nil
+}
+
+// Get returns currently stored inventory.
+func (fic *FakeClient) Get(ctx context.Context, id Info, opts GetOptions) (Inventory, error) {
 	if fic.Err != nil {
-		return object.ObjMetadataSet{}, fic.Err
+		return nil, fic.Err
 	}
-	return fic.Objs, nil
+	return fic.Inv, nil
 }
 
-// Merge stores the passed objects with the current stored cluster inventory
-// objects. Returns the set difference of the current set of objects minus
-// the passed set of objects, or an error if one is set up.
-func (fic *FakeClient) Merge(_ Info, objs object.ObjMetadataSet, _ common.DryRunStrategy) (object.ObjMetadataSet, error) {
-	if fic.Err != nil {
-		return object.ObjMetadataSet{}, fic.Err
-	}
-	diffObjs := fic.Objs.Diff(objs)
-	fic.Objs = fic.Objs.Union(objs)
-	return diffObjs, nil
-}
-
-// Replace the stored cluster inventory objs with the passed obj, or an
+// CreateOrUpdate the stored cluster inventory objs with the passed obj, or an
 // error if one is set up.
-func (fic *FakeClient) Replace(_ Info, objs object.ObjMetadataSet, status []actuation.ObjectStatus,
-	_ common.DryRunStrategy) error {
+func (fic *FakeClient) CreateOrUpdate(ctx context.Context, inv Inventory, opts UpdateOptions) error {
 	if fic.Err != nil {
 		return fic.Err
 	}
-	fic.Objs = objs
-	fic.Status = status
+	fic.Inv = inv
 	return nil
 }
 
-// DeleteInventoryObj returns an error if one is forced; does nothing otherwise.
-func (fic *FakeClient) DeleteInventoryObj(Info, common.DryRunStrategy) error {
+// Delete returns an error if one is forced; does nothing otherwise.
+func (fic *FakeClient) Delete(ctx context.Context, id Info, opts DeleteOptions) error {
 	if fic.Err != nil {
 		return fic.Err
 	}
 	return nil
 }
 
-func (fic *FakeClient) ApplyInventoryNamespace(*unstructured.Unstructured, common.DryRunStrategy) error {
-	if fic.Err != nil {
-		return fic.Err
-	}
-	return nil
+// List the in-cluster inventory
+// Performs a simple in-place update on the ConfigMap
+func (fic *FakeClient) List(ctx context.Context, opts ListOptions) ([]Inventory, error) {
+	return nil, nil
 }
 
 // SetError forces an error on the subsequent client call if it returns an error.
@@ -96,14 +101,20 @@ func (fic *FakeClient) ClearError() {
 	fic.Err = nil
 }
 
-func (fic *FakeClient) GetClusterInventoryInfo(Info) (*unstructured.Unstructured, error) {
-	return nil, nil
+type FakeInventory struct {
+	InventoryContents
+	InventoryID        ID
+	InventoryNamespace string
 }
 
-func (fic *FakeClient) GetClusterInventoryObjs(_ Info) (object.UnstructuredSet, error) {
-	return object.UnstructuredSet{}, nil
+func (fi *FakeInventory) GetID() ID {
+	return fi.InventoryID
 }
 
-func (fic *FakeClient) ListClusterInventoryObjs(_ context.Context) (map[string]object.ObjMetadataSet, error) {
-	return map[string]object.ObjMetadataSet{}, nil
+func (fi *FakeInventory) GetNamespace() string {
+	return fi.InventoryNamespace
+}
+
+func (fi *FakeInventory) Info() Info {
+	return NewSimpleInfo(fi.InventoryID, fi.InventoryNamespace)
 }

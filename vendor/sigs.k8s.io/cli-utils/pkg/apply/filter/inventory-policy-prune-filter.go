@@ -4,6 +4,8 @@
 package filter
 
 import (
+	"context"
+
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/cli-utils/pkg/inventory"
 )
@@ -23,7 +25,7 @@ func (ipf InventoryPolicyPruneFilter) Name() string {
 
 // Filter returns an inventory.PolicyPreventedActuationError if the object
 // prune/delete should be skipped.
-func (ipf InventoryPolicyPruneFilter) Filter(obj *unstructured.Unstructured) error {
+func (ipf InventoryPolicyPruneFilter) Filter(_ context.Context, obj *unstructured.Unstructured) error {
 	_, err := inventory.CanPrune(ipf.Inv, obj, ipf.InvPolicy)
 	if err != nil {
 		return err

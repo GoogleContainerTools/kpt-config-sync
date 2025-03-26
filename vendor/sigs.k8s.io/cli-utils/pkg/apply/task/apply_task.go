@@ -87,8 +87,7 @@ func (a *ApplyTask) Identifiers() object.ObjMetadataSet {
 // the desired state of a resource is changed.
 func (a *ApplyTask) Start(taskContext *taskrunner.TaskContext) {
 	go func() {
-		// TODO: pipe Context through TaskContext
-		ctx := context.TODO()
+		ctx := taskContext.Context()
 		objects := a.Objects
 		klog.V(2).Infof("apply task starting (name: %q, objects: %d)",
 			a.Name(), len(objects))
@@ -115,7 +114,7 @@ func (a *ApplyTask) Start(taskContext *taskrunner.TaskContext) {
 			var filterErr error
 			for _, applyFilter := range a.Filters {
 				klog.V(6).Infof("apply filter evaluating (filter: %s, object: %s)", applyFilter.Name(), id)
-				filterErr = applyFilter.Filter(obj)
+				filterErr = applyFilter.Filter(taskContext.Context(), obj)
 				if filterErr != nil {
 					var fatalErr *filter.FatalError
 					if errors.As(filterErr, &fatalErr) {

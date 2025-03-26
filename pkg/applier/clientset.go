@@ -17,13 +17,14 @@ package applier
 import (
 	"context"
 
-	"github.com/GoogleContainerTools/kpt/pkg/live"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/klog/v2"
 	"k8s.io/kubectl/pkg/cmd/util"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
+	csinventory "kpt.dev/configsync/pkg/applier/inventory"
+	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/metadata"
 	"sigs.k8s.io/cli-utils/pkg/apply"
 	"sigs.k8s.io/cli-utils/pkg/apply/event"
@@ -58,7 +59,7 @@ type ClientSet struct {
 }
 
 // NewClientSet constructs a new ClientSet.
-func NewClientSet(c client.Client, configFlags *genericclioptions.ConfigFlags, statusMode, applySetID string) (*ClientSet, error) {
+func NewClientSet(c client.Client, configFlags *genericclioptions.ConfigFlags, scope declared.Scope, syncName, statusMode, applySetID string) (*ClientSet, error) {
 	matchVersionKubeConfigFlags := util.NewMatchVersionFlags(configFlags)
 	f := util.NewFactory(matchVersionKubeConfigFlags)
 
@@ -70,8 +71,10 @@ func NewClientSet(c client.Client, configFlags *genericclioptions.ConfigFlags, s
 		klog.Infof("Disabled status reporting")
 		statusPolicy = inventory.StatusPolicyNone
 	}
-	invClient, err := inventory.NewClient(f, live.WrapInventoryObj,
-		live.InvToUnstructuredFunc, statusPolicy, v1alpha1.SchemeGroupVersionKind())
+	ic := csinventory.NewInventoryConverter(scope, syncName, statusMode)
+	invClient, err := inventory.NewUnstructuredClient(f,
+		ic.InventoryFromUnstructured, ic.InventoryToUnstructured,
+		v1alpha1.SchemeGroupVersionKind(), statusPolicy)
 	if err != nil {
 		return nil, err
 	}

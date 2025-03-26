@@ -4,6 +4,7 @@
 package filter
 
 import (
+	"context"
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -25,7 +26,7 @@ func (cuf CurrentUIDFilter) Name() string {
 
 // Filter returns a ApplyPreventedDeletionError if the object prune/delete
 // should be skipped.
-func (cuf CurrentUIDFilter) Filter(obj *unstructured.Unstructured) error {
+func (cuf CurrentUIDFilter) Filter(_ context.Context, obj *unstructured.Unstructured) error {
 	uid := obj.GetUID()
 	if cuf.CurrentUIDs.Has(string(uid)) {
 		return &ApplyPreventedDeletionError{UID: uid}

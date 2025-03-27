@@ -125,7 +125,6 @@ func (r *reconcilerBase) upsertServiceAccount(
 	auth configsync.AuthType,
 	email string,
 	labelMap map[string]string,
-	refs ...metav1.OwnerReference,
 ) (client.ObjectKey, error) {
 	childSARef := reconcilerRef
 	childSA := &corev1.ServiceAccount{}
@@ -137,12 +136,6 @@ func (r *reconcilerBase) upsertServiceAccount(
 		logFieldObjectKind, "ServiceAccount")
 	op, err := CreateOrUpdate(ctx, r.client, childSA, func() error {
 		core.AddLabels(childSA, labelMap)
-		// Update ownerRefs for RootSync ServiceAccount.
-		// Do not set ownerRefs for RepoSync ServiceAccount, since Reconciler Manager,
-		// performs garbage collection for Reposync controller resources.
-		if len(refs) > 0 {
-			childSA.OwnerReferences = refs
-		}
 		if auth == configsync.AuthGCPServiceAccount {
 			// Set annotation when impersonating a GSA on a Workload Identity enabled cluster.
 			core.SetAnnotation(childSA, GCPSAAnnotationKey, email)

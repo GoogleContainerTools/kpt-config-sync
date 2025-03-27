@@ -699,30 +699,34 @@ func ManagedObjectLabelMap(syncKind string, rsRef types.NamespacedName) map[stri
 }
 
 func (r *reconcilerBase) updateRBACBinding(ctx context.Context, reconcilerRef, rsRef types.NamespacedName, binding client.Object) error {
-	existingBinding := binding.DeepCopyObject()
 	subjects := []rbacv1.Subject{r.serviceAccountSubject(reconcilerRef)}
+	updated := core.AddLabels(binding, ManagedObjectLabelMap(r.syncGVK.Kind, rsRef))
 	if crb, ok := binding.(*rbacv1.ClusterRoleBinding); ok {
-		crb.Subjects = subjects
+		if !equality.Semantic.DeepEqual(crb.Subjects, subjects) {
+			crb.Subjects = subjects
+			updated = true
+		}
 	} else if rb, ok := binding.(*rbacv1.RoleBinding); ok {
-		rb.Subjects = subjects
+		if !equality.Semantic.DeepEqual(rb.Subjects, subjects) {
+			rb.Subjects = subjects
+			updated = true
+		}
+	} else {
+		return fmt.Errorf("invalid binding type: %s", kinds.ObjectSummary(binding))
 	}
-	core.AddLabels(binding, ManagedObjectLabelMap(r.syncGVK.Kind, rsRef))
-	if equality.Semantic.DeepEqual(existingBinding, binding) {
-		return nil
+	if !updated {
+		return nil // no change, skip update
 	}
-	bindingNN := types.NamespacedName{
-		Name:      binding.GetName(),
-		Namespace: binding.GetNamespace(),
-	}
+	bindingKey := client.ObjectKeyFromObject(binding)
 	bindingKind := binding.GetObjectKind().GroupVersionKind().Kind
 	r.Logger(ctx).V(3).Info("Updating managed object",
-		logFieldObjectRef, bindingNN.String(),
+		logFieldObjectRef, bindingKey.String(),
 		logFieldObjectKind, bindingKind)
 	if err := r.client.Update(ctx, binding, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		return err
 	}
 	r.Logger(ctx).Info("Updating managed object successful",
-		logFieldObjectRef, bindingNN.String(),
+		logFieldObjectRef, bindingKey.String(),
 		logFieldObjectKind, bindingKind)
 	return nil
 }

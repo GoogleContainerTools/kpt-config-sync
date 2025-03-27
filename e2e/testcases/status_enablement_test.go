@@ -30,6 +30,7 @@ import (
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
+	"kpt.dev/configsync/pkg/metadata"
 	"sigs.k8s.io/cli-utils/pkg/common"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -43,10 +44,28 @@ func TestStatusEnabledAndDisabled(t *testing.T) {
 	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 	id := applier.InventoryID(configsync.RootSyncName, configsync.ControllerNamespace)
 
+	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(),
+		configsync.RootSyncName, configsync.ControllerNamespace,
+		testwatcher.WatchPredicates(
+			testpredicates.HasAnnotation(metadata.StatusModeKey, metadata.StatusEnabled),
+			resourceGroupHasStatus,
+			testpredicates.HasLabel(common.InventoryLabel, id),
+		),
+		testwatcher.WatchTimeout(nt.DefaultWaitTimeout)))
+
 	rootSync := k8sobjects.RootSyncObjectV1Alpha1(configsync.RootSyncName)
 	// Override the statusMode for root-reconciler
 	nt.MustMergePatch(rootSync, `{"spec": {"override": {"statusMode": "disabled"}}}`)
 	nt.Must(nt.WatchForAllSyncs())
+
+	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(),
+		configsync.RootSyncName, configsync.ControllerNamespace,
+		testwatcher.WatchPredicates(
+			testpredicates.HasAnnotation(metadata.StatusModeKey, metadata.StatusDisabled),
+			testpredicates.ResourceGroupHasNoStatus(),
+			testpredicates.HasLabel(common.InventoryLabel, id),
+		),
+		testwatcher.WatchTimeout(nt.DefaultWaitTimeout)))
 
 	namespaceName := "status-test"
 	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespaceObject(namespaceName, nil)))
@@ -57,6 +76,7 @@ func TestStatusEnabledAndDisabled(t *testing.T) {
 	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(),
 		configsync.RootSyncName, configsync.ControllerNamespace,
 		testwatcher.WatchPredicates(
+			testpredicates.HasAnnotation(metadata.StatusModeKey, metadata.StatusDisabled),
 			testpredicates.ResourceGroupHasNoStatus(),
 			testpredicates.HasLabel(common.InventoryLabel, id),
 		),
@@ -69,6 +89,7 @@ func TestStatusEnabledAndDisabled(t *testing.T) {
 	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(),
 		configsync.RootSyncName, configsync.ControllerNamespace,
 		testwatcher.WatchPredicates(
+			testpredicates.HasAnnotation(metadata.StatusModeKey, metadata.StatusEnabled),
 			resourceGroupHasStatus,
 			testpredicates.HasLabel(common.InventoryLabel, id),
 		),

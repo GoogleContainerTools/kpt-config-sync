@@ -55,25 +55,11 @@ func HasDeletionPropagationPolicy(obj client.Object, policy metadata.DeletionPro
 // SetDeletionPropagationPolicy sets the value of the deletion propagation
 // annotation locally (does not apply). Returns true if the object was modified.
 func SetDeletionPropagationPolicy(obj client.Object, policy metadata.DeletionPropagationPolicy) bool {
-	if HasDeletionPropagationPolicy(obj, policy) {
-		return false
-	}
-	core.SetAnnotation(obj, metadata.DeletionPropagationPolicyAnnotationKey, string(policy))
-	return true
+	return core.SetAnnotation(obj, metadata.DeletionPropagationPolicyAnnotationKey, string(policy))
 }
 
 // RemoveDeletionPropagationPolicy removes the deletion propagation annotation
 // locally (does not apply). Returns true if the object was modified.
 func RemoveDeletionPropagationPolicy(obj client.Object) bool {
-	annotations := obj.GetAnnotations()
-	// don't panic if nil
-	if len(annotations) == 0 {
-		return false
-	}
-	if _, found := annotations[metadata.DeletionPropagationPolicyAnnotationKey]; !found {
-		return false
-	}
-	delete(annotations, metadata.DeletionPropagationPolicyAnnotationKey)
-	obj.SetAnnotations(annotations)
-	return true
+	return core.RemoveAnnotations(obj, metadata.DeletionPropagationPolicyAnnotationKey)
 }

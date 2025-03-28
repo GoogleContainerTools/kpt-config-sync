@@ -384,9 +384,10 @@ func setupMetricsServiceAccount(nt *nomostest.NT) {
 		if err := nt.KubeClient.Get(DefaultMonitorKSA, configmanagement.MonitoringNamespace, ksa); err != nil {
 			nt.T.Fatalf("failed to get service account: %v", err)
 		}
-		core.SetAnnotation(ksa, "iam.gke.io/gcp-service-account", gsaEmail)
-		if err := nt.KubeClient.Update(ksa); err != nil {
-			nt.T.Fatalf("failed to set service account annotation: %v", err)
+		if core.SetAnnotation(ksa, "iam.gke.io/gcp-service-account", gsaEmail) {
+			if err := nt.KubeClient.Update(ksa); err != nil {
+				nt.T.Fatalf("failed to set service account annotation: %v", err)
+			}
 		}
 		nt.Must(nt.WatchForAllSyncs())
 	}

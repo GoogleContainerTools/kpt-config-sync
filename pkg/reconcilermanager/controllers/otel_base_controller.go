@@ -18,7 +18,6 @@ import (
 	"context"
 
 	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/apimachinery/pkg/api/equality"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/status"
@@ -44,13 +43,13 @@ func (r *otelBaseController) updateDeploymentAnnotation(ctx context.Context, ann
 		return status.APIServerErrorf(err, "failed to get Deployment: %s", key)
 	}
 
-	existing := dep.DeepCopy()
-	core.SetAnnotation(&dep.Spec.Template, annotationKey, annotationValue)
-
-	// Avoid unnecessary API writes, if possible.
-	if equality.Semantic.DeepEqual(existing, dep) {
+	if core.GetAnnotation(&dep.Spec.Template, annotationKey) == annotationValue {
+		// avoid unnecessary updates
 		return nil
 	}
+
+	existing := dep.DeepCopy()
+	core.SetAnnotation(&dep.Spec.Template, annotationKey, annotationValue)
 
 	r.Logger(ctx).V(3).Info("Patching object",
 		logFieldObjectRef, key.String(),

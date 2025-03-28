@@ -46,6 +46,7 @@ import (
 	fsfake "kpt.dev/configsync/pkg/importer/filesystem/fake"
 	"kpt.dev/configsync/pkg/importer/reader"
 	"kpt.dev/configsync/pkg/kinds"
+	"kpt.dev/configsync/pkg/logging"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/remediator/conflict"
@@ -736,6 +737,7 @@ func TestRootReconciler_ParseAndUpdate(t *testing.T) {
 					options: rootOpts,
 				},
 				reconcilerState: state,
+				logger:          logging.NewLogger(recOpts.ReconcilerName),
 			}
 
 			ctx := context.Background()
@@ -1263,6 +1265,7 @@ func TestRootReconciler_Parse_Discovery(t *testing.T) {
 			}
 			reconciler := &reconciler{
 				options: recOpts,
+				logger:  logging.NewLogger(recOpts.ReconcilerName),
 				syncStatusClient: &rootSyncStatusClient{
 					options: opts,
 				},
@@ -1374,6 +1377,7 @@ func TestRootReconciler_Parse_SourceErrorMetricValidation(t *testing.T) {
 			}
 			reconciler := &reconciler{
 				options: recOpts,
+				logger:  logging.NewLogger(recOpts.ReconcilerName),
 				syncStatusClient: &rootSyncStatusClient{
 					options: opts,
 				},
@@ -1487,6 +1491,7 @@ func TestRootReconciler_Update_ApplierErrorMetricValidation(t *testing.T) {
 			}
 			reconciler := &reconciler{
 				options: recOpts,
+				logger:  logging.NewLogger(recOpts.ReconcilerName),
 				syncStatusClient: &rootSyncStatusClient{
 					options: opts,
 				},

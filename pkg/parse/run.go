@@ -29,6 +29,7 @@ import (
 	"kpt.dev/configsync/pkg/hydrate"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
+	"kpt.dev/configsync/pkg/logging"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/status"
@@ -101,6 +102,11 @@ func (r *reconciler) Reconcile(ctx context.Context, trigger string) ReconcileRes
 	opts := r.Options()
 	state := r.ReconcilerState()
 	startTime := nowMeta(opts.Clock)
+	resource := logging.SyncMetadata{
+		Name:      opts.SyncName,
+		Namespace: opts.Options.Scope.SyncNamespace(),
+		Kind:      opts.Options.Scope.SyncKind(),
+	}
 
 	// Initialize ReconcilerStatus from RSync status
 	if state.status == nil {
@@ -127,14 +133,27 @@ func (r *reconciler) Reconcile(ctx context.Context, trigger string) ReconcileRes
 	}
 
 	newSourceStatus, syncPath, errs := r.fetch(ctx)
+	commit := newSourceStatus.Commit
 	if errs != nil {
 		state.RecordFailure(opts.Clock, errs)
+		r.logger.LogEvent(
+			logging.SyncFailed,
+			resource,
+			logging.GenerateSyncResultMessage(false, logging.ReconcileStageFetch),
+			commit,
+			errs)
 		return result
 	}
 
 	if opts.RenderingEnabled {
 		if errs := r.render(ctx, newSourceStatus); errs != nil {
 			state.RecordFailure(opts.Clock, errs)
+			r.logger.LogEvent(
+				logging.SyncFailed,
+				resource,
+				logging.GenerateSyncResultMessage(false, logging.ReconcileStageRender),
+				commit,
+				errs)
 			return result
 		}
 	}
@@ -148,6 +167,12 @@ func (r *reconciler) Reconcile(ctx context.Context, trigger string) ReconcileRes
 	oldSyncPath := state.cache.source.syncPath
 	if errs := r.read(ctx, trigger, newSourceStatus, syncPath); errs != nil {
 		state.RecordFailure(opts.Clock, errs)
+		r.logger.LogEvent(
+			logging.SyncFailed,
+			resource,
+			logging.GenerateSyncResultMessage(false, logging.ReconcileStageRead),
+			commit,
+			errs)
 		return result
 	}
 
@@ -172,6 +197,12 @@ func (r *reconciler) Reconcile(ctx context.Context, trigger string) ReconcileRes
 	// Otherwise, continue to sync objects with known scope.
 	if status.HasBlockingErrors(parseErrs) {
 		state.RecordFailure(opts.Clock, parseErrs)
+		r.logger.LogEvent(
+			logging.SyncFailed,
+			resource,
+			logging.GenerateSyncResultMessage(false, logging.ReconcileStageParse),
+			commit,
+			parseErrs)
 		return result
 	}
 
@@ -188,9 +219,22 @@ func (r *reconciler) Reconcile(ctx context.Context, trigger string) ReconcileRes
 	updateErrs := r.update(ctx, trigger)
 	// Fail if there are any update errors or non-blocking parse errors.
 	if parseErrs != nil || updateErrs != nil {
+
 		state.RecordFailure(opts.Clock, status.Append(parseErrs, updateErrs))
+		r.logger.LogEvent(
+			logging.SyncFailed,
+			resource,
+			logging.GenerateSyncResultMessage(false, logging.ReconcileStageUpdate),
+			commit,
+			parseErrs)
 		return result
 	}
+	r.logger.LogEvent(
+		logging.SyncSucceeded,
+		resource,
+		"",
+		commit,
+		nil)
 
 	// Only checkpoint the state after *everything* succeeded, including status update.
 	state.RecordSyncSuccess(opts.Clock)

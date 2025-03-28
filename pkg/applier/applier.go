@@ -187,25 +187,23 @@ func NewSupervisor(cs *ClientSet, scope declared.Scope, syncName string, reconci
 func (s *supervisor) UpdateStatusMode(ctx context.Context) error {
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		u := newInventoryUnstructured(s.syncName, s.syncNamespace)
-		err := s.clientSet.Client.Get(ctx, client.ObjectKey{Name: u.GetName(), Namespace: u.GetNamespace()}, u)
+		key := client.ObjectKeyFromObject(u)
+		err := s.clientSet.Client.Get(ctx, key, u)
 		if err != nil {
 			// RG doesn't exist, it will be created by applier with appropriate status mode
 			if apierrors.IsNotFound(err) {
 				return nil
 			}
-			return err
+			return status.APIServerErrorf(err, "failed to get %s: %s", u.GetKind(), key)
 		}
-		annotations := u.GetAnnotations()
-		if annotations == nil {
-			annotations = make(map[string]string)
+		if core.SetAnnotation(u, metadata.StatusModeKey, s.clientSet.StatusMode) {
+			klog.V(3).Infof("Updating %s annotation: %s: %s", u.GetKind(), metadata.StatusModeKey, s.clientSet.StatusMode)
+			err := s.clientSet.Client.Update(ctx, u, client.FieldOwner(configsync.FieldManager))
+			if err != nil {
+				return status.APIServerErrorf(err, "failed to update %s: %s", u.GetKind(), key)
+			}
 		}
-		if annotations[metadata.StatusModeKey] == s.clientSet.StatusMode {
-			return nil // annotation already consistent, no need to update
-		}
-		annotations[metadata.StatusModeKey] = s.clientSet.StatusMode
-		u.SetAnnotations(annotations)
-		klog.Infof("annotate the ResourceGroup object with the status mode %s", s.clientSet.StatusMode)
-		return s.clientSet.Client.Update(ctx, u, client.FieldOwner(configsync.FieldManager))
+		return nil
 	})
 }
 

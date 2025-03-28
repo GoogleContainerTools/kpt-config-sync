@@ -1373,8 +1373,8 @@ func ResourceGroupStatusEquals(expected v1alpha1.ResourceGroupStatus) Predicate 
 			}
 		}
 		if !equality.Semantic.DeepEqual(found, expected) {
-			return fmt.Errorf("ResourceGroup %s status does not match expected value:\nDiff (- Expected, + Found)\n%s",
-				client.ObjectKeyFromObject(rg), log.AsYAMLDiff(expected, found))
+			return fmt.Errorf("ResourceGroup %s status does not match expected value:\nExpected:\n%s\nFound:\n%s",
+				client.ObjectKeyFromObject(rg), log.AsYAML(expected), log.AsYAML(found))
 		}
 		return nil
 	}

@@ -489,6 +489,34 @@ func (nt *NT) PodLogs(namespace, deployment, container string, previousPodLog bo
 	nt.T.Logf("%s\n%s", cmd, out)
 }
 
+func (nt *NT) GetPodLogs(namespace, deployment, container string, previousPodLog bool, startTime *time.Time) ([]string, error) {
+	nt.T.Helper()
+
+	if previousPodLog && startTime != nil {
+		return nil, fmt.Errorf("cannot specify both previousPodLog and startTime")
+	}
+
+	args := []string{"logs", fmt.Sprintf("deployment/%s", deployment), "-n", namespace}
+	if previousPodLog {
+		args = append(args, "-p")
+	} else if startTime != nil {
+		args = append(args, "--since-time", startTime.UTC().Format(time.RFC3339))
+	}
+	if container != "" {
+		args = append(args, container)
+	}
+
+	cmd := fmt.Sprintf("kubectl %s", strings.Join(args, " "))
+	out, err := nt.Shell.Kubectl(args...)
+	if err != nil {
+		nt.T.Logf("failed to run %q: %v\n%s", cmd, err, out)
+		return nil, err
+	}
+
+	entries := strings.Split(string(out), "\n")
+	return entries, nil
+}
+
 // LogDeploymentPodResources logs the resources of the deployment's pod's containers
 func (nt *NT) LogDeploymentPodResources(namespace, deployment string) {
 	nt.T.Helper()

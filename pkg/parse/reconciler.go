@@ -16,6 +16,8 @@ package parse
 
 import (
 	"context"
+
+	"kpt.dev/configsync/pkg/logging"
 )
 
 // Reconciler reconciles the cluster with config from the source of truth.
@@ -54,6 +56,7 @@ type reconciler struct {
 	syncStatusClient SyncStatusClient
 	parser           Parser
 	reconcilerState  *ReconcilerState
+	logger           *logging.Logger
 }
 
 var _ Reconciler = &reconciler{}
@@ -73,6 +76,7 @@ func (p *reconciler) ReconcilerState() *ReconcilerState {
 func NewRootSyncReconciler(recOpts *ReconcilerOptions, parseOpts *RootOptions) Reconciler {
 	return &reconciler{
 		options: recOpts,
+		logger:  logging.NewLogger(recOpts.ReconcilerName),
 		reconcilerState: &ReconcilerState{
 			syncErrorCache: recOpts.SyncErrorCache,
 		},
@@ -90,6 +94,7 @@ func NewRootSyncReconciler(recOpts *ReconcilerOptions, parseOpts *RootOptions) R
 func NewRepoSyncReconciler(recOpts *ReconcilerOptions, parseOpts *Options) Reconciler {
 	return &reconciler{
 		options: recOpts,
+		logger:  logging.NewLogger(recOpts.ReconcilerName),
 		reconcilerState: &ReconcilerState{
 			syncErrorCache: recOpts.SyncErrorCache,
 		},

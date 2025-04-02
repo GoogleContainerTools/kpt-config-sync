@@ -21,6 +21,8 @@ import (
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/rootsync"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/util/mutate"
@@ -32,9 +34,6 @@ import (
 // Implements the Finalizer interface.
 type RootSyncFinalizer struct {
 	baseFinalizer
-
-	// Client used to update RSync spec and status.
-	Client client.Client
 
 	// StopControllers will be called by the Finalize() method to stop the Parser and Remediator.
 	StopControllers context.CancelFunc
@@ -72,10 +71,17 @@ func (f *RootSyncFinalizer) Finalize(ctx context.Context, syncObj client.Object)
 		return fmt.Errorf("setting Finalizing condition: %w", err)
 	}
 
-	if err := f.deleteManagedObjects(ctx, rs); err != nil {
-		return fmt.Errorf("deleting managed objects: %w", err)
+	switch core.GetAnnotation(rs, metadata.DeletionPropagationPolicyAnnotationKey) {
+	case metadata.DeletionPropagationPolicyForeground.String():
+		if err := f.deleteManagedObjects(ctx, rs); err != nil {
+			return fmt.Errorf("deleting managed objects: %w", err)
+		}
+		klog.Infof("Deletion of managed objects successful")
+	default: // default is "Orphan"
+		if err := f.orphanManagedObjects(ctx, rs); err != nil {
+			return fmt.Errorf("orphaning managed objects: %w", err)
+		}
 	}
-	klog.Infof("Deletion of managed objects successful")
 
 	// TODO: optimize by combining these updates into a single update
 	if _, err := f.removeFinalizingCondition(ctx, rs); err != nil {
@@ -173,6 +179,25 @@ func (f *RootSyncFinalizer) removeFinalizingCondition(ctx context.Context, syncO
 		klog.V(5).Info("ReconcilerFinalizing condition removal skipped: already removed")
 	}
 	return updated, nil
+}
+
+// orphanManagedObjects orphans managed objects and then
+// updates the ReconcilerFinalizerFailure condition on the specified object.
+func (f *RootSyncFinalizer) orphanManagedObjects(ctx context.Context, syncObj *v1beta1.RootSync) error {
+	hasSynced := syncObj.Status.LastSyncedCommit != ""
+	unmanageErr := f.unmanageObjects(ctx, client.ObjectKeyFromObject(syncObj), hasSynced)
+	// Update the FinalizerFailure condition whether the destroy succeeded or failed
+	if _, updateErr := f.updateFailureCondition(ctx, syncObj, unmanageErr); updateErr != nil {
+		updateErr = fmt.Errorf("updating FinalizerFailure condition: %w", updateErr)
+		if unmanageErr != nil {
+			return status.Append(unmanageErr, updateErr)
+		}
+		return updateErr
+	}
+	if unmanageErr != nil {
+		return unmanageErr
+	}
+	return nil
 }
 
 // deleteManagedObjects uses the destroyer to delete managed objects and then

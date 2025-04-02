@@ -210,6 +210,12 @@ const FleetWorkloadIdentityCredentials = "config.kubernetes.io/fleet-workload-id
 // with the deletion-propagation-policy annotation.
 type DeletionPropagationPolicy string
 
+// String returns the string value of the DeletionPropagationPolicy.
+// Implements the Stringer interface.
+func (p DeletionPropagationPolicy) String() string {
+	return string(p)
+}
+
 const (
 	// DeletionPropagationPolicyForeground indicates that the managed resources
 	// should all be deleted/pruned before the RootSync/RepoSync object is deleted.

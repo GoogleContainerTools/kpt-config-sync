@@ -20,7 +20,6 @@ import (
 
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/applyset"
-	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/metadata"
@@ -38,21 +37,15 @@ func addAnnotationsAndLabels(objs []ast.FileObject, scope declared.Scope, syncNa
 	if err != nil {
 		return fmt.Errorf("marshaling sourceContext: %w", err)
 	}
-	applySetID := applyset.IDFromSync(syncName, scope)
-	inventoryID := applier.InventoryID(syncName, scope.SyncNamespace())
-	manager := declared.ResourceManager(scope, syncName)
+	csm := metadata.ConfigSyncMetadata{
+		ApplySetID:      applyset.IDFromSync(syncName, scope),
+		GitContextValue: string(gcVal),
+		ManagerValue:    declared.ResourceManager(scope, syncName),
+		SourceHash:      commitHash,
+		InventoryID:     applier.InventoryID(syncName, scope.SyncNamespace()),
+	}
 	for _, obj := range objs {
-		core.SetLabel(obj, metadata.ManagedByKey, metadata.ManagedByValue)
-		core.SetLabel(obj, metadata.ApplySetPartOfLabel, applySetID)
-		core.SetAnnotation(obj, metadata.GitContextKey, string(gcVal))
-		core.SetAnnotation(obj, metadata.ResourceManagerKey, manager)
-		core.SetAnnotation(obj, metadata.SyncTokenAnnotationKey, commitHash)
-		core.SetAnnotation(obj, metadata.ResourceIDKey, core.GKNN(obj))
-		core.SetAnnotation(obj, metadata.OwningInventoryKey, inventoryID)
-
-		if !metadata.IsManagementDisabled(obj) {
-			core.SetAnnotation(obj, metadata.ManagementModeAnnotationKey, metadata.ManagementEnabled.String())
-		}
+		csm.SetConfigSyncMetadata(obj)
 	}
 	return nil
 }

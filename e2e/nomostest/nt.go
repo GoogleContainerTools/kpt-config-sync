@@ -55,6 +55,7 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
+	"kpt.dev/configsync/pkg/metadata"
 	ocmetrics "kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
@@ -206,6 +207,10 @@ type NT struct {
 
 	// testStartTime is a timestamp which records when the current test started
 	testStartTime time.Time
+
+	// deletionPropagationPolicy is the deletion propagation policy to use for all
+	// RSyncs. Defaults to Foreground to clean up test resources.
+	deletionPropagationPolicy *metadata.DeletionPropagationPolicy
 }
 
 // Must not error.

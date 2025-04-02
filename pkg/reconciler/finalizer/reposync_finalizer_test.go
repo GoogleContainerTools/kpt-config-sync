@@ -26,6 +26,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
+	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
@@ -67,6 +70,7 @@ func TestRepoSyncFinalize(t *testing.T) {
 	testCases := []struct {
 		name                       string
 		rsync                      client.Object
+		deletionPolicy             metadata.DeletionPropagationPolicy
 		setup                      func(*fake.Client) error
 		destroyErrs                []status.Error
 		expectedRsyncBeforeDestroy client.Object
@@ -75,8 +79,9 @@ func TestRepoSyncFinalize(t *testing.T) {
 		expectedRsyncAfterFinalize client.Object
 	}{
 		{
-			name:  "happy path",
-			rsync: repoSync1.DeepCopy(),
+			name:           "destroy happy path",
+			rsync:          repoSync1.DeepCopy(),
+			deletionPolicy: metadata.DeletionPropagationPolicyForeground,
 			expectedRsyncBeforeDestroy: func() client.Object {
 				obj := repoSync1.DeepCopy()
 				// +1 to set ReconcilerFinalizing condition
@@ -107,8 +112,9 @@ func TestRepoSyncFinalize(t *testing.T) {
 			}(),
 		},
 		{
-			name:  "destroy failure",
-			rsync: repoSync1.DeepCopy(),
+			name:           "destroy failure",
+			rsync:          repoSync1.DeepCopy(),
+			deletionPolicy: metadata.DeletionPropagationPolicyForeground,
 			expectedRsyncBeforeDestroy: func() client.Object {
 				obj := repoSync1.DeepCopy()
 				// +1 to set ReconcilerFinalizing condition
@@ -193,10 +199,10 @@ func TestRepoSyncFinalize(t *testing.T) {
 				}
 				return obj
 			}(),
+			deletionPolicy: metadata.DeletionPropagationPolicyForeground,
 			expectedRsyncBeforeDestroy: func() client.Object {
 				obj := repoSync1.DeepCopy()
 				// No changes - continue deleting
-				// TODO: Should finalizer re-entry be vissible to the user by toggling a condition?
 				obj.SetResourceVersion("3")
 				obj.Status.Conditions = []v1beta1.RepoSyncCondition{
 					{
@@ -238,8 +244,9 @@ func TestRepoSyncFinalize(t *testing.T) {
 			}(),
 		},
 		{
-			name:  "rsync not found",
-			rsync: repoSync1.DeepCopy(),
+			name:           "rsync not found",
+			rsync:          repoSync1.DeepCopy(),
+			deletionPolicy: metadata.DeletionPropagationPolicyForeground,
 			setup: func(fakeClient *fake.Client) error {
 				// remove the finalizer that blocks deletion
 				ctx := context.Background()
@@ -271,11 +278,181 @@ func TestRepoSyncFinalize(t *testing.T) {
 			expectedStopped:            true,
 			expectedRsyncAfterFinalize: nil,
 		},
+		{
+			name:           "orphan happy path",
+			rsync:          repoSync1.DeepCopy(),
+			deletionPolicy: metadata.DeletionPropagationPolicyOrphan,
+			expectedRsyncBeforeDestroy: func() client.Object {
+				obj := repoSync1.DeepCopy()
+				// +1 to set ReconcilerFinalizing condition
+				obj.SetResourceVersion("2")
+				obj.Status.Conditions = []v1beta1.RepoSyncCondition{
+					{
+						Type:    v1beta1.RepoSyncReconcilerFinalizing,
+						Status:  metav1.ConditionTrue,
+						Reason:  "ResourcesDeleting",
+						Message: "Deleting managed resource objects",
+					},
+				}
+				return obj
+			}(),
+			expectedError:   nil,
+			expectedStopped: true,
+			expectedRsyncAfterFinalize: func() client.Object {
+				obj := repoSync1.DeepCopy()
+				// +1 to set ReconcilerFinalizing condition
+				// +1 to remove ReconcilerFinalizing condition
+				// +1 to remove Finalizer
+				// TODO: optimize by combining consecutive updates
+				obj.SetResourceVersion("4")
+				// Finalizer has been removed
+				obj.SetFinalizers(nil)
+				// ReconcilerFinalizing condition added and then removed
+				return obj
+			}(),
+		},
+		{
+			name:           "orphan recovery",
+			deletionPolicy: metadata.DeletionPropagationPolicyOrphan,
+			rsync: func() client.Object {
+				obj := repoSync1.DeepCopy()
+				// +1 to set ReconcilerFinalizing condition
+				// +1 to set ReconcilerFinalizerFailure condition
+				obj.SetResourceVersion("3")
+				// Finalizer NOT removed
+				// ReconcilerFinalizing condition added and NOT removed
+				// ReconcilerFinalizerFailure condition added
+				obj.Status.Conditions = []v1beta1.RepoSyncCondition{
+					{
+						Type:    v1beta1.RepoSyncReconcilerFinalizing,
+						Status:  metav1.ConditionTrue,
+						Reason:  "ResourcesDeleting",
+						Message: "Deleting managed resource objects",
+					},
+					{
+						Type:    v1beta1.RepoSyncReconcilerFinalizerFailure,
+						Status:  metav1.ConditionTrue,
+						Reason:  "DestroyFailure",
+						Message: "Failed to delete managed resource objects",
+						Errors: []v1beta1.ConfigSyncError{
+							{
+								Code:         "2002",
+								ErrorMessage: "KNV2002: example message: APIServer error: destroy error\n\nFor more information, see https://g.co/cloud/acm-errors#knv2002",
+							},
+						},
+					},
+				}
+				return obj
+			}(),
+			expectedRsyncBeforeDestroy: func() client.Object {
+				obj := repoSync1.DeepCopy()
+				// No changes - continue deleting
+				obj.SetResourceVersion("3")
+				obj.Status.Conditions = []v1beta1.RepoSyncCondition{
+					{
+						Type:    v1beta1.RepoSyncReconcilerFinalizing,
+						Status:  metav1.ConditionTrue,
+						Reason:  "ResourcesDeleting",
+						Message: "Deleting managed resource objects",
+					},
+					{
+						Type:    v1beta1.RepoSyncReconcilerFinalizerFailure,
+						Status:  metav1.ConditionTrue,
+						Reason:  "DestroyFailure",
+						Message: "Failed to delete managed resource objects",
+						Errors: []v1beta1.ConfigSyncError{
+							{
+								Code:         "2002",
+								ErrorMessage: "KNV2002: example message: APIServer error: destroy error\n\nFor more information, see https://g.co/cloud/acm-errors#knv2002",
+							},
+						},
+					},
+				}
+				return obj
+			}(),
+			destroyErrs:     nil,
+			expectedError:   nil,
+			expectedStopped: true,
+			expectedRsyncAfterFinalize: func() client.Object {
+				obj := repoSync1.DeepCopy()
+				// +1 to remove ReconcilerFinalizing condition
+				// +1 to remove ReconcilerFinalizerFailure condition
+				// +1 to remove Finalizer
+				// TODO: optimize by combining consecutive updates
+				obj.SetResourceVersion("6")
+				// Finalizer has been removed
+				obj.SetFinalizers(nil)
+				// ReconcilerFinalizing condition removed
+				// ReconcilerFinalizerFailure condition removed
+				return obj
+			}(),
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			fakeClient := fake.NewClient(t, scheme, tc.rsync)
+			// Set up a toy object referenced by the ResourceGroup
+			cm := k8sobjects.ConfigMapObject(
+				core.Name("cm1"), core.Namespace(tc.rsync.GetNamespace()),
+				core.Annotation("a-key", "a-value"),
+				core.Label("l-key", "l-value"))
+			wantCM := cm.DeepCopy()
+			wantCM.Generation = 1
+			wantCM.ResourceVersion = "1"
+			wantCM.UID = "1"
+
+			applySetID := "apply-set-id"
+			if tc.deletionPolicy == metadata.DeletionPropagationPolicyForeground {
+				wantCM.SetAnnotations(map[string]string{
+					metadata.OwningInventoryKey:          "inventory-id",
+					metadata.ManagementModeAnnotationKey: metadata.ManagementEnabled.String(),
+					metadata.SyncTokenAnnotationKey:      "commit-hash",
+					metadata.GitContextKey:               "git-context",
+					metadata.ResourceManagerKey:          "manager-value",
+					metadata.ResourceIDKey:               "_configmap_example_cm1",
+					"a-key":                              "a-value",
+				})
+				wantCM.SetLabels(map[string]string{
+					metadata.ManagedByKey:        metadata.ManagedByValue,
+					metadata.ApplySetPartOfLabel: applySetID,
+					"l-key":                      "l-value",
+				})
+			} else { // When "Orphan" is used, all CS metadata should be removed from the CM
+				wantCM.ResourceVersion = "2"
+				wantCM.SetAnnotations(map[string]string{
+					"a-key": "a-value",
+				})
+				wantCM.SetLabels(map[string]string{
+					"l-key": "l-value",
+				})
+			}
+			csm := metadata.ConfigSyncMetadata{
+				ApplySetID:      "apply-set-id",
+				GitContextValue: "git-context",
+				ManagerValue:    "manager-value",
+				SourceHash:      "commit-hash",
+				InventoryID:     "inventory-id",
+			}
+			csm.SetConfigSyncMetadata(cm)
+			// Create a ResourceGroup which references the ConfigMap
+			// "Orphan" will look up the ResourceGroup to remove CS metadata from managed objects
+			rg := &v1alpha1.ResourceGroup{}
+			rg.Name = tc.rsync.GetName()
+			rg.Namespace = tc.rsync.GetNamespace()
+			rg.Spec.Resources = []v1alpha1.ObjMetadata{
+				{
+					Name:      cm.Name,
+					Namespace: cm.Namespace,
+					GroupKind: v1alpha1.GroupKind{
+						Group: cm.GroupVersionKind().Group,
+						Kind:  cm.GroupVersionKind().Kind,
+					},
+				},
+			}
+			core.SetAnnotation(tc.rsync,
+				metadata.DeletionPropagationPolicyAnnotationKey,
+				tc.deletionPolicy.String())
+			fakeClient := fake.NewClient(t, scheme, tc.rsync, cm, rg)
 			ctx := context.Background()
 
 			stopped := false
@@ -290,6 +467,9 @@ func TestRepoSyncFinalize(t *testing.T) {
 				rsync := &v1beta1.RepoSync{}
 				err := fakeClient.Get(context.Background(), key, rsync)
 				require.NoError(t, err)
+				core.SetAnnotation(tc.expectedRsyncBeforeDestroy,
+					metadata.DeletionPropagationPolicyAnnotationKey,
+					tc.deletionPolicy.String())
 				asserter.Equal(t, tc.expectedRsyncBeforeDestroy, rsync)
 				// Return errors, if any
 				return tc.destroyErrs
@@ -297,9 +477,10 @@ func TestRepoSyncFinalize(t *testing.T) {
 			fakeDestroyer := newFakeDestroyer(tc.destroyErrs, destroyFunc)
 			finalizer := &RepoSyncFinalizer{
 				baseFinalizer: baseFinalizer{
-					Destroyer: fakeDestroyer,
+					Destroyer:  fakeDestroyer,
+					Client:     fakeClient,
+					ApplySetID: applySetID,
 				},
-				Client:             fakeClient,
 				StopControllers:    stopFunc,
 				ControllersStopped: continueCh,
 			}
@@ -313,8 +494,11 @@ func TestRepoSyncFinalize(t *testing.T) {
 			testerrors.AssertEqual(t, tc.expectedError, err)
 
 			assert.Equal(t, tc.expectedStopped, stopped)
-			var expectedObjs []client.Object
+			expectedObjs := []client.Object{rg, wantCM}
 			if tc.expectedRsyncAfterFinalize != nil {
+				core.SetAnnotation(tc.expectedRsyncAfterFinalize,
+					metadata.DeletionPropagationPolicyAnnotationKey,
+					tc.deletionPolicy.String())
 				expectedObjs = append(expectedObjs, tc.expectedRsyncAfterFinalize)
 			}
 			fakeClient.Check(t, expectedObjs...)
@@ -430,7 +614,9 @@ func TestRepoSyncAddFinalizer(t *testing.T) {
 			ctx := context.Background()
 
 			finalizer := &RepoSyncFinalizer{
-				Client: fakeClient,
+				baseFinalizer: baseFinalizer{
+					Client: fakeClient,
+				},
 			}
 
 			if tc.setup != nil {
@@ -567,7 +753,9 @@ func TestRepoSyncRemoveFinalizer(t *testing.T) {
 			ctx := context.Background()
 
 			finalizer := &RepoSyncFinalizer{
-				Client: fakeClient,
+				baseFinalizer: baseFinalizer{
+					Client: fakeClient,
+				},
 			}
 
 			if tc.setup != nil {

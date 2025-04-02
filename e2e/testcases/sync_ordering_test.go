@@ -22,10 +22,13 @@ import (
 
 	"go.uber.org/multierr"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	"kpt.dev/configsync/e2e/nomostest/policy"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
@@ -35,6 +38,7 @@ import (
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
+	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
@@ -660,6 +664,114 @@ func TestDependencyWithReconciliation(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
+}
+
+func verifyManagedBy(nt *nomostest.NT, o client.Object, rsync core.ID) error {
+	return nt.Validate(o.GetName(), o.GetNamespace(), o,
+		testpredicates.IsManagedBy(nt.Scheme, declared.ScopeFromSyncNamespace(rsync.Namespace), rsync.Name))
+}
+
+func verifyUnmanaged(nt *nomostest.NT, o client.Object) error {
+	return nt.Validate(o.GetName(), o.GetNamespace(), o,
+		testpredicates.NoConfigSyncMetadata())
+}
+
+func TestSplitRSyncsWithDeletion(t *testing.T) {
+	ns1 := func() *corev1.Namespace {
+		return k8sobjects.NamespaceObject("ns1")
+	}
+	anvilCRD := func() *apiextensionsv1.CustomResourceDefinition {
+		return anvilV1CRD()
+	}
+	anvilCR := func() *unstructured.Unstructured {
+		o := newAnvilObject("v1", "anvil", 42)
+		o.SetNamespace("foo")
+		return o
+	}
+	tenantNS1 := "tenant-ns-1"
+	tenantNS2 := "tenant-ns-2"
+	cm1 := func() *corev1.ConfigMap {
+		return k8sobjects.ConfigMapObject(core.Name("cm1"), core.Namespace(tenantNS1))
+	}
+	sa1 := func() *corev1.ServiceAccount {
+		return k8sobjects.ServiceAccountObject("sa1", core.Namespace(tenantNS2))
+	}
+	rootSync := nomostest.DefaultRootSyncID
+	rootSync1 := core.RootSyncID("root-sync-1")
+	rootSync2 := core.RootSyncID("root-sync-2")
+	repoSync1 := core.RepoSyncID("repo-sync-1", tenantNS1)
+	repoSync2 := core.RepoSyncID("repo-sync-2", tenantNS2)
+	nt := nomostest.New(t, nomostesting.Lifecycle,
+		ntopts.SyncWithGitSource(rootSync, ntopts.Unstructured),
+		ntopts.SyncWithGitSource(rootSync1, ntopts.Unstructured),
+		ntopts.SyncWithGitSource(rootSync2, ntopts.Unstructured),
+		ntopts.SyncWithGitSource(repoSync1, ntopts.Unstructured),
+		ntopts.SyncWithGitSource(repoSync2, ntopts.Unstructured),
+		ntopts.WithDelegatedControl,
+		ntopts.WithoutDeletionPropagationPolicy(),
+		ntopts.RepoSyncPermissions(policy.CoreAdmin()))
+
+	nt.T.Log("Add all resources to a single RootSync")
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSync)
+	nt.Must(rootSyncGitRepo.Add("acme/ns1.yaml", ns1()))
+	nt.Must(rootSyncGitRepo.Add("acme/anvil_crd.yaml", anvilCRD()))
+	nt.Must(rootSyncGitRepo.Add("acme/anvil_cr.yaml", anvilCR()))
+	nt.Must(rootSyncGitRepo.Add("acme/cm1.yaml", cm1()))
+	nt.Must(rootSyncGitRepo.Add("acme/sa1.yaml", sa1()))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Add objects"))
+	nt.Must(nt.WatchForAllSyncs())
+	// Validate metadata for each object
+	nt.Must(verifyManagedBy(nt, ns1(), rootSync))
+	nt.Must(verifyManagedBy(nt, anvilCRD(), rootSync))
+	nt.Must(verifyManagedBy(nt, anvilCR(), rootSync))
+	nt.Must(verifyManagedBy(nt, cm1(), rootSync))
+	nt.Must(verifyManagedBy(nt, sa1(), rootSync))
+
+	nt.T.Cleanup(func() {
+		rs := nomostest.RootSyncObjectV1Beta1FromRootRepo(nt, rootSync.Name)
+		nt.Must(nt.KubeClient.Apply(rs))
+		nt.Must(nt.WatchForAllSyncs())
+	})
+	nt.T.Log("Delete the single RootSync to orphan all resources")
+	nt.Must(nt.KubeClient.Delete(k8sobjects.RootSyncV1Beta1(rootSync.Name)))
+	nt.Must(nt.Watcher.WatchForNotFound(kinds.RootSyncV1Beta1(), rootSync.Name, rootSync.Namespace))
+	nt.Must(verifyUnmanaged(nt, ns1()))
+	nt.Must(verifyUnmanaged(nt, anvilCRD()))
+	nt.Must(verifyUnmanaged(nt, anvilCR()))
+	nt.Must(verifyUnmanaged(nt, cm1()))
+	nt.Must(verifyUnmanaged(nt, sa1()))
+
+	nt.T.Cleanup(func() {
+		// Remove objects from the original RSync for cleanup
+		repo := nt.SyncSourceGitReadWriteRepository(rootSync)
+		nt.Must(repo.Remove("acme/ns1.yaml"))
+		nt.Must(repo.Remove("acme/anvil_crd.yaml"))
+		nt.Must(repo.Remove("acme/anvil_cr.yaml"))
+		nt.Must(repo.Remove("acme/cm1.yaml"))
+		nt.Must(repo.Remove("acme/sa1.yaml"))
+		nt.Must(repo.CommitAndPush("Remove orphaned objects"))
+	})
+	nt.T.Log("Adopt each resource by various RootSyncs/RepoSyncs")
+	repo := nt.SyncSourceGitReadWriteRepository(rootSync1)
+	nt.Must(repo.Add("acme/ns1.yaml", ns1()))
+	nt.Must(repo.CommitAndPush("Take ownership of ns1 in root-sync-1"))
+	repo = nt.SyncSourceGitReadWriteRepository(rootSync2)
+	nt.Must(repo.Add("acme/anvil_crd.yaml", anvilCRD()))
+	nt.Must(repo.Add("acme/anvil_cr.yaml", anvilCR()))
+	nt.Must(repo.CommitAndPush("Take ownership of anvil in root-sync-2"))
+	repo = nt.SyncSourceGitReadWriteRepository(repoSync1)
+	nt.Must(repo.Add("acme/cm1.yaml", cm1()))
+	nt.Must(repo.CommitAndPush("Take ownership of cm1 in repo-sync-1"))
+	repo = nt.SyncSourceGitReadWriteRepository(repoSync2)
+	nt.Must(repo.Add("acme/sa1.yaml", sa1()))
+	nt.Must(repo.CommitAndPush("Take ownership of sa1 in repo-sync-2"))
+	// Ready check recreates the root-sync, which we don't want
+	nt.Must(nt.WatchForAllSyncs(nomostest.SkipReadyCheck(), nomostest.SkipRootRepos(rootSync.Name)))
+	nt.Must(verifyManagedBy(nt, ns1(), rootSync1))
+	nt.Must(verifyManagedBy(nt, anvilCRD(), rootSync2))
+	nt.Must(verifyManagedBy(nt, anvilCR(), rootSync2))
+	nt.Must(verifyManagedBy(nt, cm1(), repoSync1))
+	nt.Must(verifyManagedBy(nt, sa1(), repoSync2))
 }
 
 func getPodReadyTimestamp(pod *corev1.Pod) *metav1.Time {

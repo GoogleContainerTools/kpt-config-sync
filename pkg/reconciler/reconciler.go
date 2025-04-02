@@ -371,7 +371,7 @@ func Run(opts Options) {
 	// the GET cache on UPDATE/PATCH. So we need to use the non-caching client
 	// for the finalizer, which does GET/LIST after UPDATE/PATCH.
 	f := finalizer.New(opts.ReconcilerScope, supervisor, cl, // non-caching client
-		stopControllers, continueChanForFinalizer)
+		stopControllers, continueChanForFinalizer, applySetID)
 
 	// Create the Finalizer Controller
 	finalizerController := &finalizer.Controller{

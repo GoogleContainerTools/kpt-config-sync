@@ -304,6 +304,21 @@ func (ms *MemoryStorage) listObjects(gk schema.GroupKind) []*unstructured.Unstru
 	return result
 }
 
+func lookupGVK(obj runtime.Object, scheme *runtime.Scheme) (schema.GroupVersionKind, error) {
+	switch obj.(type) {
+	case *metav1.PartialObjectMetadata:
+		// Workaround for PartialObjectMetadata which are missing the Version.
+		// Missing apiVersion is allowed by real client, but apiutil.GVKForObject returns an error
+		gvk := obj.GetObjectKind().GroupVersionKind()
+		if len(gvk.Kind) == 0 {
+			return schema.GroupVersionKind{}, fmt.Errorf("missing object Kind from PartialObjectMetadata")
+		}
+		return gvk, nil
+	default:
+		return kinds.Lookup(obj, scheme)
+	}
+}
+
 // Get an object from storage
 func (ms *MemoryStorage) Get(_ context.Context, key client.ObjectKey, obj client.Object, opts *client.GetOptions) error {
 	ms.lock.RLock()
@@ -313,7 +328,7 @@ func (ms *MemoryStorage) Get(_ context.Context, key client.ObjectKey, obj client
 	if err != nil {
 		return err
 	}
-	gvk, err := kinds.Lookup(obj, ms.scheme)
+	gvk, err := lookupGVK(obj, ms.scheme)
 	if err != nil {
 		return err
 	}
@@ -823,7 +838,7 @@ func (ms *MemoryStorage) Patch(ctx context.Context, obj client.Object, patch cli
 		return err
 	}
 
-	gvk, err := kinds.Lookup(obj, ms.scheme)
+	gvk, err := lookupGVK(obj, ms.scheme)
 	if err != nil {
 		return fmt.Errorf("failed to lookup GVK from scheme: %w", err)
 	}

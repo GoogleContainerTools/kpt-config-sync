@@ -150,12 +150,8 @@ func (c *Controller) reconcileFinalizer(ctx context.Context, obj client.Object) 
 		policy = metadata.DeletionPropagationPolicyOrphan
 	}
 	switch policy {
-	case metadata.DeletionPropagationPolicyForeground:
+	case metadata.DeletionPropagationPolicyForeground, metadata.DeletionPropagationPolicyOrphan:
 		if _, err := c.Finalizer.AddFinalizer(ctx, obj); err != nil {
-			return err
-		}
-	case metadata.DeletionPropagationPolicyOrphan:
-		if _, err := c.Finalizer.RemoveFinalizer(ctx, obj); err != nil {
 			return err
 		}
 	default:

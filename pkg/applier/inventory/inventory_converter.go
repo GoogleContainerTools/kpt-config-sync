@@ -109,10 +109,6 @@ func (ic *UnstructuredInventoryConverter) InventoryToUnstructured(fromObj *unstr
 	if toInv == nil {
 		return nil, fmt.Errorf("UnstructuredInventory object is nil")
 	}
-	objStatusMap := map[object.ObjMetadata]actuation.ObjectStatus{}
-	for _, s := range toInv.GetObjectStatuses() {
-		objStatusMap[inventory.ObjMetadataFromObjectReference(s.ObjectReference)] = s
-	}
 	klog.V(4).Infof("converting UnstructuredInventory to ResourceGroup object")
 	klog.V(4).Infof("creating list of %d resources", len(toInv.GetObjectRefs()))
 	var objs []interface{}
@@ -125,22 +121,29 @@ func (ic *UnstructuredInventoryConverter) InventoryToUnstructured(fromObj *unstr
 			"name":      objMeta.Name,
 		})
 	}
-	klog.V(4).Infof("Creating list of %d resource statuses", len(toInv.GetObjectRefs()))
+
 	var objStatus []interface{}
-	for _, objMeta := range toInv.GetObjectRefs() {
-		status, found := objStatusMap[objMeta]
-		if found {
-			klog.V(4).Infof("converting to object status: %s", objMeta)
-			objStatus = append(objStatus, map[string]interface{}{
-				"group":     objMeta.GroupKind.Group,
-				"kind":      objMeta.GroupKind.Kind,
-				"namespace": objMeta.Namespace,
-				"name":      objMeta.Name,
-				"status":    string(v1alpha1.Unknown),
-				"strategy":  status.Strategy.String(),
-				"actuation": status.Actuation.String(),
-				"reconcile": status.Reconcile.String(),
-			})
+	if ic.statusMode == metadata.StatusEnabled {
+		objStatusMap := map[object.ObjMetadata]actuation.ObjectStatus{}
+		for _, s := range toInv.GetObjectStatuses() {
+			objStatusMap[inventory.ObjMetadataFromObjectReference(s.ObjectReference)] = s
+		}
+		klog.V(4).Infof("Creating list of %d resource statuses", len(toInv.GetObjectRefs()))
+		for _, objMeta := range toInv.GetObjectRefs() {
+			status, found := objStatusMap[objMeta]
+			if found {
+				klog.V(4).Infof("converting to object status: %s", objMeta)
+				objStatus = append(objStatus, map[string]interface{}{
+					"group":     objMeta.GroupKind.Group,
+					"kind":      objMeta.GroupKind.Kind,
+					"namespace": objMeta.Namespace,
+					"name":      objMeta.Name,
+					"status":    string(v1alpha1.Unknown),
+					"strategy":  status.Strategy.String(),
+					"actuation": status.Actuation.String(),
+					"reconcile": status.Reconcile.String(),
+				})
+			}
 		}
 	}
 
@@ -153,20 +156,25 @@ func (ic *UnstructuredInventoryConverter) InventoryToUnstructured(fromObj *unstr
 	core.SetAnnotation(toObj, metadata.ResourceManagementKey, metadata.ResourceManagementEnabled)
 	core.SetAnnotation(toObj, metadata.StatusModeKey, ic.statusMode)
 
-	if len(objs) == 0 { // Unset resource fields
+	if len(objs) == 0 { // Unset resources
 		klog.V(4).Infoln("clearing inventory resources")
 		unstructured.RemoveNestedField(toObj.Object,
 			"spec", "resources")
-		unstructured.RemoveNestedField(toObj.Object,
-			"status", "resourceStatuses")
-	} else { // Update resource fields
+	} else { // Update resources
 		klog.V(4).Infof("storing inventory (%d) resources", len(objs))
 		err := unstructured.SetNestedSlice(toObj.Object,
 			objs, "spec", "resources")
 		if err != nil {
 			return nil, err
 		}
-		err = unstructured.SetNestedSlice(toObj.Object,
+	}
+	if len(objStatus) == 0 { // Unset resource statuses
+		klog.V(4).Infoln("clearing inventory resourceStatuses")
+		unstructured.RemoveNestedField(toObj.Object,
+			"status", "resourceStatuses")
+	} else { // Update resource statuses
+		klog.V(4).Infof("storing inventory (%d) resourceStatuses", len(objStatus))
+		err := unstructured.SetNestedSlice(toObj.Object,
 			objStatus, "status", "resourceStatuses")
 		if err != nil {
 			return nil, err

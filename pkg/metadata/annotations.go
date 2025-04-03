@@ -152,18 +152,11 @@ const (
 	// to indicate the exact image that should be synced.
 	ImageToSyncAnnotationKey = configsync.ConfigSyncPrefix + "image-to-sync"
 
-	// StatusEnabled is used to allow kpt applier to inject the actuation status
-	// into the ResourceGroup object.
-	StatusEnabled = "enabled"
-	// StatusDisabled is used to stop kpt applier to inject the actuation status
-	// into the ResourceGroup object.
-	StatusDisabled = "disabled"
-
-	// StatusModeKey annotates a ResourceGroup CR
+	// StatusModeAnnotationKey annotates a ResourceGroup CR
 	// to communicate with the ResourceGroup controller.
 	// When the value is set to "disabled", the ResourceGroup controller
 	// ignores the ResourceGroup CR.
-	StatusModeKey = configsync.ConfigSyncPrefix + "status"
+	StatusModeAnnotationKey = configsync.ConfigSyncPrefix + "status"
 )
 
 // Lifecycle annotations
@@ -246,4 +239,27 @@ const (
 	// affecting the managed resources.
 	// This is the default behavior if the annotation is not specified.
 	DeletionPropagationPolicyOrphan = DeletionPropagationPolicy("Orphan")
+)
+
+// StatusMode is the type used to identify value enums to use with the
+// configsync.gke.io/status annotation.
+type StatusMode string
+
+// String returns the string value of the StatusMode.
+// Implements the Stringer interface.
+func (m StatusMode) String() string {
+	return string(m)
+}
+
+const (
+	// StatusEnabled is used to enable writing status to the ResourceGroup
+	// inventory.
+	StatusEnabled StatusMode = "enabled"
+	// StatusDisabled is used to disabled writing status to the ResourceGroup
+	// inventory. This is useful as part of a mitigation strategy when the
+	// status pushes the object size over the etcd entry size limit. Disabling
+	// the status allows syncing to succeed while you reduce the number of
+	// objects in the source of truth or split the apply set across multiple
+	// RSyncs.
+	StatusDisabled StatusMode = "disabled"
 )

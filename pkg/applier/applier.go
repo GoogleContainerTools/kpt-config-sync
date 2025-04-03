@@ -196,8 +196,8 @@ func (s *supervisor) UpdateStatusMode(ctx context.Context) error {
 			}
 			return status.APIServerErrorf(err, "failed to get %s: %s", u.GetKind(), key)
 		}
-		if core.SetAnnotation(u, metadata.StatusModeKey, s.clientSet.StatusMode) {
-			klog.V(3).Infof("Updating %s annotation: %s: %s", u.GetKind(), metadata.StatusModeKey, s.clientSet.StatusMode)
+		if core.SetAnnotation(u, metadata.StatusModeAnnotationKey, s.clientSet.StatusMode.String()) {
+			klog.V(3).Infof("Updating %s annotation: %s: %s", u.GetKind(), metadata.StatusModeAnnotationKey, s.clientSet.StatusMode)
 			err := s.clientSet.Client.Update(ctx, u, client.FieldOwner(configsync.FieldManager))
 			if err != nil {
 				return status.APIServerErrorf(err, "failed to update %s: %s", u.GetKind(), key)

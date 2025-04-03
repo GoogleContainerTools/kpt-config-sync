@@ -38,12 +38,12 @@ type UnstructuredInventoryConverter struct {
 	syncKind      string
 	syncName      string
 	syncNamespace string
-	statusMode    string
+	statusMode    metadata.StatusMode
 	// TODO: add source/commit hash and interface method once it's to be persisted on ResourceGroup
 }
 
 // NewInventoryConverter constructs a new UnstructuredInventoryConverter
-func NewInventoryConverter(scope declared.Scope, syncName, statusMode string) *UnstructuredInventoryConverter {
+func NewInventoryConverter(scope declared.Scope, syncName string, statusMode metadata.StatusMode) *UnstructuredInventoryConverter {
 	return &UnstructuredInventoryConverter{
 		syncKind:      scope.SyncKind(),
 		syncName:      syncName,
@@ -154,7 +154,7 @@ func (ic *UnstructuredInventoryConverter) InventoryToUnstructured(fromObj *unstr
 	core.SetLabel(toObj, metadata.SyncNameLabel, ic.syncName)
 	core.SetLabel(toObj, metadata.SyncKindLabel, ic.syncKind)
 	core.SetAnnotation(toObj, metadata.ResourceManagementKey, metadata.ResourceManagementEnabled)
-	core.SetAnnotation(toObj, metadata.StatusModeKey, ic.statusMode)
+	core.SetAnnotation(toObj, metadata.StatusModeAnnotationKey, ic.statusMode.String())
 
 	if len(objs) == 0 { // Unset resources
 		klog.V(4).Infoln("clearing inventory resources")

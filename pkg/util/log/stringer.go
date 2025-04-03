@@ -15,6 +15,7 @@
 package log
 
 import (
+	"encoding/binary"
 	"fmt"
 
 	"github.com/kylelemons/godebug/diff"
@@ -26,6 +27,14 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"sigs.k8s.io/yaml"
 )
+
+// maxByteSizeToDiff is the maximum size byte array to compute a diff for.
+// Diffing large files uses a lot of memory, which can cause tests to be
+// OOMKilled by the kernel.
+// It's set to 256 KB, because tests show that a ResourceGroup with 1k resources
+// and resourceStatuses takes about 256 KB, and diffing two of these with 1k
+// diffs takes about 1.6 GB of memory.
+const maxByteSizeToDiff int = 1024 * 256 // 256 KB
 
 type jsonStringer struct {
 	O interface{}
@@ -131,14 +140,21 @@ func AsYAMLDiffWithScheme(oldObject, newObject runtime.Object, scheme *runtime.S
 // error string if marshalling fails.
 // Uses diff.Diff to print full yaml, instead of cmp.Diff which truncates.
 func (yds *yamlDiffStringer) String() string {
+	var oldStr, newStr string
 	if yds.Scheme != nil {
 		// Must be either runtime.Object or nil.
 		// Don't panic trying to cast nil interface{} to runtime.Object.
 		oldObj, _ := yds.Old.(runtime.Object)
 		newObj, _ := yds.New.(runtime.Object)
-		return diff.Diff(
-			AsYAMLWithScheme(oldObj, yds.Scheme).String(),
-			AsYAMLWithScheme(newObj, yds.Scheme).String())
+		oldStr = AsYAMLWithScheme(oldObj, yds.Scheme).String()
+		newStr = AsYAMLWithScheme(newObj, yds.Scheme).String()
+	} else {
+		oldStr = AsYAML(yds.Old).String()
+		newStr = AsYAML(yds.New).String()
 	}
-	return diff.Diff(AsYAML(yds.Old).String(), AsYAML(yds.New).String())
+	if binary.Size([]byte(oldStr)) > maxByteSizeToDiff ||
+		binary.Size([]byte(newStr)) > maxByteSizeToDiff {
+		return "yamlDiffStringer: diff disabled: object too large"
+	}
+	return diff.Diff(oldStr, newStr)
 }

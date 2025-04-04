@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	"kpt.dev/configsync/e2e/nomostest/policy"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
@@ -35,6 +36,7 @@ import (
 	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
+	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
@@ -660,6 +662,104 @@ func TestDependencyWithReconciliation(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
+}
+
+func verifyManagedBy(nt *nomostest.NT, o client.Object, rsync core.ID) error {
+	return nt.Validate(o.GetName(), o.GetNamespace(), o,
+		testpredicates.IsManagedBy(nt.Scheme, declared.ScopeFromSyncNamespace(rsync.Namespace), rsync.Name))
+}
+
+func verifyUnmanaged(nt *nomostest.NT, o client.Object) error {
+	return nt.Validate(o.GetName(), o.GetNamespace(), o,
+		testpredicates.IsNotManaged(nt.Scheme))
+}
+
+func TestSplitRSyncsWithDeletion(t *testing.T) {
+	ns1 := func() *corev1.Namespace {
+		return k8sobjects.NamespaceObject("ns1")
+	}
+	ns2 := func() *corev1.Namespace {
+		return k8sobjects.NamespaceObject("ns2")
+	}
+	cm1 := func() *corev1.ConfigMap {
+		return k8sobjects.ConfigMapObject(core.Name("cm1"), core.Namespace("ns1"))
+	}
+	cm2 := func() *corev1.ConfigMap {
+		return k8sobjects.ConfigMapObject(core.Name("cm2"), core.Namespace("ns2"))
+	}
+	rootSync := nomostest.DefaultRootSyncID
+	rootSync1 := core.RootSyncID("rs1")
+	rootSync2 := core.RootSyncID("rs2")
+	repoSync1 := core.RepoSyncID("repo-sync", ns1().Name)
+	repoSync2 := core.RepoSyncID("repo-sync", ns2().Name)
+	nt := nomostest.New(t, nomostesting.Lifecycle,
+		ntopts.SyncWithGitSource(rootSync, ntopts.Unstructured),
+		ntopts.SyncWithGitSource(rootSync1, ntopts.Unstructured),
+		ntopts.SyncWithGitSource(rootSync2, ntopts.Unstructured),
+		ntopts.SyncWithGitSource(repoSync1, ntopts.Unstructured),
+		ntopts.SyncWithGitSource(repoSync2, ntopts.Unstructured),
+		ntopts.WithDelegatedControl,
+		ntopts.WithDeletionPropagationPolicy(metadata.DeletionPropagationPolicyOrphan),
+		ntopts.RepoSyncPermissions(policy.CoreAdmin()))
+
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSync)
+	nt.Must(rootSyncGitRepo.Add("acme/ns1.yaml", ns1()))
+	nt.Must(rootSyncGitRepo.Add("acme/ns2.yaml", ns2()))
+	nt.Must(rootSyncGitRepo.Add("acme/cm1.yaml", cm1()))
+	nt.Must(rootSyncGitRepo.Add("acme/cm2.yaml", cm2()))
+	nt.Must(rootSyncGitRepo.CommitAndPush("Added Namespaces and ConfigMaps"))
+	nt.Must(nt.WatchForAllSyncs())
+
+	// Validate metadata for each object
+	nt.Must(verifyManagedBy(nt, ns1(), rootSync))
+	nt.Must(verifyManagedBy(nt, ns2(), rootSync))
+	nt.Must(verifyManagedBy(nt, cm1(), rootSync))
+	nt.Must(verifyManagedBy(nt, cm2(), rootSync))
+
+	nt.Must(nt.KubeClient.Delete(k8sobjects.RootSyncV1Beta1(rootSync.Name)))
+	nt.Must(nt.Watcher.WatchForNotFound(kinds.RootSyncV1Beta1(), rootSync.Name, rootSync.Namespace))
+
+	nt.Must(verifyUnmanaged(nt, ns1()))
+	nt.Must(verifyUnmanaged(nt, ns2()))
+	nt.Must(verifyUnmanaged(nt, cm1()))
+	nt.Must(verifyUnmanaged(nt, cm2()))
+
+	tg := taskgroup.New()
+	tg.Go(func() error {
+		repo := nt.SyncSourceGitReadWriteRepository(rootSync1)
+		if err := repo.Add("acme/ns1.yaml", ns1()); err != nil {
+			return err
+		}
+		return repo.CommitAndPush("Take ownership of ns1 in rootSync1")
+	})
+	tg.Go(func() error {
+		repo := nt.SyncSourceGitReadWriteRepository(rootSync2)
+		if err := repo.Add("acme/ns2.yaml", ns2()); err != nil {
+			return err
+		}
+		return repo.CommitAndPush("Take ownership of ns2 in rootSync2")
+	})
+	tg.Go(func() error {
+		repo := nt.SyncSourceGitReadWriteRepository(repoSync1)
+		if err := repo.Add("acme/cm1.yaml", cm1()); err != nil {
+			return err
+		}
+		return repo.CommitAndPush("Take ownership of cm1 in repoSync1")
+	})
+	tg.Go(func() error {
+		repo := nt.SyncSourceGitReadWriteRepository(repoSync2)
+		if err := repo.Add("acme/cm2.yaml", cm2()); err != nil {
+			return err
+		}
+		return repo.CommitAndPush("Take ownership of cm2 in repoSync2")
+	})
+	nt.Must(tg.Wait())
+	// Ready check recreates the root-sync, which we don't want
+	nt.Must(nt.WatchForAllSyncs(nomostest.SkipReadyCheck(), nomostest.SkipRootRepos(rootSync.Name)))
+	nt.Must(verifyManagedBy(nt, ns1(), rootSync1))
+	nt.Must(verifyManagedBy(nt, ns2(), rootSync2))
+	nt.Must(verifyManagedBy(nt, cm1(), repoSync1))
+	nt.Must(verifyManagedBy(nt, cm2(), repoSync2))
 }
 
 func getPodReadyTimestamp(pod *corev1.Pod) *metav1.Time {

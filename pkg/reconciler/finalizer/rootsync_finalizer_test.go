@@ -305,8 +305,8 @@ func TestRootSyncFinalize(t *testing.T) {
 			finalizer := &RootSyncFinalizer{
 				baseFinalizer: baseFinalizer{
 					Destroyer: fakeDestroyer,
+					Client:    fakeClient,
 				},
-				Client:             fakeClient,
 				StopControllers:    stopFunc,
 				ControllersStopped: continueCh,
 			}
@@ -438,7 +438,9 @@ func TestRootSyncAddFinalizer(t *testing.T) {
 			ctx := context.Background()
 
 			finalizer := &RootSyncFinalizer{
-				Client: fakeClient,
+				baseFinalizer: baseFinalizer{
+					Client: fakeClient,
+				},
 			}
 
 			if tc.setup != nil {
@@ -576,7 +578,9 @@ func TestRootSyncRemoveFinalizer(t *testing.T) {
 			ctx := context.Background()
 
 			finalizer := &RootSyncFinalizer{
-				Client: fakeClient,
+				baseFinalizer: baseFinalizer{
+					Client: fakeClient,
+				},
 			}
 
 			if tc.setup != nil {

@@ -17,13 +17,24 @@ package finalizer
 import (
 	"context"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog/v2"
+	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/applier"
+	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type baseFinalizer struct {
 	Destroyer applier.Destroyer
+
+	// Client used to update RSync spec and status.
+	Client client.Client
 }
 
 // destroy calls Destroyer.Destroy, collects errors, and handles logging,
@@ -55,4 +66,44 @@ func (bf *baseFinalizer) destroy(ctx context.Context) status.MultiError {
 	}
 	klog.Info("Destroyer succeeded")
 	return nil
+}
+
+func (bf *baseFinalizer) unmanageObjects(ctx context.Context, rsyncRef client.ObjectKey) status.MultiError {
+	var errs status.MultiError
+	rg := &v1alpha1.ResourceGroup{}
+	if err := bf.Client.Get(ctx, rsyncRef, rg); err != nil {
+		return status.APIServerError(err, "failed to get ResourceGroup", rg)
+	}
+	removeAnnotations := []string{
+		metadata.ResourceManagerKey,
+		metadata.OwningInventoryKey,
+		metadata.ResourceManagementKey,
+	}
+	for _, objRef := range rg.Spec.Resources {
+		// Remove metadata for each object
+		obj := &metav1.PartialObjectMetadata{}
+		obj.SetGroupVersionKind(schema.GroupVersionKind{
+			Group: objRef.Group,
+			Kind:  objRef.Kind,
+		})
+		key := client.ObjectKey{
+			Name:      objRef.Name,
+			Namespace: objRef.Namespace,
+		}
+		if err := bf.Client.Get(ctx, key, obj); err != nil {
+			if apierrors.IsNotFound(err) { // skip orphaning objects that don't exist
+				continue
+			}
+			errs = status.Append(errs, status.APIServerError(err, "failed to get object", obj))
+			continue
+		}
+		existing := obj.DeepCopy()
+		if core.RemoveAnnotations(obj, removeAnnotations...) {
+			if err := bf.Client.Patch(ctx, obj, client.MergeFrom(existing),
+				client.FieldOwner(configsync.FieldManager)); err != nil {
+				errs = status.Append(errs, status.APIServerError(err, "failed to patch object to remove metadata", obj))
+			}
+		}
+	}
+	return errs
 }

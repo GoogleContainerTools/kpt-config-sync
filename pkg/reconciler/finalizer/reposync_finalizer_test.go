@@ -298,8 +298,8 @@ func TestRepoSyncFinalize(t *testing.T) {
 			finalizer := &RepoSyncFinalizer{
 				baseFinalizer: baseFinalizer{
 					Destroyer: fakeDestroyer,
+					Client:    fakeClient,
 				},
-				Client:             fakeClient,
 				StopControllers:    stopFunc,
 				ControllersStopped: continueCh,
 			}
@@ -430,7 +430,9 @@ func TestRepoSyncAddFinalizer(t *testing.T) {
 			ctx := context.Background()
 
 			finalizer := &RepoSyncFinalizer{
-				Client: fakeClient,
+				baseFinalizer: baseFinalizer{
+					Client: fakeClient,
+				},
 			}
 
 			if tc.setup != nil {
@@ -567,7 +569,9 @@ func TestRepoSyncRemoveFinalizer(t *testing.T) {
 			ctx := context.Background()
 
 			finalizer := &RepoSyncFinalizer{
-				Client: fakeClient,
+				baseFinalizer: baseFinalizer{
+					Client: fakeClient,
+				},
 			}
 
 			if tc.setup != nil {

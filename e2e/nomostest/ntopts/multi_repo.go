@@ -21,6 +21,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/syncsource"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
+	"kpt.dev/configsync/pkg/metadata"
 )
 
 // MultiRepo configures the NT for use with multi-repo tests.
@@ -55,6 +56,9 @@ type MultiRepo struct {
 
 	// RepoSyncPermissions will grant a list of PolicyRules to NS reconcilers
 	RepoSyncPermissions []rbacv1.PolicyRule
+
+	// RSyncDeletionPropagation sets the deletion propagation policy for all RSyncs
+	RSyncDeletionPropagation metadata.DeletionPropagationPolicy
 }
 
 // GitSourceOption mutates a GitSyncSource
@@ -150,5 +154,12 @@ func WithoutReconcileTimeout(opt *New) {
 func RepoSyncPermissions(policy ...rbacv1.PolicyRule) Opt {
 	return func(opt *New) {
 		opt.RepoSyncPermissions = append(opt.RepoSyncPermissions, policy...)
+	}
+}
+
+// WithDeletionPropagationPolicy specifies the DeletionPropagationPolicy
+func WithDeletionPropagationPolicy(policy metadata.DeletionPropagationPolicy) Opt {
+	return func(opt *New) {
+		opt.RSyncDeletionPropagation = policy
 	}
 }

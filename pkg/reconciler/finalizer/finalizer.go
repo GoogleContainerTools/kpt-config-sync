@@ -39,8 +39,8 @@ func New(scope declared.Scope, destroyer applier.Destroyer, c client.Client, sto
 		return &RootSyncFinalizer{
 			baseFinalizer: baseFinalizer{
 				Destroyer: destroyer,
+				Client:    c,
 			},
-			Client:             c,
 			StopControllers:    stopControllers,
 			ControllersStopped: controllersStopped,
 		}
@@ -48,8 +48,8 @@ func New(scope declared.Scope, destroyer applier.Destroyer, c client.Client, sto
 	return &RepoSyncFinalizer{
 		baseFinalizer: baseFinalizer{
 			Destroyer: destroyer,
+			Client:    c,
 		},
-		Client:             c,
 		StopControllers:    stopControllers,
 		ControllersStopped: controllersStopped,
 	}

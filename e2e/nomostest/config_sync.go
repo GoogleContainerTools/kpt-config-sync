@@ -745,7 +745,14 @@ func SetRSyncTestDefaults(nt *NT, obj client.Object) {
 	// Set global defaults
 	// Enable automatic deletion of managed objects by default.
 	// This helps ensure that test artifacts are cleaned up.
-	EnableDeletionPropagation(obj)
+	switch nt.rsyncDeletionPropagation {
+	case metadata.DeletionPropagationPolicyOrphan:
+		RemoveDeletionPropagationPolicy(obj)
+	case metadata.DeletionPropagationPolicyForeground:
+		EnableDeletionPropagation(obj)
+	default:
+		EnableDeletionPropagation(obj)
+	}
 }
 
 // rootSyncObjectV1Alpha1Git returns the default RootSync object.

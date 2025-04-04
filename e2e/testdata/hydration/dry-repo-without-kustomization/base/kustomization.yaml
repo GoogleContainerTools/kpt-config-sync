@@ -20,5 +20,6 @@ helmCharts:
 commonAnnotations:
   hydration-tool: kustomize
 
-commonLabels:
-  team: monitoring
+labels:
+- pairs:
+    team: monitoring

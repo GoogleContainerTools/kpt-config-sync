@@ -17,7 +17,7 @@ kind: Kustomization
 bases:
 - ../../base
 patches:
-# ServiceAccount - make name unique per environ 
+# ServiceAccount - make name unique per environ
 - target:
     kind: ServiceAccount
     name: foo-ksa
@@ -25,7 +25,7 @@ patches:
     - op: replace
       path: /metadata/name
       value: foo-ksa-dev
-# Pod creators - give all FooCorp developers access 
+# Pod creators - give all FooCorp developers access
 - target:
     kind: RoleBinding
     name: pod-creators
@@ -33,5 +33,7 @@ patches:
     - op: replace
       path: /subjects/0/name
       value: developers-all@foo-corp.com
-commonLabels:
-  environment: dev
+
+labels:
+- pairs:
+    environment: dev

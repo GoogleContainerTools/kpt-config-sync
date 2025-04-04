@@ -44,6 +44,7 @@ import (
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	fsfake "kpt.dev/configsync/pkg/importer/filesystem/fake"
 	"kpt.dev/configsync/pkg/kinds"
+	"kpt.dev/configsync/pkg/logging"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/remediator/conflict"
 	remediatorfake "kpt.dev/configsync/pkg/remediator/fake"
@@ -111,6 +112,7 @@ func newRootReconciler(t *testing.T, clock clock.Clock, fakeClient client.Client
 			options: rootOpts,
 		},
 		reconcilerState: state,
+		logger:          logging.NewLogger(opts.ReconcilerName),
 	}
 }
 

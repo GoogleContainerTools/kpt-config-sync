@@ -234,7 +234,7 @@ func TestInventoryToUnstructured(t *testing.T) {
 	testCases := map[string]struct {
 		fromObj    *unstructured.Unstructured
 		toInv      *inventory.UnstructuredInventory
-		statusMode string
+		statusMode metadata.StatusMode
 		wantErr    error
 		wantObj    *unstructured.Unstructured
 	}{
@@ -729,8 +729,8 @@ func TestInventoryToUnstructured(t *testing.T) {
 			require.Equal(t, invNamespace, rg.GetNamespace())
 			// Set expected annotations
 			tc.wantObj.SetAnnotations(map[string]string{
-				metadata.ResourceManagementKey: metadata.ResourceManagementEnabled,
-				metadata.StatusModeKey:         tc.statusMode,
+				metadata.ResourceManagementKey:   metadata.ResourceManagementEnabled,
+				metadata.StatusModeAnnotationKey: tc.statusMode.String(),
 			})
 			// Set expected labels
 			tc.wantObj.SetLabels(map[string]string{

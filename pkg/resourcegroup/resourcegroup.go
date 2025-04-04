@@ -68,6 +68,6 @@ func IsStatusDisabled(resgroup *v1alpha1.ResourceGroup) bool {
 	if annotations == nil {
 		return false
 	}
-	val, found := annotations[metadata.StatusModeKey]
-	return found && val == metadata.StatusDisabled
+	val, found := annotations[metadata.StatusModeAnnotationKey]
+	return found && val == metadata.StatusDisabled.String()
 }

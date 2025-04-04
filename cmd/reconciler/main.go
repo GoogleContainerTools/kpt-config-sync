@@ -26,6 +26,7 @@ import (
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
+	"kpt.dev/configsync/pkg/metadata"
 	ocmetrics "kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/profiler"
 	"kpt.dev/configsync/pkg/reconciler"
@@ -183,6 +184,10 @@ func main() {
 		klog.Fatal(err)
 	}
 
+	if err := validateStatusMode(*statusMode); err != nil {
+		klog.Fatal(err)
+	}
+
 	opts := reconciler.Options{
 		Logger:                   logger,
 		ClusterName:              *clusterName,
@@ -204,7 +209,7 @@ func main() {
 		SyncDir:                  relSyncDir,
 		SyncName:                 *syncName,
 		ReconcilerName:           *reconcilerName,
-		StatusMode:               *statusMode,
+		StatusMode:               metadata.StatusMode(*statusMode),
 		ReconcileTimeout:         *reconcileTimeout,
 		APIServerTimeout:         *apiServerTimeout,
 		RenderingEnabled:         *renderingEnabled,
@@ -243,4 +248,17 @@ func main() {
 		}
 	}
 	reconciler.Run(opts)
+}
+
+// validateStatusMode validates the --status-mode flag option value.
+func validateStatusMode(statusMode string) error {
+	switch statusMode {
+	case metadata.StatusEnabled.String(),
+		metadata.StatusDisabled.String(),
+		"": // unspecified or empty
+		return nil
+	default:
+		return fmt.Errorf("invalid %s %q: must be %s or %s",
+			flags.statusMode, statusMode, metadata.StatusEnabled, metadata.StatusDisabled)
+	}
 }

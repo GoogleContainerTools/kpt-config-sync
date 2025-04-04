@@ -710,7 +710,7 @@ func TestUpdateStatusMode(t *testing.T) {
 
 	testcases := map[string]struct {
 		rgObj         client.Object
-		newStatusMode string
+		newStatusMode metadata.StatusMode
 	}{
 		"ResourceGroup does not exist": {
 			rgObj:         nil,
@@ -720,7 +720,7 @@ func TestUpdateStatusMode(t *testing.T) {
 			rgObj: k8sobjects.ResourceGroupObject(
 				core.Name(syncName),
 				core.Namespace(syncNamespace),
-				core.Annotation(metadata.StatusModeKey, metadata.StatusEnabled),
+				core.Annotation(metadata.StatusModeAnnotationKey, metadata.StatusEnabled.String()),
 			),
 			newStatusMode: metadata.StatusEnabled,
 		},
@@ -728,7 +728,7 @@ func TestUpdateStatusMode(t *testing.T) {
 			rgObj: k8sobjects.ResourceGroupObject(
 				core.Name(syncName),
 				core.Namespace(syncNamespace),
-				core.Annotation(metadata.StatusModeKey, metadata.StatusDisabled),
+				core.Annotation(metadata.StatusModeAnnotationKey, metadata.StatusDisabled.String()),
 			),
 			newStatusMode: metadata.StatusDisabled,
 		},
@@ -736,7 +736,7 @@ func TestUpdateStatusMode(t *testing.T) {
 			rgObj: k8sobjects.ResourceGroupObject(
 				core.Name(syncName),
 				core.Namespace(syncNamespace),
-				core.Annotation(metadata.StatusModeKey, metadata.StatusEnabled),
+				core.Annotation(metadata.StatusModeAnnotationKey, metadata.StatusEnabled.String()),
 			),
 			newStatusMode: metadata.StatusDisabled,
 		},
@@ -744,7 +744,7 @@ func TestUpdateStatusMode(t *testing.T) {
 			rgObj: k8sobjects.ResourceGroupObject(
 				core.Name(syncName),
 				core.Namespace(syncNamespace),
-				core.Annotation(metadata.StatusModeKey, metadata.StatusDisabled),
+				core.Annotation(metadata.StatusModeAnnotationKey, metadata.StatusDisabled.String()),
 			),
 			newStatusMode: metadata.StatusEnabled,
 		},
@@ -784,7 +784,7 @@ func TestUpdateStatusMode(t *testing.T) {
 			}
 			require.NoError(t, err)
 			annotations := rg.GetAnnotations()
-			require.Equal(t, tc.newStatusMode, annotations[metadata.StatusModeKey])
+			require.Equal(t, tc.newStatusMode.String(), annotations[metadata.StatusModeAnnotationKey])
 		})
 	}
 }

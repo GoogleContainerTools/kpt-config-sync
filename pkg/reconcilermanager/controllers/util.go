@@ -103,7 +103,7 @@ type reconcilerOptions struct {
 	ociConfig                *v1beta1.Oci
 	helmConfig               *v1beta1.HelmBase
 	pollPeriod               string
-	statusMode               string
+	statusMode               metadata.StatusMode
 	reconcileTimeout         string
 	apiServerTimeout         string
 	requiresRendering        bool
@@ -188,7 +188,7 @@ func reconcilerEnvs(opts reconcilerOptions) []corev1.EnvVar {
 		},
 		corev1.EnvVar{
 			Name:  reconcilermanager.StatusMode,
-			Value: statusMode,
+			Value: statusMode.String(),
 		},
 		corev1.EnvVar{
 			Name:  reconcilermanager.ReconcileTimeout,

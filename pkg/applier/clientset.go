@@ -54,12 +54,12 @@ type ClientSet struct {
 	InvClient    inventory.Client
 	Client       client.Client
 	Mapper       meta.RESTMapper
-	StatusMode   string
+	StatusMode   metadata.StatusMode
 	ApplySetID   string
 }
 
 // NewClientSet constructs a new ClientSet.
-func NewClientSet(c client.Client, configFlags *genericclioptions.ConfigFlags, scope declared.Scope, syncName, statusMode, applySetID string) (*ClientSet, error) {
+func NewClientSet(c client.Client, configFlags *genericclioptions.ConfigFlags, scope declared.Scope, syncName string, statusMode metadata.StatusMode, applySetID string) (*ClientSet, error) {
 	matchVersionKubeConfigFlags := util.NewMatchVersionFlags(configFlags)
 	f := util.NewFactory(matchVersionKubeConfigFlags)
 

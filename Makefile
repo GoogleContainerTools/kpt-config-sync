@@ -418,7 +418,7 @@ clean-addlicense:
 	@rm -rf $(ADDLICENSE)
 
 "$(GOLANGCI_LINT)": buildenv-dirs
-	GOPATH="$(GO_DIR)" go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+	GOPATH="$(GO_DIR)" go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 
 .PHONY: install-golangci-lint
 # install golangci-lint (user-friendly target alias)

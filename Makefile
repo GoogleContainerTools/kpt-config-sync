@@ -50,7 +50,7 @@ DEBIAN_BASE_IMAGE := gcr.io/gke-release/debian-base:bookworm-v1.0.4-gke.5
 GCLOUD_IMAGE_VERSION := 517.0.0
 GCLOUD_IMAGE := gcr.io/google.com/cloudsdktool/google-cloud-cli:$(GCLOUD_IMAGE_VERSION)-slim
 # Base image used for docker cli install, primarily used for test images.
-DOCKER_CLI_IMAGE_VERSION := 20.10..24
+DOCKER_CLI_IMAGE_VERSION := 20.10.24
 DOCKER_CLI_IMAGE := gcr.io/cloud-builders/docker:$(DOCKER_CLI_IMAGE_VERSION)
 
 # Directory containing installed go binaries.

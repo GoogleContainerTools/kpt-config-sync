@@ -265,8 +265,8 @@ func TestManagementDisabledNamespace(t *testing.T) {
 		}))
 
 		// Update the namespace and the configmap to be no longer be managed
-		nsObj.Annotations[metadata.ResourceManagementKey] = metadata.ResourceManagementDisabled
-		cm1.Annotations[metadata.ResourceManagementKey] = metadata.ResourceManagementDisabled
+		metadata.WithManagementMode(metadata.ManagementDisabled)(nsObj)
+		metadata.WithManagementMode(metadata.ManagementDisabled)(cm1)
 		nt.Must(rootSyncGitRepo.Add(fmt.Sprintf("acme/namespaces/%s/ns.yaml", nsName), nsObj))
 		nt.Must(rootSyncGitRepo.Add(fmt.Sprintf("acme/namespaces/%s/cm1.yaml", nsName), cm1))
 		nt.Must(rootSyncGitRepo.CommitAndPush("Unmanage the namespace and the configmap"))
@@ -319,7 +319,8 @@ func TestManagementDisabledConfigMap(t *testing.T) {
 	fooNamespace := k8sobjects.NamespaceObject("foo")
 	cm1 := k8sobjects.ConfigMapObject(core.Namespace("foo"), core.Name("cm1"))
 	// Initialize repo with disabled resource to test initial sync w/ unmanaged resources
-	cm2 := k8sobjects.ConfigMapObject(core.Namespace("foo"), core.Name("cm2"), core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementDisabled))
+	cm2 := k8sobjects.ConfigMapObject(core.Namespace("foo"), core.Name("cm2"),
+		metadata.WithManagementMode(metadata.ManagementDisabled))
 	cm3 := k8sobjects.ConfigMapObject(core.Namespace("foo"), core.Name("cm3"))
 
 	nt := nomostest.New(t, nomostesting.Reconciliation2, ntopts.WithInitialCommit(ntopts.Commit{
@@ -382,7 +383,7 @@ func TestManagementDisabledConfigMap(t *testing.T) {
 	}
 
 	// Update the configmap to be no longer be managed
-	cm1.Annotations[metadata.ResourceManagementKey] = metadata.ResourceManagementDisabled
+	metadata.WithManagementMode(metadata.ManagementDisabled)(cm1)
 	nt.Must(rootSyncGitRepo.Add("acme/namespaces/foo/cm1.yaml", cm1))
 	nt.Must(rootSyncGitRepo.Remove("acme/namespaces/foo/cm3.yaml"))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Unmanage cm1 and remove cm3"))

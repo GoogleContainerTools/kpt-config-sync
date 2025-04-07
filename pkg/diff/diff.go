@@ -104,13 +104,10 @@ func (d Diff) Operation(scope declared.Scope, syncName string) Operation {
 
 func (d Diff) createType() Operation {
 	switch {
-	case differ.ManagementEnabled(d.Declared):
+	case metadata.IsManagementEnabled(d.Declared):
 		// Managed by ConfigSync and it doesn't exist, so create it.
-		// For this case, we can also use `differ.ManagedByConfigSync`, since
-		// the parser adds the `configsync.gke.io/resource-id` annotation to
-		// all the resources in declared.Resources.
 		return Create
-	case differ.ManagementDisabled(d.Declared):
+	case metadata.IsManagementDisabled(d.Declared):
 		// The resource doesn't exist but management is disabled, so take no action.
 		return NoOp
 	default:
@@ -130,7 +127,7 @@ func (d Diff) updateType(scope declared.Scope, syncName string) Operation {
 		// canManage must be true when CS metadata is the same between
 		// declared and actual, so no need to check canManage
 
-		if differ.ManagementDisabled(d.Declared) {
+		if metadata.IsManagementDisabled(d.Declared) {
 			return Abandon // remove CS metadata because it is no longer managed
 		}
 
@@ -142,15 +139,15 @@ func (d Diff) updateType(scope declared.Scope, syncName string) Operation {
 	}
 
 	switch {
-	case differ.ManagementEnabled(d.Declared) && canManage:
+	case metadata.IsManagementEnabled(d.Declared) && canManage:
 		if ignoreMutation {
 			return UpdateCSMetadata
 		}
 		return Update
-	case differ.ManagementEnabled(d.Declared) && !canManage:
+	case metadata.IsManagementEnabled(d.Declared) && !canManage:
 		// This reconciler can't manage this object but is erroneously being told to.
 		return ManagementConflict
-	case differ.ManagementDisabled(d.Declared) && canManage:
+	case metadata.IsManagementDisabled(d.Declared) && canManage:
 		if metadata.HasConfigSyncMetadata(d.Actual) {
 			manager := d.Actual.GetAnnotations()[metadata.ResourceManagerKey]
 			if manager == "" || manager == declared.ResourceManager(scope, syncName) {
@@ -158,7 +155,7 @@ func (d Diff) updateType(scope declared.Scope, syncName string) Operation {
 			}
 		}
 		return NoOp
-	case differ.ManagementDisabled(d.Declared) && !canManage:
+	case metadata.IsManagementDisabled(d.Declared) && !canManage:
 		// Management is disabled and the object isn't owned by this reconciler, so
 		// there's nothing to do.
 		return NoOp

@@ -232,7 +232,7 @@ func IsObjectDeclarable(_ client.Object) bool {
 // when included in the source.
 func IsObjectApplyable(obj client.Object) bool {
 	switch {
-	case obj.GetAnnotations()[metadata.ResourceManagementKey] == metadata.ResourceManagementDisabled:
+	case metadata.IsManagementDisabled(obj):
 		// Disabled objects count towards declared objects, but are not applied
 		return false
 	case obj.GetAnnotations()[metadata.LocalConfigAnnotationKey] == "true":

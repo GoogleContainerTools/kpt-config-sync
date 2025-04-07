@@ -296,10 +296,10 @@ func TestConfigSyncMetadata(t *testing.T) {
 			name: "With metadata",
 			obj: roleForTest(
 				core.Annotations(map[string]string{
-					"hello":                          "goodbye",
-					csmetadata.ResourceManagerKey:    ":root",
-					csmetadata.ResourceManagementKey: "enabled",
+					"hello":                       "goodbye",
+					csmetadata.ResourceManagerKey: ":root",
 				}),
+				csmetadata.WithManagementMode(csmetadata.ManagementEnabled),
 				core.Labels(map[string]string{
 					"here":                  "there",
 					csmetadata.ManagedByKey: "config-sync",

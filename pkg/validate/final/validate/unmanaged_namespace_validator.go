@@ -31,14 +31,14 @@ func UnmanagedNamespaces(objs []ast.FileObject) status.MultiError {
 		if obj.GetObjectKind().GroupVersionKind() != kinds.Namespace() {
 			continue
 		}
-		if isUnmanaged(obj) {
+		if metadata.IsManagementDisabled(obj) {
 			unmanagedNamespaces[obj.GetName()] = []client.Object{}
 		}
 	}
 
 	for _, obj := range objs {
 		ns := obj.GetNamespace()
-		if ns == "" || isUnmanaged(obj) {
+		if ns == "" || metadata.IsManagementDisabled(obj) {
 			continue
 		}
 		resources, isInUnmanagedNamespace := unmanagedNamespaces[ns]
@@ -54,9 +54,4 @@ func UnmanagedNamespaces(objs []ast.FileObject) status.MultiError {
 		}
 	}
 	return errs
-}
-
-func isUnmanaged(obj client.Object) bool {
-	annotation, hasAnnotation := obj.GetAnnotations()[metadata.ResourceManagementKey]
-	return hasAnnotation && annotation == metadata.ResourceManagementDisabled
 }

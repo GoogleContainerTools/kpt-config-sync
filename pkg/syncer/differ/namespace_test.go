@@ -39,9 +39,10 @@ func markForDeletion(nsConfig *v1.NamespaceConfig) *v1.NamespaceConfig {
 }
 
 var (
-	disableManaged    = syncertest.ManagementDisabled
-	managementInvalid = core.Annotation(metadata.ResourceManagementKey, "invalid")
-	managementEmpty   = core.Annotation(metadata.ResourceManagementKey, "")
+	enableManaged     = metadata.WithManagementMode(metadata.ManagementEnabled)
+	disableManaged    = metadata.WithManagementMode(metadata.ManagementDisabled)
+	managementInvalid = metadata.WithManagementMode("invalid")
+	managementEmpty   = metadata.WithManagementMode("")
 	preventDeletion   = core.Annotation(common.LifecycleDeleteAnnotation, common.PreventDeletion)
 )
 
@@ -82,7 +83,7 @@ func TestNamespaceDiffType(t *testing.T) {
 		{
 			name:     "in both, management disabled unmanage",
 			declared: namespaceConfig(disableManaged),
-			actual:   k8sobjects.NamespaceObject("foo", syncertest.ManagementEnabled),
+			actual:   k8sobjects.NamespaceObject("foo", enableManaged),
 
 			expectType: Unmanage,
 		},
@@ -94,19 +95,19 @@ func TestNamespaceDiffType(t *testing.T) {
 		},
 		{
 			name:       "if not in repo but managed in cluster, noop",
-			actual:     k8sobjects.NamespaceObject("foo", syncertest.ManagementEnabled),
+			actual:     k8sobjects.NamespaceObject("foo", enableManaged),
 			expectType: NoOp,
 		},
 		{
 			name:       "delete",
 			declared:   markForDeletion(namespaceConfig()),
-			actual:     k8sobjects.NamespaceObject("foo", syncertest.ManagementEnabled),
+			actual:     k8sobjects.NamespaceObject("foo", enableManaged),
 			expectType: Delete,
 		},
 		{
 			name:       "marked for deletion, unmanage if deletion: prevent",
 			declared:   markForDeletion(namespaceConfig()),
-			actual:     k8sobjects.NamespaceObject("foo", syncertest.ManagementEnabled, preventDeletion),
+			actual:     k8sobjects.NamespaceObject("foo", enableManaged, preventDeletion),
 			expectType: UnmanageNamespace,
 		},
 		{

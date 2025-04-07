@@ -56,20 +56,6 @@ const (
 	// This annotation is set by Config Sync on a managed resource.
 	SyncTokenAnnotationKey = ConfigManagementPrefix + "token"
 
-	// ResourceManagementKey is the annotation that indicates if Nomos will manage the content and
-	// lifecycle for the resource.
-	// This annotation is set by Config Sync on a managed resource.
-	ResourceManagementKey = ConfigManagementPrefix + "managed"
-	// ResourceManagementEnabled is the value corresponding to ResourceManagementKey indicating that
-	// Nomos will manage content and lifecycle for the given resource.
-	ResourceManagementEnabled = "enabled"
-	// ResourceManagementDisabled is the value corresponding to ResourceManagementKey indicating that
-	// Nomos will not manage content and lifecycle for the given resource.
-	// By design, the `configmanagement.gke.io/managed: disabled` annotation
-	// should not be pushed to the cluster. Instead, we remove all the Config
-	// Sync metadata from the object on the cluster.
-	ResourceManagementDisabled = "disabled"
-
 	// The following annotations implement the extended resource status specification.
 
 	// ResourceStatusErrorsKey is the annotation that indicates any errors, encoded as a JSON array.
@@ -242,7 +228,7 @@ const (
 )
 
 // StatusMode is the type used to identify value enums to use with the
-// configsync.gke.io/status annotation.
+// `configsync.gke.io/status` annotation.
 type StatusMode string
 
 // String returns the string value of the StatusMode.

@@ -234,7 +234,7 @@ func TestMultiDependencies(t *testing.T) {
 	nt.T.Log("Disable cm3 by adding the `configmanagement.gke.io/managed: disabled` annotation")
 	nt.Must(rootSyncGitRepo.Add("acme/cm3.yaml", k8sobjects.ConfigMapObject(core.Name(cm3Name), core.Namespace(namespaceName),
 		core.Annotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm0"),
-		core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementDisabled))))
+		metadata.WithManagementMode(metadata.ManagementDisabled))))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Disable cm3 by adding the `configmanagement.gke.io/managed: disabled` annotation"))
 	nt.Must(nt.WatchForAllSyncs())
 
@@ -274,10 +274,10 @@ func TestMultiDependencies(t *testing.T) {
 	nt.T.Log("A new test: verify that an object and its dependency can be disabled together")
 	nt.T.Log("Disable both cm1 and cm0 by adding the `configmanagement.gke.io/managed: disabled` annotation")
 	nt.Must(rootSyncGitRepo.Add("acme/cm0.yaml", k8sobjects.ConfigMapObject(core.Name(cm0Name), core.Namespace(namespaceName),
-		core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementDisabled))))
+		metadata.WithManagementMode(metadata.ManagementDisabled))))
 	nt.Must(rootSyncGitRepo.Add("acme/cm1.yaml", k8sobjects.ConfigMapObject(core.Name(cm1Name), core.Namespace(namespaceName),
 		core.Annotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm0"),
-		core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementDisabled))))
+		metadata.WithManagementMode(metadata.ManagementDisabled))))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Disable both cm1 and cm0 by adding the `configmanagement.gke.io/managed: disabled` annotation"))
 	nt.Must(nt.WatchForAllSyncs())
 
@@ -328,7 +328,7 @@ func TestExternalDependencyError(t *testing.T) {
 	nt.Must(rootSyncGitRepo.CommitAndPush("Adding cm1 and cm0: cm1 depends on cm0"))
 	nt.Must(nt.WatchForAllSyncs())
 	nt.Must(rootSyncGitRepo.Add("acme/cm0.yaml", k8sobjects.ConfigMapObject(core.Name(cm0Name), core.Namespace(namespaceName),
-		core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementDisabled))))
+		metadata.WithManagementMode(metadata.ManagementDisabled))))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Disabling management for cm0 in the git repo"))
 	nt.Must(nt.Watcher.WatchForRootSyncSyncError(configsync.RootSyncName, applier.ApplierErrorCode, "external dependency", nil))
 
@@ -345,7 +345,7 @@ func TestExternalDependencyError(t *testing.T) {
 	nt.Must(nt.WatchForAllSyncs())
 	nt.T.Log("A new test: verify that disabling a dependant from the git repo cause an external dependency error")
 	nt.Must(rootSyncGitRepo.Add("acme/cm0.yaml", k8sobjects.ConfigMapObject(core.Name(cm0Name), core.Namespace(namespaceName),
-		core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementDisabled))))
+		metadata.WithManagementMode(metadata.ManagementDisabled))))
 	nt.Must(rootSyncGitRepo.Add("acme/cm1.yaml", k8sobjects.ConfigMapObject(core.Name(cm1Name), core.Namespace(namespaceName),
 		core.Annotation(dependson.Annotation, "/namespaces/bookstore/ConfigMap/cm0"))))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Adding cm1 and cm0: cm1 depends on cm0, cm0 is disabled"))

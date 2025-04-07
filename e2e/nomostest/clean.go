@@ -41,7 +41,6 @@ import (
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
-	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
@@ -190,11 +189,11 @@ func uninstallUnmanagedPackagesOfType(nt *NT, gvk schema.GroupVersionKind) error
 	// Find the unmanaged packages
 	var rsObjs []*unstructured.Unstructured
 	for _, item := range rsObjList.Items {
-		if core.GetAnnotation(&item, metadata.ResourceManagementKey) != metadata.ResourceManagementEnabled {
-			rsObjs = append(rsObjs, &item)
-		} else {
+		if metadata.IsManagementEnabled(&item) {
 			nt.T.Logf("[CLEANUP] Skipping deletion of managed %s object %s",
 				gvk.Kind, client.ObjectKeyFromObject(&item))
+		} else {
+			rsObjs = append(rsObjs, &item)
 		}
 	}
 	// Once deleted, one of the following conditions must be satisfied to continue

@@ -160,7 +160,7 @@ func (r *reconciler) remediate(ctx context.Context, id core.ID, objDiff diff.Dif
 		// Should never happen as the Parser would have thrown an error.
 		return nonhierarchical.IllegalManagementAnnotationError(
 			objDiff.Declared,
-			objDiff.Declared.GetAnnotations()[metadata.ResourceManagementKey],
+			core.GetAnnotation(objDiff.Declared, metadata.ManagementModeAnnotationKey),
 		)
 	case diff.Abandon:
 		actual, err := objDiff.UnstructuredActual()

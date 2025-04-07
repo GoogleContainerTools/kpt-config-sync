@@ -337,14 +337,16 @@ func TestDriftKubectlAnnotateConfigSyncAnnotation(t *testing.T) {
 		)))
 
 	// Modify a Config Sync annotation
-	out, err := nt.Shell.Kubectl("annotate", "namespace", "bookstore", "--overwrite", fmt.Sprintf("%s=fall", metadata.ResourceManagementKey))
+	out, err := nt.Shell.Kubectl("annotate", "namespace", "bookstore", "--overwrite", fmt.Sprintf("%s=fall", metadata.ManagementModeAnnotationKey))
 	if err != nil {
-		nt.T.Fatalf("got `kubectl annotate namespace bookstore --overwrite %s=fall` error %v %s, want return nil", metadata.ResourceManagementKey, err, out)
+		nt.T.Fatalf("got `kubectl annotate namespace bookstore --overwrite %s=fall` error %v %s, want return nil", metadata.ManagementModeAnnotationKey, err, out)
 	}
 
 	// Remediator SHOULD correct it
 	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
-		testwatcher.WatchPredicates(testpredicates.HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled))))
+		testwatcher.WatchPredicates(
+			testpredicates.IsManagementEnabled(),
+		)))
 }
 
 // TestDriftKubectlAnnotateDeleteManagedFieldsWithIgnoreMutationAnnotation
@@ -396,16 +398,18 @@ func TestDriftKubectlAnnotateDeleteManagedFieldsWithIgnoreMutationAnnotation(t *
 	nt.Must(tg.Wait())
 
 	// Delete a Config Sync annotation
-	out, err = nt.Shell.Kubectl("annotate", "namespace", "bookstore", fmt.Sprintf("%s-", metadata.ResourceManagementKey))
+	out, err = nt.Shell.Kubectl("annotate", "namespace", "bookstore", fmt.Sprintf("%s-", metadata.ManagementModeAnnotationKey))
 	if err != nil {
-		nt.T.Fatalf("got `kubectl annotate namespace bookstore %s-` error %v %s, want return nil", metadata.ResourceManagementKey, err, out)
+		nt.T.Fatalf("got `kubectl annotate namespace bookstore %s-` error %v %s, want return nil", metadata.ManagementModeAnnotationKey, err, out)
 	}
 
 	time.Sleep(10 * time.Second)
 
 	// Remediator SHOULD correct it
 	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
-		testwatcher.WatchPredicates(testpredicates.HasAnnotationKey(metadata.ResourceManagementKey))))
+		testwatcher.WatchPredicates(
+			testpredicates.IsManagementEnabled(),
+		)))
 }
 
 // TestAddIgnoreMutationAnnotationDirectly verifies the behavior of the applier when the

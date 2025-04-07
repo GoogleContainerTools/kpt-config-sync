@@ -15,6 +15,7 @@
 package validate
 
 import (
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/metadata"
@@ -22,10 +23,11 @@ import (
 )
 
 // ManagementAnnotation returns an Error if the user-specified management annotation is invalid.
+// The only valid value in the source is `disabled`.
 func ManagementAnnotation(obj ast.FileObject) status.Error {
-	value, found := obj.GetAnnotations()[metadata.ResourceManagementKey]
-	if found && (value != metadata.ResourceManagementDisabled) {
-		return nonhierarchical.IllegalManagementAnnotationError(obj, value)
+	if !metadata.IsManagementDisabled(obj) && !metadata.IsManagementUnspecified(obj) {
+		return nonhierarchical.IllegalManagementAnnotationError(obj,
+			core.GetAnnotation(obj, metadata.ManagementModeAnnotationKey))
 	}
 	return nil
 }

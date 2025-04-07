@@ -47,7 +47,7 @@ func clean(o ast.FileObject) {
 	// Remove all the annotations starting with configsync.gke.io or configmanagement.gke.io
 	// except for the configmanagement.gke.io/managed annotation.
 	for k := range annotations {
-		if metadata.HasConfigSyncPrefix(k) && k != metadata.ResourceManagementKey {
+		if metadata.HasConfigSyncPrefix(k) && k != metadata.ManagementModeAnnotationKey {
 			delete(annotations, k)
 		}
 	}

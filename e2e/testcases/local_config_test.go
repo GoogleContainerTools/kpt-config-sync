@@ -23,7 +23,6 @@ import (
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/metadata"
-	"kpt.dev/configsync/pkg/syncer/syncertest"
 )
 
 var LocalConfigValue = "true"
@@ -99,7 +98,8 @@ func TestLocalConfigWithManagementDisabled(t *testing.T) {
 	}
 
 	// Add the management disabled annotation.
-	cm = k8sobjects.ConfigMapObject(core.Name(cmName), syncertest.ManagementDisabled)
+	cm = k8sobjects.ConfigMapObject(core.Name(cmName),
+		metadata.WithManagementMode(metadata.ManagementDisabled))
 	nt.Must(rootSyncGitRepo.Add(cmPath, cm))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Disable the management of ConfigMap"))
 	nt.Must(nt.WatchForAllSyncs())
@@ -111,7 +111,8 @@ func TestLocalConfigWithManagementDisabled(t *testing.T) {
 	}
 
 	// Add the local-config annotation to the unmanaged configmap
-	cm = k8sobjects.ConfigMapObject(core.Name(cmName), syncertest.ManagementDisabled,
+	cm = k8sobjects.ConfigMapObject(core.Name(cmName),
+		metadata.WithManagementMode(metadata.ManagementDisabled),
 		core.Annotation(metadata.LocalConfigAnnotationKey, LocalConfigValue))
 	nt.Must(rootSyncGitRepo.Add(cmPath, cm))
 	nt.Must(rootSyncGitRepo.CommitAndPush("Change the ConfigMap to local config"))

@@ -15,26 +15,25 @@
 package validate
 
 import (
-	"errors"
 	"testing"
 
-	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/importer/analyzer/ast"
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/nonhierarchical"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/syncer/syncertest"
+	"kpt.dev/configsync/pkg/testing/testerrors"
 )
 
-func TestValidManagementAnnotation(t *testing.T) {
+func TestManagementAnnotation(t *testing.T) {
 	testCases := []struct {
 		name string
 		obj  ast.FileObject
 		want status.Error
 	}{
 		{
-			name: "no management annotation",
+			name: "no management annotation passes",
 			obj:  k8sobjects.Role(),
 		},
 		{
@@ -44,21 +43,21 @@ func TestValidManagementAnnotation(t *testing.T) {
 		{
 			name: "enabled management fails",
 			obj:  k8sobjects.Role(syncertest.ManagementEnabled),
-			want: status.FakeError(nonhierarchical.IllegalManagementAnnotationErrorCode),
+			want: nonhierarchical.IllegalManagementAnnotationError(
+				k8sobjects.Role(), metadata.ManagementEnabled.String()),
 		},
 		{
 			name: "invalid management fails",
-			obj:  k8sobjects.Role(core.Annotation(metadata.ResourceManagementKey, "invalid")),
-			want: status.FakeError(nonhierarchical.IllegalManagementAnnotationErrorCode),
+			obj:  k8sobjects.Role(syncertest.ManagementInvalid),
+			want: nonhierarchical.IllegalManagementAnnotationError(
+				k8sobjects.Role(), "invalid"),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := nonhierarchical.ValidManagementAnnotation(tc.obj)
-			if !errors.Is(err, tc.want) {
-				t.Errorf("got ValidManagementAnnotation() error %v, want %v", err, tc.want)
-			}
+			err := ManagementAnnotation(tc.obj)
+			testerrors.AssertEqual(t, tc.want, err)
 		})
 	}
 }

@@ -62,7 +62,7 @@ func TestValidator_Handle(t *testing.T) {
 				core.Name("hello"),
 				core.Namespace("world"),
 				core.Label(csmetadata.ManagedByKey, csmetadata.ManagedByValue),
-				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
+				csmetadata.WithManagementMode(csmetadata.ManagementEnabled),
 				core.Annotation(csmetadata.ResourceManagerKey, rootSyncManagerAnnotation(rootSyncName)),
 				setRules([]rbacv1.PolicyRule{
 					{
@@ -81,7 +81,7 @@ func TestValidator_Handle(t *testing.T) {
 				core.Name("hello"),
 				core.Namespace("world"),
 				core.Label(csmetadata.ManagedByKey, csmetadata.ManagedByValue),
-				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
+				csmetadata.WithManagementMode(csmetadata.ManagementEnabled),
 				core.Annotation(csmetadata.ResourceManagerKey, repoSyncManagerAnnotation("bookstore", repoSyncName)),
 				setRules([]rbacv1.PolicyRule{
 					{
@@ -101,7 +101,7 @@ func TestValidator_Handle(t *testing.T) {
 				core.Name("hello"),
 				core.Namespace("world"),
 				core.Label(csmetadata.ManagedByKey, csmetadata.ManagedByValue),
-				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
+				csmetadata.WithManagementMode(csmetadata.ManagementEnabled),
 				core.Annotation(csmetadata.ResourceManagerKey, repoSyncManagerAnnotation("bookstore", repoSyncName)),
 				setRules([]rbacv1.PolicyRule{
 					{
@@ -120,7 +120,7 @@ func TestValidator_Handle(t *testing.T) {
 				core.Name("hello"),
 				core.Namespace("world"),
 				core.Label(csmetadata.ManagedByKey, csmetadata.ManagedByValue),
-				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
+				csmetadata.WithManagementMode(csmetadata.ManagementEnabled),
 				core.Annotation(csmetadata.ResourceManagerKey, repoSyncManagerAnnotation("videostore", repoSyncName)),
 				setRules([]rbacv1.PolicyRule{
 					{
@@ -140,7 +140,7 @@ func TestValidator_Handle(t *testing.T) {
 				core.Name("hello"),
 				core.Namespace("world"),
 				core.Label(csmetadata.ManagedByKey, csmetadata.ManagedByValue),
-				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
+				csmetadata.WithManagementMode(csmetadata.ManagementEnabled),
 				core.Annotation(csmetadata.ResourceManagerKey, repoSyncManagerAnnotation("videostore", repoSyncName)),
 				setRules([]rbacv1.PolicyRule{
 					{
@@ -174,7 +174,7 @@ func TestValidator_Handle(t *testing.T) {
 			newObj: k8sobjects.RoleObject(
 				core.Name("hello"),
 				core.Namespace("world"),
-				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
+				csmetadata.WithManagementMode(csmetadata.ManagementEnabled),
 				setRules([]rbacv1.PolicyRule{
 					{
 						APIGroups: []string{""},
@@ -221,7 +221,7 @@ func TestValidator_Handle(t *testing.T) {
 			oldObj: k8sobjects.RoleObject(
 				core.Name("hello"),
 				core.Namespace("world"),
-				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
+				csmetadata.WithManagementMode(csmetadata.ManagementEnabled),
 				setRules([]rbacv1.PolicyRule{
 					{
 						APIGroups: []string{""},
@@ -279,7 +279,7 @@ func TestValidator_Handle(t *testing.T) {
 			oldObj: k8sobjects.RoleObject(
 				core.Name("hello"),
 				core.Namespace("world"),
-				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
+				csmetadata.WithManagementMode(csmetadata.ManagementEnabled),
 				setRules([]rbacv1.PolicyRule{
 					{
 						APIGroups: []string{""},
@@ -308,7 +308,7 @@ func TestValidator_Handle(t *testing.T) {
 				core.Name("hello"),
 				core.Namespace("world"),
 				core.Label(csmetadata.ManagedByKey, csmetadata.ManagedByValue),
-				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
+				csmetadata.WithManagementMode(csmetadata.ManagementEnabled),
 				core.Annotation(csmetadata.ResourceIDKey, "rbac.authorization.k8s.io_role_world_hello"),
 				setRules([]rbacv1.PolicyRule{
 					{
@@ -328,7 +328,7 @@ func TestValidator_Handle(t *testing.T) {
 				core.Name("hello"),
 				core.Namespace("world"),
 				core.Label(csmetadata.ManagedByKey, csmetadata.ManagedByValue),
-				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
+				csmetadata.WithManagementMode(csmetadata.ManagementEnabled),
 				core.Annotation(csmetadata.ResourceIDKey, "rbac.authorization.k8s.io_role_world_hello"),
 				setRules([]rbacv1.PolicyRule{
 					{
@@ -348,7 +348,7 @@ func TestValidator_Handle(t *testing.T) {
 				core.Name("hello"),
 				core.Namespace("world"),
 				core.Label(csmetadata.ManagedByKey, csmetadata.ManagedByValue),
-				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
+				csmetadata.WithManagementMode(csmetadata.ManagementEnabled),
 				core.Annotation(csmetadata.ResourceIDKey, "rbac.authorization.k8s.io_role_world_hello"),
 				setRules([]rbacv1.PolicyRule{
 					{
@@ -364,7 +364,7 @@ func TestValidator_Handle(t *testing.T) {
 				core.Namespace("world"),
 				core.Label(csmetadata.ManagedByKey, csmetadata.ManagedByValue),
 				core.Label("acme.com/foo", "bar"),
-				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
+				csmetadata.WithManagementMode(csmetadata.ManagementEnabled),
 				core.Annotation(csmetadata.ResourceIDKey, "rbac.authorization.k8s.io_role_world_hello"),
 				setRules([]rbacv1.PolicyRule{
 					{
@@ -383,7 +383,7 @@ func TestValidator_Handle(t *testing.T) {
 				core.Name("hello"),
 				core.Namespace("world"),
 				core.Label(csmetadata.ManagedByKey, csmetadata.ManagedByValue),
-				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
+				csmetadata.WithManagementMode(csmetadata.ManagementEnabled),
 				core.Annotation(csmetadata.ResourceIDKey, "rbac.authorization.k8s.io_role_world_hello"),
 				setRules([]rbacv1.PolicyRule{
 					{
@@ -398,7 +398,7 @@ func TestValidator_Handle(t *testing.T) {
 				core.Name("hello"),
 				core.Namespace("world"),
 				core.Label(csmetadata.ManagedByKey, csmetadata.ManagedByValue),
-				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
+				csmetadata.WithManagementMode(csmetadata.ManagementEnabled),
 				core.Annotation(csmetadata.ResourceIDKey, "rbac.authorization.k8s.io_role_world_hello"),
 				setRules([]rbacv1.PolicyRule{
 					{
@@ -418,7 +418,7 @@ func TestValidator_Handle(t *testing.T) {
 				core.Name("hello"),
 				core.Namespace("world"),
 				core.Label(csmetadata.ManagedByKey, csmetadata.ManagedByValue),
-				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
+				csmetadata.WithManagementMode(csmetadata.ManagementEnabled),
 				core.Annotation(csmetadata.ResourceIDKey, "rbac.authorization.k8s.io_role_world_hello"),
 				setRules([]rbacv1.PolicyRule{
 					{
@@ -433,7 +433,7 @@ func TestValidator_Handle(t *testing.T) {
 				core.Name("hello"),
 				core.Namespace("world"),
 				// Removed managed-by label
-				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
+				csmetadata.WithManagementMode(csmetadata.ManagementEnabled),
 				core.Annotation(csmetadata.ResourceIDKey, "rbac.authorization.k8s.io_role_world_hello"),
 				setRules([]rbacv1.PolicyRule{
 					{
@@ -453,7 +453,7 @@ func TestValidator_Handle(t *testing.T) {
 				core.Name("hello"),
 				core.Namespace("world"),
 				core.Label(csmetadata.ManagedByKey, csmetadata.ManagedByValue),
-				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
+				csmetadata.WithManagementMode(csmetadata.ManagementEnabled),
 				setRules([]rbacv1.PolicyRule{
 					{
 						APIGroups: []string{""},
@@ -467,7 +467,7 @@ func TestValidator_Handle(t *testing.T) {
 				core.Name("hello"),
 				core.Namespace("world"),
 				// Removed managed-by label
-				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
+				csmetadata.WithManagementMode(csmetadata.ManagementEnabled),
 				setRules([]rbacv1.PolicyRule{
 					{
 						APIGroups: []string{""},
@@ -484,7 +484,7 @@ func TestValidator_Handle(t *testing.T) {
 			newObj: k8sobjects.ResourceGroupObject(
 				core.Name("repo-sync"),
 				core.Namespace("bookstore"),
-				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
+				csmetadata.WithManagementMode(csmetadata.ManagementEnabled),
 				core.Label(common.InventoryLabel, applier.InventoryID("repo-sync", "bookstore"))),
 			user: bob(),
 			deny: metav1.StatusReasonForbidden,
@@ -494,7 +494,7 @@ func TestValidator_Handle(t *testing.T) {
 			oldObj: k8sobjects.ResourceGroupObject(
 				core.Name("repo-sync"),
 				core.Namespace("bookstore"),
-				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
+				csmetadata.WithManagementMode(csmetadata.ManagementEnabled),
 				core.Label(common.InventoryLabel, applier.InventoryID("repo-sync", "bookstore"))),
 			user: bob(),
 			deny: metav1.StatusReasonForbidden,
@@ -504,12 +504,12 @@ func TestValidator_Handle(t *testing.T) {
 			oldObj: k8sobjects.ResourceGroupObject(
 				core.Name("repo-sync"),
 				core.Namespace("bookstore"),
-				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
+				csmetadata.WithManagementMode(csmetadata.ManagementEnabled),
 				core.Label(common.InventoryLabel, applier.InventoryID("repo-sync", "bookstore"))),
 			newObj: k8sobjects.ResourceGroupObject(
 				core.Name("repo-sync"),
 				core.Namespace("bookstore"),
-				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
+				csmetadata.WithManagementMode(csmetadata.ManagementEnabled),
 				core.Label(common.InventoryLabel, applier.InventoryID("repo-sync", "bookstore")),
 				core.Label("acme.com/foo", "bar")),
 			user: bob(),
@@ -520,7 +520,7 @@ func TestValidator_Handle(t *testing.T) {
 			newObj: k8sobjects.ResourceGroupObject(
 				core.Name("user-created"),
 				core.Namespace("bookstore"),
-				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled)),
+				csmetadata.WithManagementMode(csmetadata.ManagementEnabled)),
 			user: bob(),
 		},
 		{
@@ -528,7 +528,7 @@ func TestValidator_Handle(t *testing.T) {
 			oldObj: k8sobjects.ResourceGroupObject(
 				core.Name("user-created"),
 				core.Namespace("bookstore"),
-				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled)),
+				csmetadata.WithManagementMode(csmetadata.ManagementEnabled)),
 			user: bob(),
 		},
 		{
@@ -536,42 +536,42 @@ func TestValidator_Handle(t *testing.T) {
 			oldObj: k8sobjects.ResourceGroupObject(
 				core.Name("user-created"),
 				core.Namespace("bookstore"),
-				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled)),
+				csmetadata.WithManagementMode(csmetadata.ManagementEnabled)),
 			newObj: k8sobjects.ResourceGroupObject(
 				core.Name("user-created"),
 				core.Namespace("bookstore"),
-				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
+				csmetadata.WithManagementMode(csmetadata.ManagementEnabled),
 				core.Label("acme.com/foo", "bar")),
 			user: bob(),
 		},
 		{
 			name: "Bob manually modifies lifecycle annotation of an object, whose configmanagement.gke.io/managed annotation is set to enabled, but whose configsync.gke.io/resource-id annotation is unset",
 			oldObj: k8sobjects.RoleObject(
-				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
+				csmetadata.WithManagementMode(csmetadata.ManagementEnabled),
 				core.Annotation(csmetadata.LifecycleMutationAnnotation, csmetadata.IgnoreMutation)),
 			newObj: k8sobjects.RoleObject(
-				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
+				csmetadata.WithManagementMode(csmetadata.ManagementEnabled),
 				core.Annotation(csmetadata.LifecycleMutationAnnotation, "other")),
 		},
 		{
 			name: "Bob manually modifies lifecycle annotation of an object, whose configsync.gke.io/resource-id annotation is incorrect",
 			oldObj: k8sobjects.RoleObject(
-				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
+				csmetadata.WithManagementMode(csmetadata.ManagementEnabled),
 				core.Annotation(csmetadata.ResourceIDKey, "rbac.authorization.k8s.io_role_world_hello"),
 				core.Annotation(csmetadata.LifecycleMutationAnnotation, csmetadata.IgnoreMutation)),
 			newObj: k8sobjects.RoleObject(
-				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
+				csmetadata.WithManagementMode(csmetadata.ManagementEnabled),
 				core.Annotation(csmetadata.ResourceIDKey, "rbac.authorization.k8s.io_role_world_hello"),
 				core.Annotation(csmetadata.LifecycleMutationAnnotation, "other")),
 		},
 		{
 			name: "Bob manually modifies lifecycle annotation of a managed object",
 			oldObj: k8sobjects.RoleObject(
-				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
+				csmetadata.WithManagementMode(csmetadata.ManagementEnabled),
 				core.Annotation(csmetadata.ResourceIDKey, "rbac.authorization.k8s.io_role_default-name"),
 				core.Annotation(csmetadata.LifecycleMutationAnnotation, csmetadata.IgnoreMutation)),
 			newObj: k8sobjects.RoleObject(
-				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
+				csmetadata.WithManagementMode(csmetadata.ManagementEnabled),
 				core.Annotation(csmetadata.ResourceIDKey, "rbac.authorization.k8s.io_role_default-name"),
 				core.Annotation(csmetadata.LifecycleMutationAnnotation, "other")),
 			deny: metav1.StatusReasonForbidden,
@@ -579,10 +579,10 @@ func TestValidator_Handle(t *testing.T) {
 		{
 			name: "Bob manually adds lifecycle annotation",
 			oldObj: k8sobjects.RoleObject(
-				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
+				csmetadata.WithManagementMode(csmetadata.ManagementEnabled),
 				core.Annotation(csmetadata.ResourceIDKey, "rbac.authorization.k8s.io_role_default-name")),
 			newObj: k8sobjects.RoleObject(
-				core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementEnabled),
+				csmetadata.WithManagementMode(csmetadata.ManagementEnabled),
 				core.Annotation(csmetadata.ResourceIDKey, "rbac.authorization.k8s.io_role_default-name"),
 				core.Annotation(csmetadata.LifecycleMutationAnnotation, csmetadata.IgnoreMutation)),
 			deny: metav1.StatusReasonForbidden,

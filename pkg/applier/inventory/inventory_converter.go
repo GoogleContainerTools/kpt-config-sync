@@ -153,7 +153,7 @@ func (ic *UnstructuredInventoryConverter) InventoryToUnstructured(fromObj *unstr
 	core.SetLabel(toObj, metadata.SyncNamespaceLabel, ic.syncNamespace)
 	core.SetLabel(toObj, metadata.SyncNameLabel, ic.syncName)
 	core.SetLabel(toObj, metadata.SyncKindLabel, ic.syncKind)
-	core.SetAnnotation(toObj, metadata.ResourceManagementKey, metadata.ResourceManagementEnabled)
+	core.SetAnnotation(toObj, metadata.ManagementModeAnnotationKey, metadata.ManagementEnabled.String())
 	core.SetAnnotation(toObj, metadata.StatusModeAnnotationKey, ic.statusMode.String())
 
 	if len(objs) == 0 { // Unset resources

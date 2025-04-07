@@ -52,7 +52,7 @@ func IsManager(scope declared.Scope, syncName string, obj client.Object) bool {
 // CanManage returns true if the given reconciler is allowed to perform the
 // specified operation on the specified resource object.
 func CanManage(scope declared.Scope, syncName string, obj client.Object, op admissionv1.Operation) bool {
-	if !differ.ManagementEnabled(obj) {
+	if !metadata.IsManagementEnabled(obj) {
 		// Not managed
 		return true
 	}

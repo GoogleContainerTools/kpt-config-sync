@@ -861,7 +861,7 @@ func TestHierarchical(t *testing.T) {
 			objs: []ast.FileObject{
 				k8sobjects.Repo(),
 				k8sobjects.Namespace("namespaces/foo",
-					core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementDisabled)),
+					csmetadata.WithManagementMode(csmetadata.ManagementDisabled)),
 				k8sobjects.RoleAtPath("namespaces/foo/role.yaml",
 					core.Namespace("foo")),
 			},
@@ -1234,7 +1234,7 @@ func TestUnstructured(t *testing.T) {
 					},
 					"foo/validator.yaml",
 					core.Namespace("foo"),
-					core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementDisabled)),
+					csmetadata.WithManagementMode(csmetadata.ManagementDisabled)),
 			},
 			want: []ast.FileObject{
 				k8sobjects.Namespace("namespaces/foo",
@@ -1249,7 +1249,7 @@ func TestUnstructured(t *testing.T) {
 					"foo/validator.yaml",
 					core.Namespace("foo"),
 					core.Label(csmetadata.DeclaredVersionLabel, "v1alpha1"),
-					core.Annotation(csmetadata.ResourceManagementKey, csmetadata.ResourceManagementDisabled),
+					csmetadata.WithManagementMode(csmetadata.ManagementDisabled),
 					core.Annotation(csmetadata.SourcePathAnnotationKey, dir+"/foo/validator.yaml")),
 			},
 		},

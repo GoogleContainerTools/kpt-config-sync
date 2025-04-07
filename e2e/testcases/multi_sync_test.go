@@ -822,7 +822,7 @@ func TestControllerValidationErrors(t *testing.T) {
 		nt.Must(nomostest.DeleteObjectsAndWait(nt, rsInvalidSecretRef))
 	})
 	nt.WaitForRepoSyncStalledError(rsInvalidSecretRef.Namespace, rsInvalidSecretRef.Name, "Validation",
-		fmt.Sprintf(`The managed secret name "%s-%s" is invalid: must be no more than %d characters. To fix it, update '.spec.git.secretRef.name'`,
+		fmt.Sprintf(`the managed secret name "%s-%s" is invalid: must be no more than %d characters. To fix it, update '.spec.git.secretRef.name'`,
 			core.NsReconcilerName(rsInvalidSecretRef.Namespace, rsInvalidSecretRef.Name), veryLongName, validation.DNS1123SubdomainMaxLength))
 }
 

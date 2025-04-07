@@ -20,7 +20,7 @@ set -euox pipefail
 hnc_enabled="$(kubectl get configmanagements.configmanagement.gke.io config-management -o=jsonpath="{.spec.hierarchyController.enabled}" --ignore-not-found)"
 
 if [[ "${hnc_enabled}" == "true" ]]; then
-  echo "Hierarchy Controller is enabled on the ConfigManagement object. It must be disabled before migrating."
+  echo "hierarchy Controller is enabled on the ConfigManagement object. It must be disabled before migrating."
   echo "This can be done by unsetting the spec.hierarchyController field on ConfigManagement."
   exit 1
 fi

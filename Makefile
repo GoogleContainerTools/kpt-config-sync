@@ -38,19 +38,19 @@ GO_DIR := $(OUTPUT_DIR)/go
 
 # Base image used for all golang containers
 # Uses trusted google-built golang image
-GOLANG_IMAGE_VERSION := 1.23.4
+GOLANG_IMAGE_VERSION := 1.24.2
 GOLANG_IMAGE := google-go.pkg.dev/golang:$(GOLANG_IMAGE_VERSION)
 # Base image used for debian containers
-# When updating you can use this command: 
-# gcloud container images list-tags gcr.io/gke-release/debian-base --filter="tags:bookworm*" 
+# When updating you can use this command:
+# gcloud container images list-tags gcr.io/gke-release/debian-base --filter="tags:bookworm*"
 DEBIAN_BASE_IMAGE := gcr.io/gke-release/debian-base:bookworm-v1.0.4-gke.5
 # Base image used for gcloud install, primarily for test images.
 # We use -slim for a smaller base image where we can choose which components to install.
 # https://cloud.google.com/sdk/docs/downloads-docker#docker_image_options
-GCLOUD_IMAGE_VERSION := 513.0.0
+GCLOUD_IMAGE_VERSION := 517.0.0
 GCLOUD_IMAGE := gcr.io/google.com/cloudsdktool/google-cloud-cli:$(GCLOUD_IMAGE_VERSION)-slim
 # Base image used for docker cli install, primarily used for test images.
-DOCKER_CLI_IMAGE_VERSION := 20.10.14
+DOCKER_CLI_IMAGE_VERSION := 20.10..24
 DOCKER_CLI_IMAGE := gcr.io/cloud-builders/docker:$(DOCKER_CLI_IMAGE_VERSION)
 
 # Directory containing installed go binaries.
@@ -72,7 +72,7 @@ CRANE := $(BIN_DIR)/crane
 # End vendored tools
 
 # golangci-lint is GPL, so it must not be vendored.
-GOLANGCI_LINT_VERSION := v1.63.4
+GOLANGCI_LINT_VERSION := v2.0.2
 GOLANGCI_LINT := $(BIN_DIR)/golangci-lint
 
 KUSTOMIZE_VERSION := v5.4.2-gke.0

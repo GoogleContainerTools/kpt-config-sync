@@ -47,7 +47,7 @@ func TestStatusEnabledAndDisabled(t *testing.T) {
 	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(),
 		configsync.RootSyncName, configsync.ControllerNamespace,
 		testwatcher.WatchPredicates(
-			testpredicates.HasAnnotation(metadata.StatusModeKey, metadata.StatusEnabled),
+			testpredicates.HasAnnotation(metadata.StatusModeAnnotationKey, metadata.StatusEnabled.String()),
 			resourceGroupHasStatus,
 			testpredicates.HasLabel(common.InventoryLabel, id),
 		),
@@ -61,7 +61,7 @@ func TestStatusEnabledAndDisabled(t *testing.T) {
 	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(),
 		configsync.RootSyncName, configsync.ControllerNamespace,
 		testwatcher.WatchPredicates(
-			testpredicates.HasAnnotation(metadata.StatusModeKey, metadata.StatusDisabled),
+			testpredicates.HasAnnotation(metadata.StatusModeAnnotationKey, metadata.StatusDisabled.String()),
 			testpredicates.ResourceGroupHasNoStatus(),
 			testpredicates.HasLabel(common.InventoryLabel, id),
 		),
@@ -76,7 +76,7 @@ func TestStatusEnabledAndDisabled(t *testing.T) {
 	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(),
 		configsync.RootSyncName, configsync.ControllerNamespace,
 		testwatcher.WatchPredicates(
-			testpredicates.HasAnnotation(metadata.StatusModeKey, metadata.StatusDisabled),
+			testpredicates.HasAnnotation(metadata.StatusModeAnnotationKey, metadata.StatusDisabled.String()),
 			testpredicates.ResourceGroupHasNoStatus(),
 			testpredicates.HasLabel(common.InventoryLabel, id),
 		),
@@ -89,7 +89,7 @@ func TestStatusEnabledAndDisabled(t *testing.T) {
 	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(),
 		configsync.RootSyncName, configsync.ControllerNamespace,
 		testwatcher.WatchPredicates(
-			testpredicates.HasAnnotation(metadata.StatusModeKey, metadata.StatusEnabled),
+			testpredicates.HasAnnotation(metadata.StatusModeAnnotationKey, metadata.StatusEnabled.String()),
 			resourceGroupHasStatus,
 			testpredicates.HasLabel(common.InventoryLabel, id),
 		),

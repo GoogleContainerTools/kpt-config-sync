@@ -34,6 +34,7 @@ import (
 	"kpt.dev/configsync/pkg/importer/filesystem"
 	"kpt.dev/configsync/pkg/importer/filesystem/cmpath"
 	"kpt.dev/configsync/pkg/importer/reader"
+	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/parse"
 	"kpt.dev/configsync/pkg/parse/events"
 	"kpt.dev/configsync/pkg/reconciler/finalizer"
@@ -113,7 +114,7 @@ type Options struct {
 	// SyncDir is the relative path to the configurations in the source.
 	SyncDir cmpath.Relative
 	// StatusMode controls the kpt applier to inject the actuation status data or not
-	StatusMode string
+	StatusMode metadata.StatusMode
 	// ReconcileTimeout controls the reconcile/prune Timeout in kpt applier
 	ReconcileTimeout string
 	// APIServerTimeout is the client-side timeout used for talking to the API server

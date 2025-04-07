@@ -909,7 +909,7 @@ func (r *RepoSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 			ociConfig:         rs.Spec.Oci,
 			helmConfig:        reposync.GetHelmBase(rs.Spec.Helm),
 			pollPeriod:        r.reconcilerPollingPeriod.String(),
-			statusMode:        rs.Spec.SafeOverride().StatusMode,
+			statusMode:        metadata.StatusMode(rs.Spec.SafeOverride().StatusMode),
 			reconcileTimeout:  v1beta1.GetReconcileTimeout(rs.Spec.SafeOverride().ReconcileTimeout),
 			apiServerTimeout:  v1beta1.GetAPIServerTimeout(rs.Spec.SafeOverride().APIServerTimeout),
 			requiresRendering: r.isAnnotationValueTrue(ctx, rs, metadata.RequiresRenderingAnnotationKey),

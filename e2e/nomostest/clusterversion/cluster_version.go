@@ -90,13 +90,13 @@ func ParseClusterVersion(version string) (ClusterVersion, error) {
 	if len(match) > 4 && match[4] != "" {
 		cv.Minor, err = strconv.Atoi(match[4])
 		if err != nil {
-			return cv, fmt.Errorf("Invalid regex result: minor version must be an integer: %v", err)
+			return cv, fmt.Errorf("invalid regex result: minor version must be an integer: %v", err)
 		}
 	}
 	if len(match) > 6 && match[6] != "" {
 		cv.Patch, err = strconv.Atoi(match[6])
 		if err != nil {
-			return cv, fmt.Errorf("Invalid regex result: patch version must be an integer: %v", err)
+			return cv, fmt.Errorf("invalid regex result: patch version must be an integer: %v", err)
 		}
 	}
 	if len(match) > 7 && match[7] != "" {

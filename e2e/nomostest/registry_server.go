@@ -21,7 +21,6 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -218,13 +217,13 @@ func registryServer() []client.Object {
 
 // This service exposes a port which maps to the nginx endpoint which uses HTTPS
 // but does not require authentication
-func registryService() *v1.Service {
+func registryService() *corev1.Service {
 	service := k8sobjects.ServiceObject(
 		core.Name(TestRegistryServer),
 		core.Namespace(TestRegistryNamespace),
 	)
 	service.Spec.Selector = testRegistryServerSelector()
-	service.Spec.Ports = []v1.ServicePort{
+	service.Spec.Ports = []corev1.ServicePort{
 		{Name: "https", Port: 443, TargetPort: intstr.FromInt(RegistryHTTPSPort)},
 	}
 	return service
@@ -232,19 +231,19 @@ func registryService() *v1.Service {
 
 // This service exposes a port which maps to the nginx endpoint which requires
 // authentication (using contrived username/password)
-func registryServiceAuthenticated() *v1.Service {
+func registryServiceAuthenticated() *corev1.Service {
 	service := k8sobjects.ServiceObject(
 		core.Name(TestRegistryServerAuthenticated),
 		core.Namespace(TestRegistryNamespace),
 	)
 	service.Spec.Selector = testRegistryServerSelector()
-	service.Spec.Ports = []v1.ServicePort{
+	service.Spec.Ports = []corev1.ServicePort{
 		{Name: "https", Port: 443, TargetPort: intstr.FromInt(RegistryHTTPSAuthPort)},
 	}
 	return service
 }
 
-func nginxConfigMap() *v1.ConfigMap {
+func nginxConfigMap() *corev1.ConfigMap {
 	configMap := k8sobjects.ConfigMapObject(core.Name(nginxConfigMapName),
 		core.Namespace(TestRegistryNamespace),
 		core.Labels(testRegistryServerSelector()),
@@ -268,20 +267,20 @@ func registryDeployment() *appsv1.Deployment {
 	deployment.Spec = appsv1.DeploymentSpec{
 		Strategy: appsv1.DeploymentStrategy{Type: appsv1.RecreateDeploymentStrategyType},
 		Selector: &metav1.LabelSelector{MatchLabels: testRegistryServerSelector()},
-		Template: v1.PodTemplateSpec{
+		Template: corev1.PodTemplateSpec{
 			ObjectMeta: metav1.ObjectMeta{
 				Labels: testRegistryServerSelector(),
 				Annotations: map[string]string{
 					safeToEvictAnnotation: "false",
 				},
 			},
-			Spec: v1.PodSpec{
-				Volumes: []v1.Volume{
+			Spec: corev1.PodSpec{
+				Volumes: []corev1.Volume{
 					{ // Volume for storing nginx config
 						Name: nginxConfVolume,
-						VolumeSource: v1.VolumeSource{
-							ConfigMap: &v1.ConfigMapVolumeSource{
-								LocalObjectReference: v1.LocalObjectReference{
+						VolumeSource: corev1.VolumeSource{
+							ConfigMap: &corev1.ConfigMapVolumeSource{
+								LocalObjectReference: corev1.LocalObjectReference{
 									Name: nginxConfigMapName,
 								},
 							},
@@ -289,8 +288,8 @@ func registryDeployment() *appsv1.Deployment {
 					},
 					{ // Volume for storing credentials
 						Name: credVolume,
-						VolumeSource: v1.VolumeSource{
-							EmptyDir: &v1.EmptyDirVolumeSource{},
+						VolumeSource: corev1.VolumeSource{
+							EmptyDir: &corev1.EmptyDirVolumeSource{},
 						},
 					},
 					{ // Volume for storing CA cert
@@ -300,23 +299,23 @@ func registryDeployment() *appsv1.Deployment {
 						},
 					},
 				},
-				InitContainers: []v1.Container{
+				InitContainers: []corev1.Container{
 					{ // bootstrap credentials for e2e testing usage
 						Image:   testing.HTTPDImage,
 						Name:    "httpd",
 						Command: []string{"htpasswd"},
 						// use contrived username/password for testing
 						Args: []string{"-Bbc", htpasswdFile, RegistryUsername, RegistryPassword},
-						VolumeMounts: []v1.VolumeMount{
+						VolumeMounts: []corev1.VolumeMount{
 							{Name: credVolume, MountPath: authDir},
 						},
 					},
 				},
-				Containers: []v1.Container{
+				Containers: []corev1.Container{
 					{ // nginx reverse proxy for testing with token auth (username/password)
 						Image: testing.NginxImage,
 						Name:  "nginx",
-						VolumeMounts: []v1.VolumeMount{
+						VolumeMounts: []corev1.VolumeMount{
 							{
 								Name:      nginxConfVolume,
 								MountPath: "/etc/nginx/nginx.conf",
@@ -331,7 +330,7 @@ func registryDeployment() *appsv1.Deployment {
 							},
 							{Name: "ssl-cert", MountPath: "/etc/nginx/ssl"},
 						},
-						Ports: []v1.ContainerPort{
+						Ports: []corev1.ContainerPort{
 							{ContainerPort: RegistryHTTPSPort},
 							{ContainerPort: RegistryHTTPSAuthPort},
 						},
@@ -339,10 +338,10 @@ func registryDeployment() *appsv1.Deployment {
 					{ // registry server. See https://distribution.github.io/distribution/about/deploying/
 						Image: testing.RegistryImage,
 						Name:  "registry",
-						Ports: []v1.ContainerPort{ // expose port for pushing images and public registry testing
+						Ports: []corev1.ContainerPort{ // expose port for pushing images and public registry testing
 							{ContainerPort: RegistryHTTPPort},
 						},
-						Env: []v1.EnvVar{
+						Env: []corev1.EnvVar{
 							{ // Enable deleting image blobs
 								Name:  "REGISTRY_STORAGE_DELETE_ENABLED",
 								Value: "true",

@@ -49,7 +49,6 @@ import (
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reposync"
-	"kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/testerrors"
 	"kpt.dev/configsync/pkg/util"
@@ -1390,7 +1389,7 @@ func TestRepoSyncValidateCACertSecret(t *testing.T) {
 		err  string
 	}{
 		"caCertSecretRef set but missing Secret": {
-			err: fmt.Sprintf("Secret %s not found, create one to allow client connections with CA certificate", caCertSecret),
+			err: fmt.Sprintf("secret %s not found, create one to allow client connections with CA certificate", caCertSecret),
 		},
 		"caCertSecretRef set but invalid Secret": {
 			objs: []client.Object{
@@ -2245,7 +2244,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	if err := fakeClient.Create(ctx, rs2, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
-	if err := fakeClient.Create(ctx, rg2, client.FieldOwner(fake.FieldManager)); err != nil {
+	if err := fakeClient.Create(ctx, rg2, client.FieldOwner(syncerFake.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName2); err != nil {
@@ -2310,7 +2309,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	if err := fakeClient.Create(ctx, rs3, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
-	if err := fakeClient.Create(ctx, rg3, client.FieldOwner(fake.FieldManager)); err != nil {
+	if err := fakeClient.Create(ctx, rg3, client.FieldOwner(syncerFake.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName3); err != nil {
@@ -2374,7 +2373,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	if err := fakeClient.Create(ctx, secret4, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
-	if err := fakeClient.Create(ctx, rg4, client.FieldOwner(fake.FieldManager)); err != nil {
+	if err := fakeClient.Create(ctx, rg4, client.FieldOwner(syncerFake.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName4); err != nil {
@@ -2438,7 +2437,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	if err := fakeClient.Create(ctx, secret5, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
-	if err := fakeClient.Create(ctx, rg5, client.FieldOwner(fake.FieldManager)); err != nil {
+	if err := fakeClient.Create(ctx, rg5, client.FieldOwner(syncerFake.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName5); err != nil {
@@ -4141,7 +4140,7 @@ func TestPopulateRepoContainerEnvs(t *testing.T) {
 			repoSync: repoSyncWithGit(reposyncNs, reposyncName,
 				reposyncSecretType("invalid-secret-type"),
 			),
-			expectedErr: fmt.Errorf("Unrecognized secret type \"invalid-secret-type\""),
+			expectedErr: fmt.Errorf("unrecognized secret type \"invalid-secret-type\""),
 		},
 	}
 

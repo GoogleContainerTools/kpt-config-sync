@@ -39,7 +39,6 @@ import (
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/syncer/differ"
 	"kpt.dev/configsync/pkg/syncer/metrics"
-	"kpt.dev/configsync/pkg/util"
 	nomosutil "kpt.dev/configsync/pkg/util"
 	"sigs.k8s.io/cli-utils/pkg/apis/actuation"
 	"sigs.k8s.io/cli-utils/pkg/apply"
@@ -581,7 +580,7 @@ func (s *supervisor) applyInner(ctx context.Context, eventHandler func(Event), d
 		case event.ErrorType:
 			klog.Info(e.ErrorEvent)
 			err := e.ErrorEvent.Err
-			if util.IsRequestTooLargeError(err) {
+			if nomosutil.IsRequestTooLargeError(err) {
 				err = largeResourceGroupError(err, coreIDFromInventoryInfo(s.invInfo))
 			}
 			sendErrorEvent(err, eventHandler)
@@ -671,7 +670,7 @@ func (s *supervisor) destroyInner(ctx context.Context, eventHandler func(Event))
 		case event.ErrorType:
 			klog.Info(e.ErrorEvent)
 			err := e.ErrorEvent.Err
-			if util.IsRequestTooLargeError(err) {
+			if nomosutil.IsRequestTooLargeError(err) {
 				err = largeResourceGroupError(err, coreIDFromInventoryInfo(s.invInfo))
 			}
 			sendErrorEvent(err, eventHandler)

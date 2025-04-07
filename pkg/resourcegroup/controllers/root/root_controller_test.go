@@ -31,7 +31,6 @@ import (
 	"kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/testcontroller"
 	"sigs.k8s.io/cli-utils/pkg/common"
-	controllerruntime "sigs.k8s.io/controller-runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -50,7 +49,7 @@ func TestRootReconciler(t *testing.T) {
 
 	// Configure controller-manager to log to the test logger
 	testLogger := testcontroller.NewTestLogger(t)
-	controllerruntime.SetLogger(testLogger)
+	ctrl.SetLogger(testLogger)
 
 	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
 	// channel when it is finished.

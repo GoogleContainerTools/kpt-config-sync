@@ -35,7 +35,6 @@ import (
 	"kpt.dev/configsync/pkg/remediator/queue"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/syncer/syncertest"
-	syncertestfake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	testingfake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/testerrors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -136,7 +135,7 @@ func TestWorker_Run_Remediates(t *testing.T) {
 
 			d := makeDeclared(t, randomCommitHash(), tc.declaredObjs...)
 			w := NewWorker(declared.RootScope, configsync.RootSyncName, c.Applier(configsync.FieldManager), q, d,
-				syncertestfake.NewConflictHandler(), syncertestfake.NewFightHandler())
+				testingfake.NewConflictHandler(), testingfake.NewFightHandler())
 
 			ctx, cancel := context.WithCancel(ctx)
 			defer cancel()
@@ -241,7 +240,7 @@ func TestWorker_Run_RemediatesExisting(t *testing.T) {
 
 	d := makeDeclared(t, randomCommitHash(), declaredObjs...)
 	w := NewWorker(declared.RootScope, configsync.RootSyncName, c.Applier(configsync.FieldManager), q, d,
-		syncertestfake.NewConflictHandler(), syncertestfake.NewFightHandler())
+		testingfake.NewConflictHandler(), testingfake.NewFightHandler())
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -350,7 +349,7 @@ func TestWorker_ProcessNextObject(t *testing.T) {
 
 			d := makeDeclared(t, randomCommitHash(), tc.declared...)
 			w := NewWorker(declared.RootScope, configsync.RootSyncName, c.Applier(configsync.FieldManager), q, d,
-				syncertestfake.NewConflictHandler(), syncertestfake.NewFightHandler())
+				testingfake.NewConflictHandler(), testingfake.NewFightHandler())
 
 			for _, obj := range tc.toProcess {
 				if err := w.processNextObject(context.Background()); err != nil {
@@ -371,7 +370,7 @@ func TestWorker_Run_CancelledWhenEmpty(t *testing.T) {
 	c := testingfake.NewClient(t, core.Scheme)
 	d := makeDeclared(t, randomCommitHash()) // no resources declared
 	w := NewWorker(declared.RootScope, configsync.RootSyncName, c.Applier(configsync.FieldManager), q, d,
-		syncertestfake.NewConflictHandler(), syncertestfake.NewFightHandler())
+		testingfake.NewConflictHandler(), testingfake.NewFightHandler())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -439,7 +438,7 @@ func TestWorker_Run_CancelledWhenNotEmpty(t *testing.T) {
 	d := makeDeclared(t, randomCommitHash(), declaredObjs...)
 	a := &testingfake.Applier{Client: c, FieldManager: configsync.FieldManager}
 	w := NewWorker(declared.RootScope, configsync.RootSyncName, a, q, d,
-		syncertestfake.NewConflictHandler(), syncertestfake.NewFightHandler())
+		testingfake.NewConflictHandler(), testingfake.NewFightHandler())
 
 	// Run worker in the background
 	doneCh := make(chan struct{})
@@ -513,7 +512,7 @@ func TestWorker_Refresh(t *testing.T) {
 			queue: fakeQueue{
 				element: k8sobjects.UnstructuredObject(kinds.Role(), core.Name(name), core.Namespace(namespace)),
 			},
-			client:      syncertestfake.NewClient(t, scheme),
+			client:      testingfake.NewClient(t, scheme),
 			want:        k8sobjects.UnstructuredObject(kinds.Role(), core.Name(name), core.Namespace(namespace)),
 			wantDeleted: true,
 			wantErr:     nil,
@@ -524,7 +523,7 @@ func TestWorker_Refresh(t *testing.T) {
 				element: k8sobjects.UnstructuredObject(kinds.Role(), core.Name(name), core.Namespace(namespace),
 					core.Annotation("foo", "bar")),
 			},
-			client: syncertestfake.NewClient(t, scheme,
+			client: testingfake.NewClient(t, scheme,
 				k8sobjects.RoleObject(core.Name(name), core.Namespace(namespace),
 					core.Annotation("foo", "qux"))),
 			want: k8sobjects.UnstructuredObject(kinds.Role(), core.Name(name), core.Namespace(namespace),
@@ -538,7 +537,7 @@ func TestWorker_Refresh(t *testing.T) {
 			queue: fakeQueue{
 				element: k8sobjects.UnstructuredObject(kinds.Role(), core.Name(name), core.Namespace(namespace)),
 			},
-			client:      syncertestfake.NewErrorClient(errors.New("some error")),
+			client:      testingfake.NewErrorClient(errors.New("some error")),
 			want:        k8sobjects.UnstructuredObject(kinds.Role(), core.Name(name), core.Namespace(namespace)),
 			wantDeleted: false,
 			wantErr: status.APIServerError(errors.New("some error"),

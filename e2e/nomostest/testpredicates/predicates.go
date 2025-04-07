@@ -35,7 +35,6 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testkubeclient"
 	"kpt.dev/configsync/e2e/nomostest/testlogger"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
-	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	kptv1alpha1 "kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
@@ -249,7 +248,7 @@ func HasExactlyImage(containerName, expectImageName, expectImageTag, expectImage
 			expectImage += "@" + expectImageDigest
 		}
 		if !strings.Contains(container.Image, expectImage) {
-			return fmt.Errorf("Expected %q container image contains %q, however the actual image is %q", container.Name, expectImage, container.Image)
+			return fmt.Errorf("expected %q container image contains %q, however the actual image is %q", container.Name, expectImage, container.Image)
 		}
 		return nil
 	}
@@ -514,10 +513,10 @@ func DeploymentHasEnvVar(containerName, key, value string) Predicate {
 				if e.Value == value {
 					return nil
 				}
-				return fmt.Errorf("Container %q has the wrong value for environment variable %q. Expected : %q, actual %q", containerName, key, value, e.Value)
+				return fmt.Errorf("container %q has the wrong value for environment variable %q. Expected : %q, actual %q", containerName, key, value, e.Value)
 			}
 		}
-		return fmt.Errorf("Container %q does not contain environment variable %q", containerName, key)
+		return fmt.Errorf("container %q does not contain environment variable %q", containerName, key)
 	}
 }
 
@@ -538,7 +537,7 @@ func DeploymentMissingEnvVar(containerName, key string) Predicate {
 		}
 		for _, e := range container.Env {
 			if e.Name == key {
-				return fmt.Errorf("Container %q should not have environment variable %q", containerName, key)
+				return fmt.Errorf("container %q should not have environment variable %q", containerName, key)
 			}
 		}
 		return nil
@@ -558,7 +557,7 @@ func DeploymentHasContainer(containerName string) Predicate {
 		}
 		container := ContainerByName(d, containerName)
 		if container == nil {
-			return fmt.Errorf("Deployment %s should have container %s",
+			return fmt.Errorf("deployment %s should have container %s",
 				core.ObjectNamespacedName(o), containerName)
 		}
 		return nil
@@ -578,7 +577,7 @@ func DeploymentMissingContainer(containerName string) Predicate {
 		}
 		container := ContainerByName(d, containerName)
 		if container != nil {
-			return fmt.Errorf("Deployment %s should not have container %s",
+			return fmt.Errorf("deployment %s should not have container %s",
 				core.ObjectNamespacedName(o), containerName)
 		}
 		return nil
@@ -870,7 +869,7 @@ func RoleBindingHasName(expectedName string) Predicate {
 		}
 		actualName := o.(*rbacv1.RoleBinding).RoleRef.Name
 		if actualName != expectedName {
-			return fmt.Errorf("Expected name: %s, got: %s", expectedName, actualName)
+			return fmt.Errorf("expected name: %s, got: %s", expectedName, actualName)
 		}
 		return nil
 	}
@@ -1328,11 +1327,11 @@ func ResourceGroupHasNoStatus() Predicate {
 		if obj == nil {
 			return ErrObjectNotFound
 		}
-		rg, ok := obj.(*v1alpha1.ResourceGroup)
+		rg, ok := obj.(*kptv1alpha1.ResourceGroup)
 		if !ok {
-			return WrongTypeErr(obj, &v1alpha1.ResourceGroup{})
+			return WrongTypeErr(obj, &kptv1alpha1.ResourceGroup{})
 		}
-		emptyStatus := v1alpha1.ResourceGroupStatus{}
+		emptyStatus := kptv1alpha1.ResourceGroupStatus{}
 		if !equality.Semantic.DeepEqual(emptyStatus, rg.Status) {
 			return fmt.Errorf("found non-empty status in %s:\nDiff (- Expected, + Found)\n%s",
 				kinds.ObjectSummary(rg), log.AsYAMLDiff(emptyStatus, rg.Status))
@@ -1343,11 +1342,11 @@ func ResourceGroupHasNoStatus() Predicate {
 
 // ResourceGroupStatusEquals checks that the RootSync's spec.override matches
 // the specified RootSyncOverrideSpec.
-func ResourceGroupStatusEquals(expected v1alpha1.ResourceGroupStatus) Predicate {
+func ResourceGroupStatusEquals(expected kptv1alpha1.ResourceGroupStatus) Predicate {
 	return func(obj client.Object) error {
-		rg, ok := obj.(*v1alpha1.ResourceGroup)
+		rg, ok := obj.(*kptv1alpha1.ResourceGroup)
 		if !ok {
-			return WrongTypeErr(obj, &v1alpha1.ResourceGroup{})
+			return WrongTypeErr(obj, &kptv1alpha1.ResourceGroup{})
 		}
 		found := rg.DeepCopy().Status
 		// Set LastTransitionTime to nil value for comparisons
@@ -1383,9 +1382,9 @@ func ResourceGroupStatusEquals(expected v1alpha1.ResourceGroupStatus) Predicate 
 // ResourceGroupHasObjects checks whether the objects are in the ResourceGroup's inventory.
 func ResourceGroupHasObjects(objects []client.Object) Predicate {
 	return func(obj client.Object) error {
-		rg, ok := obj.(*v1alpha1.ResourceGroup)
+		rg, ok := obj.(*kptv1alpha1.ResourceGroup)
 		if !ok {
-			return WrongTypeErr(obj, &v1alpha1.ResourceGroup{})
+			return WrongTypeErr(obj, &kptv1alpha1.ResourceGroup{})
 		}
 
 		rgResources := toManagedResourceIDs(rg)
@@ -1399,7 +1398,7 @@ func ResourceGroupHasObjects(objects []client.Object) Predicate {
 	}
 }
 
-func toManagedResourceIDs(rg *v1alpha1.ResourceGroup) map[core.ID]struct{} {
+func toManagedResourceIDs(rg *kptv1alpha1.ResourceGroup) map[core.ID]struct{} {
 	rgResources := make(map[core.ID]struct{}, len(rg.Spec.Resources))
 	for _, res := range rg.Spec.Resources {
 		id := core.ID{
@@ -1417,9 +1416,9 @@ func toManagedResourceIDs(rg *v1alpha1.ResourceGroup) map[core.ID]struct{} {
 // ResourceGroupMissingObjects checks whether the objects are NOT in the ResourceGroup's inventory.
 func ResourceGroupMissingObjects(objects []client.Object) Predicate {
 	return func(obj client.Object) error {
-		rg, ok := obj.(*v1alpha1.ResourceGroup)
+		rg, ok := obj.(*kptv1alpha1.ResourceGroup)
 		if !ok {
-			return WrongTypeErr(obj, &v1alpha1.ResourceGroup{})
+			return WrongTypeErr(obj, &kptv1alpha1.ResourceGroup{})
 		}
 
 		rgResources := toManagedResourceIDs(rg)
@@ -1485,7 +1484,7 @@ func Or(logger *testlogger.TestLogger, predicates ...Predicate) Predicate {
 			logger.Infof("None of the predicates were satisfied (%d)", len(predicates))
 			return multiErr
 		}
-		return fmt.Errorf("No predicates were specified")
+		return fmt.Errorf("no predicates were specified")
 	}
 }
 

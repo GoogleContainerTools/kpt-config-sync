@@ -44,7 +44,7 @@ func (p *LoggingTokenProvider) Token(ctx context.Context) (*goauth.Token, error)
 		return nil, err
 	}
 
-	if p.getTokenExpiry() == token.Expiry {
+	if p.getTokenExpiry().Equal(token.Expiry) {
 		return token, nil // no change
 	}
 

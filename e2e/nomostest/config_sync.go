@@ -380,7 +380,7 @@ func multiRepoObjects(objects []client.Object, opts ...func(obj client.Object) e
 		filtered = append(filtered, obj)
 	}
 	if !found {
-		return nil, fmt.Errorf("Reconciler Manager ConfigMap not found")
+		return nil, fmt.Errorf("reconciler Manager ConfigMap not found")
 	}
 	return filtered, nil
 }
@@ -579,7 +579,7 @@ func setReconcilerDebugMode(obj client.Object) error {
 	key := "deployment.yaml"
 	deploymentYAML, found := cm.Data[key]
 	if !found {
-		return fmt.Errorf("Reconciler Manager ConfigMap has no deployment.yaml entry")
+		return fmt.Errorf("reconciler Manager ConfigMap has no deployment.yaml entry")
 	}
 
 	// The Deployment YAML for Reconciler deployments is a raw YAML string embedded
@@ -604,7 +604,7 @@ func setReconcilerDebugMode(obj client.Object) error {
 		}
 	}
 	if !found {
-		return fmt.Errorf("Unable to set debug mode for reconciler")
+		return fmt.Errorf("unable to set debug mode for reconciler")
 	}
 
 	cm.Data[key] = strings.Join(lines, "\n")

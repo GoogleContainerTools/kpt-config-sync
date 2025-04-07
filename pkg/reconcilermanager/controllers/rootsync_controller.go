@@ -873,7 +873,7 @@ func (r *RootSyncReconciler) validateSourceSpec(ctx context.Context, rs *v1beta1
 func (r *RootSyncReconciler) validateRoleRefs(roleRefs []v1beta1.RootSyncRoleRef) error {
 	for _, roleRef := range roleRefs {
 		if roleRef.Kind == "Role" && roleRef.Namespace == "" {
-			return fmt.Errorf("namespace must be provided for roleRef with kind Role.")
+			return fmt.Errorf("namespace must be provided for roleRef with kind Role")
 		}
 	}
 	return nil
@@ -930,9 +930,9 @@ func (r *RootSyncReconciler) validateRootSecret(ctx context.Context, rootSync *v
 		r.client)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			return fmt.Errorf("Secret %s not found: create one to allow client authentication", v1beta1.GetSecretName(rootSync.Spec.SecretRef))
+			return fmt.Errorf("secret %s not found: create one to allow client authentication", v1beta1.GetSecretName(rootSync.Spec.SecretRef))
 		}
-		return fmt.Errorf("Secret %s get failed: %w", v1beta1.GetSecretName(rootSync.Spec.SecretRef), err)
+		return fmt.Errorf("secret %s get failed: %w", v1beta1.GetSecretName(rootSync.Spec.SecretRef), err)
 	}
 
 	_, r.knownHostExist = secret.Data[KnownHostsKey]
@@ -1129,12 +1129,12 @@ func (r *RootSyncReconciler) updateSyncStatus(ctx context.Context, rs *v1beta1.R
 		return nil
 	}, client.FieldOwner(reconcilermanager.FieldManager))
 	if err != nil {
-		return updated, fmt.Errorf("Sync status update failed: %w", err)
+		return updated, fmt.Errorf("sync status update failed: %w", err)
 	}
 	if updated {
-		r.Logger(ctx).Info("Sync status update successful")
+		r.Logger(ctx).Info("sync status update successful")
 	} else {
-		r.Logger(ctx).V(5).Info("Sync status update skipped: no change")
+		r.Logger(ctx).V(5).Info("sync status update skipped: no change")
 	}
 	return updated, nil
 }

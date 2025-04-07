@@ -1,4 +1,4 @@
-# Copyright 2022 Google LLC
+# Copyright 2025 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,31 +11,42 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-run:
-  timeout: 5m
+version: "2"
 
 linters:
   enable:
-  - gofmt
-  - goimports
-  - revive
-  - staticcheck
-  - unconvert
-  - misspell
-
-issues:
-  exclude-rules:
-    - linters:
-        - revive
-      # TODO: Add package comments and remove this exception
-      text: "should have a package comment"
-    - linters:
-        - revive
-      # Config Sync uses errors for human-readable status messages.
-      text: "error strings should not be capitalized"
-    # ResourceGroup apis currently don't conform to linter
-    # TODO: Refactor ResourceGroup api comments and remove this exception
-    - path: 'pkg/api/kpt.dev/(.+)'
-      linters:
-      - revive
+    - misspell
+    - revive
+    - unconvert
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - revive
+        text: should have a package comment
+      - linters:
+          - revive
+        text: error strings should not be capitalized
+      - linters:
+          - revive
+        path: pkg/api/kpt.dev/(.+)
+      - linters:
+          - staticcheck
+        text: QF1008 # could remove embedded field
+    paths:
+    - vendor
+    - .output
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+    - vendor
+    - .output

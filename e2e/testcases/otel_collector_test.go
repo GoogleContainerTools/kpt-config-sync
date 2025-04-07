@@ -40,7 +40,6 @@ import (
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
-	"kpt.dev/configsync/pkg/metrics"
 	csmetrics "kpt.dev/configsync/pkg/metrics"
 	rgmetrics "kpt.dev/configsync/pkg/resourcegroup/controllers/metrics"
 )
@@ -343,7 +342,7 @@ func TestOtelCollectorGCMLabelAggregation(t *testing.T) {
 			descriptor := fmt.Sprintf("%s/%s", GCMMetricPrefix, metricType)
 			it := listMetricInGCM(ctx, nt, client, startTime, descriptor)
 			err = multierr.Append(err, validateMetricInGCM(nt, it, descriptor, nt.ClusterName,
-				metricDoesNotHaveLabel(metrics.KeyCommit.Name())))
+				metricDoesNotHaveLabel(csmetrics.KeyCommit.Name())))
 		}
 		return err
 	})

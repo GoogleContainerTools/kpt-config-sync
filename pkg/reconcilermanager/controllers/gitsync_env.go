@@ -349,7 +349,7 @@ func gitSyncEnvs(_ context.Context, opts options) ([]corev1.EnvVar, error) {
 			})
 		}
 	default:
-		return nil, fmt.Errorf("Unrecognized secret type %q", opts.secretType)
+		return nil, fmt.Errorf("unrecognized secret type %q", opts.secretType)
 	}
 	return result, nil
 }

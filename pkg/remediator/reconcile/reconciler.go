@@ -29,7 +29,6 @@ import (
 	"kpt.dev/configsync/pkg/status"
 	syncerclient "kpt.dev/configsync/pkg/syncer/client"
 	"kpt.dev/configsync/pkg/syncer/reconcile"
-	syncerreconcile "kpt.dev/configsync/pkg/syncer/reconcile"
 	"kpt.dev/configsync/pkg/syncer/reconcile/fight"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -45,7 +44,7 @@ type reconciler struct {
 	scope    declared.Scope
 	syncName string
 	// applier is where to write the declared configuration to.
-	applier syncerreconcile.Applier
+	applier reconcile.Applier
 	// declared is the threadsafe in-memory representation of declared configuration.
 	declared *declared.Resources
 
@@ -57,7 +56,7 @@ type reconciler struct {
 func newReconciler(
 	scope declared.Scope,
 	syncName string,
-	applier syncerreconcile.Applier,
+	applier reconcile.Applier,
 	declared *declared.Resources,
 	conflictHandler conflict.Handler,
 	fightHandler fight.Handler,

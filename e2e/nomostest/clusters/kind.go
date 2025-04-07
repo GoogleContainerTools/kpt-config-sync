@@ -155,7 +155,7 @@ func asKindVersion(version string) (KindVersion, error) {
 	if ok {
 		return kindVersion, nil
 	}
-	return "", fmt.Errorf("Unrecognized Kind version: %q", version)
+	return "", fmt.Errorf("unrecognized Kind version: %q", version)
 }
 
 func createKindCluster(p *cluster.Provider, name, kcfgPath string, version KindVersion) error {

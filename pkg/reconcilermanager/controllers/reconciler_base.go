@@ -563,9 +563,9 @@ func (r *reconcilerBase) validateCACertSecret(ctx context.Context, namespace, ca
 			r.client)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				return fmt.Errorf("Secret %s not found, create one to allow client connections with CA certificate", caCertSecretRefName)
+				return fmt.Errorf("secret %s not found, create one to allow client connections with CA certificate", caCertSecretRefName)
 			}
-			return fmt.Errorf("Secret %s get failed: %w", caCertSecretRefName, err)
+			return fmt.Errorf("secret %s get failed: %w", caCertSecretRefName, err)
 		}
 		if _, ok := secret.Data[CACertSecretKey]; !ok {
 			return fmt.Errorf("caCertSecretRef was set, but %s key is not present in %s Secret", CACertSecretKey, caCertSecretRefName)
@@ -846,7 +846,7 @@ func (r *reconcilerBase) patchSyncMetadata(ctx context.Context, rs client.Object
 	err := r.client.Patch(ctx, rs, client.RawPatch(types.MergePatchType, []byte(patch)),
 		client.FieldOwner(reconcilermanager.FieldManager))
 	if err != nil {
-		return true, fmt.Errorf("Sync metadata update failed: %w", err)
+		return true, fmt.Errorf("sync metadata update failed: %w", err)
 	}
 	r.Logger(ctx).V(3).Info("Patching object metadata successful",
 		logFieldObjectRef, syncKey.String(),

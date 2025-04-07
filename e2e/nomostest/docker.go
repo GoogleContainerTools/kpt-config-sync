@@ -105,7 +105,7 @@ func checkImage(image string) error {
 	url := fmt.Sprintf("http://%s", image)
 	resp, err := http.Get(url)
 	if err != nil {
-		return fmt.Errorf("Failed to check for image %s in registry: %s", image, err)
+		return fmt.Errorf("failed to check for image %s in registry: %s", image, err)
 	}
 
 	defer func() {
@@ -113,7 +113,7 @@ func checkImage(image string) error {
 	}()
 	_, err = io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("Failed to read response for image %s in registry: %s", image, err)
+		return fmt.Errorf("failed to read response for image %s in registry: %s", image, err)
 	}
 	return nil
 }

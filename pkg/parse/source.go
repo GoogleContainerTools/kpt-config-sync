@@ -205,7 +205,7 @@ func listFiles(dir cmpath.Absolute, ignore map[string]bool) ([]cmpath.Absolute, 
 func hydratedError(errorFile, label string) hydrate.HydrationError {
 	content, err := os.ReadFile(errorFile)
 	if err != nil {
-		return hydrate.NewInternalError(fmt.Errorf("Unable to load %s: %v. Please check %s logs for more info: kubectl logs -n %s -l %s -c %s",
+		return hydrate.NewInternalError(fmt.Errorf("unable to load %s: %v. Please check %s logs for more info: kubectl logs -n %s -l %s -c %s",
 			errorFile, err, reconcilermanager.HydrationController, configsync.ControllerNamespace, label, reconcilermanager.HydrationController))
 	}
 	if len(content) == 0 {

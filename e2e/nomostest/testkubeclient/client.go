@@ -49,7 +49,7 @@ type KubeClient struct {
 func (tc *KubeClient) ObjectTypeMustExist(o client.Object) error {
 	gvks, _, _ := tc.Client.Scheme().ObjectKinds(o)
 	if len(gvks) == 0 {
-		return fmt.Errorf("unknown type %T %v. Add it to nomostest.newScheme().", o, o.GetObjectKind().GroupVersionKind())
+		return fmt.Errorf("unknown type %T %v. Add it to nomostest.newScheme()", o, o.GetObjectKind().GroupVersionKind())
 	}
 	return nil
 }

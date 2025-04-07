@@ -55,12 +55,13 @@ var nsReconcilerKey = types.NamespacedName{
 func repoSyncWithAuth(ns, name string, auth configsync.AuthType, sourceType configsync.SourceType, opts ...core.MetaMutator) *v1beta1.RepoSync {
 	result := k8sobjects.RepoSyncObjectV1Beta1(ns, name, opts...)
 	result.Spec.SourceType = sourceType
-	if sourceType == configsync.GitSource {
+	switch sourceType {
+	case configsync.GitSource:
 		result.Spec.Git = &v1beta1.Git{
 			Auth:      auth,
 			SecretRef: &v1beta1.SecretReference{Name: gitSecretName},
 		}
-	} else if sourceType == configsync.HelmSource {
+	case configsync.HelmSource:
 		result.Spec.Helm = &v1beta1.HelmRepoSync{HelmBase: v1beta1.HelmBase{
 			Auth:      auth,
 			SecretRef: &v1beta1.SecretReference{Name: helmSecretName},

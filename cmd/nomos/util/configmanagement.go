@@ -216,11 +216,11 @@ func (c *ConfigManagementClient) IsHNCEnabled(ctx context.Context) (bool, error)
 func IsOssInstallation(ctx context.Context, c *ConfigManagementClient, cl client.Client, ck *kubernetes.Clientset) (bool, error) {
 	v, cmErr := c.Version(ctx)
 	if cmErr != nil {
-		return false, fmt.Errorf("Failed to get the ConfigManagment version: %v", cmErr)
+		return false, fmt.Errorf("failed to get the ConfigManagment version: %v", cmErr)
 	}
 	_, operatorDepErr := ck.AppsV1().Deployments(configmanagement.ControllerNamespace).Get(ctx, ACMOperatorDeployment, metav1.GetOptions{})
 	if operatorDepErr != nil && !apierrors.IsNotFound(operatorDepErr) {
-		return false, fmt.Errorf("Failed to get the Operator Deployment: %v", operatorDepErr)
+		return false, fmt.Errorf("failed to get the Operator Deployment: %v", operatorDepErr)
 	}
 
 	if v != NotInstalledMsg && operatorDepErr == nil {
@@ -231,6 +231,6 @@ func IsOssInstallation(ctx context.Context, c *ConfigManagementClient, cl client
 	if rootSyncCRDErr == nil {
 		return true, nil
 	}
-	err := fmt.Errorf("Failed to get the RootSync CRD: %v", rootSyncCRDErr)
+	err := fmt.Errorf("failed to get the RootSync CRD: %v", rootSyncCRDErr)
 	return false, err
 }

@@ -322,7 +322,7 @@ func createRootSync(ctx context.Context, cm *util.ConfigManagementClient) (*v1be
 		return nil, err
 	}
 	if syncRepo == "" {
-		return nil, fmt.Errorf("Git sync repo is empty")
+		return nil, fmt.Errorf("git sync repo is empty")
 	}
 
 	var secretRefName string

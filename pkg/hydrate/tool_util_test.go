@@ -28,7 +28,7 @@ func TestValidateTool(t *testing.T) {
 		{
 			name:        "tool version older than recommended",
 			version:     "{kustomize/v3.6.5  2021-05-20T20:52:40Z  }",
-			expectedErr: fmt.Sprintf(`The current kustomize version is "3.6.5". The recommended version is %s. Please upgrade to the %s+ for compatibility.`, KustomizeVersion, KustomizeVersion),
+			expectedErr: fmt.Sprintf(`the current kustomize version is "3.6.5". The recommended version is %s. Please upgrade to the %s+ for compatibility`, KustomizeVersion, KustomizeVersion),
 		},
 		{
 			name:    "tool version is the same as recommended",

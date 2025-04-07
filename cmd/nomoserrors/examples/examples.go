@@ -49,12 +49,15 @@ import (
 	"kpt.dev/configsync/pkg/webhook/configuration"
 )
 
-// ExamplesOrDeprecated contains either a list of example errors, or that the
-// id is deprecated.
+// ExamplesOrDeprecated contains either a list of example errors, or that the id is deprecated.
+//
+//revive:disable:exported
 type ExamplesOrDeprecated struct {
 	Examples   []status.Error
 	Deprecated bool
 }
+
+//revive:enable:exported
 
 // AllExamples is a map from error codes to either example errors, or a mark that
 // the code is deprecated.
@@ -393,8 +396,8 @@ func Generate() AllExamples {
 }
 
 // Add adds the given error to the collection examples of errors.
-func (e *ExamplesOrDeprecated) Add(error status.Error) {
-	e.Examples = append(e.Examples, error)
+func (e *ExamplesOrDeprecated) Add(err status.Error) {
+	e.Examples = append(e.Examples, err)
 }
 
 // add adds example errors for a specific error code for use in documentation.

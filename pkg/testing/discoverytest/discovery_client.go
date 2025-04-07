@@ -313,7 +313,7 @@ func CRDsToAPIGroupResources(crds []*apiextensionsv1.CustomResourceDefinition) [
 				{
 					Name:         syncedCRD.Spec.Names.Plural,
 					SingularName: syncedCRD.Spec.Names.Singular,
-					Namespaced:   !(syncedCRD.Spec.Scope == apiextensionsv1.ClusterScoped),
+					Namespaced:   syncedCRD.Spec.Scope != apiextensionsv1.ClusterScoped,
 					Group:        syncedCRD.Spec.Group,
 					Version:      version.Name,
 					Kind:         syncedCRD.Spec.Names.Kind,

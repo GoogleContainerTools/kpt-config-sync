@@ -56,23 +56,23 @@ const (
 
 const (
 	// RenderingInProgress means that the configs are still being rendered by Config Sync.
-	RenderingInProgress string = "Rendering is still in progress"
+	RenderingInProgress string = "rendering is still in progress"
 
 	// RenderingSucceeded means that the configs have been rendered successfully.
-	RenderingSucceeded string = "Rendering succeeded"
+	RenderingSucceeded string = "rendering succeeded"
 
 	// RenderingFailed means that the configs have failed to be rendered.
-	RenderingFailed string = "Rendering failed"
+	RenderingFailed string = "rendering failed"
 
 	// RenderingSkipped means that the configs don't need to be rendered.
-	RenderingSkipped string = "Rendering skipped"
+	RenderingSkipped string = "rendering skipped"
 
 	// RenderingRequired means that the configs require rendering but the
 	// hydration-controller is not currently running.
-	RenderingRequired string = "Rendering required but is currently disabled"
+	RenderingRequired string = "rendering required but is currently disabled"
 	// RenderingNotRequired means that the configs do not require rendering but the
 	// hydration-controller is currently running.
-	RenderingNotRequired string = "Rendering not required but is currently enabled"
+	RenderingNotRequired string = "rendering not required but is currently enabled"
 )
 
 // ReconcileResult encapsulates the result of a reconciler.Reconcile.

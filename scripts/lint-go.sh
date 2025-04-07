@@ -29,7 +29,7 @@ if [[ "${HOME}" == "/" ]]; then
 fi
 
 echo "Running golangci-lint: "
-if ! OUT="$(golangci-lint run --exclude-use-default=false)"; then
+if ! OUT="$(golangci-lint run)"; then
   echo "${OUT}"
 
   NC=''

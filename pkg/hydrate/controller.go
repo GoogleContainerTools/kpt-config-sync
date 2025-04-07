@@ -182,9 +182,9 @@ func (h *Hydrator) hydrate(sourceCommit string, syncPath cmpath.Absolute) Hydrat
 			return NewInternalError(err)
 		}
 		if found {
-			return NewActionableError(fmt.Errorf("Kustomization config file is missing from the sync directory %s. "+
+			return NewActionableError(fmt.Errorf("kustomization config file is missing from the sync directory %s. "+
 				"To fix, either add kustomization.yaml in the sync directory to trigger the rendering process, "+
-				"or remove kustomizaiton.yaml from all sub directories to skip rendering.", osSyncPath))
+				"or remove kustomizaiton.yaml from all sub directories to skip rendering", osSyncPath))
 		}
 		klog.V(5).Infof("no rendering is needed because of no Kustomization config file in the source configs with commit %s", sourceCommit)
 		if err := os.RemoveAll(h.HydratedRoot.OSPath()); err != nil {

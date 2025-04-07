@@ -133,7 +133,7 @@ func getImageVersion(deployment *v1.Deployment) (string, error) {
 
 	reconcilerManagerImage := strings.Split(container.Image, ":")
 	if len(reconcilerManagerImage) <= 1 {
-		return "", fmt.Errorf("Failed to get valid image version from: %s", reconcilerManagerImage)
+		return "", fmt.Errorf("failed to get valid image version from: %s", reconcilerManagerImage)
 	}
 	return reconcilerManagerImage[1], nil
 }

@@ -105,7 +105,7 @@ func GetProjectID(g *GitlabClient, name string) (string, error) {
 		"--header", fmt.Sprintf("PRIVATE-TOKEN: %s", g.privateToken)).CombinedOutput()
 
 	if err != nil {
-		return "", fmt.Errorf("Failure retrieving id for project %s: %w", name, err)
+		return "", fmt.Errorf("failure retrieving id for project %s: %w", name, err)
 	}
 
 	var response []interface{}
@@ -120,18 +120,18 @@ func GetProjectID(g *GitlabClient, name string) (string, error) {
 
 	// the assumption is that our project name is unique, so we'll get exactly 1 result
 	if len(response) < 1 {
-		return "", fmt.Errorf("Project with name %s: %w", name, err)
+		return "", fmt.Errorf("project with name %s: %w", name, err)
 	}
 	if len(response) > 1 {
-		return "", fmt.Errorf("Project with name %s is not unique: %w", name, err)
+		return "", fmt.Errorf("project with name %s is not unique: %w", name, err)
 	}
 	m := response[0].(map[string]interface{})
 	if x, found := m["id"]; found {
 		if float, ok = x.(float64); !ok {
-			return "", fmt.Errorf("Project id in the respose isn't a float: %w", err)
+			return "", fmt.Errorf("project id in the respose isn't a float: %w", err)
 		}
 	} else {
-		return "", fmt.Errorf("Project id wasn't found in the response: %w", err)
+		return "", fmt.Errorf("project id wasn't found in the response: %w", err)
 	}
 	id := fmt.Sprintf("%.0f", float)
 
@@ -206,7 +206,7 @@ func (g *GitlabClient) GetObsoleteRepos() ([]string, error) {
 			"--header", fmt.Sprintf("PRIVATE-TOKEN: %s", g.privateToken)).CombinedOutput()
 
 		if err != nil {
-			return result, fmt.Errorf("Failure retrieving obsolete repos: %w", err)
+			return result, fmt.Errorf("failure retrieving obsolete repos: %w", err)
 		}
 
 		if len(out) <= 2 {
@@ -227,12 +227,12 @@ func (g *GitlabClient) GetObsoleteRepos() ([]string, error) {
 				var id float64
 				var ok bool
 				if id, ok = flt.(float64); !ok {
-					return result, fmt.Errorf("Project id in the response isn't a float: %w", err)
+					return result, fmt.Errorf("project id in the response isn't a float: %w", err)
 				}
 				result = append(result, fmt.Sprintf("%.0f", id))
 
 			} else {
-				return result, fmt.Errorf("Project id wasn't found in the response: %w", err)
+				return result, fmt.Errorf("project id wasn't found in the response: %w", err)
 			}
 		}
 	}

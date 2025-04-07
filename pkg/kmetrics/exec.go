@@ -54,7 +54,7 @@ func RunKustomizeBuild(ctx context.Context, sendMetrics bool, inputDir string, f
 	err := func() error {
 		b, kustPath = readKustomizeFileBytes(inputDir)
 		if b == nil {
-			return fmt.Errorf("Error: unable to find one of 'kustomization.yaml', 'kustomization.yml' or 'Kustomization' in directory")
+			return fmt.Errorf("unable to find one of 'kustomization.yaml', 'kustomization.yml' or 'Kustomization' in directory")
 		}
 
 		var kt *types.Kustomization

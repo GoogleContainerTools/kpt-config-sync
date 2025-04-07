@@ -43,7 +43,7 @@ func migrateConfigManagement(ctx context.Context, cc *status.ClusterClient, kube
 	if isHNCEnabled, err := cc.ConfigManagement.IsHNCEnabled(ctx); err != nil {
 		return err
 	} else if isHNCEnabled {
-		return fmt.Errorf("Hierarchy Controller is enabled on the ConfigManagement object. It must be disabled before migrating.")
+		return fmt.Errorf("hierarchy Controller is enabled on the ConfigManagement object. It must be disabled before migrating")
 	}
 
 	fmt.Printf("Removing ConfigManagement on cluster %q ...\n", kubeCtx)

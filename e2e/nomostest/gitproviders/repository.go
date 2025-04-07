@@ -235,7 +235,7 @@ func (g *ReadWriteRepository) InitialCommit(sourceFormat configsync.SourceFormat
 		// It is an error for unstructured repos to include the Repo object.
 		g.Logger.Infof("[repo %s] Setting repo format to %s", path.Base(g.Root), sourceFormat)
 	default:
-		return fmt.Errorf("Unrecognized SourceFormat: %q", sourceFormat)
+		return fmt.Errorf("unrecognized SourceFormat: %q", sourceFormat)
 	}
 	g.Format = sourceFormat
 	return g.CommitAndPush("initial commit")

@@ -70,7 +70,7 @@ func validateSecretData(auth configsync.AuthType, secret *corev1.Secret) error {
 		}
 		hasAppID := hasDataKey(GitSecretGithubAppApplicationID)
 		hasClientID := hasDataKey(GitSecretGithubAppClientID)
-		if !(hasAppID || hasClientID) {
+		if !hasAppID && !hasClientID {
 			return fmt.Errorf("git secretType was set to %q but one of (%s, %s) is not present in %v secret",
 				auth, GitSecretGithubAppApplicationID, GitSecretGithubAppClientID, secret.Name)
 		}

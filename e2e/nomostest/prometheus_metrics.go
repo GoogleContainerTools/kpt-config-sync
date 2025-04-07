@@ -30,7 +30,6 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/kinds"
-	"kpt.dev/configsync/pkg/metrics"
 	ocmetrics "kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/util/log"
 )
@@ -191,7 +190,7 @@ func ValidateStandardMetricsForSync(nt *NT, syncKind testmetrics.SyncKind, syncL
 // ReconcilerManagerMetrics returns a MetricsPredicate that validates the
 // ReconcileDurationView metric.
 func ReconcilerManagerMetrics(nt *NT) MetricsPredicate {
-	nt.Logger.Debugf("[METRICS] Expecting reconciler-manager reconciling status: %s", metrics.StatusSuccess)
+	nt.Logger.Debugf("[METRICS] Expecting reconciler-manager reconciling status: %s", ocmetrics.StatusSuccess)
 	return func(ctx context.Context, v1api prometheusv1.API) error {
 		metricName := ocmetrics.ReconcileDurationView.Name
 		// ReconcileDurationView is a distribution. Query count to aggregate.
@@ -219,15 +218,15 @@ func ReconcilerSourceMetrics(nt *NT, syncLabels prometheusmodel.LabelSet, commit
 // ReconcilerSyncMetrics returns a MetricsPredicate that validates the
 // LastApplyTimestampView, ApplyDurationView, and LastSyncTimestampView metrics.
 func ReconcilerSyncMetrics(nt *NT, syncLabels prometheusmodel.LabelSet, commitHash string) MetricsPredicate {
-	nt.Logger.Debugf("[METRICS] Expecting last apply & sync status (commit: %s): %s", commitHash, metrics.StatusSuccess)
+	nt.Logger.Debugf("[METRICS] Expecting last apply & sync status (commit: %s): %s", commitHash, ocmetrics.StatusSuccess)
 	return func(ctx context.Context, v1api prometheusv1.API) error {
 		var err error
 		err = multierr.Append(err, metricLastApplyTimestampHasStatus(ctx, nt, v1api,
-			syncLabels, commitHash, metrics.StatusSuccess))
+			syncLabels, commitHash, ocmetrics.StatusSuccess))
 		err = multierr.Append(err, metricApplyDurationViewHasStatus(ctx, nt, v1api,
-			syncLabels, commitHash, metrics.StatusSuccess))
+			syncLabels, commitHash, ocmetrics.StatusSuccess))
 		err = multierr.Append(err, metricLastSyncTimestampHasStatus(ctx, nt, v1api,
-			syncLabels, commitHash, metrics.StatusSuccess))
+			syncLabels, commitHash, ocmetrics.StatusSuccess))
 		return err
 	}
 }
@@ -293,20 +292,20 @@ func ReconcilerErrorMetrics(nt *NT, syncLabels prometheusmodel.LabelSet, commitH
 // ReconcilerSyncSuccess returns a MetricsPredicate that validates that the
 // latest commit synced successfully for the specified reconciler and commit.
 func ReconcilerSyncSuccess(nt *NT, syncLabels prometheusmodel.LabelSet, commitHash string) MetricsPredicate {
-	nt.Logger.Debugf("[METRICS] Expecting last sync status (commit: %s): %s", commitHash, metrics.StatusSuccess)
+	nt.Logger.Debugf("[METRICS] Expecting last sync status (commit: %s): %s", commitHash, ocmetrics.StatusSuccess)
 	return func(ctx context.Context, v1api prometheusv1.API) error {
 		return metricLastSyncTimestampHasStatus(ctx, nt, v1api,
-			syncLabels, commitHash, metrics.StatusSuccess)
+			syncLabels, commitHash, ocmetrics.StatusSuccess)
 	}
 }
 
 // ReconcilerSyncError returns a MetricsPredicate that validates that the
 // latest commit sync errored for the specified reconciler and commit.
 func ReconcilerSyncError(nt *NT, syncLabels prometheusmodel.LabelSet, commitHash string) MetricsPredicate {
-	nt.Logger.Debugf("[METRICS] Expecting last sync status (commit: %s): %s", commitHash, metrics.StatusError)
+	nt.Logger.Debugf("[METRICS] Expecting last sync status (commit: %s): %s", commitHash, ocmetrics.StatusError)
 	return func(ctx context.Context, v1api prometheusv1.API) error {
 		return metricLastSyncTimestampHasStatus(ctx, nt, v1api,
-			syncLabels, commitHash, metrics.StatusError)
+			syncLabels, commitHash, ocmetrics.StatusError)
 	}
 }
 

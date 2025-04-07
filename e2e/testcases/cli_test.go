@@ -1403,7 +1403,7 @@ func TestNomosMigrate(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	assert.Contains(t, string(out), "Hierarchy Controller is enabled on the ConfigManagement object. It must be disabled before migrating.")
+	assert.Contains(t, string(out), "hierarchy Controller is enabled on the ConfigManagement object. It must be disabled before migrating.")
 
 	nt.T.Log("Disabling HNC")
 	cmObj = &unstructured.Unstructured{
@@ -1813,7 +1813,7 @@ func TestACMUninstallScript(t *testing.T) {
 	if err == nil {
 		nt.T.Fatal("Expected uninstall script to return non-zero exit code")
 	}
-	assert.Contains(t, string(out), "Hierarchy Controller is enabled on the ConfigManagement object. It must be disabled before migrating.")
+	assert.Contains(t, string(out), "hierarchy Controller is enabled on the ConfigManagement object. It must be disabled before migrating.")
 
 	nt.T.Log("Disabling HNC")
 	cmObj = &unstructured.Unstructured{

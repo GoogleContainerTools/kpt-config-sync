@@ -40,8 +40,7 @@ func partitionObjs(objs []client.Object) ([]client.Object, []client.Object) {
 	var enabled []client.Object
 	var disabled []client.Object
 	for _, obj := range objs {
-		// i.e. managed by Config Sync
-		if obj.GetAnnotations()[metadata.ResourceManagementKey] == metadata.ResourceManagementDisabled {
+		if metadata.IsManagementDisabled(obj) {
 			disabled = append(disabled, obj)
 		} else {
 			enabled = append(enabled, obj)

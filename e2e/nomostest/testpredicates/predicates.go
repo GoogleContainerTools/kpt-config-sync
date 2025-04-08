@@ -414,6 +414,12 @@ func NotPendingDeletion(o client.Object) error {
 	return fmt.Errorf("object has non-nil deletionTimestamp")
 }
 
+// IsManagementEnabled returns a Predicate that succeeds when the managed
+// annotation is present and enabled.
+func IsManagementEnabled() Predicate {
+	return HasAnnotation(metadata.ManagementModeAnnotationKey, metadata.ManagementEnabled.String())
+}
+
 // HasAllNomosMetadata ensures that the object contains the expected
 // nomos labels and annotations.
 func HasAllNomosMetadata() Predicate {
@@ -425,7 +431,7 @@ func HasAllNomosMetadata() Predicate {
 		labels := metadata.SyncerLabels()
 		predicates := []Predicate{
 			HasAllAnnotationKeys(annotationKeys...),
-			HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+			HasAnnotation(metadata.ManagementModeAnnotationKey, metadata.ManagementEnabled.String()),
 		}
 		for labelKey, value := range labels {
 			predicates = append(predicates, HasLabel(labelKey, value))
@@ -605,11 +611,8 @@ func IsManagedBy(scheme *runtime.Scheme, scope declared.Scope, syncName string) 
 		}
 
 		// managed is required by differ.ManagedByConfigSync
-		managedValue := core.GetAnnotation(obj, metadata.ResourceManagementKey)
-		if managedValue != metadata.ResourceManagementEnabled {
-			return fmt.Errorf("expected %s %s to be managed by configsync, but found %q=%q",
-				gvk.Kind, core.ObjectNamespacedName(obj),
-				metadata.ResourceManagementKey, managedValue)
+		if err := IsManagementEnabled()(obj); err != nil {
+			return err
 		}
 
 		// manager is required by diff.IsManager
@@ -696,11 +699,10 @@ func IsNotManaged(scheme *runtime.Scheme) Predicate {
 		}
 
 		// managed is required by differ.ManagedByConfigSync
-		managedValue := core.GetAnnotation(obj, metadata.ResourceManagementKey)
-		if managedValue == metadata.ResourceManagementEnabled {
+		if metadata.IsManagementEnabled(obj) {
 			return fmt.Errorf("expected %s %s to NOT have management enabled, but found %q=%q",
 				gvk.Kind, core.ObjectNamespacedName(obj),
-				metadata.ResourceManagementKey, managedValue)
+				metadata.ManagementModeAnnotationKey, metadata.ManagementEnabled)
 		}
 		return nil
 	}

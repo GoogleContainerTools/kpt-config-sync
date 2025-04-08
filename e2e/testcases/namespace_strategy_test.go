@@ -93,7 +93,7 @@ func TestNamespaceStrategy(t *testing.T) {
 	// assert that implicit namespace was created
 	nt.Must(nt.Validate(fooNamespace.Name, fooNamespace.Namespace, &corev1.Namespace{},
 		testpredicates.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
-		testpredicates.HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+		testpredicates.IsManagementEnabled(),
 		testpredicates.HasAnnotation(metadata.ResourceManagerKey, string(declared.RootScope)),
 	))
 	// switch mode back to explicit
@@ -104,7 +104,7 @@ func TestNamespaceStrategy(t *testing.T) {
 			// still has PreventDeletion
 			testpredicates.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
 			// management annotations should be removed
-			testpredicates.MissingAnnotation(metadata.ResourceManagementKey),
+			testpredicates.MissingAnnotation(metadata.ManagementModeAnnotationKey),
 			testpredicates.MissingAnnotation(metadata.ResourceManagerKey),
 		),
 	))
@@ -119,7 +119,7 @@ func TestNamespaceStrategy(t *testing.T) {
 			// annotation is removed.
 			// Users can still declare the annotation in the explicit namespace.
 			testpredicates.MissingAnnotation(common.LifecycleDeleteAnnotation),
-			testpredicates.HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+			testpredicates.IsManagementEnabled(),
 			testpredicates.HasAnnotation(metadata.ResourceManagerKey, string(declared.RootScope)),
 		),
 	))
@@ -237,21 +237,21 @@ func TestNamespaceStrategyMultipleRootSyncs(t *testing.T) {
 				// Users can add PreventDeletion annotation to the declared namespace
 				// if they choose, but the reconciler does not add it by default.
 				testpredicates.MissingAnnotation(common.LifecycleDeleteAnnotation),
-				testpredicates.HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+				testpredicates.IsManagementEnabled(),
 				testpredicates.HasAnnotation(metadata.ResourceManagerKey, declared.ResourceManager(declared.RootScope, rootSyncA.Name)),
 			))
 	})
 	tg.Go(func() error {
 		return nt.Watcher.WatchObject(kinds.ConfigMap(), cmX.Name, cmX.Namespace,
 			testwatcher.WatchPredicates(
-				testpredicates.HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+				testpredicates.IsManagementEnabled(),
 				testpredicates.HasAnnotation(metadata.ResourceManagerKey, declared.ResourceManager(declared.RootScope, rootSyncX.Name)),
 			))
 	})
 	tg.Go(func() error {
 		return nt.Watcher.WatchObject(kinds.ConfigMap(), cmY.Name, cmY.Namespace,
 			testwatcher.WatchPredicates(
-				testpredicates.HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+				testpredicates.IsManagementEnabled(),
 				testpredicates.HasAnnotation(metadata.ResourceManagerKey, declared.ResourceManager(declared.RootScope, rootSyncY.Name)),
 			))
 	})

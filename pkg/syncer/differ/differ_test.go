@@ -39,15 +39,15 @@ func name(s string) func(*unstructured.Unstructured) {
 	}
 }
 
-func managed(s string) func(*unstructured.Unstructured) {
+func managed(mode metadata.ManagementMode) func(*unstructured.Unstructured) {
 	return func(u *unstructured.Unstructured) {
-		core.SetAnnotation(u, metadata.ResourceManagementKey, s)
+		core.SetAnnotation(u, metadata.ManagementModeAnnotationKey, mode.String())
 	}
 }
 
 func managedByConfigSync() func(*unstructured.Unstructured) {
 	return func(u *unstructured.Unstructured) {
-		core.SetAnnotation(u, metadata.ResourceManagementKey, metadata.ResourceManagementEnabled)
+		core.SetAnnotation(u, metadata.ManagementModeAnnotationKey, metadata.ManagementEnabled.String())
 		core.SetAnnotation(u, metadata.ResourceIDKey, core.GKNN(u))
 	}
 }
@@ -86,7 +86,7 @@ func TestDiffType(t *testing.T) {
 		},
 		{
 			name:       "in repo only and unmanaged, noop",
-			declared:   buildUnstructured(managed(metadata.ResourceManagementDisabled)),
+			declared:   buildUnstructured(managed(metadata.ManagementDisabled)),
 			expectType: NoOp,
 		},
 		{
@@ -125,19 +125,19 @@ func TestDiffType(t *testing.T) {
 		},
 		{
 			name:       "in both, management disabled unmanage",
-			declared:   buildUnstructured(managed(metadata.ResourceManagementDisabled)),
-			actual:     buildUnstructured(managed(metadata.ResourceManagementEnabled)),
+			declared:   buildUnstructured(managed(metadata.ManagementDisabled)),
+			actual:     buildUnstructured(managed(metadata.ManagementEnabled)),
 			expectType: Unmanage,
 		},
 		{
 			name:       "in both, management disabled noop",
-			declared:   buildUnstructured(managed(metadata.ResourceManagementDisabled)),
+			declared:   buildUnstructured(managed(metadata.ManagementDisabled)),
 			actual:     buildUnstructured(),
 			expectType: NoOp,
 		},
 		{
 			name:       "in cluster only, does not have the `configsync.gke.io./resource-id` annotation",
-			actual:     buildUnstructured(managed(metadata.ResourceManagementEnabled)),
+			actual:     buildUnstructured(managed(metadata.ManagementEnabled)),
 			expectType: NoOp,
 		},
 		{
@@ -226,7 +226,7 @@ func TestMultipleDifftypes(t *testing.T) {
 			declared: []*unstructured.Unstructured{
 				buildUnstructured(name("foo")),
 				buildUnstructured(name("bar")),
-				buildUnstructured(name("qux"), managed(metadata.ResourceManagementDisabled)),
+				buildUnstructured(name("qux"), managed(metadata.ManagementDisabled)),
 			},
 			actuals: []*unstructured.Unstructured{
 				buildUnstructured(name("bar"), managedByConfigSync()),
@@ -249,7 +249,7 @@ func TestMultipleDifftypes(t *testing.T) {
 				},
 				"qux": {
 					Name:     "qux",
-					Declared: buildUnstructured(name("qux"), managed(metadata.ResourceManagementDisabled)),
+					Declared: buildUnstructured(name("qux"), managed(metadata.ManagementDisabled)),
 					Actual:   buildUnstructured(name("qux")),
 				},
 				"mun": {

@@ -50,9 +50,8 @@ func addAnnotationsAndLabels(objs []ast.FileObject, scope declared.Scope, syncNa
 		core.SetAnnotation(obj, metadata.ResourceIDKey, core.GKNN(obj))
 		core.SetAnnotation(obj, metadata.OwningInventoryKey, inventoryID)
 
-		value := core.GetAnnotation(obj, metadata.ResourceManagementKey)
-		if value != metadata.ResourceManagementDisabled {
-			core.SetAnnotation(obj, metadata.ResourceManagementKey, metadata.ResourceManagementEnabled)
+		if !metadata.IsManagementDisabled(obj) {
+			core.SetAnnotation(obj, metadata.ManagementModeAnnotationKey, metadata.ManagementEnabled.String())
 		}
 	}
 	return nil

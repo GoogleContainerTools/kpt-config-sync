@@ -729,8 +729,8 @@ func TestInventoryToUnstructured(t *testing.T) {
 			require.Equal(t, invNamespace, rg.GetNamespace())
 			// Set expected annotations
 			tc.wantObj.SetAnnotations(map[string]string{
-				metadata.ResourceManagementKey:   metadata.ResourceManagementEnabled,
-				metadata.StatusModeAnnotationKey: tc.statusMode.String(),
+				metadata.ManagementModeAnnotationKey: metadata.ManagementEnabled.String(),
+				metadata.StatusModeAnnotationKey:     tc.statusMode.String(),
 			})
 			// Set expected labels
 			tc.wantObj.SetLabels(map[string]string{

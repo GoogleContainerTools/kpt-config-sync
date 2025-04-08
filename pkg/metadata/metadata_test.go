@@ -63,7 +63,7 @@ func TestHasConfigSyncMetadata(t *testing.T) {
 		{
 			name: "An object with the `ResourceManagementKey` annotation",
 			obj: k8sobjects.UnstructuredObject(kinds.Deployment(), core.Name("deploy"),
-				core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled)),
+				metadata.WithManagementMode(metadata.ManagementEnabled)),
 			want: true,
 		},
 		{

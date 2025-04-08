@@ -758,12 +758,12 @@ func (s *supervisor) handleDisabledObjects(ctx context.Context, objs []client.Ob
 		handleMetrics(ctx, "unmanage", err)
 		if err != nil {
 			err = fmt.Errorf("failed to remove the Config Sync metadata from %v (%s: %s): %v",
-				id, metadata.ResourceManagementKey, metadata.ResourceManagementDisabled, err)
+				id, metadata.ManagementModeAnnotationKey, metadata.ManagementDisabled, err)
 			klog.Warning(err)
 			errs = status.Append(errs, Error(err))
 		} else {
 			klog.V(4).Infof("removed the Config Sync metadata from %v (%s: %s)",
-				id, metadata.ResourceManagementKey, metadata.ResourceManagementDisabled)
+				id, metadata.ManagementModeAnnotationKey, metadata.ManagementDisabled)
 			disabledCount++
 		}
 	}

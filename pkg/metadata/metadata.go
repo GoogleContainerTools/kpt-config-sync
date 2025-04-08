@@ -27,7 +27,7 @@ import (
 // CommonAnnotationKeys include the annotation keys used in both the mono-repo and multi-repo mode.
 var CommonAnnotationKeys = []string{
 	ClusterNameAnnotationKey,
-	ResourceManagementKey,
+	ManagementModeAnnotationKey,
 	SourcePathAnnotationKey,
 	SyncTokenAnnotationKey,
 	DeclaredFieldsKey,
@@ -53,7 +53,7 @@ var sourceAnnotations = map[string]bool{
 	NamespaceSelectorAnnotationKey:         true,
 	LegacyClusterSelectorAnnotationKey:     true,
 	ClusterNameSelectorAnnotationKey:       true,
-	ResourceManagementKey:                  true,
+	ManagementModeAnnotationKey:            true,
 	LifecycleMutationAnnotation:            true,
 	DeletionPropagationPolicyAnnotationKey: true,
 }

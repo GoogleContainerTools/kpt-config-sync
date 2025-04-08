@@ -73,9 +73,9 @@ func TestDriftKubectlApplyClusterScoped(t *testing.T) {
 	ns1Obj := &corev1.Namespace{}
 	ns1Obj.SetName("test-ns1")
 	ns1Obj.SetAnnotations(map[string]string{
-		metadata.ResourceManagementKey: metadata.ResourceManagementEnabled,
-		metadata.ResourceIDKey:         "_namespace_test-ns1",
-		metadata.ResourceManagerKey:    rootSync1Manager,
+		metadata.ManagementModeAnnotationKey: metadata.ManagementEnabled.String(),
+		metadata.ResourceIDKey:               "_namespace_test-ns1",
+		metadata.ResourceManagerKey:          rootSync1Manager,
 	})
 	ns1Obj.SetLabels(map[string]string{
 		metadata.ApplySetPartOfLabel: rootSync1ApplySetID,
@@ -101,9 +101,9 @@ func TestDriftKubectlApplyClusterScoped(t *testing.T) {
 	ns2Obj := &corev1.Namespace{}
 	ns2Obj.SetName("test-ns2")
 	ns2Obj.SetAnnotations(map[string]string{
-		metadata.ResourceManagementKey: metadata.ResourceManagementEnabled,
-		metadata.ResourceIDKey:         "_namespace_test-ns2",
-		metadata.ResourceManagerKey:    rootSync2Manager,
+		metadata.ManagementModeAnnotationKey: metadata.ManagementEnabled.String(),
+		metadata.ResourceIDKey:               "_namespace_test-ns2",
+		metadata.ResourceManagerKey:          rootSync2Manager,
 	})
 	ns2Obj.SetLabels(map[string]string{
 		metadata.ApplySetPartOfLabel: rootSync2ApplySetID,
@@ -126,7 +126,7 @@ func TestDriftKubectlApplyClusterScoped(t *testing.T) {
 	// RootSync that does not exist.
 	err = nt.Validate("test-ns2", "", &corev1.Namespace{},
 		testpredicates.HasExactlyAnnotationKeys(
-			metadata.ResourceManagementKey,
+			metadata.ManagementModeAnnotationKey,
 			metadata.ResourceIDKey,
 			metadata.ResourceManagerKey,
 			corev1.LastAppliedConfigAnnotation))
@@ -138,8 +138,8 @@ func TestDriftKubectlApplyClusterScoped(t *testing.T) {
 	ns3Obj := &corev1.Namespace{}
 	ns3Obj.SetName("test-ns3")
 	ns3Obj.SetAnnotations(map[string]string{
-		metadata.ResourceManagementKey: metadata.ResourceManagementEnabled,
-		metadata.ResourceIDKey:         "_namespace_test-ns3",
+		metadata.ManagementModeAnnotationKey: metadata.ManagementEnabled.String(),
+		metadata.ResourceIDKey:               "_namespace_test-ns3",
 	})
 	ns2Obj.SetLabels(map[string]string{
 		metadata.ApplySetPartOfLabel: rootSync2ApplySetID,
@@ -161,7 +161,7 @@ func TestDriftKubectlApplyClusterScoped(t *testing.T) {
 	// `configsync.gke.io/manager` annotation.
 	err = nt.Validate("test-ns3", "", &corev1.Namespace{},
 		testpredicates.HasExactlyAnnotationKeys(
-			metadata.ResourceManagementKey,
+			metadata.ManagementModeAnnotationKey,
 			metadata.ResourceIDKey,
 			// no manager
 			corev1.LastAppliedConfigAnnotation))
@@ -173,9 +173,9 @@ func TestDriftKubectlApplyClusterScoped(t *testing.T) {
 	ns4Obj := &corev1.Namespace{}
 	ns4Obj.SetName("test-ns4")
 	ns4Obj.SetAnnotations(map[string]string{
-		metadata.ResourceManagementKey: metadata.ResourceManagementEnabled,
-		metadata.ResourceIDKey:         "_namespace_wrong-ns4",
-		metadata.ResourceManagerKey:    rootSync1Manager,
+		metadata.ManagementModeAnnotationKey: metadata.ManagementEnabled.String(),
+		metadata.ResourceIDKey:               "_namespace_wrong-ns4",
+		metadata.ResourceManagerKey:          rootSync1Manager,
 	})
 	ns2Obj.SetLabels(map[string]string{
 		metadata.ApplySetPartOfLabel: rootSync2ApplySetID,
@@ -197,7 +197,7 @@ func TestDriftKubectlApplyClusterScoped(t *testing.T) {
 	// `configsync.gke.io/resource-id` annotation is incorrect.
 	err = nt.Validate("test-ns4", "", &corev1.Namespace{},
 		testpredicates.HasExactlyAnnotationKeys(
-			metadata.ResourceManagementKey,
+			metadata.ManagementModeAnnotationKey,
 			metadata.ResourceIDKey,
 			metadata.ResourceManagerKey,
 			corev1.LastAppliedConfigAnnotation))
@@ -209,9 +209,9 @@ func TestDriftKubectlApplyClusterScoped(t *testing.T) {
 	ns5Obj := &corev1.Namespace{}
 	ns5Obj.SetName("test-ns5")
 	ns5Obj.SetAnnotations(map[string]string{
-		metadata.ResourceManagementKey: metadata.ResourceManagementEnabled,
-		metadata.ResourceIDKey:         "_namespace_test-ns5",
-		metadata.ResourceManagerKey:    rootSync1Manager,
+		metadata.ManagementModeAnnotationKey: metadata.ManagementEnabled.String(),
+		metadata.ResourceIDKey:               "_namespace_test-ns5",
+		metadata.ResourceManagerKey:          rootSync1Manager,
 	})
 	ns2Obj.SetLabels(map[string]string{
 		metadata.ApplySetPartOfLabel: "wrong-applyset-id",
@@ -233,7 +233,7 @@ func TestDriftKubectlApplyClusterScoped(t *testing.T) {
 	// `applyset.kubernetes.io/part-of` label is incorrect.
 	err = nt.Validate("test-ns5", "", &corev1.Namespace{},
 		testpredicates.HasExactlyAnnotationKeys(
-			metadata.ResourceManagementKey,
+			metadata.ManagementModeAnnotationKey,
 			metadata.ResourceIDKey,
 			metadata.ResourceManagerKey,
 			corev1.LastAppliedConfigAnnotation))
@@ -269,9 +269,9 @@ func TestDriftKubectlApplyNamespaceScoped(t *testing.T) {
 	cm1Obj.SetName("test-cm1")
 	cm1Obj.SetNamespace("bookstore")
 	cm1Obj.SetAnnotations(map[string]string{
-		metadata.ResourceManagementKey: metadata.ResourceManagementEnabled,
-		metadata.ResourceIDKey:         "_configmap_bookstore_test-cm1",
-		metadata.ResourceManagerKey:    rootSync1Manager,
+		metadata.ManagementModeAnnotationKey: metadata.ManagementEnabled.String(),
+		metadata.ResourceIDKey:               "_configmap_bookstore_test-cm1",
+		metadata.ResourceManagerKey:          rootSync1Manager,
 	})
 	cm1Obj.SetLabels(map[string]string{
 		metadata.ApplySetPartOfLabel: rootSync1ApplySetID,
@@ -300,9 +300,9 @@ func TestDriftKubectlApplyNamespaceScoped(t *testing.T) {
 	cm2Obj.SetName("test-cm2")
 	cm2Obj.SetNamespace("bookstore")
 	cm2Obj.SetAnnotations(map[string]string{
-		metadata.ResourceManagementKey: metadata.ResourceManagementEnabled,
-		metadata.ResourceIDKey:         "_configmap_bookstore_wrong-cm2",
-		metadata.ResourceManagerKey:    rootSync1Manager,
+		metadata.ManagementModeAnnotationKey: metadata.ManagementEnabled.String(),
+		metadata.ResourceIDKey:               "_configmap_bookstore_wrong-cm2",
+		metadata.ResourceManagerKey:          rootSync1Manager,
 	})
 	cm2Obj.SetLabels(map[string]string{
 		metadata.ApplySetPartOfLabel: rootSync1ApplySetID,
@@ -327,7 +327,7 @@ func TestDriftKubectlApplyNamespaceScoped(t *testing.T) {
 	// `configsync.gke.io/resource-id` annotation is incorrect.
 	err = nt.Validate("test-cm2", "bookstore", &corev1.ConfigMap{},
 		testpredicates.HasExactlyAnnotationKeys(
-			metadata.ResourceManagementKey,
+			metadata.ManagementModeAnnotationKey,
 			metadata.ResourceIDKey,
 			metadata.ResourceManagerKey,
 			corev1.LastAppliedConfigAnnotation))
@@ -340,9 +340,9 @@ func TestDriftKubectlApplyNamespaceScoped(t *testing.T) {
 	cm3Obj.SetName("test-cm3")
 	cm3Obj.SetNamespace("bookstore")
 	cm3Obj.SetAnnotations(map[string]string{
-		metadata.ResourceManagementKey: metadata.ResourceManagementEnabled,
-		metadata.ResourceIDKey:         "_configmap_bookstore_test-cm3",
-		metadata.ResourceManagerKey:    rootSync2Manager,
+		metadata.ManagementModeAnnotationKey: metadata.ManagementEnabled.String(),
+		metadata.ResourceIDKey:               "_configmap_bookstore_test-cm3",
+		metadata.ResourceManagerKey:          rootSync2Manager,
 	})
 	cm3Obj.SetLabels(map[string]string{
 		metadata.ApplySetPartOfLabel: rootSync2ApplySetID,
@@ -368,7 +368,7 @@ func TestDriftKubectlApplyNamespaceScoped(t *testing.T) {
 	// RootSync that does not exist.
 	err = nt.Validate("test-cm3", "bookstore", &corev1.ConfigMap{},
 		testpredicates.HasExactlyAnnotationKeys(
-			metadata.ResourceManagementKey,
+			metadata.ManagementModeAnnotationKey,
 			metadata.ResourceIDKey,
 			metadata.ResourceManagerKey,
 			corev1.LastAppliedConfigAnnotation))
@@ -381,8 +381,8 @@ func TestDriftKubectlApplyNamespaceScoped(t *testing.T) {
 	cm4Obj.SetName("test-cm4")
 	cm4Obj.SetNamespace("bookstore")
 	cm4Obj.SetAnnotations(map[string]string{
-		metadata.ResourceManagementKey: metadata.ResourceManagementEnabled,
-		metadata.ResourceIDKey:         "_configmap_bookstore_test-cm4",
+		metadata.ManagementModeAnnotationKey: metadata.ManagementEnabled.String(),
+		metadata.ResourceIDKey:               "_configmap_bookstore_test-cm4",
 	})
 	cm4Obj.SetLabels(map[string]string{
 		metadata.ApplySetPartOfLabel: rootSync1ApplySetID,
@@ -407,7 +407,7 @@ func TestDriftKubectlApplyNamespaceScoped(t *testing.T) {
 	// `configsync.gke.io/manager` annotation.
 	err = nt.Validate("test-cm4", "bookstore", &corev1.ConfigMap{},
 		testpredicates.HasExactlyAnnotationKeys(
-			metadata.ResourceManagementKey,
+			metadata.ManagementModeAnnotationKey,
 			metadata.ResourceIDKey,
 			// no manager
 			corev1.LastAppliedConfigAnnotation))
@@ -420,9 +420,9 @@ func TestDriftKubectlApplyNamespaceScoped(t *testing.T) {
 	cm5Obj.SetName("test-cm5")
 	cm5Obj.SetNamespace("bookstore")
 	cm5Obj.SetAnnotations(map[string]string{
-		metadata.ResourceManagementKey: metadata.ResourceManagementEnabled,
-		metadata.ResourceIDKey:         "_configmap_bookstore_test-cm5",
-		metadata.ResourceManagerKey:    rootSync1Manager,
+		metadata.ManagementModeAnnotationKey: metadata.ManagementEnabled.String(),
+		metadata.ResourceIDKey:               "_configmap_bookstore_test-cm5",
+		metadata.ResourceManagerKey:          rootSync1Manager,
 	})
 	cm5Obj.SetLabels(map[string]string{
 		metadata.ApplySetPartOfLabel: "wrong-applyset-id",
@@ -445,7 +445,7 @@ func TestDriftKubectlApplyNamespaceScoped(t *testing.T) {
 	// `applyset.kubernetes.io/part-of` label is incorrect.
 	nt.Must(nt.Validate("test-cm5", "bookstore", &corev1.ConfigMap{},
 		testpredicates.HasExactlyAnnotationKeys(
-			metadata.ResourceManagementKey,
+			metadata.ManagementModeAnnotationKey,
 			metadata.ResourceIDKey,
 			metadata.ResourceManagerKey,
 			corev1.LastAppliedConfigAnnotation)))
@@ -455,9 +455,9 @@ func TestDriftKubectlApplyNamespaceScoped(t *testing.T) {
 	secretObj.SetName("test-secret")
 	secretObj.SetNamespace("bookstore")
 	secretObj.SetAnnotations(map[string]string{
-		metadata.ResourceManagementKey: metadata.ResourceManagementEnabled,
-		metadata.ResourceIDKey:         "_configmap_bookstore_test-secret",
-		metadata.ResourceManagerKey:    rootSync1Manager,
+		metadata.ManagementModeAnnotationKey: metadata.ManagementEnabled.String(),
+		metadata.ResourceIDKey:               "_configmap_bookstore_test-secret",
+		metadata.ResourceManagerKey:          rootSync1Manager,
 	})
 	secretObj.SetLabels(map[string]string{
 		metadata.ApplySetPartOfLabel: rootSync1ApplySetID,
@@ -479,7 +479,7 @@ func TestDriftKubectlApplyNamespaceScoped(t *testing.T) {
 	// declared in the git repository do not include the GVK for Secret.
 	err = nt.Validate("test-secret", "bookstore", &corev1.Secret{},
 		testpredicates.HasExactlyAnnotationKeys(
-			metadata.ResourceManagementKey,
+			metadata.ManagementModeAnnotationKey,
 			metadata.ResourceIDKey,
 			metadata.ResourceManagerKey,
 			corev1.LastAppliedConfigAnnotation))
@@ -592,9 +592,9 @@ func TestDriftKubectlAnnotateManagedField(t *testing.T) {
 	}
 
 	// Webhook SHOULD prevent kubectl from modifying Config Sync metadata.
-	_, err = nt.Shell.Kubectl("annotate", "namespace", "bookstore", "--overwrite", fmt.Sprintf("%s=winter", metadata.ResourceManagementKey))
+	_, err = nt.Shell.Kubectl("annotate", "namespace", "bookstore", "--overwrite", fmt.Sprintf("%s=winter", metadata.ManagementModeAnnotationKey))
 	if err == nil {
-		nt.T.Fatalf("got `kubectl annotate namespace bookstore --overwrite %s=winter` success, want err", metadata.ResourceManagementKey)
+		nt.T.Fatalf("got `kubectl annotate namespace bookstore --overwrite %s=winter` success, want err", metadata.ManagementModeAnnotationKey)
 	}
 
 	// Stop the Config Sync webhook to test the drift correction functionality
@@ -611,15 +611,15 @@ func TestDriftKubectlAnnotateManagedField(t *testing.T) {
 		testwatcher.WatchPredicates(testpredicates.HasAnnotation("season", "summer"))))
 
 	// Modify a Config Sync annotation
-	out, err = nt.Shell.Kubectl("annotate", "namespace", "bookstore", "--overwrite", fmt.Sprintf("%s=winter", metadata.ResourceManagementKey))
+	out, err = nt.Shell.Kubectl("annotate", "namespace", "bookstore", "--overwrite", fmt.Sprintf("%s=winter", metadata.ManagementModeAnnotationKey))
 	if err != nil {
-		nt.T.Fatalf("got `kubectl annotate namespace bookstore --overwrite %s=winter` error %v %s, want return nil", metadata.ResourceManagementKey, err, out)
+		nt.T.Fatalf("got `kubectl annotate namespace bookstore --overwrite %s=winter` error %v %s, want return nil", metadata.ManagementModeAnnotationKey, err, out)
 	}
 
 	// Remediator SHOULD correct the annotation
 	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
 		testwatcher.WatchPredicates(
-			testpredicates.HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+			testpredicates.IsManagementEnabled(),
 		)))
 }
 
@@ -644,9 +644,9 @@ func TestDriftKubectlAnnotateDeleteManagedFields(t *testing.T) {
 	}
 
 	// Webhook SHOULD prevent kubectl from deleting Config Sync metadata.
-	_, err = nt.Shell.Kubectl("annotate", "namespace", "bookstore", fmt.Sprintf("%s-", metadata.ResourceManagementKey))
+	_, err = nt.Shell.Kubectl("annotate", "namespace", "bookstore", fmt.Sprintf("%s-", metadata.ManagementModeAnnotationKey))
 	if err == nil {
-		nt.T.Fatalf("got `kubectl annotate namespace bookstore %s-` success, want err", metadata.ResourceManagementKey)
+		nt.T.Fatalf("got `kubectl annotate namespace bookstore %s-` success, want err", metadata.ManagementModeAnnotationKey)
 	}
 
 	// Stop the Config Sync webhook to test the drift correction functionality
@@ -663,15 +663,15 @@ func TestDriftKubectlAnnotateDeleteManagedFields(t *testing.T) {
 		testwatcher.WatchPredicates(testpredicates.HasAnnotation("season", "summer"))))
 
 	// Delete a Config Sync annotation
-	out, err = nt.Shell.Kubectl("annotate", "namespace", "bookstore", fmt.Sprintf("%s-", metadata.ResourceManagementKey))
+	out, err = nt.Shell.Kubectl("annotate", "namespace", "bookstore", fmt.Sprintf("%s-", metadata.ManagementModeAnnotationKey))
 	if err != nil {
-		nt.T.Fatalf("got `kubectl annotate namespace bookstore %s-` error %v %s, want return nil", metadata.ResourceManagementKey, err, out)
+		nt.T.Fatalf("got `kubectl annotate namespace bookstore %s-` error %v %s, want return nil", metadata.ManagementModeAnnotationKey, err, out)
 	}
 
 	// Remediator SHOULD correct it
 	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), "bookstore", "",
 		testwatcher.WatchPredicates(
-			testpredicates.HasAnnotation(metadata.ResourceManagementKey, metadata.ResourceManagementEnabled),
+			testpredicates.IsManagementEnabled(),
 		)))
 }
 

@@ -38,7 +38,7 @@ func (d *NamespaceDiff) Type() Type {
 
 		if !d.Declared.Spec.DeleteSyncedTime.IsZero() {
 			// NamespaceConfig is marked for deletion
-			if d.Actual == nil || ManagementDisabled(d.Declared) {
+			if d.Actual == nil || metadata.IsManagementDisabled(d.Declared) {
 				// The corresponding namespace has already been deleted or the namespace is explicitly marked management disabled in the repository, so delete the NsConfig.
 				return DeleteNsConfig
 			}
@@ -48,7 +48,7 @@ func (d *NamespaceDiff) Type() Type {
 			return Delete
 		}
 
-		if ManagementUnset(d.Declared) {
+		if metadata.IsManagementUnspecified(d.Declared) {
 			// The declared Namespace has no resource management key, so it is managed.
 			if d.Actual != nil {
 				// The Namespace is also in the cluster, so update it.
@@ -58,7 +58,7 @@ func (d *NamespaceDiff) Type() Type {
 			// The Namespace is not in the cluster, so create it.
 			return Create
 		}
-		if ManagementDisabled(d.Declared) {
+		if metadata.IsManagementDisabled(d.Declared) {
 			// The Namespace is explicitly marked management disabled in the repository.
 			if d.Actual != nil {
 				if metadata.HasConfigSyncMetadata(d.Actual) {

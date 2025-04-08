@@ -26,14 +26,14 @@ const Token = "b38239ea8f58eaed17af6734bd6a025eeafccda1"
 var (
 	// ManagementEnabled sets management labels and annotations on the object.
 	ManagementEnabled core.MetaMutator = func(obj client.Object) {
-		core.SetAnnotation(obj, metadata.ResourceManagementKey, metadata.ResourceManagementEnabled)
+		core.SetAnnotation(obj, metadata.ManagementModeAnnotationKey, metadata.ManagementEnabled.String())
 		core.SetAnnotation(obj, metadata.ResourceIDKey, core.GKNN(obj))
 		core.SetLabel(obj, metadata.ManagedByKey, metadata.ManagedByValue)
 	}
 	// ManagementDisabled sets the management disabled annotation on the object.
-	ManagementDisabled = core.Annotation(metadata.ResourceManagementKey, metadata.ResourceManagementDisabled)
+	ManagementDisabled = metadata.WithManagementMode(metadata.ManagementDisabled)
 	// ManagementInvalid sets an invalid management annotation on the object.
-	ManagementInvalid = core.Annotation(metadata.ResourceManagementKey, "invalid")
+	ManagementInvalid = metadata.WithManagementMode("invalid")
 	// TokenAnnotation sets the sync token annotation on the object
 	TokenAnnotation = core.Annotation(metadata.SyncTokenAnnotationKey, Token)
 	// IgnoreMutationAnnotation sets the ignore mutation annotation on the object

@@ -58,7 +58,7 @@ func TestAddAnnotationsAndLabels(t *testing.T) {
 				core.Namespace("foo"),
 				core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
 				core.Label(metadata.ApplySetPartOfLabel, applySetID),
-				core.Annotation(metadata.ResourceManagementKey, "enabled"),
+				metadata.WithManagementMode(metadata.ManagementEnabled),
 				core.Annotation(metadata.ResourceManagerKey, "some-namespace_rs"),
 				core.Annotation(metadata.SyncTokenAnnotationKey, "1234567"),
 				core.Annotation(metadata.GitContextKey, `{"repo":"git@github.com/foo","branch":"main","rev":"HEAD"}`),

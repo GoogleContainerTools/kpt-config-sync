@@ -71,7 +71,7 @@ func (d Diff) Type() Type {
 
 	if d.Declared != nil {
 		// The resource IS in the repository.
-		if ManagementUnset(d.Declared) {
+		if metadata.IsManagementUnspecified(d.Declared) {
 			// The declared resource has no resource management key, so it is managed.
 			if d.Actual != nil {
 				// The resource is also in the cluster, so update it.
@@ -80,7 +80,7 @@ func (d Diff) Type() Type {
 			// The resource is not in the cluster, so create it.
 			return Create
 		}
-		if ManagementDisabled(d.Declared) {
+		if metadata.IsManagementDisabled(d.Declared) {
 			// The resource is explicitly marked management disabled in the repository.
 			if d.Actual != nil {
 				if metadata.HasConfigSyncMetadata(d.Actual) {

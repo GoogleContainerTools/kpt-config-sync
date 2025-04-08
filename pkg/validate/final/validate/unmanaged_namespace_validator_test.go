@@ -40,7 +40,7 @@ func TestUnmanagedNamespaces(t *testing.T) {
 			},
 		},
 		{
-			name: "Namespace-scoped objects in managed namespace pass",
+			name: "Unmanaged namespace-scoped objects in managed namespace pass",
 			objs: []ast.FileObject{
 				k8sobjects.Namespace("namespaces/foo"),
 				k8sobjects.Role(core.Namespace("foo")),
@@ -55,7 +55,7 @@ func TestUnmanagedNamespaces(t *testing.T) {
 			},
 		},
 		{
-			name: "Unmanaged namespace-scoped object in managed namespace fails",
+			name: "Managed namespace-scoped object in unmanaged namespace fails",
 			objs: []ast.FileObject{
 				k8sobjects.Namespace("namespaces/foo", syncertest.ManagementDisabled),
 				k8sobjects.Role(core.Namespace("foo")),

@@ -61,7 +61,7 @@ func TestAnnotations(t *testing.T) {
 		},
 		{
 			name: "legal management annotation",
-			obj:  k8sobjects.RoleBinding(core.Annotation(csmetadata.ResourceManagementKey, "a")),
+			obj:  k8sobjects.RoleBinding(core.Annotation(csmetadata.ManagementModeAnnotationKey, "a")),
 		},
 		{
 			name:    "illegal ConfigManagement annotation",

@@ -972,7 +972,7 @@ func validateRepoSyncName(rs *v1beta1.RepoSync) error {
 
 func (r *RepoSyncReconciler) validateRepoSync(ctx context.Context, rs *v1beta1.RepoSync, reconcilerName string) error {
 	if rs.Namespace == configsync.ControllerNamespace {
-		return fmt.Errorf("repoSync objects are not allowed in the %s namespace", configsync.ControllerNamespace)
+		return fmt.Errorf("RepoSync objects are not allowed in the %s namespace", configsync.ControllerNamespace)
 	}
 
 	if err := validateRepoSyncName(rs); err != nil {

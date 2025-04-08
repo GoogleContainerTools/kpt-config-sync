@@ -1,6 +1,7 @@
 module webhook-server
 
-go 1.23
+// see go/cs-upgrade-go for updates
+go 1.24.2
 require (
 	github.com/google/go-containerregistry v0.20.2
 	github.com/sigstore/cosign/v2 v2.4.1

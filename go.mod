@@ -1,6 +1,7 @@
 module kpt.dev/configsync
 
-go 1.23.0
+// see go/cs-upgrade-go for updates
+go 1.24.2
 
 require (
 	cloud.google.com/go/compute/metadata v0.5.1

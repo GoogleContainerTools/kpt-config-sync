@@ -25,9 +25,9 @@ import (
 // ManagementAnnotation returns an Error if the user-specified management annotation is invalid.
 // The only valid value in the source is `disabled`.
 func ManagementAnnotation(obj ast.FileObject) status.Error {
-	if !metadata.IsManagementDisabled(obj) && !metadata.IsManagementUnspecified(obj) {
-		return nonhierarchical.IllegalManagementAnnotationError(obj,
-			core.GetAnnotation(obj, metadata.ManagementModeAnnotationKey))
+	if metadata.IsManagementDisabled(obj) || metadata.IsManagementUnspecified(obj) {
+		return nil
 	}
-	return nil
+	return nonhierarchical.IllegalManagementAnnotationError(obj,
+		core.GetAnnotation(obj, metadata.ManagementModeAnnotationKey))
 }

@@ -111,6 +111,37 @@ func HasConfigSyncMetadata(obj client.Object) bool {
 	return false
 }
 
+// ConfigSyncMetadata contains fields needed to set all Config Sync metadata on
+// a managed resource.
+type ConfigSyncMetadata struct {
+	// ApplySetID is the label value to set for ApplySetPartOfLabel
+	ApplySetID string
+	// GitContextValue is annotation the value to set for GitContextKey
+	GitContextValue string
+	// ManagerValue is the annotation value to set for ResourceManagerKey
+	ManagerValue string
+	// SourceHash is the annotation value to set for SyncTokenAnnotationKey
+	SourceHash string
+	// InventoryID is the annotation value to set for OwningInventoryKey
+	InventoryID string
+}
+
+// SetConfigSyncMetadata sets Config Sync metadata, including both Config Sync
+// annotations and labels, on the given resource.
+func (csm *ConfigSyncMetadata) SetConfigSyncMetadata(obj client.Object) {
+	core.SetLabel(obj, ManagedByKey, ManagedByValue)
+	core.SetLabel(obj, ApplySetPartOfLabel, csm.ApplySetID)
+	core.SetAnnotation(obj, GitContextKey, csm.GitContextValue)
+	core.SetAnnotation(obj, ResourceManagerKey, csm.ManagerValue)
+	core.SetAnnotation(obj, SyncTokenAnnotationKey, csm.SourceHash)
+	core.SetAnnotation(obj, ResourceIDKey, core.GKNN(obj))
+	core.SetAnnotation(obj, OwningInventoryKey, csm.InventoryID)
+
+	if !IsManagementDisabled(obj) {
+		core.SetAnnotation(obj, ManagementModeAnnotationKey, ManagementEnabled.String())
+	}
+}
+
 // RemoveConfigSyncMetadata removes the Config Sync metadata, including both Config Sync
 // annotations and labels, from the given resource.
 // The only Config Sync metadata which will not be removed is `LifecycleMutationAnnotation`.

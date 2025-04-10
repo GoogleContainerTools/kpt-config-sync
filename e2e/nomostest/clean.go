@@ -644,11 +644,11 @@ func disableRepoSyncDeletionPropagation(nt *NT) error {
 		return err
 	}
 	for _, rs := range rsList.Items {
-		if IsDeletionPropagationEnabled(&rs) {
+		if metadata.HasDeletionPropagationPolicy(&rs, metadata.DeletionPropagationPolicyForeground) {
 			rsCopy := rs.DeepCopy()
 			// Disable deletion-propagation and delete finalizers
 			// This should unblock RepoSync & Namespace deletion.
-			RemoveDeletionPropagationPolicy(rsCopy)
+			metadata.RemoveDeletionPropagationPolicy(rsCopy)
 			rsCopy.Finalizers = nil
 			if err := nt.KubeClient.Update(rsCopy); err != nil {
 				return err
@@ -669,11 +669,11 @@ func disableRootSyncDeletionPropagation(nt *NT) error {
 		return err
 	}
 	for _, rs := range rsList.Items {
-		if IsDeletionPropagationEnabled(&rs) {
+		if metadata.HasDeletionPropagationPolicy(&rs, metadata.DeletionPropagationPolicyForeground) {
 			rsCopy := rs.DeepCopy()
 			// Disable deletion-propagation and delete finalizers
 			// This should unblock RootSync & `config-management-system` Namespace deletion.
-			RemoveDeletionPropagationPolicy(rsCopy)
+			metadata.RemoveDeletionPropagationPolicy(rsCopy)
 			rsCopy.Finalizers = nil
 			if err := nt.KubeClient.Update(rsCopy); err != nil {
 				return err

@@ -95,7 +95,7 @@ func TestReconcilerFinalizer_Orphan(t *testing.T) {
 	rootSync := &v1beta1.RootSync{}
 	nt.Must(nt.KubeClient.Get(rootSyncID.Name, rootSyncID.Namespace, rootSync))
 
-	if nomostest.SetDeletionPropagationPolicy(rootSync, metadata.DeletionPropagationPolicyOrphan) {
+	if metadata.SetDeletionPropagationPolicy(rootSync, metadata.DeletionPropagationPolicyOrphan) {
 		nt.Must(nt.KubeClient.Update(rootSync))
 	}
 	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync.GetName(), rootSync.GetNamespace(),
@@ -103,7 +103,7 @@ func TestReconcilerFinalizer_Orphan(t *testing.T) {
 			testpredicates.StatusEquals(nt.Scheme, kstatus.CurrentStatus),
 			testpredicates.HasFinalizer(metadata.ReconcilerFinalizer),
 			testpredicates.HasAnnotation(metadata.DeletionPropagationPolicyAnnotationKey,
-				string(metadata.DeletionPropagationPolicyOrphan)),
+				metadata.DeletionPropagationPolicyOrphan.String()),
 		)))
 
 	// Delete the RootSync
@@ -138,7 +138,7 @@ func TestReconcilerFinalizer_Orphan(t *testing.T) {
 
 	// Recreate the RootSync
 	rootSync = nomostest.RootSyncObjectV1Beta1FromRootRepo(nt, rootSyncKey.Name)
-	nomostest.RemoveDeletionPropagationPolicy(rootSync)
+	metadata.RemoveDeletionPropagationPolicy(rootSync)
 	nt.Must(nt.KubeClient.Create(rootSync))
 	nt.Must(nt.WatchForAllSyncs())
 
@@ -196,7 +196,7 @@ func TestReconcilerFinalizer_Foreground(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	if nomostest.SetDeletionPropagationPolicy(rootSync, metadata.DeletionPropagationPolicyForeground) {
+	if metadata.SetDeletionPropagationPolicy(rootSync, metadata.DeletionPropagationPolicyForeground) {
 		err = nt.KubeClient.Update(rootSync)
 		if err != nil {
 			nt.T.Fatal(err)
@@ -306,7 +306,7 @@ func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
 	if err != nil {
 		nt.T.Fatal(err)
 	}
-	if nomostest.SetDeletionPropagationPolicy(rootSync, metadata.DeletionPropagationPolicyForeground) {
+	if metadata.SetDeletionPropagationPolicy(rootSync, metadata.DeletionPropagationPolicyForeground) {
 		err = nt.KubeClient.Update(rootSync)
 		if err != nil {
 			nt.T.Fatal(err)
@@ -320,7 +320,7 @@ func TestReconcilerFinalizer_MultiLevelForeground(t *testing.T) {
 
 	nt.T.Log("Enabling RepoSync deletion propagation")
 	repoSync := rootSyncGitRepo.MustGet(nt.T, repoSyncPath)
-	if nomostest.SetDeletionPropagationPolicy(repoSync, metadata.DeletionPropagationPolicyForeground) {
+	if metadata.SetDeletionPropagationPolicy(repoSync, metadata.DeletionPropagationPolicyForeground) {
 		nt.Must(rootSyncGitRepo.Add(repoSyncPath, repoSync))
 		nt.Must(rootSyncGitRepo.CommitAndPush("Enabling RepoSync deletion propagation"))
 	}
@@ -423,7 +423,7 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 	nt.T.Log("Enabling RootSync deletion propagation")
 	rootSync := &v1beta1.RootSync{}
 	nt.Must(nt.KubeClient.Get(rootSyncID.Name, rootSyncID.Namespace, rootSync))
-	if nomostest.SetDeletionPropagationPolicy(rootSync, metadata.DeletionPropagationPolicyForeground) {
+	if metadata.SetDeletionPropagationPolicy(rootSync, metadata.DeletionPropagationPolicyForeground) {
 		nt.Must(nt.KubeClient.Update(rootSync))
 	}
 	nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync.GetName(), rootSync.GetNamespace(),
@@ -434,7 +434,7 @@ func TestReconcilerFinalizer_MultiLevelMixed(t *testing.T) {
 
 	nt.T.Log("Disabling RepoSync deletion propagation")
 	repoSync := rootSyncGitRepo.MustGet(nt.T, repoSyncPath)
-	if nomostest.RemoveDeletionPropagationPolicy(repoSync) {
+	if metadata.RemoveDeletionPropagationPolicy(repoSync) {
 		nt.Must(rootSyncGitRepo.Add(repoSyncPath, repoSync))
 		nt.Must(rootSyncGitRepo.CommitAndPush("Disabling RepoSync deletion propagation"))
 		nt.Must(nt.WatchForAllSyncs())
@@ -722,7 +722,7 @@ func deleteSyncWithOrphanPolicy(nt *nomostest.NT, obj client.Object) error {
 	}
 
 	nt.T.Log("Removing deletion propagation annotation")
-	if nomostest.RemoveDeletionPropagationPolicy(obj) {
+	if metadata.RemoveDeletionPropagationPolicy(obj) {
 		err = nt.KubeClient.Update(obj)
 		if err != nil {
 			return err

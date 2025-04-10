@@ -111,11 +111,6 @@ const (
 	// to indicate that the scope of a resource is unknown.
 	UnknownScopeAnnotationValue = "true"
 
-	// DeletionPropagationPolicyAnnotationKey is the annotation key set on
-	// RootSync/RepoSync objects to indicate what do do with the managed
-	// resources when the RootSync/RepoSync object is deleted.
-	DeletionPropagationPolicyAnnotationKey = configsync.ConfigSyncPrefix + "deletion-propagation-policy"
-
 	// RequiresRenderingAnnotationKey is the annotation key set on
 	// RootSync/RepoSync objects to indicate whether the source of truth
 	// requires last mile hydration. The reconciler writes the value of this
@@ -205,33 +200,6 @@ const KustomizeOrigin = "config.kubernetes.io/origin"
 
 // FleetWorkloadIdentityCredentials is the key for the credentials file of the Fleet Workload Identity.
 const FleetWorkloadIdentityCredentials = "config.kubernetes.io/fleet-workload-identity"
-
-// DeletionPropagationPolicy is the type used to identify value enums to use
-// with the deletion-propagation-policy annotation.
-type DeletionPropagationPolicy string
-
-// String returns the string value of the DeletionPropagationPolicy.
-// Implements the Stringer interface.
-func (p DeletionPropagationPolicy) String() string {
-	return string(p)
-}
-
-const (
-	// DeletionPropagationPolicyForeground indicates that the managed resources
-	// should all be deleted/pruned before the RootSync/RepoSync object is deleted.
-	// This will block deletion of the RootSync/RepoSync using a finalizer.
-	DeletionPropagationPolicyForeground = DeletionPropagationPolicy("Foreground")
-
-	// DeletionPropagationPolicyOrphan indicates that the managed resources
-	// should all be orphanned (not deleted) when the RootSync/RepoSync object
-	// is deleted.
-	// This will NOT block deletion of the RootSync/RepoSync AND will not
-	// remove or modify any config sync managed annotations.
-	// This allows the RootSync/RepoSync to be deleted and re-created without
-	// affecting the managed resources.
-	// This is the default behavior if the annotation is not specified.
-	DeletionPropagationPolicyOrphan = DeletionPropagationPolicy("Orphan")
-)
 
 // StatusMode is the type used to identify value enums to use with the
 // `configsync.gke.io/status` annotation.

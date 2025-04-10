@@ -157,7 +157,7 @@ func ResetRootSyncs(nt *NT, rsList []v1beta1.RootSync) error {
 
 		if manager, found := rs.GetAnnotations()[string(metadata.ResourceManagerKey)]; found {
 			nt.T.Logf("[RESET] RootSync %s managed by %q", rsNN, manager)
-			if !IsDeletionPropagationEnabled(rs) {
+			if !metadata.HasDeletionPropagationPolicy(rs, metadata.DeletionPropagationPolicyForeground) {
 				// If you go this error, make sure your test cleanup ensures
 				// that the managed RootSync has deletion propagation enabled.
 				return fmt.Errorf("RootSync %s managed by %q does NOT have deletion propagation enabled: test reset incomplete", rsNN, manager)
@@ -166,7 +166,7 @@ func ResetRootSyncs(nt *NT, rsList []v1beta1.RootSync) error {
 		}
 
 		// Enable deletion propagation, if not enabled
-		if EnableDeletionPropagation(rs) {
+		if metadata.SetDeletionPropagationPolicy(rs, metadata.DeletionPropagationPolicyForeground) {
 			nt.T.Logf("[RESET] Enabling deletion propagation on RootSync %s", rsNN)
 			// Use MergePatch instead of Update in case modified since list
 			patch := fmt.Sprintf(`{"metadata": {"annotations": {"%s": "%s"}}}`,
@@ -232,7 +232,7 @@ func ResetRepoSyncs(nt *NT, rsList []v1beta1.RepoSync) error {
 		// If managed, skip direct deletion
 		if manager, found := rs.GetAnnotations()[string(metadata.ResourceManagerKey)]; found {
 			nt.T.Logf("[RESET] RepoSync %s managed by %q", rsNN, manager)
-			if !IsDeletionPropagationEnabled(rs) {
+			if !metadata.HasDeletionPropagationPolicy(rs, metadata.DeletionPropagationPolicyForeground) {
 				// If you go this error, make sure your test cleanup ensures
 				// that the managed RepoSync has deletion propagation enabled.
 				return fmt.Errorf("RepoSync %s managed by %q does NOT have deletion propagation enabled: test reset incomplete", rsNN, manager)
@@ -241,7 +241,7 @@ func ResetRepoSyncs(nt *NT, rsList []v1beta1.RepoSync) error {
 		}
 
 		// Enable deletion propagation, if not enabled
-		if EnableDeletionPropagation(rs) {
+		if metadata.SetDeletionPropagationPolicy(rs, metadata.DeletionPropagationPolicyForeground) {
 			nt.T.Logf("[RESET] Enabling deletion propagation on RepoSync %s", rsNN)
 			// Use MergePatch instead of Update in case modified since list
 			patch := fmt.Sprintf(`{"metadata": {"annotations": {"%s": "%s"}}}`,

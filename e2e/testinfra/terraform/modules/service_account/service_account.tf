@@ -48,9 +48,9 @@ resource "google_service_account_iam_member" "k8s_sa_binding" {
     "serviceAccount:${data.google_project.project.project_id}.svc.id.goog[config-management-system/ns-reconciler-test-ns-rs-test-2-9]",
     # RepoSync used in TestNamespaceRepo_Delegated, TestDeleteRepoSync_Delegated_AndRepoSyncV1Alpha1, TestDeleteRepoSync_Centralized_AndRepoSyncV1Alpha1, TestManageSelfRepoSync, TestDeleteNamespaceReconcilerDeployment, TestReconcilerManagerRootSyncCRDMissing.
     "serviceAccount:${data.google_project.project.project_id}.svc.id.goog[config-management-system/ns-reconciler-bookstore]",
-    # RepoSync used in TestNoSSLVerifyV1Alpha1, TestNoSSLVerifyV1Beta1, TestOverrideGitSyncDepthV1Alpha1, TestOverrideGitSyncDepthV1Beta1, TestOverrideReconcilerResourcesV1Alpha1, TestOverrideReconcilerResourcesV1Beta1.
+    # RepoSync used in TestNoSSLVerifyV1Alpha1, TestNoSSLVerifyV1Beta1, TestOverrideGitSyncDepthV1Alpha1, TestOverrideGitSyncDepthV1Beta1, TestOverrideReconcilerResourcesV1Alpha1, TestOverrideReconcilerResourcesV1Beta1, TestSplitRSyncsWithDeletion.
     "serviceAccount:${data.google_project.project.project_id}.svc.id.goog[config-management-system/ns-reconciler-backend]",
-    # RepoSync used in TestOverrideRepoSyncLogLevel, TestOverrideReconcilerResourcesV1Alpha1, TestOverrideReconcilerResourcesV1Beta1.
+    # RepoSync used in TestOverrideRepoSyncLogLevel, TestOverrideReconcilerResourcesV1Alpha1, TestOverrideReconcilerResourcesV1Beta1, TestSplitRSyncsWithDeletion.
     "serviceAccount:${data.google_project.project.project_id}.svc.id.goog[config-management-system/ns-reconciler-frontend]",
     # RootSync used in TestRootSyncRoleRefs, TestNamespaceStrategyMultipleRootSyncs.
     "serviceAccount:${data.google_project.project.project_id}.svc.id.goog[config-management-system/root-reconciler-sync-a]",
@@ -64,7 +64,7 @@ resource "google_service_account_iam_member" "k8s_sa_binding" {
     "serviceAccount:${data.google_project.project.project_id}.svc.id.goog[config-management-system/ns-reconciler-invalid-teardown]",
     # RepoSync used in TestReconcilerManagerTeardownRepoSyncWithReconcileTimeout.
     "serviceAccount:${data.google_project.project.project_id}.svc.id.goog[config-management-system/ns-reconciler-reconcile-timeout]",
-    # RootSync used in TestNamespaceStrategyMultipleRootSyncs.
+    # RootSync used in TestNamespaceStrategyMultipleRootSyncs, TestSplitRSyncsWithDeletion.
     "serviceAccount:${data.google_project.project.project_id}.svc.id.goog[config-management-system/root-reconciler-sync-x]",
     "serviceAccount:${data.google_project.project.project_id}.svc.id.goog[config-management-system/root-reconciler-sync-y]",
     # RootSync and RepoSync used in TestComposition

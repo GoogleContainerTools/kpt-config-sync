@@ -688,8 +688,8 @@ func TestSplitRSyncsWithDeletion(t *testing.T) {
 		o.SetNamespace("foo")
 		return o
 	}
-	tenantNS1 := "tenant-ns-1"
-	tenantNS2 := "tenant-ns-2"
+	tenantNS1 := frontendNamespace
+	tenantNS2 := backendNamespace
 	cm1 := func() *corev1.ConfigMap {
 		return k8sobjects.ConfigMapObject(core.Name("cm1"), core.Namespace(tenantNS1))
 	}
@@ -697,10 +697,10 @@ func TestSplitRSyncsWithDeletion(t *testing.T) {
 		return k8sobjects.ServiceAccountObject("sa1", core.Namespace(tenantNS2))
 	}
 	rootSync := nomostest.DefaultRootSyncID
-	rootSync1 := core.RootSyncID("root-sync-1")
-	rootSync2 := core.RootSyncID("root-sync-2")
-	repoSync1 := core.RepoSyncID("repo-sync-1", tenantNS1)
-	repoSync2 := core.RepoSyncID("repo-sync-2", tenantNS2)
+	rootSync1 := core.RootSyncID("sync-x")
+	rootSync2 := core.RootSyncID("sync-y")
+	repoSync1 := core.RepoSyncID(configsync.RepoSyncName, tenantNS1)
+	repoSync2 := core.RepoSyncID(configsync.RepoSyncName, tenantNS2)
 	nt := nomostest.New(t, nomostesting.Lifecycle,
 		ntopts.SyncWithGitSource(rootSync, ntopts.Unstructured),
 		ntopts.SyncWithGitSource(rootSync1, ntopts.Unstructured),

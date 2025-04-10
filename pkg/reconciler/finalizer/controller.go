@@ -139,25 +139,11 @@ func (c *Controller) Reconcile(ctx context.Context, req reconcile.Request) (reco
 	return result, nil
 }
 
-// reconcileFinalizer adds or removes the `configsync.gke.io/reconciler`
-// finalizer, depending on the existence and value of the
-// `configsync.gke.io/deletion-propagation-policy` annotation.
+// reconcileFinalizer adds the `configsync.gke.io/reconciler` finalizer.
+// Now that both Foreground and Orphan policies use the finalizer, always add it.
 func (c *Controller) reconcileFinalizer(ctx context.Context, obj client.Object) error {
-	policyStr, found := obj.GetAnnotations()[metadata.DeletionPropagationPolicyAnnotationKey]
-	policy := metadata.DeletionPropagationPolicy(policyStr)
-	if !found {
-		// Orphan is the default policy
-		policy = metadata.DeletionPropagationPolicyOrphan
-	}
-	switch policy {
-	case metadata.DeletionPropagationPolicyForeground, metadata.DeletionPropagationPolicyOrphan:
-		if _, err := c.Finalizer.AddFinalizer(ctx, obj); err != nil {
-			return err
-		}
-	default:
-		klog.Warningf("%T %s has an invalid value for the annotation %q: %q",
-			obj, client.ObjectKeyFromObject(obj), metadata.DeletionPropagationPolicyAnnotationKey, policy)
-		// User error. Retry won't help, so don't return the error.
+	if _, err := c.Finalizer.AddFinalizer(ctx, obj); err != nil {
+		return err
 	}
 	return nil
 }

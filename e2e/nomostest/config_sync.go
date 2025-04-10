@@ -746,9 +746,9 @@ func SetRSyncTestDefaults(nt *NT, obj client.Object) {
 	// Enable automatic deletion of managed objects by default.
 	// This helps ensure that test artifacts are cleaned up.
 	if nt.deletionPropagationPolicy == nil {
-		RemoveDeletionPropagationPolicy(obj)
+		metadata.RemoveDeletionPropagationPolicy(obj)
 	} else {
-		SetDeletionPropagationPolicy(obj, *nt.deletionPropagationPolicy)
+		metadata.SetDeletionPropagationPolicy(obj, *nt.deletionPropagationPolicy)
 	}
 }
 

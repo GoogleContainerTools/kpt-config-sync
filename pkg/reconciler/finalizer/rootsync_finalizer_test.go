@@ -66,9 +66,7 @@ spec:
 
 func TestRootSyncFinalize(t *testing.T) {
 	rootSync1 := yamlToTypedObject(t, rootSync1Yaml).(*v1beta1.RootSync)
-	core.SetAnnotation(rootSync1,
-		metadata.DeletionPropagationPolicyAnnotationKey,
-		string(metadata.DeletionPropagationPolicyForeground))
+	metadata.SetDeletionPropagationPolicy(rootSync1, metadata.DeletionPropagationPolicyForeground)
 	rootSync1.SetFinalizers([]string{
 		metadata.ReconcilerFinalizer,
 	})
@@ -458,9 +456,7 @@ func TestRootSyncFinalize(t *testing.T) {
 					},
 				},
 			}
-			core.SetAnnotation(tc.rsync,
-				metadata.DeletionPropagationPolicyAnnotationKey,
-				tc.deletionPolicy.String())
+			metadata.SetDeletionPropagationPolicy(tc.rsync, tc.deletionPolicy)
 
 			fakeClient := fake.NewClient(t, scheme, tc.rsync, cm, rg)
 			ctx := context.Background()
@@ -477,9 +473,7 @@ func TestRootSyncFinalize(t *testing.T) {
 				rsync := &v1beta1.RootSync{}
 				err := fakeClient.Get(context.Background(), key, rsync)
 				require.NoError(t, err)
-				core.SetAnnotation(tc.expectedRsyncBeforeDestroy,
-					metadata.DeletionPropagationPolicyAnnotationKey,
-					tc.deletionPolicy.String())
+				metadata.SetDeletionPropagationPolicy(tc.expectedRsyncBeforeDestroy, tc.deletionPolicy)
 				asserter.Equal(t, tc.expectedRsyncBeforeDestroy, rsync)
 				// Return errors, if any
 				return tc.destroyErrs
@@ -506,9 +500,7 @@ func TestRootSyncFinalize(t *testing.T) {
 			assert.Equal(t, tc.expectedStopped, stopped)
 			expectedObjs := []client.Object{rg, wantCM}
 			if tc.expectedRsyncAfterFinalize != nil {
-				core.SetAnnotation(tc.expectedRsyncAfterFinalize,
-					metadata.DeletionPropagationPolicyAnnotationKey,
-					tc.deletionPolicy.String())
+				metadata.SetDeletionPropagationPolicy(tc.expectedRsyncAfterFinalize, tc.deletionPolicy)
 				expectedObjs = append(expectedObjs, tc.expectedRsyncAfterFinalize)
 			}
 			fakeClient.Check(t, expectedObjs...)

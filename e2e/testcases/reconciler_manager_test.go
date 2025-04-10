@@ -1201,7 +1201,7 @@ func TestReconcilerManagerRootSyncCRDMissing(t *testing.T) {
 	// Enable RootSync deletion propagation, if not enabled
 	rootSync := &v1beta1.RootSync{}
 	nt.Must(nt.KubeClient.Get(rootSyncKey.Name, rootSyncKey.Namespace, rootSync))
-	if nomostest.EnableDeletionPropagation(rootSync) {
+	if metadata.SetDeletionPropagationPolicy(rootSync, metadata.DeletionPropagationPolicyForeground) {
 		nt.Must(nt.KubeClient.Update(rootSync))
 		nt.Must(nt.Watcher.WatchObject(kinds.RootSyncV1Beta1(), rootSync.Name, rootSync.Namespace,
 			testwatcher.WatchPredicates(

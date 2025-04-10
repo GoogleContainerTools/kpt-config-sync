@@ -1,0 +1,135 @@
+# Sync Status Watch Controller
+
+A Kubernetes controller that monitors and reports sync error status for Config Sync's `RootSync` and `RepoSync` resources.
+
+## Prerequisites
+
+- Go 1.24+
+- Docker
+- kubectl
+- Access to a Kubernetes cluster with Config Sync installed
+- Kubernetes cluster (v1.20+ recommended)
+- Container registry access (public or private)
+
+### **Note**
+⚠️ **This component is not released with Config Sync**.  
+- It is **only compatible** with the **Config Sync API at `main` branch HEAD**.  
+- **Backward compatibility is not supported at this moment**.
+- **Version management and continuous builds** of this controller **must be handled by the user**.  
+
+## Image Registry Setup
+
+### Using Public Registry (Example: GAR)
+This guide uses Google Artifact Registry (GAR) as an example public registry:
+
+### Using Google Artifact Registry (GAR)
+1. **Enable Artifact Registry API**:
+   ```sh
+   gcloud services enable artifactregistry.googleapis.com
+   ```
+
+2. **Create a GAR Repository** (if not exists):
+   ```sh
+   gcloud artifacts repositories create sync-status-watch \
+     --repository-format=docker \
+     --location=REGION (e.g., us-central1) \
+     --description="Docker repository for Sync Status Watch"
+   ```
+
+3. **Configure Docker Authentication**:
+   ```sh
+   gcloud auth configure-docker REGION-docker.pkg.dev
+   ```
+
+*Note: For production environments, consider using a private registry for better security and access control.*
+
+### Alternative Registry Options
+- **Private Registry**: Use private container registry
+- **Local Registry**: For development/testing with `minikube` or `kind`
+- **Other Public Registries**: Docker Hub, GitHub Container Registry
+
+## Building the Container
+
+1. **Build the Docker Image**:
+   ```sh
+   docker build -t REGION-docker.pkg.dev/YOUR_PROJECT_ID/sync-status-watch/sync-status-watch:latest .
+   ```
+
+2. **Push to Artifact Registry**:
+   ```sh
+   docker push REGION-docker.pkg.dev/YOUR_PROJECT_ID/sync-status-watch/sync-status-watch:latest
+   ```
+
+*For private registries, ensure you:*
+1. Authenticate with `docker login`
+2. Use the correct registry URL format
+3. Configure image pull secrets in your deployment
+
+## Deployment
+
+### 1. Create Namespace and Service Account
+```sh
+kubectl create namespace sync-status-watch
+kubectl apply -f sync-watch-manifest.yaml
+```
+
+### 2. Verify Deployment
+```sh
+kubectl get pods -n sync-status-watch
+kubectl logs -f deployment/sync-status-watch -n sync-status-watch
+```
+
+### 3. Sample Output
+**Successful startup**
+```
+{"level":"info","ts":1744307308.0837288,"caller":"/main.go:246","msg":"Starting standalone SyncStatusController"}
+```
+
+**Error detected**
+```
+{"level":"info","ts":1744307308.1975124,"caller":"/main.go:119","msg":"Sync error detected","sync":"rs-quickstart","namespace":"config-management-system","kind":"RootSync","commit":"e79b57c3705821b2734531aec690e61a369c3586","status":"failed","error":"aggregated errors: Code: 1029, Message: KNV1029: Namespace-scoped configs of the same Group and Kind MUST have unique names if they are in the same Namespace. Found 2 configs of GroupKind \"ConfigMap\" in Namespace \"config-management-monitoring\" named \"test-monitoring-cm2\". Rename or delete the duplicates to fix:\n\nsource: config-sync-quickstart/multirepo/root/monitoring-cm2-dupe.yaml\nnamespace: config-management-monitoring\nmetadata.name: test-monitoring-cm2\ngroup:\nversion: v1\nkind: ConfigMap\n\nsource: config-sync-quickstart/multirepo/root/monitoring-cm2.yaml\nnamespace: config-management-monitoring\nmetadata.name: test-monitoring-cm2\ngroup:\nversion: v1\nkind: ConfigMap\n\nFor more information, see https://g.co/cloud/acm-errors#knv1029"}
+```
+
+## Troubleshooting
+
+### GAR-Specific Issues
+1. **Permission Denied**:
+   - Ensure the service account has `roles/artifactregistry.reader`:
+     ```sh
+     gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+       --member=serviceAccount:$(gcloud config get-value account) \
+       --role=roles/artifactregistry.reader
+     ```
+
+2. **Image Pull Errors**:
+   - Verify repository path and authentication:
+     ```sh
+     gcloud auth print-access-token | docker login -u oauth2accesstoken --password-stdin REGION-docker.pkg.dev
+     ```
+
+## Cleanup
+
+To remove the controller:
+```sh
+kubectl delete -f sync-watch-manifest.yaml
+kubectl delete namespace sync-status-watch
+```
+
+To delete the GAR repository (optional):
+```sh
+gcloud artifacts repositories delete sync-status-watch --location=REGION
+```
+
+## Registry Migration Guide
+
+To switch to a private registry:
+1. Update the image reference in `sync-watch-manifest.yaml`
+2. Create image pull secret:
+   ```sh
+   kubectl create secret docker-registry regcred \
+     --docker-server=<your-registry> \
+     --docker-username=<username> \
+     --docker-password=<password> \
+     -n sync-status-watch
+   ```
+3. Add `imagePullSecrets` to your deployment spec

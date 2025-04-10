@@ -317,3 +317,29 @@ push-oci-signature-verification-server:
 .PHONY: deploy
 deploy:
 	kubectl apply -f $(OSS_MANIFEST_STAGING_DIR)/config-sync-manifest.yaml
+
+##################################################
+# E2E Sync Status Watch Controller
+# Only run when changes are made to
+# ./examples/postsync/
+##################################################
+
+E2E_TEST_IMAGE_SYNC_STATUS_WATCH_CONTROLLER := $(TEST_INFRA_REGISTRY)/sync-status-watch-controller:v1.0.0-$(shell git rev-parse --short HEAD)
+# Builds the container used by e2e tests to test sync status watch error logs
+.PHONY: build-sync-status-watch-controller
+build-sync-status-watch-controller:
+	@echo "+++ Building $(E2E_TEST_IMAGE_SYNC_STATUS_WATCH_CONTROLLER)"
+	docker buildx build \
+		--build-arg GOLANG_IMAGE=$(GOLANG_IMAGE) \
+		-t $(E2E_TEST_IMAGE_SYNC_STATUS_WATCH_CONTROLLER) \
+		examples/post-sync/
+
+.PHONY: push-sync-status-watch-controller
+push-sync-status-watch-controller:
+	@echo "+++ Pushing $(E2E_TEST_IMAGE_SYNC_STATUS_WATCH_CONTROLLER)"
+	@gcloud $(GCLOUD_QUIET) auth configure-docker $(firstword $(subst /, ,$(E2E_TEST_IMAGE_SYNC_STATUS_WATCH_CONTROLLER)))
+	@docker push $(E2E_TEST_IMAGE_SYNC_STATUS_WATCH_CONTROLLER)
+
+.PHONY: deploy
+deploy:
+	kubectl apply -f $(OSS_MANIFEST_STAGING_DIR)/config-sync-manifest.yaml

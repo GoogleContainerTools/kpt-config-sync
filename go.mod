@@ -65,8 +65,13 @@ require (
 // When updating cloud.google.com/go/auth, ensure the auth.IsCredentialsNotFoundError still works.
 require cloud.google.com/go/auth v0.12.0
 
+require cloud.google.com/go/logging v1.11.0
+
 require (
+	cloud.google.com/go v0.115.1 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.4 // indirect
+	cloud.google.com/go/iam v1.2.0 // indirect
+	cloud.google.com/go/longrunning v0.6.0 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20230124172434-306776ec8161 // indirect
 	github.com/BurntSushi/toml v1.4.0 // indirect
 	github.com/MakeNowJust/heredoc v1.0.0 // indirect
@@ -102,7 +107,6 @@ require (
 	github.com/google/btree v1.1.2 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/licenseclassifier/v2 v2.0.0 // indirect
-	github.com/google/martian/v3 v3.3.3 // indirect
 	github.com/google/s2a-go v0.1.8 // indirect
 	github.com/google/safetext v0.0.0-20220905092116-b49f7bc46da2 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect

@@ -102,3 +102,15 @@ resource "google_project_iam_member" "ns-reconciler-wi-sa-iam" {
   member  = "serviceAccount:${data.google_project.project.project_id}.svc.id.goog[config-management-system/ns-reconciler-test-ns]"
   project = data.google_project.project.id
 }
+
+resource "google_service_account" "e2e_log_writer_sa" {
+  account_id   = "e2e-test-log-writer"
+  display_name = "Test Log Writer"
+  description  = "Service account used to write logs to Google Cloud Logging for post-sync tests"
+}
+
+resource "google_project_iam_member" "e2e_log_writer_gcp_role" {
+  role    = "roles/logging.logWriter"
+  member  = "serviceAccount:${google_service_account.e2e_log_writer_sa.email}"
+  project = data.google_project.project.id
+}

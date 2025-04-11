@@ -24,6 +24,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest"
+	"kpt.dev/configsync/e2e/nomostest/gitproviders"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/policy"
 	"kpt.dev/configsync/e2e/nomostest/syncsource"
@@ -285,15 +286,13 @@ func TestMaxRepoSyncNameLength(t *testing.T) {
 
 	repo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
+	rootSyncDir := gitproviders.DefaultSyncDir
 	// The ns-reconciler deployment label is constructed as "ns-reconciler-<ns>-<name>-<len(name)>"
 	// Thus, the max length name + namespace for a RepoSync is 45 characters.
 	repoSyncNS := strings.Repeat("x", 10)
-	nt.Must(nt.KubeClient.Create(k8sobjects.NamespaceObject(repoSyncNS)))
-	nt.T.Cleanup(func() {
-		if err := nt.KubeClient.Delete(k8sobjects.NamespaceObject(repoSyncNS)); err != nil {
-			nt.T.Error(err)
-		}
-	})
+	nt.Must(repo.Add(fmt.Sprintf("%s/ns.yaml", rootSyncDir), k8sobjects.NamespaceObject(repoSyncNS)))
+	nt.Must(repo.CommitAndPush("Create RepoSync namespace"))
+	nt.Must(nt.WatchForAllSyncs())
 	nt.Must(nomostest.CreateNamespaceSecrets(nt, repoSyncNS))
 
 	// Test scenario for RepoSync that exceeds the max name length by one
@@ -304,15 +303,14 @@ func TestMaxRepoSyncNameLength(t *testing.T) {
 	repoSyncTooLong := nomostest.RepoSyncObjectV1Beta1FromOtherRootRepo(
 		nt, repoSyncTooLongNN, nomostest.DefaultRootSyncID.Name)
 	// Share the repository but set a separate sync dir for the new RepoSync
-	defaultSyncDir := repoSyncTooLong.Spec.Dir
 	syncDir := repoSyncTooLongNN.Name
 	repoSyncTooLong.Spec.Git.Dir = syncDir
-	nt.Must(repo.Add(fmt.Sprintf("%s/rs1.yaml", defaultSyncDir), repoSyncTooLong))
-	nt.Must(repo.Add(fmt.Sprintf("%s/rb-1.yaml", defaultSyncDir),
+	nt.Must(repo.Add(fmt.Sprintf("%s/rs1.yaml", rootSyncDir), repoSyncTooLong))
+	nt.Must(repo.Add(fmt.Sprintf("%s/rb-1.yaml", rootSyncDir),
 		nomostest.RepoSyncRoleBinding(repoSyncTooLongNN)))
-	nt.Must(repo.Add(fmt.Sprintf("%s/cr.yaml", defaultSyncDir), nt.RepoSyncClusterRole()))
+	nt.Must(repo.Add(fmt.Sprintf("%s/cr.yaml", rootSyncDir), nt.RepoSyncClusterRole()))
 	nt.Must(repo.Add(
-		fmt.Sprintf("%s/ns.yaml", syncDir),
+		fmt.Sprintf("%s/cm.yaml", syncDir),
 		k8sobjects.ConfigMapObject(
 			core.Name(repoSyncTooLongNN.Name), core.Namespace(repoSyncTooLongNN.Namespace))))
 	nt.Must(repo.CommitAndPush("create RepoSync with too long NN"))
@@ -328,11 +326,11 @@ func TestMaxRepoSyncNameLength(t *testing.T) {
 		nt, repoSyncMaxLengthNN, nomostest.DefaultRootSyncID.Name)
 	syncDir = repoSyncMaxLengthNN.Name
 	repoSyncMaxLength.Spec.Git.Dir = syncDir
-	nt.Must(repo.Add(fmt.Sprintf("%s/rs2.yaml", defaultSyncDir), repoSyncMaxLength))
-	nt.Must(repo.Add(fmt.Sprintf("%s/rb-2.yaml", defaultSyncDir),
+	nt.Must(repo.Add(fmt.Sprintf("%s/rs2.yaml", rootSyncDir), repoSyncMaxLength))
+	nt.Must(repo.Add(fmt.Sprintf("%s/rb-2.yaml", rootSyncDir),
 		nomostest.RepoSyncRoleBinding(repoSyncMaxLengthNN)))
 	nt.Must(repo.Add(
-		fmt.Sprintf("%s/ns.yaml", syncDir),
+		fmt.Sprintf("%s/cm.yaml", syncDir),
 		k8sobjects.ConfigMapObject(
 			core.Name(repoSyncMaxLengthNN.Name), core.Namespace(repoSyncMaxLengthNN.Namespace))))
 	nt.Must(repo.CommitAndPush("create RepoSync with max length NN"))

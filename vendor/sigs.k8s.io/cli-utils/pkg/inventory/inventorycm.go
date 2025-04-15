@@ -28,68 +28,103 @@ var ConfigMapGVK = schema.GroupVersionKind{
 // wraps it with the ConfigMap and upcasts the wrapper as
 // an the Inventory interface.
 func ConfigMapToInventoryObj(uObj *unstructured.Unstructured) (Inventory, error) {
-	return configMapToInventory(uObj)
+	return configMapToInventory(true)(uObj)
 }
 
 // ConfigMapToInventoryInfo takes a passed ConfigMap (as a resource.Info),
 // wraps it with the ConfigMap and upcasts the wrapper as
 // an the Info interface.
 func ConfigMapToInventoryInfo(uObj *unstructured.Unstructured) (Info, error) {
-	inv := NewUnstructuredInventory(uObj)
+	inv := NewSingleObjectInventory(uObj)
 	return inv.Info(), nil
 }
 
 // buildDataMap converts the inventory to the storage format to be used in a ConfigMap
-func buildDataMap(objMetas object.ObjMetadataSet, objStatus []actuation.ObjectStatus) map[string]string {
-	objMap := map[string]string{}
-	objStatusMap := map[object.ObjMetadata]actuation.ObjectStatus{}
-	for _, status := range objStatus {
-		objStatusMap[ObjMetadataFromObjectReference(status.ObjectReference)] = status
-	}
-	for _, objMetadata := range objMetas {
-		if status, found := objStatusMap[objMetadata]; found {
-			objMap[objMetadata.String()] = stringFrom(status)
-		} else {
-			// It's possible that the passed in status doesn't any object status
-			objMap[objMetadata.String()] = ""
+func buildDataMap(objMetas object.ObjMetadataSet, objStatus object.ObjectStatusSet, statusEnabled bool) (map[string]string, error) {
+	objMap := make(map[string]string, len(objMetas))
+	var objStatusMap map[object.ObjMetadata]actuation.ObjectStatus
+	if statusEnabled {
+		objStatusMap = make(map[object.ObjMetadata]actuation.ObjectStatus, len(objStatus))
+		for _, status := range objStatus {
+			// Copy ObjectStatus to remove ObjectReference
+			objStatusMap[ObjMetadataFromObjectReference(status.ObjectReference)] = actuation.ObjectStatus{
+				Strategy:  status.Strategy,
+				Actuation: status.Actuation,
+				Reconcile: status.Reconcile,
+			}
 		}
 	}
-	return objMap
-}
-
-var _ FromUnstructuredFunc = configMapToInventory
-
-func configMapToInventory(configMap *unstructured.Unstructured) (*UnstructuredInventory, error) {
-	inv := NewUnstructuredInventory(configMap)
-	objMap, exists, err := unstructured.NestedStringMap(configMap.Object, "data")
-	if err != nil {
-		err := fmt.Errorf("error retrieving object metadata from inventory object")
-		return nil, err
-	}
-	if exists {
-		for objStr := range objMap {
-			obj, err := object.ParseObjMetadata(objStr)
+	for _, objMetadata := range objMetas {
+		if !statusEnabled {
+			// Status disabled
+			objMap[objMetadata.String()] = ""
+		} else if status, found := objStatusMap[objMetadata]; found {
+			statusStr, err := formatObjectStatus(status)
 			if err != nil {
 				return nil, err
 			}
-			inv.ObjectRefs = append(inv.ObjectRefs, obj)
+			objMap[objMetadata.String()] = statusStr
+		} else {
+			// Object meta doesn't have a matching object status
+			objMap[objMetadata.String()] = ""
 		}
 	}
-	return inv, nil
+	return objMap, nil
+}
+
+func parseDataMap(objMap map[string]string, statusEnabled bool) (object.ObjMetadataSet, object.ObjectStatusSet, error) {
+	var objRefList object.ObjMetadataSet
+	var objStatusList object.ObjectStatusSet
+	for objStr, objStatusStr := range objMap {
+		objMeta, err := object.ParseObjMetadata(objStr)
+		if err != nil {
+			return nil, nil, err
+		}
+		objRefList = append(objRefList, objMeta)
+		if statusEnabled {
+			objStatus, err := parseObjectStatus(objStatusStr)
+			if err != nil {
+				return nil, nil, err
+			}
+			// data map value doesn't include the objRef, so set it from the key
+			objStatus.ObjectReference = ObjectReferenceFromObjMetadata(objMeta)
+			objStatusList = append(objStatusList, objStatus)
+		}
+	}
+	return objRefList, objStatusList, nil
+}
+
+func configMapToInventory(statusEnabled bool) FromUnstructuredFunc {
+	return func(configMap *unstructured.Unstructured) (*SingleObjectInventory, error) {
+		inv := NewSingleObjectInventory(configMap)
+		dataMap, exists, err := unstructured.NestedStringMap(configMap.Object, "data")
+		if err != nil {
+			return nil, fmt.Errorf("failed to read data field from ConfigMap inventory object: %w", err)
+		}
+		if exists {
+			objRefList, objStatusList, err := parseDataMap(dataMap, statusEnabled)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse data field from ConfigMap inventory object: %w", err)
+			}
+			inv.ObjectRefs = objRefList
+			inv.ObjectStatuses = objStatusList
+		}
+		return inv, nil
+	}
 }
 
 // ConfigMap does not have an actual status, so the object statuses are persisted
 // as values in the ConfigMap key/value pairs.
-func inventoryToConfigMap(statusPolicy StatusPolicy) ToUnstructuredFunc {
-	return func(uObj *unstructured.Unstructured, inv *UnstructuredInventory) (*unstructured.Unstructured, error) {
+func inventoryToConfigMap(statusEnabled bool) ToUnstructuredFunc {
+	return func(uObj *unstructured.Unstructured, inv *SingleObjectInventory) (*unstructured.Unstructured, error) {
 		var dataMap map[string]string
-		if statusPolicy == StatusPolicyAll {
-			dataMap = buildDataMap(inv.GetObjectRefs(), inv.GetObjectStatuses())
-		} else {
-			dataMap = buildDataMap(inv.GetObjectRefs(), nil)
+		var err error
+		dataMap, err = buildDataMap(inv.GetObjectRefs(), inv.GetObjectStatuses(), statusEnabled)
+		if err != nil {
+			return nil, err
 		}
 		// Adds the inventory map to the ConfigMap "data" section.
-		err := unstructured.SetNestedStringMap(uObj.UnstructuredContent(),
+		err = unstructured.SetNestedStringMap(uObj.UnstructuredContent(),
 			dataMap, "data")
 		if err != nil {
 			return nil, err
@@ -98,15 +133,24 @@ func inventoryToConfigMap(statusPolicy StatusPolicy) ToUnstructuredFunc {
 	}
 }
 
-func stringFrom(status actuation.ObjectStatus) string {
-	tmp := map[string]string{
-		"strategy":  status.Strategy.String(),
-		"actuation": status.Actuation.String(),
-		"reconcile": status.Reconcile.String(),
-	}
-	data, err := json.Marshal(tmp)
+func formatObjectStatus(status actuation.ObjectStatus) (string, error) {
+	data, err := json.Marshal(status)
 	if err != nil || string(data) == "{}" {
-		return ""
+		return "", err
 	}
-	return string(data)
+	if string(data) == "{}" {
+		return "", nil
+	}
+	return string(data), nil
+}
+
+func parseObjectStatus(statusStr string) (actuation.ObjectStatus, error) {
+	var status actuation.ObjectStatus
+	if statusStr == "" {
+		return status, nil
+	}
+	if err := json.Unmarshal([]byte(statusStr), &status); err != nil {
+		return status, err
+	}
+	return status, nil
 }

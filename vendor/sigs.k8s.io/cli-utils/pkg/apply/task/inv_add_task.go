@@ -152,8 +152,8 @@ func (i *InvAddTask) sendTaskResult(taskContext *taskrunner.TaskContext, err err
 
 // getObjStatus returns the list of object status
 // at the beginning of an apply process.
-func (i *InvAddTask) getObjStatus(pruneIDs, unionIDs []object.ObjMetadata) []actuation.ObjectStatus {
-	var status []actuation.ObjectStatus
+func (i *InvAddTask) getObjStatus(pruneIDs, unionIDs []object.ObjMetadata) object.ObjectStatusSet {
+	var status object.ObjectStatusSet
 	pruneMap := make(map[object.ObjMetadata]bool)
 	for _, obj := range pruneIDs {
 		pruneMap[obj] = true

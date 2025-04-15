@@ -701,8 +701,8 @@ k8s.io/utils v0.0.0-20241210054802-24370beab758/go.mod h1:OLgZIPagt7ERELqWJFomSt
 rsc.io/binaryregexp v0.2.0/go.mod h1:qTv7/COck+e2FymRvadv62gMdZztPaShugOCi3I+8D8=
 rsc.io/quote/v3 v3.1.0/go.mod h1:yEA65RcK8LyAZtP9Kv3t0HmxON59tX3rD+tICJqUlj0=
 rsc.io/sampler v1.3.0/go.mod h1:T1hPZKmBbMNahiBKFy5HrXp6adAjACjK9JXDnKaTXpA=
-sigs.k8s.io/cli-utils v0.37.3-0.20250325022231-3e7dc15c47fa h1:kI77Dvd+BnKybJmWTMPgIFztScQQno8Y8esfJXdKNPc=
-sigs.k8s.io/cli-utils v0.37.3-0.20250325022231-3e7dc15c47fa/go.mod h1:bM9dkBKOU5vmCHVg5yr3Jf6ooy4S0giTbeaskiHkZfQ=
+sigs.k8s.io/cli-utils v0.37.3-0.20250410211241-63a8e151c476 h1:HjKF4Xfsh702Qx9J0Uu8QDywHA6aIKVoYFXIDTAEXZI=
+sigs.k8s.io/cli-utils v0.37.3-0.20250410211241-63a8e151c476/go.mod h1:bM9dkBKOU5vmCHVg5yr3Jf6ooy4S0giTbeaskiHkZfQ=
 sigs.k8s.io/controller-runtime v0.19.3 h1:XO2GvC9OPftRst6xWCpTgBZO04S2cbp0Qqkj8bX1sPw=
 sigs.k8s.io/controller-runtime v0.19.3/go.mod h1:j4j87DqtsThvwTv5/Tc5NFRyyF/RF0ip4+62tbTSIUM=
 sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20231023142458-b9f29826ee83 h1:37G7lMdeXe0kogUnwCa1K+EIVYR5f4BqM0bqITyaDBI=

@@ -4,6 +4,8 @@
 package actuation
 
 import (
+	"fmt"
+
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -57,33 +59,111 @@ type ObjectStatus struct {
 	Generation int64 `json:"generation,omitempty"`
 }
 
+// ActuationStrategy defines the actuation strategy used for a specific object.
+//
 //nolint:revive // consistent prefix improves tab-completion for enums
-//go:generate stringer -type=ActuationStrategy -linecomment
-type ActuationStrategy int
+type ActuationStrategy string
+
+// String implements the fmt.Stringer interface.
+func (s ActuationStrategy) String() string {
+	return string(s)
+}
+
+// ParseActuationStrategy parses from string to ActuationStrategy
+func ParseActuationStrategy(data string) (ActuationStrategy, error) {
+	switch data {
+	case ActuationStrategyApply.String():
+		return ActuationStrategyApply, nil
+	case ActuationStrategyDelete.String():
+		return ActuationStrategyDelete, nil
+	case ActuationStrategyUnknown.String():
+		return ActuationStrategyUnknown, nil
+	default:
+		return ActuationStrategyUnknown,
+			fmt.Errorf("invalid actuation strategy %q: must be %q, %q, or %q",
+				data, ActuationStrategyApply, ActuationStrategyDelete, ActuationStrategyUnknown)
+	}
+}
 
 const (
-	ActuationStrategyApply  ActuationStrategy = iota // Apply
-	ActuationStrategyDelete                          // Delete
+	ActuationStrategyUnknown ActuationStrategy = ""
+	ActuationStrategyApply   ActuationStrategy = "Apply"
+	ActuationStrategyDelete  ActuationStrategy = "Delete"
 )
 
+// ActuationStatus defines the status of the actuation of a specific object.
+//
 //nolint:revive // consistent prefix improves tab-completion for enums
-//go:generate stringer -type=ActuationStatus -linecomment
-type ActuationStatus int
+type ActuationStatus string
+
+// String implements the fmt.Stringer interface.
+func (s ActuationStatus) String() string {
+	return string(s)
+}
+
+// ParseActuationStatus parses from string to ActuationStatus
+func ParseActuationStatus(data string) (ActuationStatus, error) {
+	switch data {
+	case ActuationPending.String():
+		return ActuationPending, nil
+	case ActuationSucceeded.String():
+		return ActuationSucceeded, nil
+	case ActuationSkipped.String():
+		return ActuationSkipped, nil
+	case ActuationFailed.String():
+		return ActuationFailed, nil
+	case ActuationUnknown.String():
+		return ActuationUnknown, nil
+	default:
+		return ActuationUnknown,
+			fmt.Errorf("invalid actuation status %q: must be one of %q, %q, %q, %q, or %q",
+				data, ActuationPending, ActuationSucceeded, ActuationSkipped, ActuationFailed, ActuationUnknown)
+	}
+}
 
 const (
-	ActuationPending   ActuationStatus = iota // Pending
-	ActuationSucceeded                        // Succeeded
-	ActuationSkipped                          // Skipped
-	ActuationFailed                           // Failed
+	ActuationUnknown   ActuationStatus = ""
+	ActuationPending   ActuationStatus = "Pending"
+	ActuationSucceeded ActuationStatus = "Succeeded"
+	ActuationSkipped   ActuationStatus = "Skipped"
+	ActuationFailed    ActuationStatus = "Failed"
 )
 
-//go:generate stringer -type=ReconcileStatus -linecomment
-type ReconcileStatus int
+// ReconcileStatus defines the status of the reconciliation of a specific object.
+type ReconcileStatus string
+
+// String implements the fmt.Stringer interface.
+func (s ReconcileStatus) String() string {
+	return string(s)
+}
+
+// ParseReconcileStatus parses from string to ReconcileStatus
+func ParseReconcileStatus(data string) (ReconcileStatus, error) {
+	switch data {
+	case ReconcilePending.String():
+		return ReconcilePending, nil
+	case ReconcileSucceeded.String():
+		return ReconcileSucceeded, nil
+	case ReconcileSkipped.String():
+		return ReconcileSkipped, nil
+	case ReconcileFailed.String():
+		return ReconcileFailed, nil
+	case ReconcileTimeout.String():
+		return ReconcileTimeout, nil
+	case ReconcileUnknown.String():
+		return ReconcileUnknown, nil
+	default:
+		return ReconcileUnknown,
+			fmt.Errorf("invalid reconcile status %q: must be one of %q, %q, %q, %q, %q, or %q",
+				data, ReconcilePending, ReconcileSucceeded, ReconcileSkipped, ReconcileFailed, ReconcileTimeout, ReconcileUnknown)
+	}
+}
 
 const (
-	ReconcilePending   ReconcileStatus = iota // Pending
-	ReconcileSucceeded                        // Succeeded
-	ReconcileSkipped                          // Skipped
-	ReconcileFailed                           // Failed
-	ReconcileTimeout                          // Timeout
+	ReconcileUnknown   ReconcileStatus = ""
+	ReconcilePending   ReconcileStatus = "Pending"
+	ReconcileSucceeded ReconcileStatus = "Succeeded"
+	ReconcileSkipped   ReconcileStatus = "Skipped"
+	ReconcileFailed    ReconcileStatus = "Failed"
+	ReconcileTimeout   ReconcileStatus = "Timeout"
 )

@@ -53,8 +53,8 @@ func TestObjectStatusMapFilter(t *testing.T) {
 				},
 			},
 			strategy:  actuation.ActuationStrategyDelete,
-			actuation: -1,
-			reconcile: -1,
+			actuation: "",
+			reconcile: "",
 			expected: []core.ID{
 				idFrom(testID),
 			},
@@ -75,7 +75,7 @@ func TestObjectStatusMapFilter(t *testing.T) {
 			},
 			strategy:  actuation.ActuationStrategyApply,
 			actuation: actuation.ActuationSucceeded,
-			reconcile: -1,
+			reconcile: "",
 			expected: []core.ID{
 				idFrom(deploymentID),
 			},
@@ -138,7 +138,7 @@ func TestObjectStatusMapFilter(t *testing.T) {
 			},
 			strategy:  actuation.ActuationStrategyApply,
 			actuation: actuation.ActuationSucceeded,
-			reconcile: -1,
+			reconcile: "",
 			expected: []core.ID{
 				idFrom(deploymentID),
 				idFrom(testID),

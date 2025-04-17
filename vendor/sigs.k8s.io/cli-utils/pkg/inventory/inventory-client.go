@@ -16,7 +16,6 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
-	"sigs.k8s.io/cli-utils/pkg/apis/actuation"
 	"sigs.k8s.io/cli-utils/pkg/common"
 	"sigs.k8s.io/cli-utils/pkg/object"
 )
@@ -84,7 +83,7 @@ func NewSimpleInfo(id ID, namespace string) *SimpleInfo {
 
 // SingleObjectInfo implements the Info interface and also adds a Name field.
 // This assumes the underlying inventory is a singleton object with a single
-// name. Used by UnstructuredInventory, which assumes a single object.
+// name. Used by SingleObjectInventory, which assumes a single object.
 type SingleObjectInfo struct {
 	SimpleInfo
 	// name of the singleton inventory object
@@ -121,13 +120,13 @@ type Inventory interface {
 	// GetObjectRefs returns the list of object references tracked in the inventory
 	GetObjectRefs() object.ObjMetadataSet
 	// GetObjectStatuses returns the list of statuses for each object reference tracked in the inventory
-	GetObjectStatuses() []actuation.ObjectStatus
+	GetObjectStatuses() object.ObjectStatusSet
 	// SetObjectRefs updates the local cache of object references tracked in the inventory.
 	// This will be persisted to the cluster when the Inventory is passed to CreateOrUpdate.
 	SetObjectRefs(object.ObjMetadataSet)
 	// SetObjectStatuses updates the local cache of object statuses tracked in the inventory.
 	// This will be persisted to the cluster when the Inventory is passed to CreateOrUpdate.
-	SetObjectStatuses([]actuation.ObjectStatus)
+	SetObjectStatuses(object.ObjectStatusSet)
 }
 
 type ReadClient interface {
@@ -168,10 +167,10 @@ type DeleteOptions struct{}
 
 var _ Client = &UnstructuredClient{}
 
-// NewUnstructuredInventory constructs a new UnstructuredInventory object
+// NewSingleObjectInventory constructs a new SingleObjectInventory object
 // from a raw unstructured object.
-func NewUnstructuredInventory(uObj *unstructured.Unstructured) *UnstructuredInventory {
-	return &UnstructuredInventory{
+func NewSingleObjectInventory(uObj *unstructured.Unstructured) *SingleObjectInventory {
+	return &SingleObjectInventory{
 		SingleObjectInfo: SingleObjectInfo{
 			SimpleInfo: SimpleInfo{
 				id:        ID(uObj.GetLabels()[common.InventoryLabel]),
@@ -182,20 +181,20 @@ func NewUnstructuredInventory(uObj *unstructured.Unstructured) *UnstructuredInve
 	}
 }
 
-// UnstructuredInventory implements Inventory while also tracking the actual
-// KRM object from the cluster. This enables the client to update the
-// same object and utilize resourceVersion checks.
-type UnstructuredInventory struct {
+// SingleObjectInventory implements Inventory while also retaining a reference
+// to a singleton KRM object from the cluster. This enables the client to update
+// set the object metadata for create/update/delete calls.
+type SingleObjectInventory struct {
 	SingleObjectInfo
 	InventoryContents
 }
 
-// Info returns the metadata associated with this UnstructuredInventory
-func (ui *UnstructuredInventory) Info() Info {
+// Info returns the metadata associated with this SingleObjectInventory
+func (ui *SingleObjectInventory) Info() Info {
 	return &ui.SingleObjectInfo
 }
 
-var _ Inventory = &UnstructuredInventory{}
+var _ Inventory = &SingleObjectInventory{}
 
 // InventoryContents is a boilerplate struct that contains the basic methods
 // to implement Inventory. Can be extended for different inventory implementations.
@@ -204,7 +203,7 @@ type InventoryContents struct {
 	// ObjectRefs and ObjectStatuses are in memory representations of the inventory which are
 	// read and manipulated by the applier.
 	ObjectRefs     object.ObjMetadataSet
-	ObjectStatuses []actuation.ObjectStatus
+	ObjectStatuses object.ObjectStatusSet
 }
 
 // GetObjectRefs returns the list of object references tracked in the inventory
@@ -213,7 +212,7 @@ func (inv *InventoryContents) GetObjectRefs() object.ObjMetadataSet {
 }
 
 // GetObjectStatuses returns the list of statuses for each object reference tracked in the inventory
-func (inv *InventoryContents) GetObjectStatuses() []actuation.ObjectStatus {
+func (inv *InventoryContents) GetObjectStatuses() object.ObjectStatusSet {
 	return inv.ObjectStatuses
 }
 
@@ -225,28 +224,40 @@ func (inv *InventoryContents) SetObjectRefs(objs object.ObjMetadataSet) {
 
 // SetObjectStatuses updates the local cache of object statuses tracked in the inventory.
 // This will be persisted to the cluster when the Inventory is passed to CreateOrUpdate.
-func (inv *InventoryContents) SetObjectStatuses(statuses []actuation.ObjectStatus) {
+func (inv *InventoryContents) SetObjectStatuses(statuses object.ObjectStatusSet) {
 	inv.ObjectStatuses = statuses
 }
 
 // FromUnstructuredFunc is used by UnstructuredClient to convert an unstructured
 // object, usually fetched from the cluster, to an Inventory object for use by
 // the applier/destroyer.
-type FromUnstructuredFunc func(fromObj *unstructured.Unstructured) (*UnstructuredInventory, error)
+type FromUnstructuredFunc func(fromObj *unstructured.Unstructured) (*SingleObjectInventory, error)
 
 // ToUnstructuredFunc is used by UnstructuredClient to take an unstructured object,
-// usually fetched from the cluster, and update it using the UnstructuredInventory.
+// usually fetched from the cluster, and update it using the SingleObjectInventory.
 // The function should return an updated unstructured object which will then be
 // applied to the cluster by UnstructuredClient.
-type ToUnstructuredFunc func(fromObj *unstructured.Unstructured, toInv *UnstructuredInventory) (*unstructured.Unstructured, error)
+type ToUnstructuredFunc func(fromObj *unstructured.Unstructured, toInv *SingleObjectInventory) (*unstructured.Unstructured, error)
 
 // UnstructuredClient implements the inventory client interface for a single unstructured object
 type UnstructuredClient struct {
-	client           dynamic.NamespaceableResourceInterface
+	// client is the namespaced dynamic client to use when reading or writing
+	// the inventory objects to and from the server.
+	client dynamic.NamespaceableResourceInterface
+	// fromUnstructured is used in NewInventory, Get, and List, to convert the
+	// object(s) from Unstructured to UnstructuredInventory.
 	fromUnstructured FromUnstructuredFunc
-	toUnstructured   ToUnstructuredFunc
-	gvk              schema.GroupVersionKind
-	statusPolicy     StatusPolicy
+	// toUnstructured is used in CreateOrUpdate, to convert the object(s) from
+	// UnstructuredInventory to Unstructured. This is called before calling
+	// Create or Update.
+	toUnstructured ToUnstructuredFunc
+	// toUnstructuredStatus is used in CreateOrUpdate, to convert the object(s)
+	// from UnstructuredInventory to Unstructured. This is called before calling
+	// UpdateStatus. Set to nil to skip calling UpdateStatus, either because
+	// there is no status or because the status is not a subresource.
+	toUnstructuredStatus ToUnstructuredFunc
+	// gvk is the GroupVersionKind of the inventory object in the Kubernetes API.
+	gvk schema.GroupVersionKind
 }
 
 // NewUnstructuredClient constructs an instance of UnstructuredClient.
@@ -255,8 +266,9 @@ type UnstructuredClient struct {
 func NewUnstructuredClient(factory cmdutil.Factory,
 	from FromUnstructuredFunc,
 	to ToUnstructuredFunc,
+	toStatus ToUnstructuredFunc,
 	gvk schema.GroupVersionKind,
-	statusPolicy StatusPolicy) (*UnstructuredClient, error) {
+) (*UnstructuredClient, error) {
 	dc, err := factory.DynamicClient()
 	if err != nil {
 		return nil, err
@@ -270,11 +282,11 @@ func NewUnstructuredClient(factory cmdutil.Factory,
 		return nil, err
 	}
 	unstructuredClient := &UnstructuredClient{
-		client:           dc.Resource(mapping.Resource),
-		fromUnstructured: from,
-		toUnstructured:   to,
-		gvk:              gvk,
-		statusPolicy:     statusPolicy,
+		client:               dc.Resource(mapping.Resource),
+		fromUnstructured:     from,
+		toUnstructured:       to,
+		toUnstructuredStatus: toStatus,
+		gvk:                  gvk,
 	}
 	return unstructuredClient, nil
 }
@@ -288,7 +300,7 @@ func (cic *UnstructuredClient) NewInventory(inv Info) (Inventory, error) {
 	return cic.fromUnstructured(cic.newUnstructuredObject(soi))
 }
 
-// newInventory is used internally to return a typed UnstructuredInventory
+// newInventory is used internally to return a typed SingleObjectInventory
 func (cic *UnstructuredClient) newUnstructuredObject(invInfo *SingleObjectInfo) *unstructured.Unstructured {
 	obj := &unstructured.Unstructured{}
 	obj.SetName(invInfo.GetName())
@@ -335,9 +347,9 @@ func (cic *UnstructuredClient) List(ctx context.Context, _ ListOptions) ([]Inven
 // CreateOrUpdate the in-cluster inventory
 // Updates the unstructured object, or creates it if it doesn't exist
 func (cic *UnstructuredClient) CreateOrUpdate(ctx context.Context, inv Inventory, opts UpdateOptions) error {
-	ui, ok := inv.(*UnstructuredInventory)
+	ui, ok := inv.(*SingleObjectInventory)
 	if !ok {
-		return fmt.Errorf("expected UnstructuredInventory")
+		return fmt.Errorf("expected SingleObjectInventory")
 	}
 	if ui == nil {
 		return fmt.Errorf("inventory is nil")
@@ -383,7 +395,8 @@ func (cic *UnstructuredClient) CreateOrUpdate(ctx context.Context, inv Inventory
 	if err != nil {
 		return err
 	}
-	if cic.statusPolicy != StatusPolicyAll {
+	// toUnstructuredStatus being nil means that there is no status subresource
+	if cic.toUnstructuredStatus == nil {
 		return nil
 	}
 	attempt = 0
@@ -397,7 +410,7 @@ func (cic *UnstructuredClient) CreateOrUpdate(ctx context.Context, inv Inventory
 				return err
 			}
 		}
-		uObj, err := cic.toUnstructured(obj.DeepCopy(), ui)
+		uObj, err := cic.toUnstructuredStatus(obj.DeepCopy(), ui)
 		if err != nil {
 			return err
 		}

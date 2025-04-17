@@ -20,9 +20,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
-	"k8s.io/klog/v2"
 	"k8s.io/kubectl/pkg/cmd/util"
-	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	csinventory "kpt.dev/configsync/pkg/applier/inventory"
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/metadata"
@@ -63,18 +61,8 @@ func NewClientSet(c client.Client, configFlags *genericclioptions.ConfigFlags, s
 	matchVersionKubeConfigFlags := util.NewMatchVersionFlags(configFlags)
 	f := util.NewFactory(matchVersionKubeConfigFlags)
 
-	var statusPolicy inventory.StatusPolicy
-	if statusMode == metadata.StatusEnabled {
-		klog.Infof("Enabled status reporting")
-		statusPolicy = inventory.StatusPolicyAll
-	} else {
-		klog.Infof("Disabled status reporting")
-		statusPolicy = inventory.StatusPolicyNone
-	}
 	ic := csinventory.NewInventoryConverter(scope, syncName, statusMode)
-	invClient, err := inventory.NewUnstructuredClient(f,
-		ic.InventoryFromUnstructured, ic.InventoryToUnstructured,
-		v1alpha1.SchemeGroupVersionKind(), statusPolicy)
+	invClient, err := ic.UnstructuredClientFromFactory(f)
 	if err != nil {
 		return nil, err
 	}

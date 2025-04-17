@@ -16,6 +16,7 @@ package inventory
 
 import (
 	"fmt"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -48,7 +49,7 @@ type resourceGroupFactory struct {
 	status v1alpha1.ResourceGroupStatus
 }
 
-func (f resourceGroupFactory) build(t *testing.T) *unstructured.Unstructured {
+func (f resourceGroupFactory) buildBoth(t *testing.T) (*v1alpha1.ResourceGroup, *unstructured.Unstructured) {
 	rg := &v1alpha1.ResourceGroup{}
 	rg.Name = invName
 	rg.Namespace = invNamespace
@@ -60,21 +61,47 @@ func (f resourceGroupFactory) build(t *testing.T) *unstructured.Unstructured {
 	rg.Status = f.status
 	uObj, err := kinds.ToUnstructured(rg, core.Scheme)
 	require.NoError(t, err)
+	return rg, uObj
+}
+
+func (f resourceGroupFactory) build(t *testing.T) *unstructured.Unstructured {
+	_, uObj := f.buildBoth(t)
+	return uObj
+}
+
+func (f resourceGroupFactory) buildSpec(t *testing.T) *unstructured.Unstructured {
+	rg, uObj := f.buildBoth(t)
+	// Remove "omitempty" status fields.
+	if reflect.ValueOf(rg.Status).IsZero() {
+		unstructured.RemoveNestedField(uObj.Object, "status")
+	}
+	return uObj
+}
+
+func (f resourceGroupFactory) buildStatus(t *testing.T) *unstructured.Unstructured {
+	rg, uObj := f.buildBoth(t)
+	// Remove "omitempty" spec fields.
+	if reflect.ValueOf(rg.Spec).IsZero() {
+		unstructured.RemoveNestedField(uObj.Object, "spec")
+	}
 	return uObj
 }
 
 func TestInventoryFromUnstructured(t *testing.T) {
-	testCases := map[string]struct {
+	testCases := []struct {
+		name            string
 		fromObj         *unstructured.Unstructured
 		wantErr         error
 		wantObjRefs     object.ObjMetadataSet
-		wantObjStatuses []actuation.ObjectStatus
+		wantObjStatuses object.ObjectStatusSet
 	}{
-		"nil object returns err": {
+		{
+			name:    "nil object returns err",
 			fromObj: nil,
 			wantErr: fmt.Errorf("unstructured ResourceGroup object is nil"),
 		},
-		"ResourceGroup that has spec but no status": {
+		{
+			name: "ResourceGroup that has spec but no status",
 			fromObj: resourceGroupFactory{
 				spec: v1alpha1.ResourceGroupSpec{
 					Resources: []v1alpha1.ObjMetadata{
@@ -117,7 +144,8 @@ func TestInventoryFromUnstructured(t *testing.T) {
 			},
 			wantObjStatuses: nil,
 		},
-		"ResourceGroup with spec and status": {
+		{
+			name: "ResourceGroup with spec and status",
 			fromObj: resourceGroupFactory{
 				spec: v1alpha1.ResourceGroupSpec{
 					Resources: []v1alpha1.ObjMetadata{
@@ -197,8 +225,8 @@ func TestInventoryFromUnstructured(t *testing.T) {
 			wantObjStatuses: nil,
 		},
 	}
-	for name, tc := range testCases {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
 			ic := NewInventoryConverter(declared.RootScope, "test-sync", metadata.StatusEnabled)
 			inv, err := ic.InventoryFromUnstructured(tc.fromObj)
 			if tc.wantErr != nil {
@@ -215,15 +243,15 @@ func TestInventoryFromUnstructured(t *testing.T) {
 	}
 }
 
-// inventoryFactory is a convenience test helper for constructing a UnstructuredInventory
+// inventoryFactory is a convenience test helper for constructing a SingleObjectInventory
 type inventoryFactory struct {
 	objRefs     object.ObjMetadataSet
-	objStatuses []actuation.ObjectStatus
+	objStatuses object.ObjectStatusSet
 }
 
-func (f inventoryFactory) build(t *testing.T) *inventory.UnstructuredInventory {
-	emptyRG := resourceGroupFactory{}.build(t)
-	ui := inventory.NewUnstructuredInventory(emptyRG)
+func (f inventoryFactory) build(t *testing.T) *inventory.SingleObjectInventory {
+	emptyRG := resourceGroupFactory{}.buildSpec(t)
+	ui := inventory.NewSingleObjectInventory(emptyRG)
 	ui.SetObjectRefs(f.objRefs)
 	ui.SetObjectStatuses(f.objStatuses)
 	return ui
@@ -231,36 +259,42 @@ func (f inventoryFactory) build(t *testing.T) *inventory.UnstructuredInventory {
 
 func TestInventoryToUnstructured(t *testing.T) {
 
-	testCases := map[string]struct {
+	testCases := []struct {
+		name       string
 		fromObj    *unstructured.Unstructured
-		toInv      *inventory.UnstructuredInventory
+		toInv      *inventory.SingleObjectInventory
 		statusMode metadata.StatusMode
 		wantErr    error
 		wantObj    *unstructured.Unstructured
 	}{
-		"nil fromObj and toInv returns err": {
+		{
+			name:       "nil fromObj and toInv returns err",
 			statusMode: metadata.StatusEnabled,
 			wantErr:    fmt.Errorf("unstructured object is nil"),
 		},
-		"nil fromObj returns err": {
+		{
+			name:       "nil fromObj returns err",
 			statusMode: metadata.StatusEnabled,
 			toInv:      inventoryFactory{}.build(t),
 			wantErr:    fmt.Errorf("unstructured object is nil"),
 		},
-		"nil toInv returns err": {
+		{
+			name:       "nil toInv returns err",
 			statusMode: metadata.StatusEnabled,
 			fromObj:    resourceGroupFactory{}.build(t),
-			wantErr:    fmt.Errorf("UnstructuredInventory object is nil"),
+			wantErr:    fmt.Errorf("SingleObjectInventory object is nil"),
 		},
-		"empty ResourceGroup object and inventory": {
+		{
+			name:       "empty ResourceGroup object and inventory",
 			statusMode: metadata.StatusEnabled,
 			fromObj:    resourceGroupFactory{}.build(t),
 			toInv:      inventoryFactory{}.build(t),
 			wantObj: resourceGroupFactory{
-				status: v1alpha1.ResourceGroupStatus{ObservedGeneration: invGeneration},
-			}.build(t),
+				status: v1alpha1.ResourceGroupStatus{}, // always empty
+			}.buildSpec(t),
 		},
-		"empty ResourceGroup object and non-empty inventory": {
+		{
+			name:       "empty ResourceGroup object and non-empty inventory",
 			statusMode: metadata.StatusEnabled,
 			fromObj:    resourceGroupFactory{}.build(t),
 			toInv: inventoryFactory{
@@ -282,7 +316,7 @@ func TestInventoryToUnstructured(t *testing.T) {
 						},
 					},
 				},
-				objStatuses: []actuation.ObjectStatus{
+				objStatuses: object.ObjectStatusSet{
 					{
 						ObjectReference: actuation.ObjectReference{
 							Name:      "obj1-name",
@@ -332,42 +366,11 @@ func TestInventoryToUnstructured(t *testing.T) {
 						},
 					},
 				},
-				status: v1alpha1.ResourceGroupStatus{
-					ObservedGeneration: invGeneration,
-					ResourceStatuses: []v1alpha1.ResourceStatus{
-						{
-							ObjMetadata: v1alpha1.ObjMetadata{
-								Name:      "obj1-name",
-								Namespace: "obj1-ns",
-								GroupKind: v1alpha1.GroupKind{
-									Group: "obj1-group",
-									Kind:  "obj1-kind",
-								},
-							},
-							Status:    v1alpha1.Unknown,
-							Strategy:  v1alpha1.Apply,
-							Actuation: v1alpha1.ActuationSucceeded,
-							Reconcile: v1alpha1.ReconcileSucceeded,
-						},
-						{
-							ObjMetadata: v1alpha1.ObjMetadata{
-								Name:      "obj2-name",
-								Namespace: "obj2-ns",
-								GroupKind: v1alpha1.GroupKind{
-									Group: "obj2-group",
-									Kind:  "obj2-kind",
-								},
-							},
-							Status:    v1alpha1.Unknown,
-							Strategy:  v1alpha1.Apply,
-							Actuation: v1alpha1.ActuationPending,
-							Reconcile: v1alpha1.ReconcilePending,
-						},
-					},
-				},
-			}.build(t),
+				status: v1alpha1.ResourceGroupStatus{}, // always empty
+			}.buildSpec(t),
 		},
-		"non-empty ResourceGroup object and empty inventory": {
+		{
+			name:       "non-empty ResourceGroup object and empty inventory",
 			statusMode: metadata.StatusEnabled,
 			fromObj: resourceGroupFactory{
 				spec: v1alpha1.ResourceGroupSpec{
@@ -432,18 +435,11 @@ func TestInventoryToUnstructured(t *testing.T) {
 			}.build(t),
 			toInv: inventoryFactory{}.build(t),
 			wantObj: resourceGroupFactory{
-				status: v1alpha1.ResourceGroupStatus{
-					ObservedGeneration: invGeneration,
-					Conditions: []v1alpha1.Condition{
-						{
-							Type:   v1alpha1.Stalled,
-							Status: v1alpha1.FalseConditionStatus,
-						},
-					},
-				},
-			}.build(t),
+				status: v1alpha1.ResourceGroupStatus{}, // always empty
+			}.buildSpec(t),
 		},
-		"non-empty ResourceGroup object and non-empty inventory": {
+		{
+			name:       "non-empty ResourceGroup object and non-empty inventory",
 			statusMode: metadata.StatusEnabled,
 			fromObj: resourceGroupFactory{
 				spec: v1alpha1.ResourceGroupSpec{
@@ -503,7 +499,7 @@ func TestInventoryToUnstructured(t *testing.T) {
 						},
 					},
 				},
-				objStatuses: []actuation.ObjectStatus{
+				objStatuses: object.ObjectStatusSet{
 					{
 						ObjectReference: actuation.ObjectReference{
 							Name:      "obj1-name",
@@ -533,6 +529,304 @@ func TestInventoryToUnstructured(t *testing.T) {
 				},
 			}.build(t),
 			wantObj: resourceGroupFactory{
+				spec: v1alpha1.ResourceGroupSpec{
+					Resources: []v1alpha1.ObjMetadata{
+						{
+							Name:      "obj1-name",
+							Namespace: "obj1-ns",
+							GroupKind: v1alpha1.GroupKind{
+								Group: "obj1-group",
+								Kind:  "obj1-kind",
+							},
+						},
+						{
+							Name:      "obj2-name",
+							Namespace: "obj2-ns",
+							GroupKind: v1alpha1.GroupKind{
+								Group: "obj2-group",
+								Kind:  "obj2-kind",
+							},
+						},
+					},
+				},
+				status: v1alpha1.ResourceGroupStatus{}, // always empty
+			}.buildSpec(t),
+		},
+		{
+			name:       "omit status from ResourceGroup when StatusDisabled",
+			statusMode: metadata.StatusDisabled,
+			fromObj: resourceGroupFactory{
+				spec: v1alpha1.ResourceGroupSpec{
+					Resources: []v1alpha1.ObjMetadata{
+						{
+							Name:      "obj1-name",
+							Namespace: "obj1-ns",
+							GroupKind: v1alpha1.GroupKind{
+								Group: "obj1-group",
+								Kind:  "obj1-kind",
+							},
+						},
+					},
+				},
+				status: v1alpha1.ResourceGroupStatus{
+					ObservedGeneration: invGeneration,
+					Conditions: []v1alpha1.Condition{
+						{
+							Type:   v1alpha1.Stalled,
+							Status: v1alpha1.FalseConditionStatus,
+						},
+					},
+					ResourceStatuses: []v1alpha1.ResourceStatus{
+						{
+							ObjMetadata: v1alpha1.ObjMetadata{
+								Name:      "obj1-name",
+								Namespace: "obj1-ns",
+								GroupKind: v1alpha1.GroupKind{
+									Group: "obj1-group",
+									Kind:  "obj1-kind",
+								},
+							},
+							Status:    v1alpha1.Unknown,
+							Strategy:  v1alpha1.Apply,
+							Actuation: v1alpha1.ActuationSucceeded,
+							Reconcile: v1alpha1.ReconcileSucceeded,
+						},
+					},
+				},
+			}.build(t),
+			toInv: inventoryFactory{
+				objRefs: object.ObjMetadataSet{
+					{
+						Name:      "obj1-name",
+						Namespace: "obj1-ns",
+						GroupKind: schema.GroupKind{
+							Group: "obj1-group",
+							Kind:  "obj1-kind",
+						},
+					},
+					{
+						Name:      "obj2-name",
+						Namespace: "obj2-ns",
+						GroupKind: schema.GroupKind{
+							Group: "obj2-group",
+							Kind:  "obj2-kind",
+						},
+					},
+				},
+				objStatuses: object.ObjectStatusSet{
+					{
+						ObjectReference: actuation.ObjectReference{
+							Name:      "obj1-name",
+							Namespace: "obj1-ns",
+							Group:     "obj1-group",
+							Kind:      "obj1-kind",
+						},
+						Strategy:   actuation.ActuationStrategyApply,
+						Actuation:  actuation.ActuationSucceeded,
+						Reconcile:  actuation.ReconcileSucceeded,
+						UID:        "obj1-uid",
+						Generation: int64(21),
+					},
+					{
+						ObjectReference: actuation.ObjectReference{
+							Name:      "obj2-name",
+							Namespace: "obj2-ns",
+							Group:     "obj2-group",
+							Kind:      "obj2-kind",
+						},
+						Strategy:   actuation.ActuationStrategyApply,
+						Actuation:  actuation.ActuationPending,
+						Reconcile:  actuation.ReconcilePending,
+						UID:        "obj2-uid",
+						Generation: int64(12),
+					},
+				},
+			}.build(t),
+			wantObj: resourceGroupFactory{
+				spec: v1alpha1.ResourceGroupSpec{
+					Resources: []v1alpha1.ObjMetadata{
+						{
+							Name:      "obj1-name",
+							Namespace: "obj1-ns",
+							GroupKind: v1alpha1.GroupKind{
+								Group: "obj1-group",
+								Kind:  "obj1-kind",
+							},
+						},
+						{
+							Name:      "obj2-name",
+							Namespace: "obj2-ns",
+							GroupKind: v1alpha1.GroupKind{
+								Group: "obj2-group",
+								Kind:  "obj2-kind",
+							},
+						},
+					},
+				},
+				status: v1alpha1.ResourceGroupStatus{}, // always empty
+			}.buildSpec(t),
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ic := NewInventoryConverter(declared.RootScope, invName, tc.statusMode)
+			rg, err := ic.InventoryToUnstructured(tc.fromObj, tc.toInv)
+			if tc.wantErr != nil {
+				require.Equal(t, tc.wantErr, err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, invName, rg.GetName())
+			require.Equal(t, invNamespace, rg.GetNamespace())
+			// Set expected annotations
+			tc.wantObj.SetAnnotations(map[string]string{
+				metadata.ManagementModeAnnotationKey: metadata.ManagementEnabled.String(),
+				metadata.StatusModeAnnotationKey:     tc.statusMode.String(),
+			})
+			// Set expected labels
+			tc.wantObj.SetLabels(map[string]string{
+				common.InventoryLabel:       invID,
+				metadata.ManagedByKey:       metadata.ManagedByValue,
+				metadata.SyncNameLabel:      invName,
+				metadata.SyncNamespaceLabel: configsync.ControllerNamespace,
+				metadata.SyncKindLabel:      configsync.RootSyncKind,
+			})
+			testutil.AssertEqual(t, tc.wantObj, rg)
+		})
+	}
+}
+
+func TestInventoryToUnstructuredStatus(t *testing.T) {
+
+	testCases := []struct {
+		name       string
+		fromObj    *unstructured.Unstructured
+		toInv      *inventory.SingleObjectInventory
+		statusMode metadata.StatusMode
+		wantErr    error
+		wantObj    *unstructured.Unstructured
+	}{
+		{
+			name:       "nil fromObj and toInv returns err",
+			statusMode: metadata.StatusEnabled,
+			wantErr:    fmt.Errorf("unstructured object is nil"),
+		},
+		{
+			name:       "nil fromObj returns err",
+			statusMode: metadata.StatusEnabled,
+			toInv:      inventoryFactory{}.build(t),
+			wantErr:    fmt.Errorf("unstructured object is nil"),
+		},
+		{
+			name:       "nil toInv returns err",
+			statusMode: metadata.StatusEnabled,
+			fromObj:    resourceGroupFactory{}.build(t),
+			wantErr:    fmt.Errorf("SingleObjectInventory object is nil"),
+		},
+		{
+			name:       "empty ResourceGroup object and inventory",
+			statusMode: metadata.StatusEnabled,
+			fromObj:    resourceGroupFactory{}.build(t),
+			toInv:      inventoryFactory{}.build(t),
+			wantObj: resourceGroupFactory{
+				status: v1alpha1.ResourceGroupStatus{
+					ObservedGeneration: invGeneration,
+				},
+			}.buildStatus(t),
+		},
+		{
+			name:       "empty ResourceGroup object and non-empty inventory",
+			statusMode: metadata.StatusEnabled,
+			fromObj:    resourceGroupFactory{}.build(t),
+			toInv: inventoryFactory{
+				objRefs: object.ObjMetadataSet{
+					{
+						Name:      "obj1-name",
+						Namespace: "obj1-ns",
+						GroupKind: schema.GroupKind{
+							Group: "obj1-group",
+							Kind:  "obj1-kind",
+						},
+					},
+					{
+						Name:      "obj2-name",
+						Namespace: "obj2-ns",
+						GroupKind: schema.GroupKind{
+							Group: "obj2-group",
+							Kind:  "obj2-kind",
+						},
+					},
+				},
+				objStatuses: object.ObjectStatusSet{
+					{
+						ObjectReference: actuation.ObjectReference{
+							Name:      "obj1-name",
+							Namespace: "obj1-ns",
+							Group:     "obj1-group",
+							Kind:      "obj1-kind",
+						},
+						Strategy:   actuation.ActuationStrategyApply,
+						Actuation:  actuation.ActuationSucceeded,
+						Reconcile:  actuation.ReconcileSucceeded,
+						UID:        "obj1-uid",
+						Generation: int64(21),
+					},
+					{
+						ObjectReference: actuation.ObjectReference{
+							Name:      "obj2-name",
+							Namespace: "obj2-ns",
+							Group:     "obj2-group",
+							Kind:      "obj2-kind",
+						},
+						Strategy:   actuation.ActuationStrategyApply,
+						Actuation:  actuation.ActuationPending,
+						Reconcile:  actuation.ReconcilePending,
+						UID:        "obj2-uid",
+						Generation: int64(12),
+					},
+				},
+			}.build(t),
+			wantObj: resourceGroupFactory{
+				spec: v1alpha1.ResourceGroupSpec{}, // always empty
+				status: v1alpha1.ResourceGroupStatus{
+					ObservedGeneration: invGeneration,
+					ResourceStatuses: []v1alpha1.ResourceStatus{
+						{
+							ObjMetadata: v1alpha1.ObjMetadata{
+								Name:      "obj1-name",
+								Namespace: "obj1-ns",
+								GroupKind: v1alpha1.GroupKind{
+									Group: "obj1-group",
+									Kind:  "obj1-kind",
+								},
+							},
+							Status:    v1alpha1.Unknown,
+							Strategy:  v1alpha1.Apply,
+							Actuation: v1alpha1.ActuationSucceeded,
+							Reconcile: v1alpha1.ReconcileSucceeded,
+						},
+						{
+							ObjMetadata: v1alpha1.ObjMetadata{
+								Name:      "obj2-name",
+								Namespace: "obj2-ns",
+								GroupKind: v1alpha1.GroupKind{
+									Group: "obj2-group",
+									Kind:  "obj2-kind",
+								},
+							},
+							Status:    v1alpha1.Unknown,
+							Strategy:  v1alpha1.Apply,
+							Actuation: v1alpha1.ActuationPending,
+							Reconcile: v1alpha1.ReconcilePending,
+						},
+					},
+				},
+			}.buildStatus(t),
+		},
+		{
+			name:       "non-empty ResourceGroup object and empty inventory",
+			statusMode: metadata.StatusEnabled,
+			fromObj: resourceGroupFactory{
 				spec: v1alpha1.ResourceGroupSpec{
 					Resources: []v1alpha1.ObjMetadata{
 						{
@@ -593,8 +887,155 @@ func TestInventoryToUnstructured(t *testing.T) {
 					},
 				},
 			}.build(t),
+			toInv: inventoryFactory{}.build(t),
+			wantObj: resourceGroupFactory{
+				spec: v1alpha1.ResourceGroupSpec{}, // always empty
+				status: v1alpha1.ResourceGroupStatus{
+					ObservedGeneration: invGeneration,
+					Conditions: []v1alpha1.Condition{
+						{
+							Type:   v1alpha1.Stalled,
+							Status: v1alpha1.FalseConditionStatus,
+						},
+					},
+				},
+			}.buildStatus(t),
 		},
-		"omit status from ResourceGroup when StatusDisabled": {
+		{
+			name:       "non-empty ResourceGroup object and non-empty inventory",
+			statusMode: metadata.StatusEnabled,
+			fromObj: resourceGroupFactory{
+				spec: v1alpha1.ResourceGroupSpec{
+					Resources: []v1alpha1.ObjMetadata{
+						{
+							Name:      "obj1-name",
+							Namespace: "obj1-ns",
+							GroupKind: v1alpha1.GroupKind{
+								Group: "obj1-group",
+								Kind:  "obj1-kind",
+							},
+						},
+					},
+				},
+				status: v1alpha1.ResourceGroupStatus{
+					ObservedGeneration: invGeneration,
+					Conditions: []v1alpha1.Condition{
+						{
+							Type:   v1alpha1.Stalled,
+							Status: v1alpha1.FalseConditionStatus,
+						},
+					},
+					ResourceStatuses: []v1alpha1.ResourceStatus{
+						{
+							ObjMetadata: v1alpha1.ObjMetadata{
+								Name:      "obj1-name",
+								Namespace: "obj1-ns",
+								GroupKind: v1alpha1.GroupKind{
+									Group: "obj1-group",
+									Kind:  "obj1-kind",
+								},
+							},
+							Status:    v1alpha1.Unknown,
+							Strategy:  v1alpha1.Apply,
+							Actuation: v1alpha1.ActuationSucceeded,
+							Reconcile: v1alpha1.ReconcileSucceeded,
+						},
+					},
+				},
+			}.build(t),
+			toInv: inventoryFactory{
+				objRefs: object.ObjMetadataSet{
+					{
+						Name:      "obj1-name",
+						Namespace: "obj1-ns",
+						GroupKind: schema.GroupKind{
+							Group: "obj1-group",
+							Kind:  "obj1-kind",
+						},
+					},
+					{
+						Name:      "obj2-name",
+						Namespace: "obj2-ns",
+						GroupKind: schema.GroupKind{
+							Group: "obj2-group",
+							Kind:  "obj2-kind",
+						},
+					},
+				},
+				objStatuses: object.ObjectStatusSet{
+					{
+						ObjectReference: actuation.ObjectReference{
+							Name:      "obj1-name",
+							Namespace: "obj1-ns",
+							Group:     "obj1-group",
+							Kind:      "obj1-kind",
+						},
+						Strategy:   actuation.ActuationStrategyApply,
+						Actuation:  actuation.ActuationSucceeded,
+						Reconcile:  actuation.ReconcileSucceeded,
+						UID:        "obj1-uid",
+						Generation: int64(21),
+					},
+					{
+						ObjectReference: actuation.ObjectReference{
+							Name:      "obj2-name",
+							Namespace: "obj2-ns",
+							Group:     "obj2-group",
+							Kind:      "obj2-kind",
+						},
+						Strategy:   actuation.ActuationStrategyApply,
+						Actuation:  actuation.ActuationPending,
+						Reconcile:  actuation.ReconcilePending,
+						UID:        "obj2-uid",
+						Generation: int64(12),
+					},
+				},
+			}.build(t),
+			wantObj: resourceGroupFactory{
+				spec: v1alpha1.ResourceGroupSpec{}, // always empty
+				status: v1alpha1.ResourceGroupStatus{
+					ObservedGeneration: invGeneration,
+					Conditions: []v1alpha1.Condition{
+						{
+							Type:   v1alpha1.Stalled,
+							Status: v1alpha1.FalseConditionStatus,
+						},
+					},
+					ResourceStatuses: []v1alpha1.ResourceStatus{
+						{
+							ObjMetadata: v1alpha1.ObjMetadata{
+								Name:      "obj1-name",
+								Namespace: "obj1-ns",
+								GroupKind: v1alpha1.GroupKind{
+									Group: "obj1-group",
+									Kind:  "obj1-kind",
+								},
+							},
+							Status:    v1alpha1.Unknown,
+							Strategy:  v1alpha1.Apply,
+							Actuation: v1alpha1.ActuationSucceeded,
+							Reconcile: v1alpha1.ReconcileSucceeded,
+						},
+						{
+							ObjMetadata: v1alpha1.ObjMetadata{
+								Name:      "obj2-name",
+								Namespace: "obj2-ns",
+								GroupKind: v1alpha1.GroupKind{
+									Group: "obj2-group",
+									Kind:  "obj2-kind",
+								},
+							},
+							Status:    v1alpha1.Unknown,
+							Strategy:  v1alpha1.Apply,
+							Actuation: v1alpha1.ActuationPending,
+							Reconcile: v1alpha1.ReconcilePending,
+						},
+					},
+				},
+			}.buildStatus(t),
+		},
+		{
+			name:       "error when StatusDisabled",
 			statusMode: metadata.StatusDisabled,
 			fromObj: resourceGroupFactory{
 				spec: v1alpha1.ResourceGroupSpec{
@@ -654,7 +1095,7 @@ func TestInventoryToUnstructured(t *testing.T) {
 						},
 					},
 				},
-				objStatuses: []actuation.ObjectStatus{
+				objStatuses: object.ObjectStatusSet{
 					{
 						ObjectReference: actuation.ObjectReference{
 							Name:      "obj1-name",
@@ -683,43 +1124,13 @@ func TestInventoryToUnstructured(t *testing.T) {
 					},
 				},
 			}.build(t),
-			wantObj: resourceGroupFactory{
-				spec: v1alpha1.ResourceGroupSpec{
-					Resources: []v1alpha1.ObjMetadata{
-						{
-							Name:      "obj1-name",
-							Namespace: "obj1-ns",
-							GroupKind: v1alpha1.GroupKind{
-								Group: "obj1-group",
-								Kind:  "obj1-kind",
-							},
-						},
-						{
-							Name:      "obj2-name",
-							Namespace: "obj2-ns",
-							GroupKind: v1alpha1.GroupKind{
-								Group: "obj2-group",
-								Kind:  "obj2-kind",
-							},
-						},
-					},
-				},
-				status: v1alpha1.ResourceGroupStatus{
-					ObservedGeneration: invGeneration,
-					Conditions: []v1alpha1.Condition{
-						{
-							Type:   v1alpha1.Stalled,
-							Status: v1alpha1.FalseConditionStatus,
-						},
-					},
-				},
-			}.build(t),
+			wantErr: fmt.Errorf("InventoryToUnstructuredStatus must not be called when status is disabled"),
 		},
 	}
-	for name, tc := range testCases {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
 			ic := NewInventoryConverter(declared.RootScope, invName, tc.statusMode)
-			rg, err := ic.InventoryToUnstructured(tc.fromObj, tc.toInv)
+			rg, err := ic.InventoryToUnstructuredStatus(tc.fromObj, tc.toInv)
 			if tc.wantErr != nil {
 				require.Equal(t, tc.wantErr, err)
 				return

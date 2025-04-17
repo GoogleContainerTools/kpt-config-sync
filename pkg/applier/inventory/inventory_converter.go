@@ -21,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/klog/v2"
+	"k8s.io/kubectl/pkg/cmd/util"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/declared"
@@ -30,11 +31,11 @@ import (
 	"sigs.k8s.io/cli-utils/pkg/object"
 )
 
-// UnstructuredInventoryConverter is used for converting ResourceGroup objects and persisting
+// ResourceGroupInventoryConverter is used for converting ResourceGroup objects and persisting
 // Config Sync specific metadata.
 // This provides the translation logic to instantiate a UnstructuredClient which
 // works with ResourceGroup objects.
-type UnstructuredInventoryConverter struct {
+type ResourceGroupInventoryConverter struct {
 	syncKind      string
 	syncName      string
 	syncNamespace string
@@ -42,9 +43,9 @@ type UnstructuredInventoryConverter struct {
 	// TODO: add source/commit hash and interface method once it's to be persisted on ResourceGroup
 }
 
-// NewInventoryConverter constructs a new UnstructuredInventoryConverter
-func NewInventoryConverter(scope declared.Scope, syncName string, statusMode metadata.StatusMode) *UnstructuredInventoryConverter {
-	return &UnstructuredInventoryConverter{
+// NewInventoryConverter constructs a new ResourceGroupInventoryConverter
+func NewInventoryConverter(scope declared.Scope, syncName string, statusMode metadata.StatusMode) *ResourceGroupInventoryConverter {
+	return &ResourceGroupInventoryConverter{
 		syncKind:      scope.SyncKind(),
 		syncName:      syncName,
 		syncNamespace: scope.SyncNamespace(),
@@ -52,13 +53,33 @@ func NewInventoryConverter(scope declared.Scope, syncName string, statusMode met
 	}
 }
 
-// InventoryFromUnstructured converts a ResourceGroup object to UnstructuredInventory
-func (ic *UnstructuredInventoryConverter) InventoryFromUnstructured(fromObj *unstructured.Unstructured) (*inventory.UnstructuredInventory, error) {
+// UnstructuredClientFromFactory builds a new UnstructuredClient from a kubectl
+// client factory.
+func (ic *ResourceGroupInventoryConverter) UnstructuredClientFromFactory(factory util.Factory) (*inventory.UnstructuredClient, error) {
+	var toStatus inventory.ToUnstructuredFunc
+	if ic.statusMode == metadata.StatusEnabled {
+		klog.Infof("Enabled status reporting")
+		toStatus = ic.InventoryToUnstructuredStatus
+	} else {
+		klog.Infof("Disabled status reporting")
+		// Nil tells the UnstructuredClient to skip calling UpdateStatus.
+		// This requires Config Sync to remove the status, but avoids
+		// unnecessary API calls when status is disabled.
+	}
+	return inventory.NewUnstructuredClient(factory,
+		ic.InventoryFromUnstructured,
+		ic.InventoryToUnstructured,
+		toStatus,
+		v1alpha1.SchemeGroupVersionKind())
+}
+
+// InventoryFromUnstructured converts a ResourceGroup object to SingleObjectInventory
+func (ic *ResourceGroupInventoryConverter) InventoryFromUnstructured(fromObj *unstructured.Unstructured) (*inventory.SingleObjectInventory, error) {
 	if fromObj == nil {
 		return nil, fmt.Errorf("unstructured ResourceGroup object is nil")
 	}
-	klog.V(4).Infof("converting ResourceGroup to UnstructuredInventory")
-	unstructuredInventory := inventory.NewUnstructuredInventory(fromObj)
+	klog.V(4).Infof("converting ResourceGroup to SingleObjectInventory")
+	unstructuredInventory := inventory.NewSingleObjectInventory(fromObj)
 	resources, exists, err := unstructured.NestedSlice(fromObj.Object, "spec", "resources")
 	if err != nil {
 		return nil, err
@@ -100,16 +121,19 @@ func (ic *UnstructuredInventoryConverter) InventoryFromUnstructured(fromObj *uns
 	return unstructuredInventory, nil
 }
 
-// InventoryToUnstructured converts a UnstructuredInventory to a ResourceGroup
+// InventoryToUnstructured converts a SingleObjectInventory to a ResourceGroup
 // object, using the current ResourceGroup object as a base.
-func (ic *UnstructuredInventoryConverter) InventoryToUnstructured(fromObj *unstructured.Unstructured, toInv *inventory.UnstructuredInventory) (*unstructured.Unstructured, error) {
+// Only the metadata and spec are populated. The status is left empty, because
+// the server ignores it when updating the object.
+func (ic *ResourceGroupInventoryConverter) InventoryToUnstructured(fromObj *unstructured.Unstructured, toInv *inventory.SingleObjectInventory) (*unstructured.Unstructured, error) {
 	if fromObj == nil {
 		return nil, fmt.Errorf("unstructured object is nil")
 	}
 	if toInv == nil {
-		return nil, fmt.Errorf("UnstructuredInventory object is nil")
+		return nil, fmt.Errorf("SingleObjectInventory object is nil")
 	}
-	klog.V(4).Infof("converting UnstructuredInventory to ResourceGroup object")
+
+	klog.V(4).Infof("converting SingleObjectInventory to ResourceGroup object")
 	klog.V(4).Infof("creating list of %d resources", len(toInv.GetObjectRefs()))
 	var objs []interface{}
 	for _, objMeta := range toInv.GetObjectRefs() {
@@ -122,45 +146,18 @@ func (ic *UnstructuredInventoryConverter) InventoryToUnstructured(fromObj *unstr
 		})
 	}
 
-	var objStatus []interface{}
-	if ic.statusMode == metadata.StatusEnabled {
-		objStatusMap := map[object.ObjMetadata]actuation.ObjectStatus{}
-		for _, s := range toInv.GetObjectStatuses() {
-			objStatusMap[inventory.ObjMetadataFromObjectReference(s.ObjectReference)] = s
-		}
-		klog.V(4).Infof("Creating list of %d resource statuses", len(toInv.GetObjectRefs()))
-		for _, objMeta := range toInv.GetObjectRefs() {
-			status, found := objStatusMap[objMeta]
-			if found {
-				klog.V(4).Infof("converting to object status: %s", objMeta)
-				objStatus = append(objStatus, map[string]interface{}{
-					"group":     objMeta.GroupKind.Group,
-					"kind":      objMeta.GroupKind.Kind,
-					"namespace": objMeta.Namespace,
-					"name":      objMeta.Name,
-					"status":    string(v1alpha1.Unknown),
-					"strategy":  status.Strategy.String(),
-					"actuation": status.Actuation.String(),
-					"reconcile": status.Reconcile.String(),
-				})
-			}
-		}
-	}
-
 	toObj := fromObj.DeepCopy()
-	// Set Config Sync specific metadata on the object
-	core.SetLabel(toObj, metadata.ManagedByKey, metadata.ManagedByValue)
-	core.SetLabel(toObj, metadata.SyncNamespaceLabel, ic.syncNamespace)
-	core.SetLabel(toObj, metadata.SyncNameLabel, ic.syncName)
-	core.SetLabel(toObj, metadata.SyncKindLabel, ic.syncKind)
-	core.SetAnnotation(toObj, metadata.ManagementModeAnnotationKey, metadata.ManagementEnabled.String())
-	core.SetAnnotation(toObj, metadata.StatusModeAnnotationKey, ic.statusMode.String())
 
-	if len(objs) == 0 { // Unset resources
+	// Set Config Sync specific metadata on the object
+	ic.setMeta(toObj)
+
+	if len(objs) == 0 {
+		// Unset spec.resources
 		klog.V(4).Infoln("clearing inventory resources")
 		unstructured.RemoveNestedField(toObj.Object,
 			"spec", "resources")
-	} else { // Update resources
+	} else {
+		// Update spec.resources
 		klog.V(4).Infof("storing inventory (%d) resources", len(objs))
 		err := unstructured.SetNestedSlice(toObj.Object,
 			objs, "spec", "resources")
@@ -168,11 +165,70 @@ func (ic *UnstructuredInventoryConverter) InventoryToUnstructured(fromObj *unstr
 			return nil, err
 		}
 	}
-	if len(objStatus) == 0 { // Unset resource statuses
+
+	// Unset status
+	klog.V(4).Infoln("clearing inventory status")
+	unstructured.RemoveNestedField(toObj.Object, "status")
+
+	return toObj, nil
+}
+
+// InventoryToUnstructuredStatus converts a SingleObjectInventory to a
+// ResourceGroup object, using the current ResourceGroup object as a base.
+// Only the metadata and status are populated. The spec is left empty, because
+// the server ignores it when updating the status.
+func (ic *ResourceGroupInventoryConverter) InventoryToUnstructuredStatus(fromObj *unstructured.Unstructured, toInv *inventory.SingleObjectInventory) (*unstructured.Unstructured, error) {
+	if fromObj == nil {
+		return nil, fmt.Errorf("unstructured object is nil")
+	}
+	if toInv == nil {
+		return nil, fmt.Errorf("SingleObjectInventory object is nil")
+	}
+	if ic.statusMode != metadata.StatusEnabled {
+		// Should never happen.
+		return nil, fmt.Errorf("InventoryToUnstructuredStatus must not be called when status is disabled")
+	}
+
+	klog.V(4).Infof("converting SingleObjectInventory to ResourceGroup object status")
+	var objStatus []interface{}
+	objStatusMap := map[object.ObjMetadata]actuation.ObjectStatus{}
+	for _, s := range toInv.GetObjectStatuses() {
+		objStatusMap[inventory.ObjMetadataFromObjectReference(s.ObjectReference)] = s
+	}
+	klog.V(4).Infof("Creating list of %d resource statuses", len(objStatusMap))
+	for _, objMeta := range toInv.GetObjectRefs() {
+		status, found := objStatusMap[objMeta]
+		if found {
+			klog.V(4).Infof("converting to object status: %s", objMeta)
+			objStatus = append(objStatus, map[string]interface{}{
+				"group":     objMeta.GroupKind.Group,
+				"kind":      objMeta.GroupKind.Kind,
+				"namespace": objMeta.Namespace,
+				"name":      objMeta.Name,
+				"status":    string(v1alpha1.Unknown),
+				"strategy":  status.Strategy.String(),
+				"actuation": status.Actuation.String(),
+				"reconcile": status.Reconcile.String(),
+			})
+		}
+	}
+
+	toObj := fromObj.DeepCopy()
+	// Set Config Sync specific metadata on the object
+	ic.setMeta(toObj)
+
+	// Unset spec
+	klog.V(4).Infoln("clearing inventory spec")
+	unstructured.RemoveNestedField(toObj.Object, "spec", "descriptor")
+	unstructured.RemoveNestedField(toObj.Object, "spec")
+
+	if len(objStatus) == 0 {
+		// Unset status.resourceStatuses
 		klog.V(4).Infoln("clearing inventory resourceStatuses")
 		unstructured.RemoveNestedField(toObj.Object,
 			"status", "resourceStatuses")
-	} else { // Update resource statuses
+	} else {
+		// Update status.resourceStatuses
 		klog.V(4).Infof("storing inventory (%d) resourceStatuses", len(objStatus))
 		err := unstructured.SetNestedSlice(toObj.Object,
 			objStatus, "status", "resourceStatuses")
@@ -180,12 +236,25 @@ func (ic *UnstructuredInventoryConverter) InventoryToUnstructured(fromObj *unstr
 			return nil, err
 		}
 	}
-	generation := toObj.GetGeneration() // Update status.observedGeneration
+
+	// Update status.observedGeneration
+	generation := toObj.GetGeneration()
 	klog.V(4).Infof("setting observedGeneration %d: ", generation)
 	err := unstructured.SetNestedField(toObj.Object,
 		generation, "status", "observedGeneration")
 	if err != nil {
 		return nil, err
 	}
+
 	return toObj, nil
+}
+
+// setMeta set Config Sync specific metadata on the inventory object
+func (ic *ResourceGroupInventoryConverter) setMeta(toObj *unstructured.Unstructured) {
+	core.SetLabel(toObj, metadata.ManagedByKey, metadata.ManagedByValue)
+	core.SetLabel(toObj, metadata.SyncNamespaceLabel, ic.syncNamespace)
+	core.SetLabel(toObj, metadata.SyncNameLabel, ic.syncName)
+	core.SetLabel(toObj, metadata.SyncKindLabel, ic.syncKind)
+	core.SetAnnotation(toObj, metadata.ManagementModeAnnotationKey, metadata.ManagementEnabled.String())
+	core.SetAnnotation(toObj, metadata.StatusModeAnnotationKey, ic.statusMode.String())
 }

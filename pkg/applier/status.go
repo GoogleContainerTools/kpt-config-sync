@@ -58,7 +58,7 @@ func (m ObjectStatusMap) Log(logger infofLogger) {
 		if i > 0 {
 			b.WriteString(commaEscapedNewlineDelimiter)
 		}
-		ids := m.Filter(actuation.ActuationStrategyApply, status, -1)
+		ids := m.Filter(actuation.ActuationStrategyApply, status, "")
 		count += len(ids)
 		writeStatus(&b, status, ids)
 	}
@@ -74,7 +74,7 @@ func (m ObjectStatusMap) Log(logger infofLogger) {
 		if i > 0 {
 			b.WriteString(commaEscapedNewlineDelimiter)
 		}
-		ids := m.Filter(actuation.ActuationStrategyApply, -1, status)
+		ids := m.Filter(actuation.ActuationStrategyApply, "", status)
 		count += len(ids)
 		writeStatus(&b, status, ids)
 	}
@@ -90,7 +90,7 @@ func (m ObjectStatusMap) Log(logger infofLogger) {
 		if i > 0 {
 			b.WriteString(commaEscapedNewlineDelimiter)
 		}
-		ids := m.Filter(actuation.ActuationStrategyDelete, status, -1)
+		ids := m.Filter(actuation.ActuationStrategyDelete, status, "")
 		count += len(ids)
 		writeStatus(&b, status, ids)
 	}
@@ -106,7 +106,7 @@ func (m ObjectStatusMap) Log(logger infofLogger) {
 		if i > 0 {
 			b.WriteString(commaEscapedNewlineDelimiter)
 		}
-		ids := m.Filter(actuation.ActuationStrategyDelete, -1, status)
+		ids := m.Filter(actuation.ActuationStrategyDelete, "", status)
 		count += len(ids)
 		writeStatus(&b, status, ids)
 	}
@@ -131,7 +131,7 @@ func writeStatus(b *strings.Builder, status interface{ String() string }, ids []
 }
 
 // Filter returns an unsorted list of IDs that satisfy the specified constraints.
-// Use -1 to specify the constraint is not required.
+// Use the empty string to specify the constraint is not required.
 func (m ObjectStatusMap) Filter(
 	strategy actuation.ActuationStrategy,
 	actuation actuation.ActuationStatus,
@@ -142,13 +142,13 @@ func (m ObjectStatusMap) Filter(
 		if status == nil {
 			continue
 		}
-		if strategy >= 0 && status.Strategy != strategy {
+		if strategy != "" && status.Strategy != strategy {
 			continue
 		}
-		if actuation >= 0 && status.Actuation != actuation {
+		if actuation != "" && status.Actuation != actuation {
 			continue
 		}
-		if reconcile >= 0 && status.Reconcile != reconcile {
+		if reconcile != "" && status.Reconcile != reconcile {
 			continue
 		}
 		ids = append(ids, id)

@@ -1,0 +1,73 @@
+# Copyright 2025 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sync-status-watch
+  namespace: sync-status-watch
+  labels:
+    app: sync-status-watch
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sync-status-watch
+  template:
+    metadata:
+      labels:
+        app: sync-status-watch
+    spec:
+      serviceAccountName: sync-status-watch
+      containers:
+        - name: sync-status-watch
+          image: SYNC_STATUS_WATCH_CONTROLLER_IMAGE_REGISTRY
+          imagePullPolicy: Always
+          resources:
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sync-status-watch
+  namespace: sync-status-watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: sync-status-watch
+rules:
+  - apiGroups: ["configsync.gke.io"]
+    resources: ["rootsyncs", "reposyncs"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: sync-status-watch
+roleRef:
+  kind: ClusterRole
+  name: sync-status-watch
+  apiGroup: rbac.authorization.k8s.io
+subjects:
+  - kind: ServiceAccount
+    name: sync-status-watch
+    namespace: sync-status-watch

@@ -983,6 +983,10 @@ func (r *RepoSyncReconciler) validateRepoSync(ctx context.Context, rs *v1beta1.R
 		return fmt.Errorf("Invalid reconciler name %q: %s.", reconcilerName, strings.Join(err, ", "))
 	}
 
+	if err := r.validateSyncMetadata(rs); err != nil {
+		return err
+	}
+
 	if err := r.validateSourceSpec(ctx, rs, reconcilerName); err != nil {
 		return err
 	}

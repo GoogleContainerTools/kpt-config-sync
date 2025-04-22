@@ -79,7 +79,7 @@ KUSTOMIZE_VERSION := v5.4.2-gke.0
 KUSTOMIZE := $(BIN_DIR)/kustomize
 KUSTOMIZE_STAGING_DIR := $(OUTPUT_DIR)/third_party/kustomize
 
-HELM_VERSION := v3.15.3-gke.5
+HELM_VERSION := v3.15.3-gke.6
 HELM := $(BIN_DIR)/helm
 HELM_STAGING_DIR := $(OUTPUT_DIR)/third_party/helm
 
@@ -89,7 +89,7 @@ COSIGN := $(BIN_DIR)/cosign
 GIT_SYNC_VERSION := v4.3.0-gke.16__linux_amd64
 GIT_SYNC_IMAGE_NAME := gcr.io/config-management-release/git-sync:$(GIT_SYNC_VERSION)
 
-OTELCONTRIBCOL_VERSION := v0.118.0-gke.7
+OTELCONTRIBCOL_VERSION := v0.118.0-gke.8
 OTELCONTRIBCOL_IMAGE_NAME := gcr.io/config-management-release/otelcontribcol:$(OTELCONTRIBCOL_VERSION)
 
 # Directory used for staging Docker contexts.

@@ -25,7 +25,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
@@ -277,7 +276,7 @@ func TestRootSyncFinalize(t *testing.T) {
 							"failed to update object status: %s: %w",
 							kinds.ObjectSummary(rootSync1),
 							apierrors.NewNotFound(
-								schema.GroupResource{Group: "configsync.gke.io", Resource: "RootSync"},
+								kinds.RootSyncResource().GroupResource(),
 								"config-management-system/root-sync")),
 						rootSync1.DeepCopy()),
 				),
@@ -601,7 +600,7 @@ func TestRootSyncAddFinalizer(t *testing.T) {
 						"failed to update object: %s: %w",
 						kinds.ObjectSummary(rootSync1),
 						apierrors.NewNotFound(
-							schema.GroupResource{Group: "configsync.gke.io", Resource: "RootSync"},
+							kinds.RootSyncResource().GroupResource(),
 							"config-management-system/root-sync"),
 					),
 					rootSync1.DeepCopy()),
@@ -741,7 +740,7 @@ func TestRootSyncRemoveFinalizer(t *testing.T) {
 						"failed to update object: %s: %w",
 						kinds.ObjectSummary(rootSync1),
 						apierrors.NewNotFound(
-							schema.GroupResource{Group: "configsync.gke.io", Resource: "RootSync"},
+							kinds.RootSyncResource().GroupResource(),
 							"config-management-system/root-sync"),
 					),
 					rootSync1.DeepCopy()),

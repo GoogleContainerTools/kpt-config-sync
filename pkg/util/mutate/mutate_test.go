@@ -24,7 +24,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	appsv1 "k8s.io/api/apps/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/utils/ptr"
 	"kpt.dev/configsync/pkg/core"
@@ -138,7 +137,7 @@ func TestStatus(t *testing.T) {
 				fmt.Errorf(
 					"failed to update object status: %s: %w", kinds.ObjectSummary(deployment1),
 					apierrors.NewConflict(
-						schema.GroupResource{Group: "apps", Resource: "Deployment"},
+						kinds.DeploymentResource().GroupResource(),
 						"default/hello-world",
 						fmt.Errorf("ResourceVersion conflict: expected \"1\" but found \"2\"")),
 				),
@@ -263,7 +262,7 @@ func TestSpec(t *testing.T) {
 				fmt.Errorf(
 					"failed to update object: %s: %w", kinds.ObjectSummary(deployment1),
 					apierrors.NewConflict(
-						schema.GroupResource{Group: "apps", Resource: "Deployment"},
+						kinds.DeploymentResource().GroupResource(),
 						"default/hello-world",
 						fmt.Errorf("ResourceVersion conflict: expected \"1\" but found \"2\"")),
 				),

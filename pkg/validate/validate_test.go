@@ -868,14 +868,6 @@ func TestHierarchical(t *testing.T) {
 			wantErrs: status.FakeMultiError(nonhierarchical.ManagedResourceInUnmanagedNamespaceErrorCode),
 		},
 		{
-			name: "RepoSync with invalid fields fails",
-			objs: []ast.FileObject{
-				k8sobjects.Repo(),
-				k8sobjects.FileObject(k8sobjects.RepoSyncObjectV1Beta1("foo", "invalid"), "namespaces/foo/rs.yamo"),
-			},
-			wantErrs: status.FakeMultiError(validate.InvalidSyncCode),
-		},
-		{
 			name: "RepoSync manages itself",
 			options: Options{
 				Scope:    "bookstore",

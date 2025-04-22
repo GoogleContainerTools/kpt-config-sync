@@ -45,6 +45,7 @@ import (
 	"kpt.dev/configsync/pkg/syncer/client"
 	"kpt.dev/configsync/pkg/util/clusterconfig"
 	"kpt.dev/configsync/pkg/validate/raw/validate"
+	rsyncvalidate "kpt.dev/configsync/pkg/validate/rsync/validate"
 	"kpt.dev/configsync/pkg/vet"
 	"kpt.dev/configsync/pkg/webhook/configuration"
 )
@@ -289,7 +290,7 @@ func Generate() AllExamples {
 	result.add(status.ManagementConflictErrorWrap(k8sobjects.Role(), declared.ResourceManager(declared.RootScope, configsync.RootSyncName)))
 
 	// 1061
-	result.add(validate.MissingGitRepo(k8sobjects.RepoSyncObjectV1Beta1("bookstore", configsync.RepoSyncName)))
+	result.add(rsyncvalidate.MissingGitRepo(configsync.RootSyncKind))
 
 	// 1062 is Deprecated.
 	result.markDeprecated("1062")

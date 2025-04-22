@@ -24,7 +24,6 @@ import (
 	"github.com/stretchr/testify/require"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/core"
@@ -268,7 +267,7 @@ func TestRepoSyncFinalize(t *testing.T) {
 							"failed to update object status: %s: %w",
 							kinds.ObjectSummary(repoSync1),
 							apierrors.NewNotFound(
-								schema.GroupResource{Group: "configsync.gke.io", Resource: "RepoSync"},
+								kinds.RepoSyncResource().GroupResource(),
 								"example/repo-sync-1"),
 						),
 						repoSync1.DeepCopy(),
@@ -593,7 +592,7 @@ func TestRepoSyncAddFinalizer(t *testing.T) {
 						"failed to update object: %s: %w",
 						kinds.ObjectSummary(repoSync1),
 						apierrors.NewNotFound(
-							schema.GroupResource{Group: "configsync.gke.io", Resource: "RepoSync"},
+							kinds.RepoSyncResource().GroupResource(),
 							"example/repo-sync-1")),
 					repoSync1.DeepCopy()),
 			),
@@ -732,7 +731,7 @@ func TestRepoSyncRemoveFinalizer(t *testing.T) {
 						"failed to update object: %s: %w",
 						kinds.ObjectSummary(repoSync1),
 						apierrors.NewNotFound(
-							schema.GroupResource{Group: "configsync.gke.io", Resource: "RepoSync"},
+							kinds.RepoSyncResource().GroupResource(),
 							"example/repo-sync-1")),
 					repoSync1.DeepCopy()),
 			),

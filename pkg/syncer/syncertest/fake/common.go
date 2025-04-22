@@ -16,6 +16,7 @@ package fake
 
 import (
 	"fmt"
+	"strings"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -139,7 +140,7 @@ func convertToListItemType(obj runtime.Object, objListType client.ObjectList, sc
 func toGR(gk schema.GroupKind) schema.GroupResource {
 	return schema.GroupResource{
 		Group:    gk.Group,
-		Resource: gk.Kind,
+		Resource: strings.ToLower(gk.Kind) + "s",
 	}
 }
 

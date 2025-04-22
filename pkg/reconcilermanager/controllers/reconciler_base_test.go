@@ -1023,7 +1023,7 @@ func TestSetupAndTeardown(t *testing.T) {
 					core.Generation(1), core.UID("1"), core.ResourceVersion("1"),
 					core.DeletionTimestamp(metav1.Time{Time: time.Now()})),
 			},
-			expectedErrMsg: "Namespace \"/test-ns\" not found",
+			expectedErrMsg: "namespaces \"/test-ns\" not found",
 		},
 		"Terminating RootSync's reconciler & reconciler-manager finalizers should be kept if its Namespace is not terminating": {
 			rsync: k8sobjects.RootSyncObjectV1Beta1("rs",

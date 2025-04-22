@@ -70,7 +70,7 @@ func TestClient_Create(t *testing.T) {
 				k8sobjects.RoleObject(core.Name("admin"), core.Namespace("billing")),
 			),
 			wantErr: syncerclient.ConflictCreateAlreadyExists(
-				apierrors.NewAlreadyExists(rbacv1.Resource("Role"), "billing/admin"),
+				apierrors.NewAlreadyExists(rbacv1.Resource("roles"), "billing/admin"),
 				k8sobjects.RoleObject(core.Name("admin"), core.Namespace("billing"))),
 		},
 		{

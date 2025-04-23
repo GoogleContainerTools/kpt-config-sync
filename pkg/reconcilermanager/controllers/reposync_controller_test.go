@@ -4752,6 +4752,112 @@ func TestValidateRepoSyncName(t *testing.T) {
 	}
 }
 
+func TestValidateRepoSyncDeletionPropagationAnnotation(t *testing.T) {
+	repoSyncDeletionPropagationError := validate.NewDeletionPropagationAnnotationError(configsync.RepoSyncKind)
+
+	testCases := []struct {
+		name           string
+		annotations    map[string]string
+		wantConditions []v1beta1.RepoSyncCondition
+	}{
+		{
+			name:        "no annotation passes",
+			annotations: map[string]string{},
+		},
+		{
+			name: "foreground passes",
+			annotations: map[string]string{
+				metadata.DeletionPropagationPolicyAnnotationKey: metadata.DeletionPropagationPolicyForeground.String(),
+			},
+		},
+		{
+			name: "orphan passes",
+			annotations: map[string]string{
+				metadata.DeletionPropagationPolicyAnnotationKey: metadata.DeletionPropagationPolicyOrphan.String(),
+			},
+		},
+		{
+			name: "empty annotation fails",
+			annotations: map[string]string{
+				metadata.DeletionPropagationPolicyAnnotationKey: "",
+			},
+			wantConditions: []v1beta1.RepoSyncCondition{
+				{
+					Type:            v1beta1.RepoSyncStalled,
+					Status:          metav1.ConditionTrue,
+					Reason:          "Validation",
+					Message:         repoSyncDeletionPropagationError.Error(),
+					Commit:          "",
+					Errors:          nil, // TODO: len(Errors) should match ErrorSummary.TotalCount
+					ErrorSourceRefs: nil,
+					ErrorSummary:    &v1beta1.ErrorSummary{TotalCount: 1, ErrorCountAfterTruncation: 1},
+				},
+			},
+		},
+		{
+			name: "invalid annotation fails",
+			annotations: map[string]string{
+				metadata.DeletionPropagationPolicyAnnotationKey: "invalid",
+			},
+			wantConditions: []v1beta1.RepoSyncCondition{
+				{
+					Type:            v1beta1.RepoSyncStalled,
+					Status:          metav1.ConditionTrue,
+					Reason:          "Validation",
+					Message:         repoSyncDeletionPropagationError.Error(),
+					Commit:          "",
+					Errors:          nil, // TODO: len(Errors) should match ErrorSummary.TotalCount
+					ErrorSourceRefs: nil,
+					ErrorSummary:    &v1beta1.ErrorSummary{TotalCount: 1, ErrorCountAfterTruncation: 1},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			parseDeployment = parsedDeployment
+			rs := repoSyncWithGit(reposyncNs, reposyncName,
+				reposyncSecretType(configsync.AuthNone),
+			)
+			core.AddAnnotations(rs, tc.annotations)
+			request := namespacedName(rs.Name, rs.Namespace)
+			fakeClient, _, testReconciler := setupNSReconciler(t, rs)
+			reconcilerKey := client.ObjectKey{
+				Namespace: configsync.ControllerNamespace,
+				Name:      nsReconcilerName,
+			}
+
+			ctx := context.TODO()
+			result, err := testReconciler.Reconcile(ctx, request)
+			require.NoError(t, err)
+			require.Equal(t, controllerruntime.Result{}, result)
+
+			// Validate expected RSync status conditions
+			wantRs := k8sobjects.RepoSyncObjectV1Beta1(rs.Namespace, rs.Name)
+			wantRs.Status.Conditions = tc.wantConditions
+			if len(tc.wantConditions) == 0 {
+				// expect reconciling condition to say deployment was created
+				reposync.SetReconciling(wantRs, "Deployment",
+					fmt.Sprintf("Deployment (%s) InProgress: Replicas: 0/1", reconcilerKey))
+			}
+			validateRepoSyncStatus(t, wantRs, fakeClient)
+
+			// Validate reconciler Deployment creation
+			reconcilerObj := &appsv1.Deployment{}
+			err = fakeClient.Get(ctx, reconcilerKey, reconcilerObj)
+			if len(tc.wantConditions) == 0 {
+				// expect exists
+				require.NoError(t, err)
+			} else {
+				// expect not found
+				gr := kinds.DeploymentResource().GroupResource()
+				require.Equal(t, apierrors.NewNotFound(gr, reconcilerKey.String()), err)
+			}
+		})
+	}
+}
+
 func validateRepoSyncStatus(t *testing.T, want *v1beta1.RepoSync, fakeClient *syncerFake.Client) {
 	t.Helper()
 

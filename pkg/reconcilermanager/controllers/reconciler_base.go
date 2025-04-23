@@ -554,6 +554,11 @@ func (r *reconcilerBase) addTemplateLabels(deployment *appsv1.Deployment, labelM
 	deployment.Spec.Template.Labels = currentLabels
 }
 
+// validateSyncMetadata verifies that user-managed RSync metadata is valid.
+func (r *reconcilerBase) validateSyncMetadata(syncObj client.Object) error {
+	return validate.DeletionPropagationAnnotation(syncObj, r.syncGVK.Kind)
+}
+
 // validateCACertSecret verify that caCertSecretRef is well formed with a key named "cert"
 func (r *reconcilerBase) validateCACertSecret(ctx context.Context, namespace, caCertSecretRefName string) error {
 	if useCACert(caCertSecretRefName) {

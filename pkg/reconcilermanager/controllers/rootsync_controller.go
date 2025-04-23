@@ -846,6 +846,10 @@ func (r *RootSyncReconciler) validateRootSync(ctx context.Context, rs *v1beta1.R
 		return fmt.Errorf("invalid reconciler name %q: %s", reconcilerName, strings.Join(err, ", "))
 	}
 
+	if err := r.validateSyncMetadata(rs); err != nil {
+		return err
+	}
+
 	if err := r.validateSourceSpec(ctx, rs); err != nil {
 		return err
 	}

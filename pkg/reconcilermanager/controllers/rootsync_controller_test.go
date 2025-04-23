@@ -30,6 +30,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -4431,6 +4432,112 @@ func TestValidateRootSyncName(t *testing.T) {
 			rs := &v1beta1.RootSync{}
 			rs.Name = tc.name
 			require.Equal(t, tc.expectErr, validateRootSyncName(rs))
+		})
+	}
+}
+
+func TestValidateRootSyncDeletionPropagationAnnotation(t *testing.T) {
+	rootSyncDeletionPropagationError := validate.NewDeletionPropagationAnnotationError(configsync.RootSyncKind)
+
+	testCases := []struct {
+		name           string
+		annotations    map[string]string
+		wantConditions []v1beta1.RootSyncCondition
+	}{
+		{
+			name:        "no annotation passes",
+			annotations: map[string]string{},
+		},
+		{
+			name: "foreground passes",
+			annotations: map[string]string{
+				metadata.DeletionPropagationPolicyAnnotationKey: metadata.DeletionPropagationPolicyForeground.String(),
+			},
+		},
+		{
+			name: "orphan passes",
+			annotations: map[string]string{
+				metadata.DeletionPropagationPolicyAnnotationKey: metadata.DeletionPropagationPolicyOrphan.String(),
+			},
+		},
+		{
+			name: "empty annotation fails",
+			annotations: map[string]string{
+				metadata.DeletionPropagationPolicyAnnotationKey: "",
+			},
+			wantConditions: []v1beta1.RootSyncCondition{
+				{
+					Type:            v1beta1.RootSyncStalled,
+					Status:          metav1.ConditionTrue,
+					Reason:          "Validation",
+					Message:         rootSyncDeletionPropagationError.Error(),
+					Commit:          "",
+					Errors:          nil,
+					ErrorSourceRefs: nil,
+					ErrorSummary:    &v1beta1.ErrorSummary{TotalCount: 1, ErrorCountAfterTruncation: 1},
+				},
+			},
+		},
+		{
+			name: "invalid annotation fails",
+			annotations: map[string]string{
+				metadata.DeletionPropagationPolicyAnnotationKey: "invalid",
+			},
+			wantConditions: []v1beta1.RootSyncCondition{
+				{
+					Type:            v1beta1.RootSyncStalled,
+					Status:          metav1.ConditionTrue,
+					Reason:          "Validation",
+					Message:         rootSyncDeletionPropagationError.Error(),
+					Commit:          "",
+					Errors:          nil,
+					ErrorSourceRefs: nil,
+					ErrorSummary:    &v1beta1.ErrorSummary{TotalCount: 1, ErrorCountAfterTruncation: 1},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			parseDeployment = parsedDeployment
+			rs := rootSyncWithGit(rootsyncName,
+				rootsyncSecretType(configsync.AuthNone),
+			)
+			core.AddAnnotations(rs, tc.annotations)
+			request := namespacedName(rs.Name, rs.Namespace)
+			fakeClient, _, testReconciler := setupRootReconciler(t, rs)
+			reconcilerKey := client.ObjectKey{
+				Namespace: configsync.ControllerNamespace,
+				Name:      rootReconcilerName,
+			}
+
+			ctx := context.TODO()
+			result, err := testReconciler.Reconcile(ctx, request)
+			require.NoError(t, err)
+			require.Equal(t, controllerruntime.Result{}, result)
+
+			// Validate expected RSync status conditions
+			wantRs := k8sobjects.RootSyncObjectV1Beta1(rs.Name)
+			wantRs.Status.Conditions = tc.wantConditions
+			if len(tc.wantConditions) == 0 {
+				// expect reconciling condition to say deployment was created
+				rootsync.SetReconciling(wantRs, "Deployment",
+					fmt.Sprintf("Deployment (%s) InProgress: Replicas: 0/1", reconcilerKey))
+			}
+			validateRootSyncStatus(t, wantRs, fakeClient)
+
+			// Validate reconciler Deployment creation
+			reconcilerObj := &appsv1.Deployment{}
+			err = fakeClient.Get(ctx, reconcilerKey, reconcilerObj)
+			if len(tc.wantConditions) == 0 {
+				// expect exists
+				require.NoError(t, err)
+			} else {
+				// expect not found
+				gr := kinds.DeploymentResource().GroupResource()
+				require.Equal(t, apierrors.NewNotFound(gr, reconcilerKey.String()), err)
+			}
 		})
 	}
 }

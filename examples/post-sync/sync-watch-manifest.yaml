@@ -32,7 +32,7 @@ spec:
       serviceAccountName: sync-status-watch
       containers:
         - name: sync-status-watch
-          image: SYNC_STATUS_WATCH_CONTROLLER_IMAGE_REGISTRY
+          image: SYNC_STATUS_WATCH_CONTROLLER_IMAGE
           imagePullPolicy: Always
           resources:
             limits:

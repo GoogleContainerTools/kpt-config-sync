@@ -73,7 +73,7 @@ make build push
 
 ```sh
 # Replace the image placeholder and apply the manifest
-sed "s|SYNC_STATUS_WATCH_CONTROLLER_IMAGE_REGISTRY|${REGION}-docker.pkg.dev/${PROJECT_ID}/${GAR_REPO_NAME}/${IMAGE_NAME}:${IMAGE_TAG}|g" sync-watch-manifest.yaml | kubectl apply -f -
+sed "s|SYNC_STATUS_WATCH_CONTROLLER_IMAGE|${REGION}-docker.pkg.dev/${PROJECT_ID}/${GAR_REPO_NAME}/${IMAGE_NAME}:${IMAGE_TAG}|g" sync-watch-manifest.yaml | kubectl apply -f -
 
 # Or simply use the make target if available
 make deploy

@@ -18,4 +18,4 @@ push: build
 
 deploy: push
 	@echo "Deploying to Kubernetes..."
-	sed "s|SYNC_STATUS_WATCH_CONTROLLER_IMAGE_REGISTRY|${IMAGE_URI}|g" sync-watch-manifest.yaml | kubectl apply -f -
+	sed "s|SYNC_STATUS_WATCH_CONTROLLER_IMAGE|${IMAGE_URI}|g" sync-watch-manifest.yaml | kubectl apply -f -

@@ -55,6 +55,7 @@ type SyncStatusController struct {
 	client        client.Client
 	log           logr.Logger
 	statusTracker *StatusTracker
+	syncKind      string // Explicit field to indicate what kind of resource we're watching
 }
 
 func (c *SyncStatusController) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
@@ -62,10 +63,15 @@ func (c *SyncStatusController) Reconcile(ctx context.Context, req reconcile.Requ
 	var status v1beta1.Status
 	var generation int64
 	var observedGeneration int64
+	var errs, commit string
 
-	// Try to get as RootSync first
-	var root v1beta1.RootSync
-	if err := c.client.Get(ctx, req.NamespacedName, &root); err == nil {
+	// Use the explicit syncKind to know which type to fetch
+	switch c.syncKind {
+	case "RootSync":
+		var root v1beta1.RootSync
+		if err := c.client.Get(ctx, req.NamespacedName, &root); err != nil {
+			return reconcile.Result{}, client.IgnoreNotFound(err)
+		}
 		syncID = SyncID{
 			Name:      root.Name,
 			Kind:      root.Kind,
@@ -74,12 +80,9 @@ func (c *SyncStatusController) Reconcile(ctx context.Context, req reconcile.Requ
 		status = root.Status.Status
 		generation = root.Generation
 		observedGeneration = root.Status.ObservedGeneration
-		errs, commit := c.processRootSyncConditions(root.Status.Conditions)
-		if err := c.handleErrors(syncID, errs, commit, generation, observedGeneration); err != nil {
-			return reconcile.Result{}, err
-		}
-	} else {
-		// Fall back to RepoSync if RootSync not found
+		errs, commit = c.processRootSyncConditions(root.Status.Conditions)
+
+	case "RepoSync":
 		var repo v1beta1.RepoSync
 		if err := c.client.Get(ctx, req.NamespacedName, &repo); err != nil {
 			return reconcile.Result{}, client.IgnoreNotFound(err)
@@ -92,10 +95,16 @@ func (c *SyncStatusController) Reconcile(ctx context.Context, req reconcile.Requ
 		status = repo.Status.Status
 		generation = repo.Generation
 		observedGeneration = repo.Status.ObservedGeneration
-		errs, commit := c.processRepoSyncConditions(repo.Status.Conditions)
-		if err := c.handleErrors(syncID, errs, commit, generation, observedGeneration); err != nil {
-			return reconcile.Result{}, err
-		}
+		errs, commit = c.processRepoSyncConditions(repo.Status.Conditions)
+
+	default:
+		c.log.Error(fmt.Errorf("unknown sync kind: %s", c.syncKind), "unrecognized syncKind")
+		return reconcile.Result{}, fmt.Errorf("unknown sync kind: %s", c.syncKind)
+	}
+
+	// Process any errors from conditions
+	if err := c.handleErrors(syncID, errs, commit, generation, observedGeneration); err != nil {
+		return reconcile.Result{}, err
 	}
 
 	// Process sync status
@@ -281,7 +290,12 @@ func (s *StatusTracker) MarkLogged(syncID SyncID, commit, message string) {
 }
 
 func main() {
-	zapLog, _ := zap.NewProduction()
+	zapLog, err := zap.NewProduction()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to initialize logger: %v\n", err)
+		os.Exit(1)
+	}
+	defer zapLog.Sync()
 	logger := zapr.NewLogger(zapLog)
 
 	ctrl.SetLogger(logger)
@@ -296,22 +310,38 @@ func main() {
 		os.Exit(1)
 	}
 
-	ctrlr := &SyncStatusController{
+	// Create a shared status tracker
+	statusTracker := NewStatusTracker()
+
+	// Create a dedicated controller for RootSync
+	rootSyncController := &SyncStatusController{
 		client:        mgr.GetClient(),
-		log:           logger,
-		statusTracker: NewStatusTracker(),
+		log:           logger.WithName("rootsync-controller"),
+		statusTracker: statusTracker,
+		syncKind:      "RootSync",
 	}
 
+	// Create a dedicated controller for RepoSync
+	repoSyncController := &SyncStatusController{
+		client:        mgr.GetClient(),
+		log:           logger.WithName("reposync-controller"),
+		statusTracker: statusTracker,
+		syncKind:      "RepoSync",
+	}
+
+	// Set up RootSync controller
 	if err := ctrl.NewControllerManagedBy(mgr).
 		For(&v1beta1.RootSync{}).
-		Complete(ctrlr); err != nil {
-		logger.Error(err, "unable to watch RootSync")
+		Complete(rootSyncController); err != nil {
+		logger.Error(err, "unable to set up RootSync controller")
 		os.Exit(1)
 	}
+
+	// Set up RepoSync controller
 	if err := ctrl.NewControllerManagedBy(mgr).
 		For(&v1beta1.RepoSync{}).
-		Complete(ctrlr); err != nil {
-		logger.Error(err, "unable to watch RepoSync")
+		Complete(repoSyncController); err != nil {
+		logger.Error(err, "unable to set up RepoSync controller")
 		os.Exit(1)
 	}
 

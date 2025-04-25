@@ -115,10 +115,7 @@ func TestCloudLoggingRootSync(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err := setupLoggingPermission(nt, nomostest.StatusWatchName, nomostest.StatusWatchNamespace)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(setupLoggingPermission(nt, nomostest.StatusWatchName, nomostest.StatusWatchNamespace))
 
 	rootSyncID := nomostest.DefaultRootSyncID
 	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
@@ -239,10 +236,7 @@ func TestCloudLoggingConditionEventRootSync(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err := setupLoggingPermission(nt, nomostest.StatusWatchName, nomostest.StatusWatchNamespace)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(setupLoggingPermission(nt, nomostest.StatusWatchName, nomostest.StatusWatchNamespace))
 
 	testNamespace := k8sobjects.NamespaceObject(testNs)
 	nt.Must(nt.KubeClient.Create(testNamespace))
@@ -369,10 +363,7 @@ func TestCloudLoggingStatusEventRepoSync(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	err := setupLoggingPermission(nt, nomostest.StatusWatchName, nomostest.StatusWatchNamespace)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(setupLoggingPermission(nt, nomostest.StatusWatchName, nomostest.StatusWatchNamespace))
 
 	msg := "RepoSync bookstore/repo-sync must not manage itself in its repo"
 	rs := &v1beta1.RepoSync{}

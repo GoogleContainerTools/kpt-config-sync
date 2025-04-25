@@ -16,56 +16,67 @@ package nomostest
 
 import (
 	"fmt"
+	"os"
+	"strings"
 
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/kinds"
 
-	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-const (
-	// StatusWatchNamespace is the namespace for sync status watch resources.
-	StatusWatchNamespace = "sync-status-watch"
-	// StatusWatchName is the name for sync status watch resources.
-	StatusWatchName = "sync-status-watch"
-)
+// StatusWatchNamespace is the namespace for the sync status watch controller.
+const StatusWatchNamespace = "sync-status-watch"
 
-const sswImage = testing.TestInfraArtifactRepositoryAddress + "/sync-status-watch-controller:v1.0.0-539a1ddd"
+// StatusWatchName is the name of the sync status watch controller.
+const StatusWatchName = "sync-status-watch"
 
-// SetupSyncStatusWatchController builds and deploys the sync status watch controller.
-func SetupSyncStatusWatchController(nt *NT) error {
+// ImagePlaceholder is the placeholder in the manifest that will be replaced with the actual image.
+const ImagePlaceholder = "SYNC_STATUS_WATCH_CONTROLLER_IMAGE_REGISTRY"
+
+// ManifestPath is the path to the manifest file.
+const ManifestPath = "../../examples/post-sync/sync-watch-manifest.yaml"
+
+// TestImage is the image used for testing the sync status watch controller.
+const TestImage = testing.TestInfraArtifactRepositoryAddress + "/sync-status-watch-controller:v1.0.0-539a1ddd"
+
+// SetupSyncStatusWatchController sets up the sync status watch controller in the cluster.
+// It creates the necessary namespace and deploys the controller.
+// An optional custom manifest path can be provided to override the default.
+func SetupSyncStatusWatchController(nt *NT, customManifestPath ...string) error {
 	nt.T.Logf("applying sync status watch controller manifest")
-	if err := nt.KubeClient.Create(testSyncStatusWatchNamespace()); err != nil {
-		return err
-	}
-	if err := nt.KubeClient.Create(testSyncStatusWatchServiceAccount()); err != nil {
-		return err
+
+	// Create namespace first to ensure it exists
+	namespace := testSyncStatusWatchNamespace()
+	if err := nt.KubeClient.Create(namespace); err != nil && !apierrors.IsAlreadyExists(err) {
+		return fmt.Errorf("creating namespace %s: %w", namespace.Name, err)
 	}
 
-	if err := installSyncStatusWatchController(nt); err != nil {
+	// Use kubectl to apply the manifest
+	if err := execManifestCommand(nt, "apply", customManifestPath...); err != nil {
 		nt.describeNotRunningTestPods(StatusWatchNamespace)
-		return fmt.Errorf("waiting for sync status watch controller to become available: %w", err)
+		return fmt.Errorf("applying sync status watch manifest: %w", err)
 	}
-	return nil
+
+	// Wait for the deployment to be ready
+	return nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), StatusWatchName, StatusWatchNamespace)
 }
 
-// TeardownSyncStatusWatchController removes the sync status watch controller.
-func TeardownSyncStatusWatchController(nt *NT) error {
+// TeardownSyncStatusWatchController tears down the sync status watch controller from the cluster.
+// It removes the namespace and associated resources.
+// An optional custom manifest path can be provided to match the one used during setup.
+func TeardownSyncStatusWatchController(nt *NT, customManifestPath ...string) error {
 	nt.T.Log("tearing down sync status watch controller")
-	objs := testSyncStatusWatchObjects()
-	for _, o := range objs {
-		if err := nt.KubeClient.Delete(o); err != nil && !apierrors.IsNotFound(err) {
-			nt.T.Logf("Error deleting %T %s/%s: %v", o, o.GetNamespace(), o.GetName(), err)
-		}
+
+	// Use kubectl to delete resources
+	if err := execManifestCommand(nt, "delete --ignore-not-found", customManifestPath...); err != nil {
+		nt.T.Logf("Error deleting resources: %v", err)
 	}
+
+	// Make sure the namespace is deleted
 	if err := nt.KubeClient.Delete(testSyncStatusWatchNamespace()); err != nil && !apierrors.IsNotFound(err) {
 		nt.T.Logf("Error deleting Namespace: %v", err)
 	}
@@ -74,99 +85,45 @@ func TeardownSyncStatusWatchController(nt *NT) error {
 	return nil
 }
 
-func installSyncStatusWatchController(nt *NT) error {
-	objs := testSyncStatusWatchObjects()
-
-	for _, o := range objs {
-		if err := nt.KubeClient.Apply(o); err != nil {
-			return fmt.Errorf("applying %v %s: %w", o.GetObjectKind().GroupVersionKind(),
-				client.ObjectKey{Name: o.GetName(), Namespace: o.GetNamespace()}, err)
-		}
+// execManifestCommand executes a kubectl command to apply or delete a manifest with the test image.
+// It accepts an optional custom manifest path. If not provided, it uses the default ManifestPath.
+func execManifestCommand(nt *NT, kubectlAction string, customManifestPath ...string) error {
+	// Determine the manifest path to use
+	manifestPath := ManifestPath
+	if len(customManifestPath) > 0 && customManifestPath[0] != "" {
+		manifestPath = customManifestPath[0]
 	}
 
-	return nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), StatusWatchName, StatusWatchNamespace)
-}
-
-// testSyncStatusWatchObjects returns all objects needed for the sync-status-watch controller
-func testSyncStatusWatchObjects() []client.Object {
-	return []client.Object{
-		testSyncStatusWatchClusterRole(),
-		testSyncStatusWatchClusterRoleBinding(),
-		testSyncStatusWatchDeployment(),
+	// Read the manifest file
+	input, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return fmt.Errorf("reading manifest file %s: %w", manifestPath, err)
 	}
+
+	// Replace the image placeholder
+	content := strings.ReplaceAll(string(input), ImagePlaceholder, TestImage)
+
+	// Create a temporary file
+	tmpFile, err := os.CreateTemp("", "statuswatch-*.yaml")
+	if err != nil {
+		return fmt.Errorf("creating temp file: %w", err)
+	}
+	defer os.Remove(tmpFile.Name()) // Clean up the temp file when done
+
+	// Write the modified content to the temp file
+	if err := os.WriteFile(tmpFile.Name(), []byte(content), 0644); err != nil {
+		return fmt.Errorf("writing to temp file: %w", err)
+	}
+
+	// Execute kubectl with the temp file
+	_, err = nt.Shell.ExecWithDebug("kubectl", kubectlAction, "-f", tmpFile.Name())
+	if err != nil {
+		return fmt.Errorf("executing kubectl %s: %w", kubectlAction, err)
+	}
+
+	return nil
 }
 
 func testSyncStatusWatchNamespace() *corev1.Namespace {
 	return k8sobjects.NamespaceObject(StatusWatchNamespace)
-}
-
-func testSyncStatusWatchServiceAccount() *corev1.ServiceAccount {
-	return k8sobjects.ServiceAccountObject(
-		StatusWatchName,
-		core.Namespace(StatusWatchNamespace),
-	)
-}
-
-func testSyncStatusWatchClusterRole() *rbacv1.ClusterRole {
-	cr := k8sobjects.ClusterRoleObject(
-		core.Name(StatusWatchName),
-	)
-	cr.Rules = []rbacv1.PolicyRule{
-		{
-			APIGroups: []string{"configsync.gke.io"},
-			Resources: []string{"rootsyncs", "reposyncs"},
-			Verbs:     []string{"get", "list", "watch"},
-		},
-	}
-	return cr
-}
-
-func testSyncStatusWatchClusterRoleBinding() *rbacv1.ClusterRoleBinding {
-	crb := k8sobjects.ClusterRoleBindingObject(core.Name(StatusWatchName))
-	crb.RoleRef = rbacv1.RoleRef{
-		APIGroup: "rbac.authorization.k8s.io",
-		Kind:     "ClusterRole",
-		Name:     StatusWatchName,
-	}
-	crb.Subjects = []rbacv1.Subject{
-		{
-			Kind:      "ServiceAccount",
-			Name:      StatusWatchName,
-			Namespace: StatusWatchNamespace,
-		},
-	}
-	return crb
-}
-
-func testSyncStatusWatchDeployment() *appsv1.Deployment {
-	deployment := k8sobjects.DeploymentObject(
-		core.Name(StatusWatchName),
-		core.Namespace(StatusWatchNamespace),
-		core.Labels(map[string]string{"app": StatusWatchName}),
-	)
-
-	deployment.Spec = appsv1.DeploymentSpec{
-		Selector: &v1.LabelSelector{
-			MatchLabels: map[string]string{"app": StatusWatchName},
-		},
-		Template: corev1.PodTemplateSpec{
-			ObjectMeta: v1.ObjectMeta{
-				Labels: map[string]string{"app": StatusWatchName},
-			},
-			Spec: corev1.PodSpec{
-				ServiceAccountName: StatusWatchName,
-				Containers: []corev1.Container{
-					{
-						Name:            StatusWatchName,
-						Image:           sswImage,
-						ImagePullPolicy: corev1.PullAlways,
-					},
-				},
-			},
-		},
-		Strategy: appsv1.DeploymentStrategy{
-			Type: appsv1.RecreateDeploymentStrategyType,
-		},
-	}
-	return deployment
 }

@@ -314,10 +314,6 @@ push-oci-signature-verification-server:
 	@gcloud $(GCLOUD_QUIET) auth configure-docker $(firstword $(subst /, ,$(E2E_TEST_IMAGE_OCI_SIGNATURE_VERIFICATION_SERVER)))
 	@docker push $(E2E_TEST_IMAGE_OCI_SIGNATURE_VERIFICATION_SERVER)
 
-.PHONY: deploy
-deploy:
-	kubectl apply -f $(OSS_MANIFEST_STAGING_DIR)/config-sync-manifest.yaml
-
 ##################################################
 # E2E Sync Status Watch Controller
 # Only run when changes are made to

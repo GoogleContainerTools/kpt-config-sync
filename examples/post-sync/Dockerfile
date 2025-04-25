@@ -13,7 +13,9 @@
 # limitations under the License.
 
 # Build stage
-FROM golang:1.24 as builder
+ARG GOLANG_IMAGE
+
+FROM ${GOLANG_IMAGE} as builder
 
 WORKDIR /
 COPY . .

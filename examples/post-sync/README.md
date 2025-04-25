@@ -1,6 +1,13 @@
-# Sync Status Watch Controller
+# Config Sync Error Monitoring and Alerting Solution
 
-A Kubernetes controller that monitors and reports sync error status for Config Sync's `RootSync` and `RepoSync` resources. The controller watches for errors in the status.conditions, status.sync, status.source, and status.rendering fields and logs them for observability.
+A comprehensive solution for monitoring, logging, and alerting on Config Sync status errors. This solution includes a Kubernetes controller that watches `RootSync` and `RepoSync` resources, detects errors in their status fields, and integrates with Google Cloud services to provide enhanced observability and automated notifications.
+
+The solution enables:
+- Real-time monitoring of sync errors in Config Sync resources
+- Structured logging to Google Cloud Logging
+- Automated alerting through Pub/Sub, Cloud Functions, and email notifications
+- Integration with various notification channels (email, Slack, etc.)
+- Custom error handling workflows with Google Application Integration
 
 > **Note**: ⚠️ **This component is not released with Config Sync**.
 > - It is **only compatible** with the **Config Sync API at same branch HEAD**.
@@ -72,12 +79,15 @@ make build push
 4. **Deploy to Kubernetes**:
 
 ```sh
-# Replace the image placeholder and apply the manifest
-sed "s|SYNC_STATUS_WATCH_CONTROLLER_IMAGE|${REGION}-docker.pkg.dev/${PROJECT_ID}/${GAR_REPO_NAME}/${IMAGE_NAME}:${IMAGE_TAG}|g" sync-watch-manifest.yaml | kubectl apply -f -
-
-# Or simply use the make target if available
+# Deploy using the make target which handles image substitution in the manifest 
 make deploy
 ```
+
+> **Note**: The `make deploy` command automates the deployment process. Under the hood, it performs something like:
+> ```sh
+> sed "s|SYNC_STATUS_WATCH_CONTROLLER_IMAGE|${REGION}-docker.pkg.dev/${PROJECT_ID}/${GAR_REPO_NAME}/${IMAGE_NAME}:${IMAGE_TAG}|g" sync-watch-manifest.yaml | kubectl apply -f -
+> ```
+> See the `Makefile` for more details on the implementation.
 
 ### Verifying Deployment
 

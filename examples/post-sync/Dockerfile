@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # Build stage
-ARG GOLANG_IMAGE
+ARG GOLANG_IMAGE=golang:1.24
 
 FROM ${GOLANG_IMAGE} as builder
 

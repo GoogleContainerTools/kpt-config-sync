@@ -79,6 +79,9 @@ make build push
 4. **Deploy to Kubernetes**:
 
 ```sh
+# Create the namespace for the controller
+kubectl create namespace sync-status-watch
+
 # Deploy using the make target which handles image substitution in the manifest 
 make deploy
 ```
@@ -119,40 +122,7 @@ Error detected:
 
 The controller outputs structured logs that are automatically collected in Google Cloud Logging when running on GKE.
 
-### Setting Up Permissions
-
-For Cloud Logging with Workload Identity:
-
-1. **Create a Google Service Account (GSA) for logging**:
-
-```sh
-export LOG_GSA_NAME="sync-status-watch-logger"
-export KSA_NAME="sync-status-watch"
-export KSA_NAMESPACE="sync-status-watch"
-
-# Create the GSA
-gcloud iam service-accounts create ${LOG_GSA_NAME} \
-  --display-name="Sync Status Watch Logging Account"
-
-# Grant the required logging roles
-gcloud projects add-iam-policy-binding ${PROJECT_ID} \
-  --member="serviceAccount:${LOG_GSA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com" \
-  --role="roles/logging.logWriter"
-```
-
-2. **Connect the GSA with the Kubernetes Service Account**:
-
-```sh
-# Configure the IAM binding
-gcloud iam service-accounts add-iam-policy-binding \
-  ${LOG_GSA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com \
-  --role="roles/iam.workloadIdentityUser" \
-  --member="serviceAccount:${PROJECT_ID}.svc.id.goog[${KSA_NAMESPACE}/${KSA_NAME}]"
-
-# Annotate the KSA
-kubectl annotate serviceaccount ${KSA_NAME} -n ${KSA_NAMESPACE} \
-  iam.gke.io/gcp-service-account=${LOG_GSA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com
-```
+> **Note**: When running in a GKE cluster, logs from the controller pods are automatically collected and sent to Google Cloud Logging without any additional configuration. This works both for clusters with or without Workload Identity Federation enabled. All structured logs will be available in Cloud Logging with the appropriate Kubernetes resource labels.
 
 ### Querying Logs in Google Cloud Logging
 

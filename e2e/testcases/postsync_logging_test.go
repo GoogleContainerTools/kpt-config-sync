@@ -22,7 +22,6 @@ import (
 
 	"cloud.google.com/go/logging/logadmin"
 	"google.golang.org/api/iterator"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest"
@@ -32,7 +31,6 @@ import (
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
-	"kpt.dev/configsync/e2e/nomostest/workloadidentity"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core"
@@ -41,9 +39,6 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/validate/raw/validate"
 )
-
-// loggingGSA is the name of the Google Service Account used for logging permissions
-const loggingGSA = "e2e-test-log-writer"
 
 // TestStatusEventLogRootSync tests that error events from RootSync are properly logged
 // to the SyncStatusWatchController pod logs. This test can run in any environment.
@@ -115,8 +110,6 @@ func TestCloudLoggingRootSync(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nt.Must(setupLoggingPermission(nt, nomostest.StatusWatchName, nomostest.StatusWatchNamespace))
-
 	rootSyncID := nomostest.DefaultRootSyncID
 	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
 	syncBranch := "main"
@@ -133,18 +126,12 @@ func TestCloudLoggingRootSync(t *testing.T) {
 
 	nt.T.Logf("Check for source related error message at commit %s occurrence once in Cloud Logging", commit)
 	filter := fmt.Sprintf(
-		`resource.type="k8s_container" AND resource.labels.namespace_name="%s" AND timestamp >= "%s"`,
+		`resource.type="k8s_container" AND resource.labels.namespace_name="%s" AND resource.labels.cluster_name="%s" AND timestamp >= "%s"`,
 		nomostest.StatusWatchNamespace,
+		nt.ClusterName,
 		startTime.Format(time.RFC3339),
 	)
-	cloudLogs, err := queryCloudLogs(nt, filter)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-	nt.Logger.Debugf("Cloud Logs: %v", cloudLogs)
-
-	logMessages := []string{"KNV1017: The system/ directory must declare a Repo Resource."}
-	if err := assertLogEntryHasCount(cloudLogs, 1, commit, rootSyncID.Name, rootSyncID.Namespace, logMessages); err != nil {
+	if err := waitForLogEntryInCloudLogs(nt, filter, 1, commit, rootSyncID.Name, rootSyncID.Namespace, []string{"KNV1017: The system/ directory must declare a Repo Resource."}, 120*time.Second); err != nil {
 		nt.T.Fatal(err)
 	}
 
@@ -236,8 +223,6 @@ func TestCloudLoggingConditionEventRootSync(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nt.Must(setupLoggingPermission(nt, nomostest.StatusWatchName, nomostest.StatusWatchNamespace))
-
 	testNamespace := k8sobjects.NamespaceObject(testNs)
 	nt.Must(nt.KubeClient.Create(testNamespace))
 	t.Cleanup(func() {
@@ -269,18 +254,12 @@ func TestCloudLoggingConditionEventRootSync(t *testing.T) {
 
 	nt.T.Logf("Check for condition related error message occurrence once in Cloud Logging")
 	filter := fmt.Sprintf(
-		`resource.type="k8s_container" AND resource.labels.namespace_name="%s" AND timestamp >= "%s"`,
+		`resource.type="k8s_container" AND resource.labels.namespace_name="%s" AND resource.labels.cluster_name="%s" AND timestamp >= "%s"`,
 		nomostest.StatusWatchNamespace,
+		nt.ClusterName,
 		startTime.Format(time.RFC3339),
 	)
-	cloudLogs, err := queryCloudLogs(nt, filter)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-	nt.Logger.Debugf("Cloud Logs: %v", cloudLogs)
-
-	logMessages := []string{msg}
-	if err := assertLogEntryHasCount(cloudLogs, 1, "", rootSync.Name, rootSync.Namespace, logMessages); err != nil {
+	if err := waitForLogEntryInCloudLogs(nt, filter, 1, "", rootSync.Name, rootSync.Namespace, []string{msg}, 120*time.Second); err != nil {
 		nt.T.Fatal(err)
 	}
 }
@@ -363,8 +342,6 @@ func TestCloudLoggingStatusEventRepoSync(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	nt.Must(setupLoggingPermission(nt, nomostest.StatusWatchName, nomostest.StatusWatchNamespace))
-
 	msg := "RepoSync bookstore/repo-sync must not manage itself in its repo"
 	rs := &v1beta1.RepoSync{}
 	if err := nt.KubeClient.Get(repoSyncID.Name, repoSyncID.Namespace, rs); err != nil {
@@ -384,18 +361,12 @@ func TestCloudLoggingStatusEventRepoSync(t *testing.T) {
 
 	nt.T.Logf("Check for source related error message at commit %s occurrence once in Cloud Logging", commit)
 	filter := fmt.Sprintf(
-		`resource.type="k8s_container" AND resource.labels.namespace_name="%s" AND timestamp >= "%s"`,
+		`resource.type="k8s_container" AND resource.labels.namespace_name="%s" AND resource.labels.cluster_name="%s" AND timestamp >= "%s"`,
 		nomostest.StatusWatchNamespace,
+		nt.ClusterName,
 		startTime.Format(time.RFC3339),
 	)
-	cloudLogs, err := queryCloudLogs(nt, filter)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-	nt.Logger.Debugf("Cloud Logs: %v", cloudLogs)
-
-	logMessages := []string{msg, "\"generation\":1"}
-	if err := assertLogEntryHasCount(cloudLogs, 1, commit, repoSyncID.Name, repoSyncID.Namespace, logMessages); err != nil {
+	if err := waitForLogEntryInCloudLogs(nt, filter, 1, commit, repoSyncID.Name, repoSyncID.Namespace, []string{msg, "\"generation\":1"}, 120*time.Second); err != nil {
 		nt.T.Fatal(err)
 	}
 }
@@ -426,13 +397,12 @@ func assertLogEntryHasCount(logs []string, expectedCount int, commit, rname, rna
 	return nil
 }
 
-// queryCloudLogs retrieves log entries from Google Cloud Logging that match the specified filter.
-// The function retries for up to 120 seconds if no logs are found initially.
-func queryCloudLogs(nt *nomostest.NT, filter string) ([]string, error) {
+// waitForLogEntryInCloudLogs queries Cloud Logging and asserts the log entry appears within the timeout.
+func waitForLogEntryInCloudLogs(nt *nomostest.NT, filter string, expectedCount int, commit, rname, rnamespace string, messages []string, timeout time.Duration) error {
 	ctx := nt.Context
 	client, err := logadmin.NewClient(ctx, *e2e.GCPProject)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create logadmin client: %v", err)
+		return fmt.Errorf("failed to create logadmin client: %v", err)
 	}
 	defer func() {
 		if err := client.Close(); err != nil {
@@ -440,9 +410,9 @@ func queryCloudLogs(nt *nomostest.NT, filter string) ([]string, error) {
 		}
 	}()
 
-	var logs []string
-	_, err = retry.Retry(120*time.Second, func() error {
-		logs = nil
+	var lastLogs []string
+	_, err = retry.Retry(timeout, func() error {
+		lastLogs = nil
 		it := client.Entries(ctx,
 			logadmin.Filter(filter),
 			logadmin.NewestFirst(),
@@ -456,71 +426,17 @@ func queryCloudLogs(nt *nomostest.NT, filter string) ([]string, error) {
 			if err != nil {
 				return err
 			}
-			logs = append(logs, fmt.Sprintf("%s: %v", entry.Timestamp.Format(time.RFC3339), entry.Payload))
+			lastLogs = append(lastLogs, fmt.Sprintf("%s: %v", entry.Timestamp.Format(time.RFC3339), entry.Payload))
 		}
 
-		if len(logs) == 0 {
-			return fmt.Errorf("no log entries found")
+		if err := assertLogEntryHasCount(lastLogs, expectedCount, commit, rname, rnamespace, messages); err != nil {
+			return fmt.Errorf("log entry not found yet: %w", err)
 		}
 		return nil
 	})
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to query logs after retries: %v", err)
+		return fmt.Errorf("failed to find log entry after retries: %v\nLast logs: %v", err, lastLogs)
 	}
-	return logs, nil
-}
-
-// setupLoggingPermission configures the necessary permissions for the post-sync tests
-// to write logs to Google Cloud Logging. This function works with GKE clusters
-// and checks for Workload Identity support, but Workload Identity is not mandatory.
-// The function is used when the test needs to communicate with Google APIs.
-func setupLoggingPermission(nt *nomostest.NT, ksaName, namespace string) error {
-	nt.T.Logf("Checking workload identity for %s in namespace %s", ksaName, namespace)
-	workloadPool, err := workloadidentity.GetWorkloadPool(nt)
-	if err != nil {
-		return fmt.Errorf("failed to get workload pool: %v", err)
-	}
-
-	if workloadPool == "" {
-		return nil // Workload Identity not enabled
-	}
-
-	nt.T.Logf("Setting up logging permission for %s in namespace %s", loggingGSA, *e2e.GCPProject)
-	gsaEmail := fmt.Sprintf("%s@%s.iam.gserviceaccount.com", loggingGSA, *e2e.GCPProject)
-
-	// Create IAM binding between GSA and KSA
-	member := fmt.Sprintf("serviceAccount:%s.svc.id.goog[%s/%s]",
-		*e2e.GCPProject,
-		namespace,
-		ksaName,
-	)
-
-	_, err = nt.Shell.ExecWithDebug("gcloud", "iam", "service-accounts", "add-iam-policy-binding",
-		gsaEmail,
-		"--role=roles/iam.workloadIdentityUser",
-		fmt.Sprintf("--member=%s", member),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create IAM binding: %v", err)
-	}
-
-	// Annotate Kubernetes Service Account
-	ksa := &corev1.ServiceAccount{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      ksaName,
-			Namespace: namespace,
-		},
-	}
-	if err := nt.KubeClient.Get(ksaName, namespace, ksa); err != nil {
-		return fmt.Errorf("failed to get service account: %v", err)
-	}
-
-	if core.SetAnnotation(ksa, "iam.gke.io/gcp-service-account", gsaEmail) {
-		if err := nt.KubeClient.Update(ksa); err != nil {
-			return fmt.Errorf("failed to annotate service account: %v", err)
-		}
-	}
-
 	return nil
 }

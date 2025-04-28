@@ -67,7 +67,7 @@ func SetupSyncStatusWatchController(nt *NT) error {
 func TeardownSyncStatusWatchController(nt *NT) error {
 	nt.T.Log("tearing down sync status watch controller")
 
-	if err := execManifestCommand(nt, "delete --ignore-not-found"); err != nil {
+	if err := execManifestCommand(nt, "delete"); err != nil {
 		nt.T.Logf("Error deleting resources: %v", err)
 	}
 

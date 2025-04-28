@@ -15,23 +15,33 @@
 # Build stage
 ARG GOLANG_IMAGE=golang:1.24
 
-FROM ${GOLANG_IMAGE} as builder
+FROM --platform=${BUILDPLATFORM} ${GOLANG_IMAGE} as builder
 
-WORKDIR /
-COPY . .
+# Create and set working directory
+WORKDIR /workspace
 
-# Set GOPATH
-ENV GOPATH=/go
+# Copy only necessary files for building
+COPY go.mod go.sum ./
+RUN go mod download
 
-# Build the webhook server binary for Linux
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o sync-status-watch main.go
+# Copy source code
+COPY main.go ./
+
+# Build the binary
+ARG TARGETOS
+ARG TARGETARCH
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o sync-status-watch main.go
 
 # Final stage
-FROM gcr.io/distroless/static:nonroot
+FROM --platform=${TARGETPLATFORM} gcr.io/distroless/static:nonroot
 
-WORKDIR /
+# Create and set working directory
+WORKDIR /app
 
 # Copy the built binary from the builder stage
-COPY --from=builder /sync-status-watch /sync-status-watch
+COPY --from=builder /workspace/sync-status-watch /app/sync-status-watch
 
-CMD ["/sync-status-watch"]
+# Use an unprivileged user
+USER nonroot:nonroot
+
+CMD ["/app/sync-status-watch"]

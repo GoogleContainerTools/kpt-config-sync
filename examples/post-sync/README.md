@@ -73,8 +73,17 @@ gcloud artifacts repositories create ${GAR_REPO_NAME} \
 3. **Build and push the image** using the provided `Makefile`:
 
 ```sh
-make build push
+# Build for all supported architectures (amd64 and arm64)
+make build
+
+# Or build for local development (single architecture)
+make build-local
+
+# For specific architectures, override PLATFORMS:
+make build PLATFORMS=linux/amd64,linux/arm64
 ```
+
+> **Note**: The build process uses Docker's buildx feature to create images for multiple CPU architectures. By default, it builds for `linux/amd64` (x86-64) and `linux/arm64` (ARM 64-bit). Building for multiple architectures requires Docker buildx support.
 
 4. **Deploy to Kubernetes**:
 

@@ -41,6 +41,9 @@ WORKDIR /app
 # Copy the built binary from the builder stage
 COPY --from=builder /workspace/sync-status-watch /app/sync-status-watch
 
+# Expose health check port
+EXPOSE 8081
+
 # Use an unprivileged user
 USER nonroot:nonroot
 

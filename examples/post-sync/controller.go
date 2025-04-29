@@ -16,6 +16,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"sync"
@@ -44,19 +46,29 @@ type SyncID struct {
 // StatusTracker tracks which errors have been logged
 type StatusTracker struct {
 	mu   sync.Mutex
-	seen map[SyncID]map[string]struct{}
+	seen map[string]struct{} // Using a single map with hashed keys
 }
 
 // NewStatusTracker creates a new StatusTracker instance
 func NewStatusTracker() *StatusTracker {
 	return &StatusTracker{
-		seen: make(map[SyncID]map[string]struct{}),
+		seen: make(map[string]struct{}),
 	}
 }
 
-// compositeKey generates a unique key for a commit and message
-func compositeKey(commit, message string) string {
-	return commit + "::" + message
+// generateKey creates a unique key for a sync resource, commit, and error message
+func generateKey(syncID SyncID, commit, message string) string {
+	// Include SyncID information in the key
+	key := fmt.Sprintf("%s:%s:%s:%s:%s",
+		syncID.Name,
+		syncID.Kind,
+		syncID.Namespace,
+		commit,
+		message)
+
+	// Hash the key to save memory
+	hash := sha256.Sum256([]byte(key))
+	return hex.EncodeToString(hash[:])
 }
 
 // IsLogged checks if an error has been logged
@@ -64,12 +76,9 @@ func (s *StatusTracker) IsLogged(syncID SyncID, commit, message string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	key := compositeKey(commit, message)
-	if commitMap, ok := s.seen[syncID]; ok {
-		_, logged := commitMap[key]
-		return logged
-	}
-	return false
+	key := generateKey(syncID, commit, message)
+	_, logged := s.seen[key]
+	return logged
 }
 
 // MarkLogged marks an error as logged
@@ -77,11 +86,8 @@ func (s *StatusTracker) MarkLogged(syncID SyncID, commit, message string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	key := compositeKey(commit, message)
-	if _, ok := s.seen[syncID]; !ok {
-		s.seen[syncID] = make(map[string]struct{})
-	}
-	s.seen[syncID][key] = struct{}{}
+	key := generateKey(syncID, commit, message)
+	s.seen[key] = struct{}{}
 }
 
 // SyncStatusController reconciles RootSync and RepoSync resources

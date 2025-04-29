@@ -39,7 +39,7 @@ func init() {
 }
 
 // run initializes and starts the controller manager with RootSync and RepoSync controllers.
-// Returns an error if initialization or startup fails.
+// It returns an error if any step fails.
 func run() error {
 	zapLog, err := zap.NewProduction()
 	if err != nil {

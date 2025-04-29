@@ -211,26 +211,16 @@ func TestSyncStatusController(t *testing.T) {
 					expectedError = "aggregated errors: Code: 5678, Message: test error"
 				}
 
-				// Debug: Print the contents of the status tracker
-				t.Logf("Status tracker contents for %s:", tt.name)
-				for syncID, commitMap := range statusTracker.seen {
-					t.Logf("  SyncID: %+v", syncID)
-					for key := range commitMap {
-						t.Logf("    Key: %s", key)
-					}
+				assert.True(t, statusTracker.IsLogged(syncID, tt.expectedCommit, expectedError))
+
+				// Test that a different error message or different sync resource is not logged
+				differentSyncID := SyncID{
+					Name:      syncID.Name + "-different",
+					Kind:      syncID.Kind,
+					Namespace: syncID.Namespace,
 				}
-
-				// Debug: Print the expected values
-				t.Logf("Expected values for %s:", tt.name)
-				t.Logf("  SyncID: %+v", syncID)
-				t.Logf("  Commit: %s", tt.expectedCommit)
-				t.Logf("  Error: %s", expectedError)
-
-				// Check if the error was logged
-				isLogged := statusTracker.IsLogged(syncID, tt.expectedCommit, expectedError)
-				t.Logf("IsLogged result: %v", isLogged)
-
-				assert.True(t, isLogged)
+				assert.False(t, statusTracker.IsLogged(differentSyncID, tt.expectedCommit, expectedError), "Different sync resource should not be logged")
+				assert.False(t, statusTracker.IsLogged(syncID, tt.expectedCommit, "different error"), "Different error should not be logged")
 			}
 		})
 	}

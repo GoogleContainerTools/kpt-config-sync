@@ -340,6 +340,7 @@ Logs URL: https://console.cloud.google.com/logs/query?project=%s
 		logEntry.JsonPayload.Sync,
 		logEntry.JsonPayload.Commit,
 		logEntry.JsonPayload.Error,
+		logEntry.JsonPayload.Truncated,
 		logEntry.Timestamp,
 		projectID)
 

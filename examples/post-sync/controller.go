@@ -150,14 +150,14 @@ func (c *SyncStatusController) Reconcile(ctx context.Context, req reconcile.Requ
 	}
 
 	// Process any errors from conditions
-	if err := c.handleErrors(syncID, errs, commit, generation, observedGeneration); err != nil {
+	if err := c.handleErrors(syncID, errs, commit, generation, observedGeneration, false); err != nil {
 		return reconcile.Result{}, err
 	}
 
 	// Process sync status
 	if !isSuccessfulSync(status, generation) {
-		errMessage, commit := extractErrorAndCommitFromStatus(status)
-		if err := c.handleErrors(syncID, errMessage, commit, generation, observedGeneration); err != nil {
+		errMessage, commit, isTruncated := extractErrorAndCommitFromStatus(status)
+		if err := c.handleErrors(syncID, errMessage, commit, generation, observedGeneration, isTruncated); err != nil {
 			return reconcile.Result{}, err
 		}
 	}
@@ -174,7 +174,7 @@ func (c *SyncStatusController) getSyncID(ctx context.Context, req reconcile.Requ
 }
 
 // handleErrors aggregates error messages and logs them if they haven't been logged already
-func (c *SyncStatusController) handleErrors(rsyncID SyncID, errMessage string, commit string, generation int64, observedGeneration int64) error {
+func (c *SyncStatusController) handleErrors(rsyncID SyncID, errMessage string, commit string, generation int64, observedGeneration int64, isTruncated bool) error {
 	if errMessage == "" {
 		return nil
 	}
@@ -189,7 +189,8 @@ func (c *SyncStatusController) handleErrors(rsyncID SyncID, errMessage string, c
 		"status", "failed",
 		"generation", generation,
 		"observedGeneration", observedGeneration,
-		"error", errMessage)
+		"error", errMessage,
+		"truncated", isTruncated)
 
 	c.statusTracker.MarkLogged(rsyncID, commit, errMessage)
 	return nil
@@ -286,14 +287,14 @@ func hasStatusError(status v1beta1.Status) bool {
 }
 
 // extractErrorAndCommitFromStatus extracts errors and the associated commit from the status
-func extractErrorAndCommitFromStatus(status v1beta1.Status) (string, string) {
+func extractErrorAndCommitFromStatus(status v1beta1.Status) (string, string, bool) {
 	if status.Source.Errors != nil {
-		return aggregateErrors(status.Source.Errors), status.Source.Commit
+		return aggregateErrors(status.Source.Errors), status.Source.Commit, status.Source.ErrorSummary.Truncated
 	}
 	if status.Rendering.Errors != nil {
-		return aggregateErrors(status.Rendering.Errors), status.Rendering.Commit
+		return aggregateErrors(status.Rendering.Errors), status.Rendering.Commit, status.Rendering.ErrorSummary.Truncated
 	}
-	return aggregateErrors(status.Sync.Errors), status.Sync.Commit
+	return aggregateErrors(status.Sync.Errors), status.Sync.Commit, status.Sync.ErrorSummary.Truncated
 }
 
 // aggregateErrors aggregates error messages from a slice of ConfigSyncError

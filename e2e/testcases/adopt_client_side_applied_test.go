@@ -15,58 +15,63 @@
 package e2e
 
 import (
-	"path/filepath"
+	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"kpt.dev/configsync/e2e/nomostest"
+	"kpt.dev/configsync/e2e/nomostest/gitproviders"
+	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 )
 
 func TestAdoptClientSideAppliedResource(t *testing.T) {
-	nt := nomostest.New(t, nomostesting.DriftControl)
+	nt := nomostest.New(t, nomostesting.DriftControl,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 
 	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
-	// Declare a ClusterRole and `kubectl apply -f` it to the cluster.
+	// Declare a ClusterRole and apply it to the cluster.
 	nsViewerName := "ns-viewer"
-	nsViewer := k8sobjects.ClusterRoleObject(core.Name(nsViewerName),
-		core.Label("permissions", "viewer"))
-	nsViewer.Rules = []rbacv1.PolicyRule{{
+	preClusterRole := k8sobjects.ClusterRoleObject(core.Name(nsViewerName))
+	preClusterRole.SetAnnotations(map[string]string{"keep": "annotation"})
+	preClusterRole.SetLabels(map[string]string{"keep": "label"})
+	preClusterRole.Rules = []rbacv1.PolicyRule{{
 		APIGroups: []string{""},
 		Resources: []string{"namespaces"},
 		Verbs:     []string{"get", "list"},
 	}}
+	nt.Must(nt.KubeClient.Create(preClusterRole))
 
-	nt.Must(rootSyncGitRepo.Add("ns-viewer-client-side-applied.yaml", nsViewer))
-	nt.MustKubectl("apply", "-f", filepath.Join(rootSyncGitRepo.Root, "ns-viewer-client-side-applied.yaml"))
-
-	// Validate the ClusterRole exist.
-	err := nt.Validate(nsViewerName, "", &rbacv1.ClusterRole{})
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-
-	// Add the ClusterRole and let ConfigSync to sync it.
-	nsViewer.Rules = []rbacv1.PolicyRule{{
+	// Add the ClusterRole and wait for ConfigSync to sync it.
+	managedClusterRole := k8sobjects.ClusterRoleObject(core.Name(nsViewerName))
+	managedClusterRole.SetAnnotations(map[string]string{"declared": "annotation"})
+	managedClusterRole.SetLabels(map[string]string{"declared": "label"})
+	managedClusterRole.Rules = []rbacv1.PolicyRule{{
 		APIGroups: []string{""},
 		Resources: []string{"namespaces"},
 		Verbs:     []string{"get"},
 	}}
-	nt.Must(rootSyncGitRepo.Add("acme/cluster/ns-viewer-cr.yaml", nsViewer))
+	nt.Must(rootSyncGitRepo.Add(
+		fmt.Sprintf("%s/ns-viewer-cr.yaml", gitproviders.DefaultSyncDir),
+		managedClusterRole))
 	nt.Must(rootSyncGitRepo.CommitAndPush("add namespace-viewer ClusterRole"))
 	nt.Must(nt.WatchForAllSyncs())
 
-	// Validate the ClusterRole exist and the Rules are the same as the one
-	// in "acme/cluster/ns-viewer-cr.yaml".
+	// Validate:
+	// - the ClusterRole exists
+	// - the annotations/labels are merged with the adopted metadata
+	// - the Rules are overwritten by what is applied from the repository
 	role := &rbacv1.ClusterRole{}
-	err = nt.Validate(nsViewerName, "", role)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Validate(nsViewerName, "", role,
+		testpredicates.HasAnnotation("keep", "annotation"),
+		testpredicates.HasLabel("keep", "label"),
+		testpredicates.HasAnnotation("declared", "annotation"),
+		testpredicates.HasLabel("declared", "label")))
 
 	if diff := cmp.Diff(role.Rules[0].Verbs, []string{"get"}); diff != "" {
 		nt.T.Errorf(diff)

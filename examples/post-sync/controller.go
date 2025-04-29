@@ -127,11 +127,7 @@ func (c *SyncStatusController) Reconcile(ctx context.Context, req reconcile.Requ
 		if err := c.client.Get(ctx, req.NamespacedName, &root); err != nil {
 			return reconcile.Result{}, client.IgnoreNotFound(err)
 		}
-		syncID = SyncID{
-			Name:      root.Name,
-			Kind:      c.syncKind,
-			Namespace: root.Namespace,
-		}
+		syncID = c.getSyncID(ctx, req)
 		status = root.Status.Status
 		generation = root.Generation
 		observedGeneration = root.Status.ObservedGeneration
@@ -142,11 +138,7 @@ func (c *SyncStatusController) Reconcile(ctx context.Context, req reconcile.Requ
 		if err := c.client.Get(ctx, req.NamespacedName, &repo); err != nil {
 			return reconcile.Result{}, client.IgnoreNotFound(err)
 		}
-		syncID = SyncID{
-			Name:      repo.Name,
-			Kind:      c.syncKind,
-			Namespace: req.Namespace,
-		}
+		syncID = c.getSyncID(ctx, req)
 		status = repo.Status.Status
 		generation = repo.Generation
 		observedGeneration = repo.Status.ObservedGeneration
@@ -163,14 +155,22 @@ func (c *SyncStatusController) Reconcile(ctx context.Context, req reconcile.Requ
 	}
 
 	// Process sync status
-	if !isSuccessfulSync(status) {
-		errors, commit := extractErrorAndCommitFromStatus(status)
-		if err := c.handleErrors(syncID, errors, commit, generation, observedGeneration); err != nil {
+	if !isSuccessfulSync(status, generation) {
+		errMessage, commit := extractErrorAndCommitFromStatus(status)
+		if err := c.handleErrors(syncID, errMessage, commit, generation, observedGeneration); err != nil {
 			return reconcile.Result{}, err
 		}
 	}
 
 	return reconcile.Result{}, nil
+}
+
+func (c *SyncStatusController) getSyncID(ctx context.Context, req reconcile.Request) SyncID {
+	return SyncID{
+		Name:      req.Name,
+		Kind:      c.syncKind,
+		Namespace: req.Namespace,
+	}
 }
 
 // handleErrors aggregates error messages and logs them if they haven't been logged already
@@ -268,10 +268,12 @@ func (c *SyncStatusController) processRepoSyncConditions(conditions []v1beta1.Re
 }
 
 // isSuccessfulSync checks if the rsync status has no errors and all commits match
-func isSuccessfulSync(status v1beta1.Status) bool {
+func isSuccessfulSync(status v1beta1.Status, generation int64) bool {
 	allCommitsMatch := status.Source.Commit != "" &&
 		status.Source.Commit == status.Rendering.Commit &&
-		status.Rendering.Commit == status.Sync.Commit
+		status.Rendering.Commit == status.Sync.Commit &&
+		status.LastSyncedCommit == status.Source.Commit &&
+		status.ObservedGeneration == generation
 
 	return allCommitsMatch && !hasStatusError(status)
 }

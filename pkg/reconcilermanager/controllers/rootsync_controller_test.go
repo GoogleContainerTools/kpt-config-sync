@@ -54,7 +54,7 @@ import (
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/testerrors"
 	"kpt.dev/configsync/pkg/util"
-	"kpt.dev/configsync/pkg/validate/raw/validate"
+	"kpt.dev/configsync/pkg/validate/rsync/validate"
 	webhookconfiguration "kpt.dev/configsync/pkg/webhook/configuration"
 	"sigs.k8s.io/cli-utils/pkg/testutil"
 	controllerruntime "sigs.k8s.io/controller-runtime"
@@ -3659,7 +3659,7 @@ func TestRootSyncSpecValidation(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs := k8sobjects.RootSyncObjectV1Beta1(rootsyncName)
-	rootsync.SetStalled(wantRs, "Validation", validate.InvalidSourceType(rs))
+	rootsync.SetStalled(wantRs, "Validation", validate.InvalidSourceType(configsync.RootSyncKind))
 	validateRootSyncStatus(t, wantRs, fakeClient)
 
 	// verify missing Git
@@ -3674,7 +3674,7 @@ func TestRootSyncSpecValidation(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs.Spec = rs.Spec
-	rootsync.SetStalled(wantRs, "Validation", validate.MissingGitSpec(rs))
+	rootsync.SetStalled(wantRs, "Validation", validate.MissingGitSpec(configsync.RootSyncKind))
 	validateRootSyncStatus(t, wantRs, fakeClient)
 
 	// verify missing Oci
@@ -3689,7 +3689,7 @@ func TestRootSyncSpecValidation(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs.Spec = rs.Spec
-	rootsync.SetStalled(wantRs, "Validation", validate.MissingOciSpec(rs))
+	rootsync.SetStalled(wantRs, "Validation", validate.MissingOciSpec(configsync.RootSyncKind))
 	validateRootSyncStatus(t, wantRs, fakeClient)
 
 	// verify missing Helm
@@ -3704,7 +3704,7 @@ func TestRootSyncSpecValidation(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs.Spec = rs.Spec
-	rootsync.SetStalled(wantRs, "Validation", validate.MissingHelmSpec(rs))
+	rootsync.SetStalled(wantRs, "Validation", validate.MissingHelmSpec(configsync.RootSyncKind))
 	validateRootSyncStatus(t, wantRs, fakeClient)
 
 	// verify missing OCI image
@@ -3720,7 +3720,7 @@ func TestRootSyncSpecValidation(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs.Spec = rs.Spec
-	rootsync.SetStalled(wantRs, "Validation", validate.MissingOciImage(rs))
+	rootsync.SetStalled(wantRs, "Validation", validate.MissingOciImage(configsync.RootSyncKind))
 	validateRootSyncStatus(t, wantRs, fakeClient)
 
 	// verify invalid OCI Auth
@@ -3736,7 +3736,7 @@ func TestRootSyncSpecValidation(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs.Spec = rs.Spec
-	rootsync.SetStalled(wantRs, "Validation", validate.InvalidOciAuthType(rs))
+	rootsync.SetStalled(wantRs, "Validation", validate.InvalidOciAuthType(configsync.RootSyncKind))
 	validateRootSyncStatus(t, wantRs, fakeClient)
 
 	// verify missing Helm repo
@@ -3753,7 +3753,7 @@ func TestRootSyncSpecValidation(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs.Spec = rs.Spec
-	rootsync.SetStalled(wantRs, "Validation", validate.MissingHelmRepo(rs))
+	rootsync.SetStalled(wantRs, "Validation", validate.MissingHelmRepo(configsync.RootSyncKind))
 	validateRootSyncStatus(t, wantRs, fakeClient)
 
 	// verify missing Helm chart
@@ -3769,7 +3769,7 @@ func TestRootSyncSpecValidation(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs.Spec = rs.Spec
-	rootsync.SetStalled(wantRs, "Validation", validate.MissingHelmChart(rs))
+	rootsync.SetStalled(wantRs, "Validation", validate.MissingHelmChart(configsync.RootSyncKind))
 	validateRootSyncStatus(t, wantRs, fakeClient)
 
 	// verify invalid Helm Auth
@@ -3785,7 +3785,7 @@ func TestRootSyncSpecValidation(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs.Spec = rs.Spec
-	rootsync.SetStalled(wantRs, "Validation", validate.InvalidHelmAuthType(rs))
+	rootsync.SetStalled(wantRs, "Validation", validate.InvalidHelmAuthType(configsync.RootSyncKind))
 	validateRootSyncStatus(t, wantRs, fakeClient)
 
 	// verify valid OCI spec
@@ -4341,12 +4341,6 @@ func TestRootSyncReconcilerWithGithubApp(t *testing.T) {
 	wantRs := k8sobjects.RootSyncObjectV1Beta1(rs.Name)
 	rootsync.SetStalled(wantRs, "Validation",
 		fmt.Errorf(`KNV1061: RootSyncs which specify spec.git.auth as one of "ssh", "cookiefile", "githubapp", or "token" must also specify spec.git.secretRef
-
-namespace: config-management-system
-metadata.name: my-root-sync
-group: configsync.gke.io
-version: v1beta1
-kind: RootSync
 
 For more information, see https://g.co/cloud/acm-errors#knv1061`))
 	validateRootSyncStatus(t, wantRs, fakeClient)

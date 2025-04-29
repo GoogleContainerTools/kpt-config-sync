@@ -49,7 +49,7 @@ import (
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/util/compare"
 	"kpt.dev/configsync/pkg/util/mutate"
-	"kpt.dev/configsync/pkg/validate/raw/validate"
+	"kpt.dev/configsync/pkg/validate/rsync/validate"
 	webhookconfiguration "kpt.dev/configsync/pkg/webhook/configuration"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	controllerruntime "sigs.k8s.io/controller-runtime"
@@ -987,57 +987,42 @@ func (r *RepoSyncReconciler) validateRepoSync(ctx context.Context, rs *v1beta1.R
 		return err
 	}
 
-	if err := r.validateSourceSpec(ctx, rs, reconcilerName); err != nil {
+	if err := validate.RepoSyncSpec(rs.Spec); err != nil {
 		return err
 	}
 
-	return r.validateValuesFileSourcesRefs(ctx, rs)
+	return r.validateDependencies(ctx, rs, reconcilerName)
 }
 
-func (r *RepoSyncReconciler) validateSourceSpec(ctx context.Context, rs *v1beta1.RepoSync, reconcilerName string) error {
+func (r *RepoSyncReconciler) validateDependencies(ctx context.Context, rs *v1beta1.RepoSync, reconcilerName string) error {
 	switch rs.Spec.SourceType {
 	case configsync.GitSource:
-		return r.validateGitSpec(ctx, rs, reconcilerName)
+		return r.validateGitDependencies(ctx, rs, reconcilerName)
 	case configsync.OciSource:
-		return r.validateOciSpec(ctx, rs)
+		return r.validateOciDependencies(ctx, rs)
 	case configsync.HelmSource:
-		return r.validateHelmSpec(ctx, rs)
+		return r.validateHelmDependencies(ctx, rs)
 	default:
-		return validate.InvalidSourceType(rs)
+		return validate.InvalidSourceType(r.syncGVK.Kind)
 	}
 }
 
-// validateValuesFileSourcesRefs validates that the ConfigMaps specified in the RSync ValuesFileSources exist and have the
-// specified data key.
-func (r *RepoSyncReconciler) validateValuesFileSourcesRefs(ctx context.Context, rs *v1beta1.RepoSync) status.Error {
-	if rs.Spec.SourceType != configsync.HelmSource || rs.Spec.Helm == nil || len(rs.Spec.Helm.ValuesFileRefs) == 0 {
-		return nil
-	}
-	return validate.ValuesFileRefs(ctx, r.client, rs, rs.Spec.Helm.ValuesFileRefs)
-}
-
-func (r *RepoSyncReconciler) validateHelmSpec(ctx context.Context, rs *v1beta1.RepoSync) error {
-	if err := validate.HelmSpec(reposync.GetHelmBase(rs.Spec.Helm), rs); err != nil {
-		return err
-	}
-	return r.validateCACertSecret(ctx, rs.Namespace, v1beta1.GetSecretName(rs.Spec.Helm.CACertSecretRef))
-}
-
-func (r *RepoSyncReconciler) validateOciSpec(ctx context.Context, rs *v1beta1.RepoSync) error {
-	if err := validate.OciSpec(rs.Spec.Oci, rs); err != nil {
-		return err
-	}
-	return r.validateCACertSecret(ctx, rs.Namespace, v1beta1.GetSecretName(rs.Spec.Oci.CACertSecretRef))
-}
-
-func (r *RepoSyncReconciler) validateGitSpec(ctx context.Context, rs *v1beta1.RepoSync, reconcilerName string) error {
-	if err := validate.GitSpec(rs.Spec.Git, rs); err != nil {
-		return err
-	}
+func (r *RepoSyncReconciler) validateGitDependencies(ctx context.Context, rs *v1beta1.RepoSync, reconcilerName string) error {
 	if err := r.validateCACertSecret(ctx, rs.Namespace, v1beta1.GetSecretName(rs.Spec.Git.CACertSecretRef)); err != nil {
 		return err
 	}
 	return r.validateNamespaceSecret(ctx, rs, reconcilerName)
+}
+
+func (r *RepoSyncReconciler) validateOciDependencies(ctx context.Context, rs *v1beta1.RepoSync) error {
+	return r.validateCACertSecret(ctx, rs.Namespace, v1beta1.GetSecretName(rs.Spec.Oci.CACertSecretRef))
+}
+
+func (r *RepoSyncReconciler) validateHelmDependencies(ctx context.Context, rs *v1beta1.RepoSync) error {
+	if err := r.validateCACertSecret(ctx, rs.Namespace, v1beta1.GetSecretName(rs.Spec.Helm.CACertSecretRef)); err != nil {
+		return err
+	}
+	return validate.ValuesFileRefs(ctx, r.client, r.syncGVK.Kind, rs.Namespace, rs.Spec.Helm.ValuesFileRefs)
 }
 
 // validateNamespaceSecret verify that any necessary Secret is present before creating ConfigMaps and Deployments.

@@ -50,7 +50,7 @@ import (
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/util/compare"
 	"kpt.dev/configsync/pkg/util/mutate"
-	"kpt.dev/configsync/pkg/validate/raw/validate"
+	"kpt.dev/configsync/pkg/validate/rsync/validate"
 	webhookconfiguration "kpt.dev/configsync/pkg/webhook/configuration"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	controllerruntime "sigs.k8s.io/controller-runtime"
@@ -850,75 +850,42 @@ func (r *RootSyncReconciler) validateRootSync(ctx context.Context, rs *v1beta1.R
 		return err
 	}
 
-	if err := r.validateSourceSpec(ctx, rs); err != nil {
+	if err := validate.RootSyncSpec(rs.Spec); err != nil {
 		return err
 	}
 
-	if err := r.validateRoleRefs(rs.Spec.SafeOverride().RoleRefs); err != nil {
-		return err
-	}
-
-	return r.validateValuesFileSourcesRefs(ctx, rs)
+	return r.validateDependencies(ctx, rs)
 }
 
-func (r *RootSyncReconciler) validateSourceSpec(ctx context.Context, rs *v1beta1.RootSync) error {
+func (r *RootSyncReconciler) validateDependencies(ctx context.Context, rs *v1beta1.RootSync) error {
 	switch rs.Spec.SourceType {
 	case configsync.GitSource:
-		return r.validateGitSpec(ctx, rs)
+		return r.validateGitDependencies(ctx, rs)
 	case configsync.OciSource:
-		return r.validateOciSpec(ctx, rs)
+		return r.validateOciDependencies(ctx, rs)
 	case configsync.HelmSource:
-		return r.validateHelmSpec(ctx, rs)
+		return r.validateHelmDependencies(ctx, rs)
 	default:
-		return validate.InvalidSourceType(rs)
+		return validate.InvalidSourceType(r.syncGVK.Kind)
 	}
 }
 
-func (r *RootSyncReconciler) validateRoleRefs(roleRefs []v1beta1.RootSyncRoleRef) error {
-	for _, roleRef := range roleRefs {
-		if roleRef.Kind == "Role" && roleRef.Namespace == "" {
-			return fmt.Errorf("namespace must be provided for roleRef with kind Role.")
-		}
-	}
-	return nil
-}
-
-// validateValuesFileSourcesRefs validates that the ConfigMaps specified in the RSync ValuesFileSources exist, are immutable, and have the
-// specified data key.
-func (r *RootSyncReconciler) validateValuesFileSourcesRefs(ctx context.Context, rs *v1beta1.RootSync) status.Error {
-	if rs.Spec.SourceType != configsync.HelmSource || rs.Spec.Helm == nil || len(rs.Spec.Helm.ValuesFileRefs) == 0 {
-		return nil
-	}
-	return validate.ValuesFileRefs(ctx, r.client, rs, rs.Spec.Helm.ValuesFileRefs)
-}
-
-func (r *RootSyncReconciler) validateOciSpec(ctx context.Context, rs *v1beta1.RootSync) error {
-	if err := validate.OciSpec(rs.Spec.Oci, rs); err != nil {
-		return err
-	}
-	return r.validateCACertSecret(ctx, rs.Namespace, v1beta1.GetSecretName(rs.Spec.Oci.CACertSecretRef))
-}
-
-func (r *RootSyncReconciler) validateHelmSpec(ctx context.Context, rs *v1beta1.RootSync) error {
-	if err := validate.HelmSpec(rootsync.GetHelmBase(rs.Spec.Helm), rs); err != nil {
-		return err
-	}
-	if rs.Spec.Helm.Namespace != "" && rs.Spec.Helm.DeployNamespace != "" {
-		if err := validate.HelmNSAndDeployNS(rs); err != nil {
-			return err
-		}
-	}
-	return r.validateCACertSecret(ctx, rs.Namespace, v1beta1.GetSecretName(rs.Spec.Helm.CACertSecretRef))
-}
-
-func (r *RootSyncReconciler) validateGitSpec(ctx context.Context, rs *v1beta1.RootSync) error {
-	if err := validate.GitSpec(rs.Spec.Git, rs); err != nil {
-		return err
-	}
+func (r *RootSyncReconciler) validateGitDependencies(ctx context.Context, rs *v1beta1.RootSync) error {
 	if err := r.validateCACertSecret(ctx, rs.Namespace, v1beta1.GetSecretName(rs.Spec.Git.CACertSecretRef)); err != nil {
 		return err
 	}
 	return r.validateRootSecret(ctx, rs)
+}
+
+func (r *RootSyncReconciler) validateOciDependencies(ctx context.Context, rs *v1beta1.RootSync) error {
+	return r.validateCACertSecret(ctx, rs.Namespace, v1beta1.GetSecretName(rs.Spec.Oci.CACertSecretRef))
+}
+
+func (r *RootSyncReconciler) validateHelmDependencies(ctx context.Context, rs *v1beta1.RootSync) error {
+	if err := r.validateCACertSecret(ctx, rs.Namespace, v1beta1.GetSecretName(rs.Spec.Helm.CACertSecretRef)); err != nil {
+		return err
+	}
+	return validate.ValuesFileRefs(ctx, r.client, r.syncGVK.Kind, rs.Namespace, rs.Spec.Helm.ValuesFileRefs)
 }
 
 // validateRootSecret verify that any necessary Secret is present before creating ConfigMaps and Deployments.

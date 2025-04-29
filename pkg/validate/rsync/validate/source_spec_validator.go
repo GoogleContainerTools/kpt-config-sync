@@ -45,49 +45,59 @@ func HelmValuesFileDataKeyOrDefault(key string) string {
 	return key
 }
 
-// RepoSyncSpec validates the Repo Sync source specification for any obvious problems.
-func RepoSyncSpec(sourceType configsync.SourceType, git *v1beta1.Git, oci *v1beta1.Oci, helm *v1beta1.HelmRepoSync, rs client.Object) status.Error {
-	switch sourceType {
+// RepoSyncSpec validates the RepoSync source specification.
+func RepoSyncSpec(spec v1beta1.RepoSyncSpec) status.Error {
+	syncKind := configsync.RepoSyncKind
+	switch spec.SourceType {
 	case configsync.GitSource:
-		return GitSpec(git, rs)
-	case configsync.OciSource:
-		return OciSpec(oci, rs)
-	case configsync.HelmSource:
-		return HelmSpec(reposync.GetHelmBase(helm), rs)
-	default:
-		return InvalidSourceType(rs)
-	}
-}
-
-// RootSyncSpec validates the Root Sync source specification for any obvious problems.
-func RootSyncSpec(sourceType configsync.SourceType, git *v1beta1.Git, oci *v1beta1.Oci, helm *v1beta1.HelmRootSync, rs client.Object) status.Error {
-	switch sourceType {
-	case configsync.GitSource:
-		return GitSpec(git, rs)
-	case configsync.OciSource:
-		return OciSpec(oci, rs)
-	case configsync.HelmSource:
-		if err := HelmSpec(rootsync.GetHelmBase(helm), rs); err != nil {
+		if err := GitSpec(spec.Git, syncKind); err != nil {
 			return err
 		}
-		if helm.Namespace != "" && helm.DeployNamespace != "" {
-			return HelmNSAndDeployNS(rs)
+	case configsync.OciSource:
+		if err := OciSpec(spec.Oci, syncKind); err != nil {
+			return err
 		}
-		return nil
+	case configsync.HelmSource:
+		if err := RepoSyncHelmSpec(spec.Helm); err != nil {
+			return err
+		}
 	default:
-		return InvalidSourceType(rs)
+		return InvalidSourceType(syncKind)
 	}
+	return RepoSyncOverrideSpec(spec.Override)
 }
 
-// GitSpec validates the git specification for any obvious problems.
-func GitSpec(git *v1beta1.Git, rs client.Object) status.Error {
+// RootSyncSpec validates the RootSync source specification.
+func RootSyncSpec(spec v1beta1.RootSyncSpec) status.Error {
+	syncKind := configsync.RootSyncKind
+	switch spec.SourceType {
+	case configsync.GitSource:
+		if err := GitSpec(spec.Git, syncKind); err != nil {
+			return err
+		}
+	case configsync.OciSource:
+		if err := OciSpec(spec.Oci, syncKind); err != nil {
+			return err
+		}
+	case configsync.HelmSource:
+		if err := RootSyncHelmSpec(spec.Helm); err != nil {
+			return err
+		}
+	default:
+		return InvalidSourceType(syncKind)
+	}
+	return RootSyncOverrideSpec(spec.Override)
+}
+
+// GitSpec validates the git specification.
+func GitSpec(git *v1beta1.Git, syncKind string) status.Error {
 	if git == nil {
-		return MissingGitSpec(rs)
+		return MissingGitSpec(syncKind)
 	}
 
 	// We can't connect to the git repo if we don't have the URL.
 	if git.Repo == "" {
-		return MissingGitRepo(rs)
+		return MissingGitRepo(syncKind)
 	}
 
 	// Ensure auth is a valid value.
@@ -97,44 +107,44 @@ func GitSpec(git *v1beta1.Git, rs client.Object) status.Error {
 	case configsync.AuthSSH, configsync.AuthCookieFile, configsync.AuthGCENode, configsync.AuthToken, configsync.AuthNone, configsync.AuthGithubApp:
 	case configsync.AuthGCPServiceAccount:
 		if git.GCPServiceAccountEmail == "" {
-			return MissingGCPSAEmail(configsync.GitSource, rs)
+			return MissingGCPSAEmail(configsync.GitSource, syncKind)
 		}
 		if !validGCPServiceAccountEmail(git.GCPServiceAccountEmail) {
-			return InvalidGCPSAEmail(configsync.GitSource, rs)
+			return InvalidGCPSAEmail(configsync.GitSource, syncKind)
 		}
 	default:
-		return InvalidGitAuthType(rs)
+		return InvalidGitAuthType(syncKind)
 	}
 
 	// Check that proxy isn't unnecessarily declared.
 	if git.Proxy != "" && git.Auth != configsync.AuthNone && git.Auth != configsync.AuthCookieFile && git.Auth != configsync.AuthToken {
-		return NoOpProxy(rs)
+		return NoOpProxy(syncKind)
 	}
 
 	// Check the secret ref is specified if and only if it is required.
 	switch git.Auth {
 	case configsync.AuthNone, configsync.AuthGCENode, configsync.AuthGCPServiceAccount:
 		if git.SecretRef != nil && git.SecretRef.Name != "" {
-			return IllegalSecretRef(configsync.GitSource, rs)
+			return IllegalSecretRef(configsync.GitSource, syncKind)
 		}
 	default:
 		if git.SecretRef == nil || git.SecretRef.Name == "" {
-			return MissingSecretRef(configsync.GitSource, rs)
+			return MissingSecretRef(configsync.GitSource, syncKind)
 		}
 	}
 
 	return nil
 }
 
-// OciSpec validates the OCI specification for any obvious problems.
-func OciSpec(oci *v1beta1.Oci, rs client.Object) status.Error {
+// OciSpec validates the OCI specification.
+func OciSpec(oci *v1beta1.Oci, syncKind string) status.Error {
 	if oci == nil {
-		return MissingOciSpec(rs)
+		return MissingOciSpec(syncKind)
 	}
 
 	// We can't connect to the oci image if we don't have the URL.
 	if oci.Image == "" {
-		return MissingOciImage(rs)
+		return MissingOciImage(syncKind)
 	}
 
 	// Ensure auth is a valid value.
@@ -144,31 +154,49 @@ func OciSpec(oci *v1beta1.Oci, rs client.Object) status.Error {
 	case configsync.AuthGCENode, configsync.AuthK8sServiceAccount, configsync.AuthNone:
 	case configsync.AuthGCPServiceAccount:
 		if oci.GCPServiceAccountEmail == "" {
-			return MissingGCPSAEmail(configsync.OciSource, rs)
+			return MissingGCPSAEmail(configsync.OciSource, syncKind)
 		}
 		if !validGCPServiceAccountEmail(oci.GCPServiceAccountEmail) {
-			return InvalidGCPSAEmail(configsync.OciSource, rs)
+			return InvalidGCPSAEmail(configsync.OciSource, syncKind)
 		}
 	default:
-		return InvalidOciAuthType(rs)
+		return InvalidOciAuthType(syncKind)
 	}
 	return nil
 }
 
-// HelmSpec validates the Helm specification for any obvious problems.
-func HelmSpec(helm *v1beta1.HelmBase, rs client.Object) status.Error {
+// RootSyncHelmSpec validates the RootSync Helm specification.
+func RootSyncHelmSpec(helm *v1beta1.HelmRootSync) status.Error {
+	syncKind := configsync.RootSyncKind
+	if err := HelmSpec(rootsync.GetHelmBase(helm), syncKind); err != nil {
+		return err
+	}
+	if helm.Namespace != "" && helm.DeployNamespace != "" {
+		return HelmNSAndDeployNS(syncKind)
+	}
+	return nil
+}
+
+// RepoSyncHelmSpec validates the RepoSync Helm specification.
+func RepoSyncHelmSpec(helm *v1beta1.HelmRepoSync) status.Error {
+	syncKind := configsync.RepoSyncKind
+	return HelmSpec(reposync.GetHelmBase(helm), syncKind)
+}
+
+// HelmSpec validates the Helm specification.
+func HelmSpec(helm *v1beta1.HelmBase, syncKind string) status.Error {
 	if helm == nil {
-		return MissingHelmSpec(rs)
+		return MissingHelmSpec(syncKind)
 	}
 
 	// We can't locate the helm chart if we don't have the URL.
 	if helm.Repo == "" {
-		return MissingHelmRepo(rs)
+		return MissingHelmRepo(syncKind)
 	}
 
 	// We can't locate the helm chart if we don't have the chart name.
 	if helm.Chart == "" {
-		return MissingHelmChart(rs)
+		return MissingHelmChart(syncKind)
 	}
 
 	// Ensure auth is a valid value.
@@ -177,29 +205,29 @@ func HelmSpec(helm *v1beta1.HelmBase, rs client.Object) status.Error {
 	switch helm.Auth {
 	case configsync.AuthGCENode, configsync.AuthK8sServiceAccount, configsync.AuthNone:
 		if helm.SecretRef != nil && helm.SecretRef.Name != "" {
-			return IllegalSecretRef(configsync.HelmSource, rs)
+			return IllegalSecretRef(configsync.HelmSource, syncKind)
 		}
 	case configsync.AuthToken:
 		if helm.SecretRef == nil || helm.SecretRef.Name == "" {
-			return MissingSecretRef(configsync.HelmSource, rs)
+			return MissingSecretRef(configsync.HelmSource, syncKind)
 		}
 	case configsync.AuthGCPServiceAccount:
 		if helm.SecretRef != nil && helm.SecretRef.Name != "" {
-			return IllegalSecretRef(configsync.HelmSource, rs)
+			return IllegalSecretRef(configsync.HelmSource, syncKind)
 		}
 		if helm.GCPServiceAccountEmail == "" {
-			return MissingGCPSAEmail(configsync.HelmSource, rs)
+			return MissingGCPSAEmail(configsync.HelmSource, syncKind)
 		}
 		if !validGCPServiceAccountEmail(helm.GCPServiceAccountEmail) {
-			return InvalidGCPSAEmail(configsync.HelmSource, rs)
+			return InvalidGCPSAEmail(configsync.HelmSource, syncKind)
 		}
 	default:
-		return InvalidHelmAuthType(rs)
+		return InvalidHelmAuthType(syncKind)
 	}
 
 	for _, vf := range helm.ValuesFileRefs {
 		if vf.Name == "" {
-			return MissingHelmValuesFileRefsName(rs)
+			return MissingHelmValuesFileRefsName(syncKind)
 		}
 	}
 
@@ -207,22 +235,67 @@ func HelmSpec(helm *v1beta1.HelmBase, rs client.Object) status.Error {
 }
 
 // ValuesFileRefs checks that the ConfigMaps specified by valuesFileRefs exist, are immutable, and have the provided data key.
-func ValuesFileRefs(ctx context.Context, cl client.Client, rs client.Object, valuesFileRefs []v1beta1.ValuesFileRef) status.Error {
+func ValuesFileRefs(ctx context.Context, cl client.Client, syncKind, syncNamespace string, valuesFileRefs []v1beta1.ValuesFileRef) status.Error {
 	for _, vf := range valuesFileRefs {
 		objRef := types.NamespacedName{
 			Name:      vf.Name,
-			Namespace: rs.GetNamespace(),
+			Namespace: syncNamespace,
 		}
 		var cm corev1.ConfigMap
 		if err := cl.Get(ctx, objRef, &cm); err != nil {
-			return HelmValuesMissingConfigMap(rs, err)
+			return HelmValuesMissingConfigMap(syncKind, err)
 		}
 		if cm.Immutable == nil || !(*cm.Immutable) {
-			return HelmValuesConfigMapMustBeImmutable(rs, objRef.Name)
+			return HelmValuesConfigMapMustBeImmutable(syncKind, objRef.Name, objRef.Namespace)
 		}
 		dataKey := HelmValuesFileDataKeyOrDefault(vf.DataKey)
 		if _, found := cm.Data[dataKey]; !found {
-			return HelmValuesMissingConfigMapKey(rs, objRef.Name, dataKey)
+			return HelmValuesMissingConfigMapKey(syncKind, objRef.Name, objRef.Namespace, dataKey)
+		}
+	}
+	return nil
+}
+
+// RootSyncOverrideSpec validates the RootSync Override specification.
+func RootSyncOverrideSpec(override *v1beta1.RootSyncOverrideSpec) status.Error {
+	if override == nil {
+		return nil
+	}
+	syncKind := configsync.RootSyncKind
+	for _, roleRef := range override.RoleRefs {
+		if roleRef.Kind == "Role" && roleRef.Namespace == "" {
+			return OverrideRoleRefNamespace(syncKind)
+		}
+	}
+	return OverrideSpec(&override.OverrideSpec, syncKind)
+}
+
+// RepoSyncOverrideSpec validates the RepoSync Override specification.
+func RepoSyncOverrideSpec(override *v1beta1.RepoSyncOverrideSpec) status.Error {
+	if override == nil {
+		return nil
+	}
+	syncKind := configsync.RepoSyncKind
+	return OverrideSpec(&override.OverrideSpec, syncKind)
+}
+
+// OverrideSpec validates the common Override specification.
+func OverrideSpec(override *v1beta1.OverrideSpec, syncKind string) status.Error {
+	if override == nil {
+		return nil
+	}
+	for _, containerResources := range override.Resources {
+		if containerResources.CPURequest.Sign() < 0 {
+			return OverrideResourceQuantityNegative("cpuRequest", syncKind)
+		}
+		if containerResources.CPULimit.Sign() < 0 {
+			return OverrideResourceQuantityNegative("cpuLimit", syncKind)
+		}
+		if containerResources.MemoryRequest.Sign() < 0 {
+			return OverrideResourceQuantityNegative("memoryRequest", syncKind)
+		}
+		if containerResources.MemoryLimit.Sign() < 0 {
+			return OverrideResourceQuantityNegative("memoryLimit", syncKind)
 		}
 	}
 	return nil
@@ -235,82 +308,74 @@ var invalidSyncBuilder = status.NewErrorBuilder(InvalidSyncCode)
 
 // MissingGitSpec reports that a RootSync/RepoSync doesn't declare the git spec
 // when spec.sourceType is set to `git`.
-func MissingGitSpec(o client.Object) status.Error {
-	kind := o.GetObjectKind().GroupVersionKind().Kind
+func MissingGitSpec(syncKind string) status.Error {
 	return invalidSyncBuilder.
-		Sprintf("%ss must specify spec.git when spec.sourceType is %q", kind, configsync.GitSource).
-		BuildWithResources(o)
+		Sprintf("%ss must specify spec.git when spec.sourceType is %q", syncKind, configsync.GitSource).
+		Build()
 }
 
 // MissingGitRepo reports that a RootSync/RepoSync doesn't declare the git repo it is
 // supposed to connect to.
-func MissingGitRepo(o client.Object) status.Error {
-	kind := o.GetObjectKind().GroupVersionKind().Kind
+func MissingGitRepo(syncKind string) status.Error {
 	return invalidSyncBuilder.
-		Sprintf("%ss must specify spec.git.repo when spec.sourceType is %q", kind, configsync.GitSource).
-		BuildWithResources(o)
+		Sprintf("%ss must specify spec.git.repo when spec.sourceType is %q", syncKind, configsync.GitSource).
+		Build()
 }
 
 // InvalidGitAuthType reports that a RootSync/RepoSync doesn't use one of the known auth
 // methods.
-func InvalidGitAuthType(o client.Object) status.Error {
+func InvalidGitAuthType(syncKind string) status.Error {
 	types := []string{string(configsync.AuthSSH), string(configsync.AuthCookieFile), string(configsync.AuthGCENode), string(configsync.AuthToken), string(configsync.AuthNone), string(configsync.AuthGCPServiceAccount), string(configsync.AuthGithubApp)}
-	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must specify spec.git.auth to be one of %s", kind,
+		Sprintf("%ss must specify spec.git.auth to be one of %s", syncKind,
 			strings.Join(types, ",")).
-		BuildWithResources(o)
+		Build()
 }
 
 // NoOpProxy reports that a RootSync/RepoSync declares a proxy, but the declaration would
 // do nothing.
-func NoOpProxy(o client.Object) status.Error {
-	kind := o.GetObjectKind().GroupVersionKind().Kind
+func NoOpProxy(syncKind string) status.Error {
 	return invalidSyncBuilder.
 		Sprintf("%ss which specify spec.git.proxy must also specify spec.git.auth as one of %q, %q or %q",
-			kind, configsync.AuthNone, configsync.AuthCookieFile, configsync.AuthToken).
-		BuildWithResources(o)
+			syncKind, configsync.AuthNone, configsync.AuthCookieFile, configsync.AuthToken).
+		Build()
 }
 
 // IllegalSecretRef reports that a RootSync/RepoSync declares an auth mode that doesn't
 // allow SecretRefs does declare a SecretRef.
-func IllegalSecretRef(sourceType configsync.SourceType, o client.Object) status.Error {
-	kind := o.GetObjectKind().GroupVersionKind().Kind
+func IllegalSecretRef(sourceType configsync.SourceType, syncKind string) status.Error {
 	return invalidSyncBuilder.
 		Sprintf("%ss which specify spec.%s.auth as one of %q, %q, or %q must not specify spec.%s.secretRef",
-			kind, sourceType, configsync.AuthNone, configsync.AuthGCENode, configsync.AuthGCPServiceAccount, sourceType).
-		BuildWithResources(o)
+			syncKind, sourceType, configsync.AuthNone, configsync.AuthGCENode, configsync.AuthGCPServiceAccount, sourceType).
+		Build()
 }
 
 // MissingSecretRef reports that a RootSync/RepoSync declares an auth mode that requires
 // a SecretRef, but does not do so.
-func MissingSecretRef(sourceType configsync.SourceType, o client.Object) status.Error {
-	kind := o.GetObjectKind().GroupVersionKind().Kind
+func MissingSecretRef(sourceType configsync.SourceType, syncKind string) status.Error {
 	return invalidSyncBuilder.
 		Sprintf("%ss which specify spec.%s.auth as one of %q, %q, %q, or %q must also specify spec.%s.secretRef",
-			kind, sourceType, configsync.AuthSSH, configsync.AuthCookieFile, configsync.AuthGithubApp, configsync.AuthToken, sourceType).
-		BuildWithResources(o)
+			syncKind, sourceType, configsync.AuthSSH, configsync.AuthCookieFile, configsync.AuthGithubApp, configsync.AuthToken, sourceType).
+		Build()
 }
 
 // InvalidGCPSAEmail reports that a RepoSync/RootSync Resource doesn't have the
 //
 //	correct gcp service account suffix.
-func InvalidGCPSAEmail(sourceType configsync.SourceType, o client.Object) status.Error {
-	kind := o.GetObjectKind().GroupVersionKind().Kind
+func InvalidGCPSAEmail(sourceType configsync.SourceType, syncKind string) status.Error {
 	return invalidSyncBuilder.
 		Sprintf("%ss which specify spec.%s.auth as %q must use suffix <gcp_serviceaccount_name>.[%s]",
-			kind, sourceType, configsync.AuthGCPServiceAccount, gcpSASuffix).
-		BuildWithResources(o)
+			syncKind, sourceType, configsync.AuthGCPServiceAccount, gcpSASuffix).
+		Build()
 }
 
 // MissingGCPSAEmail reports that a RepoSync/RootSync resource declares an auth
 // mode that requires a GCPServiceAccountEmail, but does not do so.
-func MissingGCPSAEmail(sourceType configsync.SourceType, o client.Object) status.Error {
-	kind := o.GetObjectKind().GroupVersionKind().Kind
+func MissingGCPSAEmail(sourceType configsync.SourceType, syncKind string) status.Error {
 	return invalidSyncBuilder.
 		Sprintf("%ss which specify spec.%s.auth as %q must also specify spec.%s.gcpServiceAccountEmail",
-			kind, sourceType, configsync.AuthGCPServiceAccount, sourceType).
-		BuildWithResources(o)
+			syncKind, sourceType, configsync.AuthGCPServiceAccount, sourceType).
+		Build()
 }
 
 // validGCPServiceAccountEmail verifies whether GCP SA email has correct
@@ -332,118 +397,123 @@ func validGCPServiceAccountEmail(email string) bool {
 
 // InvalidSourceType reports that a RootSync/RepoSync doesn't use one of the
 // supported source types.
-func InvalidSourceType(o client.Object) status.Error {
-	kind := o.GetObjectKind().GroupVersionKind().Kind
+func InvalidSourceType(syncKind string) status.Error {
 	return invalidSyncBuilder.
-		Sprintf("%ss must specify spec.sourceType to be one of %q, %q, %q", kind, configsync.GitSource, configsync.OciSource, configsync.HelmSource).
-		BuildWithResources(o)
+		Sprintf("%ss must specify spec.sourceType to be one of %q, %q, %q", syncKind, configsync.GitSource, configsync.OciSource, configsync.HelmSource).
+		Build()
 }
 
 // MissingOciSpec reports that a RootSync/RepoSync doesn't declare the OCI spec
 // when spec.sourceType is set to `oci`.
-func MissingOciSpec(o client.Object) status.Error {
-	kind := o.GetObjectKind().GroupVersionKind().Kind
+func MissingOciSpec(syncKind string) status.Error {
 	return invalidSyncBuilder.
-		Sprintf("%ss must specify spec.oci when spec.sourceType is %q", kind, configsync.OciSource).
-		BuildWithResources(o)
+		Sprintf("%ss must specify spec.oci when spec.sourceType is %q", syncKind, configsync.OciSource).
+		Build()
 }
 
 // MissingOciImage reports that a RootSync/RepoSync doesn't declare the OCI image it is
 // supposed to connect to.
-func MissingOciImage(o client.Object) status.Error {
-	kind := o.GetObjectKind().GroupVersionKind().Kind
+func MissingOciImage(syncKind string) status.Error {
 	return invalidSyncBuilder.
-		Sprintf("%ss must specify spec.oci.image when spec.sourceType is %q", kind, configsync.OciSource).
-		BuildWithResources(o)
+		Sprintf("%ss must specify spec.oci.image when spec.sourceType is %q", syncKind, configsync.OciSource).
+		Build()
 }
 
 // InvalidOciAuthType reports that a RootSync/RepoSync doesn't use one of the known auth
 // methods for OCI image.
-func InvalidOciAuthType(o client.Object) status.Error {
+func InvalidOciAuthType(syncKind string) status.Error {
 	types := []string{string(configsync.AuthGCENode), string(configsync.AuthGCPServiceAccount), string(configsync.AuthK8sServiceAccount), string(configsync.AuthNone)}
-	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must specify spec.oci.auth to be one of %s", kind,
+		Sprintf("%ss must specify spec.oci.auth to be one of %s", syncKind,
 			strings.Join(types, ",")).
-		BuildWithResources(o)
+		Build()
 }
 
 // MissingHelmSpec reports that a RootSync/RepoSync doesn't declare the Helm spec
 // when spec.sourceType is set to `helm`.
-func MissingHelmSpec(o client.Object) status.Error {
-	kind := o.GetObjectKind().GroupVersionKind().Kind
+func MissingHelmSpec(syncKind string) status.Error {
 	return invalidSyncBuilder.
-		Sprintf("%ss must specify spec.helm when spec.sourceType is %q", kind, configsync.HelmSource).
-		BuildWithResources(o)
+		Sprintf("%ss must specify spec.helm when spec.sourceType is %q", syncKind, configsync.HelmSource).
+		Build()
 }
 
 // MissingHelmRepo reports that a RootSync/RepoSync doesn't declare the Helm repository it is
 // supposed to download chart from.
-func MissingHelmRepo(o client.Object) status.Error {
-	kind := o.GetObjectKind().GroupVersionKind().Kind
+func MissingHelmRepo(syncKind string) status.Error {
 	return invalidSyncBuilder.
-		Sprintf("%ss must specify spec.helm.repo when spec.sourceType is %q", kind, configsync.HelmSource).
-		BuildWithResources(o)
+		Sprintf("%ss must specify spec.helm.repo when spec.sourceType is %q", syncKind, configsync.HelmSource).
+		Build()
 }
 
 // MissingHelmChart reports that a RootSync/RepoSync doesn't declare the Helm chart name it is
 // supposed to rendering.
-func MissingHelmChart(o client.Object) status.Error {
-	kind := o.GetObjectKind().GroupVersionKind().Kind
+func MissingHelmChart(syncKind string) status.Error {
 	return invalidSyncBuilder.
-		Sprintf("%ss must specify spec.helm.chart when spec.sourceType is %q", kind, configsync.HelmSource).
-		BuildWithResources(o)
+		Sprintf("%ss must specify spec.helm.chart when spec.sourceType is %q", syncKind, configsync.HelmSource).
+		Build()
 }
 
 // InvalidHelmAuthType reports that a RootSync/RepoSync doesn't use one of the known auth
 // methods for Helm.
-func InvalidHelmAuthType(o client.Object) status.Error {
+func InvalidHelmAuthType(syncKind string) status.Error {
 	types := []string{string(configsync.AuthGCENode), string(configsync.AuthGCPServiceAccount), string(configsync.AuthK8sServiceAccount), string(configsync.AuthNone), string(configsync.AuthToken)}
-	kind := o.GetObjectKind().GroupVersionKind().Kind
 	return invalidSyncBuilder.
-		Sprintf("%ss must specify spec.helm.auth to be one of %s", kind,
+		Sprintf("%ss must specify spec.helm.auth to be one of %s", syncKind,
 			strings.Join(types, ",")).
-		BuildWithResources(o)
+		Build()
 }
 
 // HelmNSAndDeployNS reports that a RootSync has both spec.helm.namespace and spec.helm.deployNamespace
 // set, even though they are mutually exclusive
-func HelmNSAndDeployNS(o client.Object) status.Error {
-	kind := o.GetObjectKind().GroupVersionKind().Kind
+func HelmNSAndDeployNS(syncKind string) status.Error {
 	return invalidSyncBuilder.
-		Sprintf("%ss must specify only one of 'spec.helm.namespace' or 'spec.helm.deployNamespace'", kind).
-		BuildWithResources(o)
+		Sprintf("%ss must specify only one of 'spec.helm.namespace' or 'spec.helm.deployNamespace'", syncKind).
+		Build()
 }
 
 // MissingHelmValuesFileRefsName reports that an RSync is missing spec.helm.valuesFileRefs.name
-func MissingHelmValuesFileRefsName(o client.Object) status.Error {
-	kind := o.GetObjectKind().GroupVersionKind().Kind
+func MissingHelmValuesFileRefsName(syncKind string) status.Error {
 	return invalidSyncBuilder.
-		Sprintf("%ss must specify spec.helm.valuesFileRefs.name", kind).
-		BuildWithResources(o)
+		Sprintf("%ss must specify spec.helm.valuesFileRefs.name", syncKind).
+		Build()
 }
 
 // HelmValuesMissingConfigMap reports that an RSync is referencing a ConfigMap that doesn't exist.
-func HelmValuesMissingConfigMap(o client.Object, err error) status.Error {
-	kind := o.GetObjectKind().GroupVersionKind().Kind
+func HelmValuesMissingConfigMap(syncKind string, err error) status.Error {
 	return invalidSyncBuilder.
-		Sprintf("%ss must reference valid ConfigMaps in spec.helm.valuesFileRefs: %s", kind, err.Error()).
-		BuildWithResources(o)
+		Sprintf("%ss must reference valid ConfigMaps in spec.helm.valuesFileRefs: %s", syncKind, err.Error()).
+		Build()
 }
 
 // HelmValuesMissingConfigMapKey reports that an RSync is missing spec.helm.valuesFileRefs.valuesFile
-func HelmValuesMissingConfigMapKey(o client.Object, name, key string) status.Error {
-	kind := o.GetObjectKind().GroupVersionKind().Kind
+func HelmValuesMissingConfigMapKey(syncKind, cmName, cmNamespace, dataKey string) status.Error {
 	return invalidSyncBuilder.
-		Sprintf("%ss must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap %q in namespace %q does not have data key %q", kind, name, o.GetNamespace(), key).
-		BuildWithResources(o)
+		Sprintf("%ss must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap %q in namespace %q does not have data key %q", syncKind, cmName, cmNamespace, dataKey).
+		Build()
 }
 
 // HelmValuesConfigMapMustBeImmutable reports that a referenced ConfigMap from RSync spec.helm.valuesFileRefs is
 // not immutable.
-func HelmValuesConfigMapMustBeImmutable(o client.Object, name string) status.Error {
-	kind := o.GetObjectKind().GroupVersionKind().Kind
+func HelmValuesConfigMapMustBeImmutable(syncKind, cmName, cmNamespace string) status.Error {
 	return invalidSyncBuilder.
-		Sprintf("%ss must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap %q in namespace %q is not immutable", kind, name, o.GetNamespace()).
-		BuildWithResources(o)
+		Sprintf("%ss must reference valid ConfigMaps in spec.helm.valuesFileRefs: ConfigMap %q in namespace %q is not immutable", syncKind, cmName, cmNamespace).
+		Build()
+}
+
+// OverrideRoleRefNamespace reports that a RootSync needs
+// `spec.override.roleRefs.namespace` when  `spec.override.roleRefs.kind` is
+// "Role".
+func OverrideRoleRefNamespace(syncKind string) status.Error {
+	return invalidSyncBuilder.
+		Sprintf("%ss must specify 'spec.override.roleRefs.namespace' for role references with kind Role", syncKind).
+		Build()
+}
+
+// OverrideResourceQuantityNegative reports that a RootSync needs
+// `spec.override.roleRefs.namespace` when  `spec.override.roleRefs.kind` is
+// "Role".
+func OverrideResourceQuantityNegative(fieldName, syncKind string) status.Error {
+	return invalidSyncBuilder.
+		Sprintf("%s field 'spec.override.resources.%s' must not be negative", syncKind, fieldName).
+		Build()
 }

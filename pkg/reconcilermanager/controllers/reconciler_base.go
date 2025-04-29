@@ -48,7 +48,7 @@ import (
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/util"
-	"kpt.dev/configsync/pkg/validate/raw/validate"
+	"kpt.dev/configsync/pkg/validate/rsync/validate"
 	webhookconfiguration "kpt.dev/configsync/pkg/webhook/configuration"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"

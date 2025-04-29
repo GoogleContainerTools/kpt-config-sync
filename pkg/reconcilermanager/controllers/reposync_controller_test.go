@@ -53,7 +53,7 @@ import (
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/testerrors"
 	"kpt.dev/configsync/pkg/util"
-	"kpt.dev/configsync/pkg/validate/raw/validate"
+	"kpt.dev/configsync/pkg/validate/rsync/validate"
 	webhookconfiguration "kpt.dev/configsync/pkg/webhook/configuration"
 	"sigs.k8s.io/cli-utils/pkg/testutil"
 	controllerruntime "sigs.k8s.io/controller-runtime"
@@ -3785,7 +3785,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs := k8sobjects.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
-	reposync.SetStalled(wantRs, "Validation", validate.InvalidSourceType(rs))
+	reposync.SetStalled(wantRs, "Validation", validate.InvalidSourceType(configsync.RepoSyncKind))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	// verify missing Git
@@ -3800,7 +3800,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs.Spec = rs.Spec
-	reposync.SetStalled(wantRs, "Validation", validate.MissingGitSpec(rs))
+	reposync.SetStalled(wantRs, "Validation", validate.MissingGitSpec(configsync.RepoSyncKind))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	// verify missing Oci
@@ -3815,7 +3815,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs.Spec = rs.Spec
-	reposync.SetStalled(wantRs, "Validation", validate.MissingOciSpec(rs))
+	reposync.SetStalled(wantRs, "Validation", validate.MissingOciSpec(configsync.RepoSyncKind))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	// verify missing Helm
@@ -3830,7 +3830,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs.Spec = rs.Spec
-	reposync.SetStalled(wantRs, "Validation", validate.MissingHelmSpec(rs))
+	reposync.SetStalled(wantRs, "Validation", validate.MissingHelmSpec(configsync.RepoSyncKind))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	// verify missing OCI image
@@ -3846,7 +3846,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs.Spec = rs.Spec
-	reposync.SetStalled(wantRs, "Validation", validate.MissingOciImage(rs))
+	reposync.SetStalled(wantRs, "Validation", validate.MissingOciImage(configsync.RepoSyncKind))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	// verify invalid OCI Auth
@@ -3862,7 +3862,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs.Spec = rs.Spec
-	reposync.SetStalled(wantRs, "Validation", validate.InvalidOciAuthType(rs))
+	reposync.SetStalled(wantRs, "Validation", validate.InvalidOciAuthType(configsync.RepoSyncKind))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	// verify missing Helm repo
@@ -3879,7 +3879,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs.Spec = rs.Spec
-	reposync.SetStalled(wantRs, "Validation", validate.MissingHelmRepo(rs))
+	reposync.SetStalled(wantRs, "Validation", validate.MissingHelmRepo(configsync.RepoSyncKind))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	// verify missing Helm chart
@@ -3895,7 +3895,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs.Spec = rs.Spec
-	reposync.SetStalled(wantRs, "Validation", validate.MissingHelmChart(rs))
+	reposync.SetStalled(wantRs, "Validation", validate.MissingHelmChart(configsync.RepoSyncKind))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	// verify invalid Helm Auth
@@ -3911,7 +3911,7 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 	wantRs.Spec = rs.Spec
-	reposync.SetStalled(wantRs, "Validation", validate.InvalidHelmAuthType(rs))
+	reposync.SetStalled(wantRs, "Validation", validate.InvalidHelmAuthType(configsync.RepoSyncKind))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	// verify valid OCI spec
@@ -4649,12 +4649,6 @@ func TestRepoSyncReconcilerWithGithubApp(t *testing.T) {
 	wantRs := k8sobjects.RepoSyncObjectV1Beta1(rs.Namespace, rs.Name)
 	reposync.SetStalled(wantRs, "Validation",
 		fmt.Errorf(`KNV1061: RepoSyncs which specify spec.git.auth as one of "ssh", "cookiefile", "githubapp", or "token" must also specify spec.git.secretRef
-
-namespace: bookinfo
-metadata.name: my-repo-sync
-group: configsync.gke.io
-version: v1beta1
-kind: RepoSync
 
 For more information, see https://g.co/cloud/acm-errors#knv1061`))
 	validateRepoSyncStatus(t, wantRs, fakeClient)

@@ -38,11 +38,12 @@ func init() {
 	utilruntime.Must(v1beta1.AddToScheme(runtimeScheme))
 }
 
-func main() {
+// run initializes and starts the controller manager with RootSync and RepoSync controllers.
+// Returns an error if initialization or startup fails.
+func run() error {
 	zapLog, err := zap.NewProduction()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to initialize logger: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to initialize logger: %w", err)
 	}
 	defer zapLog.Sync()
 	logger := zapr.NewLogger(zapLog)
@@ -56,14 +57,12 @@ func main() {
 		HealthProbeBindAddress: ":8081",
 	})
 	if err != nil {
-		logger.Error(err, "unable to start manager")
-		os.Exit(1)
+		return fmt.Errorf("unable to start manager: %w", err)
 	}
 
 	// Add health check endpoint
 	if err := mgr.AddHealthzCheck("healthz", func(_ *http.Request) error { return nil }); err != nil {
-		logger.Error(err, "unable to set up health check")
-		os.Exit(1)
+		return fmt.Errorf("unable to set up health check: %w", err)
 	}
 
 	// Create a shared status tracker
@@ -89,20 +88,26 @@ func main() {
 	if err := ctrl.NewControllerManagedBy(mgr).
 		For(&v1beta1.RootSync{}).
 		Complete(rootSyncController); err != nil {
-		logger.Error(err, "unable to set up RootSync controller")
-		os.Exit(1)
+		return fmt.Errorf("unable to set up RootSync controller: %w", err)
 	}
 
 	// Set up RepoSync controller
 	if err := ctrl.NewControllerManagedBy(mgr).
 		For(&v1beta1.RepoSync{}).
 		Complete(repoSyncController); err != nil {
-		logger.Error(err, "unable to set up RepoSync controller")
-		os.Exit(1)
+		return fmt.Errorf("unable to set up RepoSync controller: %w", err)
 	}
 
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		logger.Error(err, "problem running manager")
+		return fmt.Errorf("problem running manager: %w", err)
+	}
+
+	return nil
+}
+
+func main() {
+	if err := run(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 }

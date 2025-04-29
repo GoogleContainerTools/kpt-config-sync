@@ -49,7 +49,7 @@ const (
 	DefaultMonitorKSA             = "default"
 	MonitorGSA                    = "e2e-test-metric-writer"
 	MetricExportErrorCaption      = "One or more TimeSeries could not be written"
-	UnrecognizedLabelErrorCaption = "Unrecognized metric labels"
+	UnrecognizedLabelErrorCaption = "unrecognized metric labels"
 	GCMMetricPrefix               = "custom.googleapis.com/opencensus/config_sync"
 )
 

@@ -1,6 +1,6 @@
 # Docker image configuration
 REGION ?= us-central1
-PROJECT_ID ?= YOUR_PROJECT_ID
+PROJECT_ID ?= your-project-id
 IMAGE_NAME ?= sync-status-watch
 GAR_REPO_NAME ?= sync-status-watch
 IMAGE_TAG ?= latest
@@ -9,7 +9,7 @@ IMAGE_URI = ${REGION}-docker.pkg.dev/${PROJECT_ID}/${GAR_REPO_NAME}/${IMAGE_NAME
 # Supported platforms for multi-arch build
 PLATFORMS ?= linux/amd64,linux/arm64
 
-.PHONY: build push buildx-setup
+.PHONY: build push buildx-setup test
 
 # Setup buildx builder for multi-arch builds
 buildx-setup:
@@ -35,6 +35,11 @@ push: build
 deploy: build
 	@echo "Deploying to Kubernetes..."
 	sed "s|SYNC_STATUS_WATCH_CONTROLLER_IMAGE|${IMAGE_URI}|g" sync-watch-manifest.yaml | kubectl apply -f -
+
+# Run unit tests
+test:
+	@echo "Running unit tests..."
+	go test -v ./...
 
 # Clean up buildx builder
 clean:

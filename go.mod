@@ -3,7 +3,9 @@ module kpt.dev/configsync
 go 1.23.0
 
 require (
+	cloud.google.com/go/auth v0.12.0
 	cloud.google.com/go/compute/metadata v0.5.1
+	cloud.google.com/go/logging v1.11.0
 	cloud.google.com/go/monitoring v1.21.0
 	cloud.google.com/go/trace v1.11.0
 	contrib.go.opencensus.io/exporter/ocagent v0.7.0
@@ -61,11 +63,6 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.2
 	sigs.k8s.io/yaml v1.4.0
 )
-
-// When updating cloud.google.com/go/auth, ensure the auth.IsCredentialsNotFoundError still works.
-require cloud.google.com/go/auth v0.12.0
-
-require cloud.google.com/go/logging v1.11.0
 
 require (
 	cloud.google.com/go v0.115.1 // indirect

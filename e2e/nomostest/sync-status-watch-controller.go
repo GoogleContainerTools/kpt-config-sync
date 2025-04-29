@@ -41,7 +41,7 @@ const ImagePlaceholder = "SYNC_STATUS_WATCH_CONTROLLER_IMAGE"
 const ManifestPath = "../../examples/post-sync/sync-watch-manifest.yaml"
 
 // TestImage is the image used for testing the sync status watch controller.
-const TestImage = testing.TestInfraArtifactRepositoryAddress + "/sync-status-watch-controller:v1.0.0-9e1e0958"
+const TestImage = testing.TestInfraArtifactRepositoryAddress + "/sync-status-watch-controller:v1.0.0-2527be8c"
 
 // SetupSyncStatusWatchController sets up the sync status watch controller in the cluster.
 // It creates the necessary namespace and deploys the controller.

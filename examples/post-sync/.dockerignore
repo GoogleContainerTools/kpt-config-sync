@@ -1,0 +1,5 @@
+# Ignore binary
+sync-status-watch
+controller_test.go
+vendor/
+.gitignore

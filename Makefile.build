@@ -317,24 +317,21 @@ push-oci-signature-verification-server:
 ##################################################
 # E2E Sync Status Watch Controller
 # Only run when changes are made to
-# ./examples/postsync/
+# ./examples/post-sync/
 ##################################################
 
 E2E_TEST_IMAGE_SYNC_STATUS_WATCH_CONTROLLER := $(TEST_INFRA_REGISTRY)/sync-status-watch-controller:v1.0.0-$(shell git rev-parse --short HEAD)
 # Builds the container used by e2e tests to test sync status watch error logs
 .PHONY: build-sync-status-watch-controller
-build-sync-status-watch-controller:
-	@echo "+++ Building $(E2E_TEST_IMAGE_SYNC_STATUS_WATCH_CONTROLLER)"
+build-push-sync-status-watch-controller:
+	@echo "Setting up Docker buildx..."
+	docker buildx create --use --name multi-arch-builder || true
+	@echo "+++ Building $(E2E_TEST_IMAGE_SYpostC_STATUS_WATCH_CONTROLLER)"
 	docker buildx build \
 		--build-arg GOLANG_IMAGE=$(GOLANG_IMAGE) \
 		-t $(E2E_TEST_IMAGE_SYNC_STATUS_WATCH_CONTROLLER) \
+		--push \
 		examples/post-sync/
-
-.PHONY: push-sync-status-watch-controller
-push-sync-status-watch-controller:
-	@echo "+++ Pushing $(E2E_TEST_IMAGE_SYNC_STATUS_WATCH_CONTROLLER)"
-	@gcloud $(GCLOUD_QUIET) auth configure-docker $(firstword $(subst /, ,$(E2E_TEST_IMAGE_SYNC_STATUS_WATCH_CONTROLLER)))
-	@docker push $(E2E_TEST_IMAGE_SYNC_STATUS_WATCH_CONTROLLER)
 
 .PHONY: deploy
 deploy:

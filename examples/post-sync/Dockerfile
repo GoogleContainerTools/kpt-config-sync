@@ -15,25 +15,26 @@
 # Build stage
 ARG GOLANG_IMAGE=golang:1.24
 
-FROM --platform=${BUILDPLATFORM} ${GOLANG_IMAGE} as builder
+FROM --platform=${BUILDPLATFORM} ${GOLANG_IMAGE} AS builder
 
 # Create and set working directory
 WORKDIR /workspace
 
-# Copy only necessary files for building
+# Copy go.mod and go.sum first for better caching
 COPY go.mod go.sum ./
-RUN go mod download
+RUN go mod tidy && \
+    go mod vendor
 
-# Copy source code
-COPY main.go ./
+# Copy all source files
+COPY . .
 
 # Build the binary
 ARG TARGETOS
 ARG TARGETARCH
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o sync-status-watch main.go
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o sync-status-watch .
 
 # Final stage
-FROM --platform=${TARGETPLATFORM} gcr.io/distroless/static:nonroot
+FROM gcr.io/distroless/static:nonroot
 
 # Create and set working directory
 WORKDIR /app

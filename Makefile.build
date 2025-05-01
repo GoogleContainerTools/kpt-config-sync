@@ -326,9 +326,10 @@ E2E_TEST_IMAGE_SYNC_STATUS_WATCH_CONTROLLER := $(TEST_INFRA_REGISTRY)/sync-statu
 build-push-sync-status-watch-controller:
 	@echo "Setting up Docker buildx..."
 	docker buildx create --use --name multi-arch-builder || true
-	@echo "+++ Building $(E2E_TEST_IMAGE_SYpostC_STATUS_WATCH_CONTROLLER)"
+	@echo "+++ Building $(E2E_TEST_IMAGE_SYNC_STATUS_WATCH_CONTROLLER)"
 	docker buildx build \
 		--build-arg GOLANG_IMAGE=$(GOLANG_IMAGE) \
+		--build-arg GOARCH=amd64 \
 		-t $(E2E_TEST_IMAGE_SYNC_STATUS_WATCH_CONTROLLER) \
 		--push \
 		examples/post-sync/

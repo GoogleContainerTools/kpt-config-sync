@@ -127,7 +127,7 @@ func (c *SyncStatusController) Reconcile(ctx context.Context, req reconcile.Requ
 		if err := c.client.Get(ctx, req.NamespacedName, &root); err != nil {
 			return reconcile.Result{}, client.IgnoreNotFound(err)
 		}
-		syncID = c.getSyncID(ctx, req)
+		syncID = c.getSyncID(req)
 		status = root.Status.Status
 		generation = root.Generation
 		observedGeneration = root.Status.ObservedGeneration
@@ -138,7 +138,7 @@ func (c *SyncStatusController) Reconcile(ctx context.Context, req reconcile.Requ
 		if err := c.client.Get(ctx, req.NamespacedName, &repo); err != nil {
 			return reconcile.Result{}, client.IgnoreNotFound(err)
 		}
-		syncID = c.getSyncID(ctx, req)
+		syncID = c.getSyncID(req)
 		status = repo.Status.Status
 		generation = repo.Generation
 		observedGeneration = repo.Status.ObservedGeneration
@@ -165,7 +165,7 @@ func (c *SyncStatusController) Reconcile(ctx context.Context, req reconcile.Requ
 	return reconcile.Result{}, nil
 }
 
-func (c *SyncStatusController) getSyncID(ctx context.Context, req reconcile.Request) SyncID {
+func (c *SyncStatusController) getSyncID(req reconcile.Request) SyncID {
 	return SyncID{
 		Name:      req.Name,
 		Kind:      c.syncKind,

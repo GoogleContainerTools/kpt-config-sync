@@ -327,7 +327,7 @@ test-kustomization:
 
 # Runs unit tests and linter.
 .PHONY: test
-test: test-unit test-kustomization lint
+test: test-unit test-kustomization lint test-post-sync
 
 # The presubmits have made side-effects in the past, which makes their
 # validation suspect (as the repository they are validating is different
@@ -374,7 +374,7 @@ deps: tidy vendor
 lint: lint-go lint-bash lint-yaml lint-license lint-license-headers
 
 .PHONY: lint-go
-lint-go: "$(GOLANGCI_LINT)"
+lint-go: "$(GOLANGCI_LINT)" lint-post-sync
 	./scripts/lint-go.sh $(NOMOS_GO_PKG)
 
 .PHONY: lint-bash
@@ -527,3 +527,13 @@ manual-test-refresh: config-sync-manifest
 	kubectl apply -f ${NOMOS_MANIFEST_STAGING_DIR}/config-sync-manifest.yaml
 
 ####################################################################################################
+
+.PHONY: test-post-sync
+test-post-sync:
+	@echo "+++ Running post-sync tests"
+	@cd examples/post-sync && go test -v ./... && cd $(CURDIR)
+
+.PHONY: lint-post-sync
+lint-post-sync: "$(GOLANGCI_LINT)"
+	@echo "+++ Running golangci-lint on post-sync example"
+	@cd examples/post-sync && GOCACHE="$(OUTPUT_DIR)/.cache/go" XDG_CACHE_HOME="$(OUTPUT_DIR)/.cache" $(GOLANGCI_LINT) run --config .golangci.yaml && cd $(CURDIR)

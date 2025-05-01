@@ -14,7 +14,7 @@
 
 # Global build arguments - these can be overridden with --build-arg
 ARG GOOS=linux
-ARG GOARCH
+ARG GOARCH=amd64
 
 # Build stage
 ARG GOLANG_IMAGE=golang:1.24
@@ -25,24 +25,25 @@ FROM --platform=${BUILDPLATFORM} ${GOLANG_IMAGE} AS builder
 WORKDIR /workspace
 
 # Copy go.mod and go.sum first for better caching
-COPY go.mod go.sum ./
+# COPY go.mod go.sum ./
+
+# Copy all source files
+COPY go.mod go.sum main.go controller.go ./
 RUN go mod tidy && \
     go mod vendor
 
-# Copy all source files
-COPY . .
+# Set build arguments in builder stage
+ARG GOOS
+ARG GOARCH
 
 # Build the binary
-RUN if [ -z "${GOARCH}" ]; then \
-        GOARCH=$(go env GOARCH); \
-    fi
-RUN mkdir -p .output/go/bin/${GOARCH} && \
-    CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} go build -o .output/go/bin/${GOARCH}/sync-status-watch .
+RUN mkdir -p /workspace/.output/go/bin/${GOARCH} && \
+    CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} go build -o /workspace/.output/go/bin/${GOARCH}/sync-status-watch .
 
 # Final stage
 FROM gcr.io/distroless/static:nonroot
 
-# Re-declare build arguments - inherits value from global ARG if set
+# Re-declare build arguments in final stage
 ARG GOARCH
 
 # Create and set working directory

@@ -45,7 +45,11 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize logger: %w", err)
 	}
-	defer zapLog.Sync()
+	defer func() {
+		if err := zapLog.Sync(); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to sync logger: %v\n", err)
+		}
+	}()
 	logger := zapr.NewLogger(zapLog)
 
 	ctrl.SetLogger(logger)

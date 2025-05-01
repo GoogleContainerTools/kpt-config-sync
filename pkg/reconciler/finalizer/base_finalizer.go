@@ -24,8 +24,12 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/applier"
+	"kpt.dev/configsync/pkg/applier/stats"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
+	"sigs.k8s.io/cli-utils/pkg/apis/actuation"
+	"sigs.k8s.io/cli-utils/pkg/apply/event"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -86,43 +90,83 @@ func (bf *baseFinalizer) unmanageObjects(ctx context.Context, rsyncRef client.Ob
 		}
 		return status.APIServerError(err, "failed to get ResourceGroup", rg)
 	}
-	numNotFound := 0
+	objStatusMap := make(applier.ObjectStatusMap)
+	syncStats := stats.NewSyncStats()
 	for _, objRef := range rg.Spec.Resources {
 		// Remove metadata for each object
-		obj := &metav1.PartialObjectMetadata{}
-		obj.SetGroupVersionKind(schema.GroupVersionKind{
+		actuationStatus, err := bf.unmanageObject(ctx, objRef)
+		objStatusMap[coreIDFromObjMetadata(objRef)] = &applier.ObjectStatus{
+			Strategy:  actuation.ActuationStrategyApply,
+			Actuation: actuationStatus,
+		}
+		syncStats.ApplyEvent.Add(actuationStatusToApplyEvent(actuationStatus))
+		errs = status.Append(errs, err)
+	}
+
+	klog.Infof("Unmanager made new progress: %s", syncStats.String())
+	objStatusMap.Log(klog.V(0))
+	return errs
+}
+
+func (bf *baseFinalizer) unmanageObject(ctx context.Context, objRef v1alpha1.ObjMetadata) (actuation.ActuationStatus, error) {
+	obj := &metav1.PartialObjectMetadata{}
+	obj.SetGroupVersionKind(schema.GroupVersionKind{ // Version not required for PartialObjectMetadata
+		Group: objRef.Group,
+		Kind:  objRef.Kind,
+	})
+	key := client.ObjectKey{
+		Name:      objRef.Name,
+		Namespace: objRef.Namespace,
+	}
+	id := coreIDFromObjMetadata(objRef)
+	if err := bf.Client.Get(ctx, key, obj); err != nil {
+		if apierrors.IsNotFound(err) { // skip orphaning objects that don't exist
+			klog.Infof("Skip unmanaging %s (Not Found)", id.String())
+			return actuation.ActuationSkipped, nil
+		}
+		return actuation.ActuationFailed, status.APIServerError(err, "failed to get object", obj)
+	}
+	existing := obj.DeepCopy()
+	// TODO: always remove apply set label with RemoveConfigSyncMetadata?
+	// All callers of RemoveConfigSyncMetadata also call RemoveApplySetPartOfLabel
+	update1 := metadata.RemoveConfigSyncMetadata(obj)
+	update2 := metadata.RemoveApplySetPartOfLabel(obj, bf.ApplySetID)
+	if update1 || update2 {
+		if err := bf.Client.Patch(ctx, obj, client.MergeFrom(existing),
+			client.FieldOwner(configsync.FieldManager)); err != nil {
+			return actuation.ActuationFailed, status.APIServerError(err, "failed to patch object to remove metadata", obj)
+		}
+		return actuation.ActuationSucceeded, nil
+	}
+	klog.Infof("Skip unmanaging %s (no-op)", id.String())
+	return actuation.ActuationSkipped, nil
+}
+
+func coreIDFromObjMetadata(objRef v1alpha1.ObjMetadata) core.ID {
+	return core.ID{
+		GroupKind: schema.GroupKind{
 			Group: objRef.Group,
-			Kind:  objRef.Kind,
-		})
-		key := client.ObjectKey{
+			Kind:  objRef.Group,
+		},
+		ObjectKey: client.ObjectKey{
 			Name:      objRef.Name,
 			Namespace: objRef.Namespace,
-		}
-		if err := bf.Client.Get(ctx, key, obj); err != nil {
-			if apierrors.IsNotFound(err) { // skip orphaning objects that don't exist
-				numNotFound++
-				continue
-			}
-			errs = status.Append(errs, status.APIServerError(err, "failed to get object", obj))
-			continue
-		}
-		existing := obj.DeepCopy()
-		// TODO: always remove apply set label with RemoveConfigSyncMetadata?
-		// All callers of RemoveConfigSyncMetadata also call RemoveApplySetPartOfLabel
-		update1 := metadata.RemoveConfigSyncMetadata(obj)
-		update2 := metadata.RemoveApplySetPartOfLabel(obj, bf.ApplySetID)
-		if update1 || update2 {
-			if err := bf.Client.Patch(ctx, obj, client.MergeFrom(existing),
-				client.FieldOwner(configsync.FieldManager)); err != nil {
-				errs = status.Append(errs, status.APIServerError(err, "failed to patch object to remove metadata", obj))
-			}
-		}
+		},
 	}
-	numErrs := 0
-	if errs != nil {
-		numErrs = len(errs.Errors())
+}
+
+// actuationStatusToApplyEvent maps ActuationStatus to ApplyEventStatus as a helper
+// method for the unmanager. This emulates the behavior of the applier so that
+// the unmanager can print logs of the same structure.
+func actuationStatusToApplyEvent(s actuation.ActuationStatus) event.ApplyEventStatus {
+	switch s {
+	case actuation.ActuationSucceeded:
+		return event.ApplySuccessful
+	case actuation.ActuationSkipped:
+		return event.ApplySkipped
+	case actuation.ActuationPending:
+		return event.ApplyPending
+	default:
+		return event.ApplyFailed
 	}
-	klog.Infof("Finalizer unmanaged %d objects (%d not found) (%d errors)",
-		len(rg.Spec.Resources), numNotFound, numErrs)
-	return errs
 }

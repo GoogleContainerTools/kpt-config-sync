@@ -50,14 +50,10 @@ func TestStatusEventLogRootSync(t *testing.T) {
 		if nt.T.Failed() {
 			nt.PodLogs(nomostest.StatusWatchNamespace, nomostest.StatusWatchName, "", false)
 		}
-		if err := nomostest.TeardownSyncStatusWatchController(nt); err != nil {
-			nt.T.Error(err)
-		}
+		nt.Must(nomostest.TeardownSyncStatusWatchController(nt))
 	})
 
-	if err := nomostest.SetupSyncStatusWatchController(nt); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nomostest.SetupSyncStatusWatchController(nt))
 
 	rootSyncID := nomostest.DefaultRootSyncID
 	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
@@ -68,9 +64,7 @@ func TestStatusEventLogRootSync(t *testing.T) {
 	nt.Must(nt.Watcher.WatchForRootSyncSourceError(configsync.RootSyncName, system.MissingRepoErrorCode, ""))
 
 	rs := k8sobjects.RootSyncObjectV1Beta1(rootSyncID.Name)
-	if err := nt.KubeClient.Get(rootSyncID.Name, rootSyncID.Namespace, rs); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.KubeClient.Get(rootSyncID.Name, rootSyncID.Namespace, rs))
 	commit := rs.Status.Source.Commit
 
 	nt.T.Logf("Check for source related error message at commit %s occurrence once", commit)
@@ -80,9 +74,7 @@ func TestStatusEventLogRootSync(t *testing.T) {
 	}
 
 	logMessages := []string{"KNV1017: The system/ directory must declare a Repo Resource."}
-	if err := assertLogEntryHasCount(logs, 1, commit, rootSyncID.Name, rootSyncID.Namespace, logMessages); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(assertLogEntryHasCount(logs, 1, commit, rootSyncID.Name, rootSyncID.Namespace, logMessages))
 
 	nt.T.Log("Reset test repo")
 	nt.Must(rootSyncGitRepo.Git("reset", "--hard", "HEAD^"))
@@ -101,14 +93,10 @@ func TestCloudLoggingRootSync(t *testing.T) {
 		if nt.T.Failed() {
 			nt.PodLogs(nomostest.StatusWatchNamespace, nomostest.StatusWatchName, "", false)
 		}
-		if err := nomostest.TeardownSyncStatusWatchController(nt); err != nil {
-			nt.T.Error(err)
-		}
+		nt.Must(nomostest.TeardownSyncStatusWatchController(nt))
 	})
 
-	if err := nomostest.SetupSyncStatusWatchController(nt); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nomostest.SetupSyncStatusWatchController(nt))
 
 	rootSyncID := nomostest.DefaultRootSyncID
 	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
@@ -119,9 +107,7 @@ func TestCloudLoggingRootSync(t *testing.T) {
 	nt.Must(nt.Watcher.WatchForRootSyncSourceError(configsync.RootSyncName, system.MissingRepoErrorCode, ""))
 
 	rs := k8sobjects.RootSyncObjectV1Beta1(rootSyncID.Name)
-	if err := nt.KubeClient.Get(rootSyncID.Name, rootSyncID.Namespace, rs); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.KubeClient.Get(rootSyncID.Name, rootSyncID.Namespace, rs))
 	commit := rs.Status.Source.Commit
 
 	nt.T.Logf("Check for source related error message at commit %s occurrence once in Cloud Logging", commit)
@@ -131,9 +117,7 @@ func TestCloudLoggingRootSync(t *testing.T) {
 		nt.ClusterName,
 		startTime.Format(time.RFC3339),
 	)
-	if err := waitForLogEntryInCloudLogs(nt, filter, 1, commit, rootSyncID.Name, rootSyncID.Namespace, []string{"KNV1017: The system/ directory must declare a Repo Resource."}, 120*time.Second); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(waitForLogEntryInCloudLogs(nt, filter, 1, commit, rootSyncID.Name, rootSyncID.Namespace, []string{"KNV1017: The system/ directory must declare a Repo Resource."}, 120*time.Second))
 
 	nt.T.Log("Reset test repo")
 	nt.Must(rootSyncGitRepo.Git("reset", "--hard", "HEAD^"))
@@ -152,14 +136,10 @@ func TestConditionEventLogRootSync(t *testing.T) {
 		if nt.T.Failed() {
 			nt.PodLogs(nomostest.StatusWatchNamespace, nomostest.StatusWatchName, "", false)
 		}
-		if err := nomostest.TeardownSyncStatusWatchController(nt); err != nil {
-			nt.T.Error(err)
-		}
+		nt.Must(nomostest.TeardownSyncStatusWatchController(nt))
 	})
 
-	if err := nomostest.SetupSyncStatusWatchController(nt); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nomostest.SetupSyncStatusWatchController(nt))
 
 	testNamespace := k8sobjects.NamespaceObject(testNs)
 	nt.Must(nt.KubeClient.Create(testNamespace))
@@ -197,9 +177,7 @@ func TestConditionEventLogRootSync(t *testing.T) {
 	}
 
 	logMessages := []string{msg}
-	if err := assertLogEntryHasCount(logs, 1, "", rootSync.Name, rootSync.Namespace, logMessages); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(assertLogEntryHasCount(logs, 1, "", rootSync.Name, rootSync.Namespace, logMessages))
 }
 
 // TestCloudLoggingConditionEventRootSync tests that condition-based errors from RootSync
@@ -214,14 +192,10 @@ func TestCloudLoggingConditionEventRootSync(t *testing.T) {
 		if nt.T.Failed() {
 			nt.PodLogs(nomostest.StatusWatchNamespace, nomostest.StatusWatchName, "", false)
 		}
-		if err := nomostest.TeardownSyncStatusWatchController(nt); err != nil {
-			nt.T.Error(err)
-		}
+		nt.Must(nomostest.TeardownSyncStatusWatchController(nt))
 	})
 
-	if err := nomostest.SetupSyncStatusWatchController(nt); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nomostest.SetupSyncStatusWatchController(nt))
 
 	testNamespace := k8sobjects.NamespaceObject(testNs)
 	nt.Must(nt.KubeClient.Create(testNamespace))
@@ -259,9 +233,7 @@ func TestCloudLoggingConditionEventRootSync(t *testing.T) {
 		nt.ClusterName,
 		startTime.Format(time.RFC3339),
 	)
-	if err := waitForLogEntryInCloudLogs(nt, filter, 1, "", rootSync.Name, rootSync.Namespace, []string{msg}, 120*time.Second); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(waitForLogEntryInCloudLogs(nt, filter, 1, "", rootSync.Name, rootSync.Namespace, []string{msg}, 120*time.Second))
 }
 
 // TestStatusEventLogRepoSync tests that error events from RepoSync are properly logged
@@ -279,20 +251,14 @@ func TestStatusEventLogRepoSync(t *testing.T) {
 		if nt.T.Failed() {
 			nt.PodLogs(nomostest.StatusWatchNamespace, nomostest.StatusWatchName, "", false)
 		}
-		if err := nomostest.TeardownSyncStatusWatchController(nt); err != nil {
-			nt.T.Error(err)
-		}
+		nt.Must(nomostest.TeardownSyncStatusWatchController(nt))
 	})
 
-	if err := nomostest.SetupSyncStatusWatchController(nt); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nomostest.SetupSyncStatusWatchController(nt))
 
 	msg := "RepoSync bookstore/repo-sync must not manage itself in its repo"
 	rs := &v1beta1.RepoSync{}
-	if err := nt.KubeClient.Get(repoSyncID.Name, repoSyncID.Namespace, rs); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.KubeClient.Get(repoSyncID.Name, repoSyncID.Namespace, rs))
 	sanitizedRs := k8sobjects.RepoSyncObjectV1Beta1(rs.Namespace, rs.Name)
 	sanitizedRs.Spec = rs.Spec
 	nt.Must(repoSyncGitRepo.Add("acme/repo-sync.yaml", sanitizedRs))
@@ -300,9 +266,7 @@ func TestStatusEventLogRepoSync(t *testing.T) {
 	nt.Must(nt.Watcher.WatchForRepoSyncSourceError(rs.Namespace, rs.Name, validate.SelfReconcileErrorCode, msg))
 
 	rs = &v1beta1.RepoSync{}
-	if err := nt.KubeClient.Get(repoSyncID.Name, repoSyncID.Namespace, rs); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.KubeClient.Get(repoSyncID.Name, repoSyncID.Namespace, rs))
 	commit := rs.Status.Source.Commit
 
 	nt.T.Logf("Check for source related error message at commit %s occurrence once", commit)
@@ -312,9 +276,7 @@ func TestStatusEventLogRepoSync(t *testing.T) {
 	}
 
 	logMessages := []string{msg, "\"generation\":1"}
-	if err := assertLogEntryHasCount(logs, 1, commit, repoSyncID.Name, repoSyncID.Namespace, logMessages); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(assertLogEntryHasCount(logs, 1, commit, repoSyncID.Name, repoSyncID.Namespace, logMessages))
 }
 
 // TestCloudLoggingStatusEventRepoSync tests that error events from RepoSync are properly sent
@@ -333,20 +295,14 @@ func TestCloudLoggingStatusEventRepoSync(t *testing.T) {
 		if nt.T.Failed() {
 			nt.PodLogs(nomostest.StatusWatchNamespace, nomostest.StatusWatchName, "", false)
 		}
-		if err := nomostest.TeardownSyncStatusWatchController(nt); err != nil {
-			nt.T.Error(err)
-		}
+		nt.Must(nomostest.TeardownSyncStatusWatchController(nt))
 	})
 
-	if err := nomostest.SetupSyncStatusWatchController(nt); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nomostest.SetupSyncStatusWatchController(nt))
 
 	msg := "RepoSync bookstore/repo-sync must not manage itself in its repo"
 	rs := &v1beta1.RepoSync{}
-	if err := nt.KubeClient.Get(repoSyncID.Name, repoSyncID.Namespace, rs); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.KubeClient.Get(repoSyncID.Name, repoSyncID.Namespace, rs))
 	sanitizedRs := k8sobjects.RepoSyncObjectV1Beta1(rs.Namespace, rs.Name)
 	sanitizedRs.Spec = rs.Spec
 	nt.Must(repoSyncGitRepo.Add("acme/repo-sync.yaml", sanitizedRs))
@@ -354,9 +310,7 @@ func TestCloudLoggingStatusEventRepoSync(t *testing.T) {
 	nt.Must(nt.Watcher.WatchForRepoSyncSourceError(rs.Namespace, rs.Name, validate.SelfReconcileErrorCode, msg))
 
 	rs = &v1beta1.RepoSync{}
-	if err := nt.KubeClient.Get(repoSyncID.Name, repoSyncID.Namespace, rs); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.KubeClient.Get(repoSyncID.Name, repoSyncID.Namespace, rs))
 	commit := rs.Status.Source.Commit
 
 	nt.T.Logf("Check for source related error message at commit %s occurrence once in Cloud Logging", commit)
@@ -366,9 +320,7 @@ func TestCloudLoggingStatusEventRepoSync(t *testing.T) {
 		nt.ClusterName,
 		startTime.Format(time.RFC3339),
 	)
-	if err := waitForLogEntryInCloudLogs(nt, filter, 1, commit, repoSyncID.Name, repoSyncID.Namespace, []string{msg, "\"generation\":1"}, 120*time.Second); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(waitForLogEntryInCloudLogs(nt, filter, 1, commit, repoSyncID.Name, repoSyncID.Namespace, []string{msg, "\"generation\":1"}, 120*time.Second))
 }
 
 // assertLogEntryHasCount checks if the specified messages appear in the logs
@@ -405,9 +357,7 @@ func waitForLogEntryInCloudLogs(nt *nomostest.NT, filter string, expectedCount i
 		return fmt.Errorf("failed to create logadmin client: %v", err)
 	}
 	defer func() {
-		if err := client.Close(); err != nil {
-			nt.T.Errorf("Failed to close logadmin client: %v", err)
-		}
+		nt.Must(client.Close())
 	}()
 
 	var lastLogs []string
@@ -429,9 +379,7 @@ func waitForLogEntryInCloudLogs(nt *nomostest.NT, filter string, expectedCount i
 			lastLogs = append(lastLogs, fmt.Sprintf("%s: %v", entry.Timestamp.Format(time.RFC3339), entry.Payload))
 		}
 
-		if err := assertLogEntryHasCount(lastLogs, expectedCount, commit, rname, rnamespace, messages); err != nil {
-			return fmt.Errorf("log entry not found yet: %w", err)
-		}
+		nt.Must(assertLogEntryHasCount(lastLogs, expectedCount, commit, rname, rnamespace, messages))
 		return nil
 	})
 

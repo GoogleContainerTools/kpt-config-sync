@@ -94,7 +94,7 @@ func execManifestCommand(nt *NT, kubectlAction string) error {
 	}
 	defer func() {
 		if removeErr := os.Remove(tmpFile.Name()); removeErr != nil {
-			nt.T.Logf("Warning: failed to remove temporary file %s: %v", tmpFile.Name(), removeErr)
+			nt.T.Errorf("Warning: failed to remove temporary file %s: %v", tmpFile.Name(), removeErr)
 		}
 	}() // Clean up the temp file when done
 

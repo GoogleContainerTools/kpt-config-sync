@@ -48,7 +48,7 @@ func TestSyncStatusController(t *testing.T) {
 	}{
 		{
 			name:     "RootSync with error",
-			syncKind: "RootSync",
+			syncKind: RootSyncKind,
 			setupObjects: []client.Object{
 				&v1beta1.RootSync{
 					ObjectMeta: metav1.ObjectMeta{
@@ -76,7 +76,7 @@ func TestSyncStatusController(t *testing.T) {
 		},
 		{
 			name:     "RepoSync with error",
-			syncKind: "RepoSync",
+			syncKind: RepoSyncKind,
 			setupObjects: []client.Object{
 				&v1beta1.RepoSync{
 					ObjectMeta: metav1.ObjectMeta{
@@ -104,7 +104,7 @@ func TestSyncStatusController(t *testing.T) {
 		},
 		{
 			name:     "RootSync without error",
-			syncKind: "RootSync",
+			syncKind: RootSyncKind,
 			setupObjects: []client.Object{
 				&v1beta1.RootSync{
 					ObjectMeta: metav1.ObjectMeta{

@@ -2,7 +2,7 @@
 
 A comprehensive solution for monitoring, logging, and alerting on Config Sync status errors. This solution includes a Kubernetes controller that watches `RootSync` and `RepoSync` resources, detects errors in their status fields, and integrates with Google Cloud services to provide enhanced observability and automated notifications.
 
-The solution enables:
+The solution provides:
 - Real-time monitoring of sync errors in Config Sync resources
 - Structured logging to Google Cloud Logging
 - Automated alerting through Pub/Sub, Cloud Functions, and email notifications
@@ -10,9 +10,9 @@ The solution enables:
 - Custom error handling workflows with Google Application Integration
 
 > **Note**: ⚠️ **This component is not released with Config Sync**.
-> - It is **only compatible** with the **Config Sync API at same branch HEAD**.
-> - **Backward compatibility is not supported at this moment**.
-> - **Version management and continuous builds** of this controller **must be handled by the user**.
+> - It is **only compatible** with the **Config Sync API at the same branch HEAD**.
+> - **Backward compatibility is not supported**.
+> - **Version management and continuous builds** of this controller **must be managed by the user**.
 
 ## Table of Contents
 
@@ -22,7 +22,6 @@ The solution enables:
   - [Verifying Deployment](#verifying-deployment)
   - [Sample Output](#sample-output)
 - [Google Cloud Logging Integration](#google-cloud-logging-integration)
-  - [Setting Up Permissions](#setting-up-permissions)
   - [Querying Logs in Google Cloud Logging](#querying-logs-in-google-cloud-logging)
   - [Creating Log Sinks](#creating-log-sinks)
 - [Setting Up Alerting with Pub/Sub and Cloud Functions](#setting-up-alerting-with-pubsub-and-cloud-functions)
@@ -36,12 +35,12 @@ The solution enables:
 
 ## Prerequisites
 
-- Go 1.21+
+- Go 1.21 or later
 - Docker
 - kubectl
 - Access to a Kubernetes cluster with Config Sync installed and configured
 - **Container registry (e.g., Google Artifact Registry)**
-  *This guide assumes you have a registry configured and authenticated.*
+  *A configured and authenticated registry is required.*
 - For Google Cloud integration:
   - Google Cloud Project with appropriate permissions
   - gcloud CLI installed and configured
@@ -83,7 +82,7 @@ make build-local
 make build PLATFORMS=linux/amd64,linux/arm64
 ```
 
-> **Note**: The build process uses Docker's buildx feature to create images for multiple CPU architectures. By default, it builds for `linux/amd64` (x86-64) and `linux/arm64` (ARM 64-bit). Building for multiple architectures requires Docker buildx support.
+> **Note**: The build process uses Docker's buildx feature to create multi-architecture images. By default, it builds for `linux/amd64` (x86-64) and `linux/arm64` (ARM 64-bit). Multi-architecture builds require Docker buildx support.
 
 4. **Deploy to Kubernetes**:
 
@@ -129,9 +128,9 @@ Error detected:
 
 ## Google Cloud Logging Integration
 
-The controller outputs structured logs that are automatically collected in Google Cloud Logging when running on GKE.
+The controller outputs structured logs that are automatically collected by Google Cloud Logging when running on GKE.
 
-> **Note**: When running in a GKE cluster, logs from the controller pods are automatically collected and sent to Google Cloud Logging without any additional configuration. This works both for clusters with or without Workload Identity Federation enabled. All structured logs will be available in Cloud Logging with the appropriate Kubernetes resource labels.
+> **Note**: When running on GKE, the controller's logs are automatically collected and sent to Google Cloud Logging without additional configuration. This functionality works with both standard clusters and those using Workload Identity Federation. All structured logs are available in Cloud Logging with the appropriate Kubernetes resource labels.
 
 ### Querying Logs in Google Cloud Logging
 

@@ -30,9 +30,10 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 )
 
-// Sync kinds
 const (
+	// RootSyncKind represents the Config Sync RootSync resource type
 	RootSyncKind = "RootSync"
+	// RepoSyncKind represents the Config Sync RepoSync resource type
 	RepoSyncKind = "RepoSync"
 )
 
@@ -43,7 +44,7 @@ type SyncID struct {
 	Namespace string
 }
 
-// StatusTracker tracks which errors have been logged
+// StatusTracker tracks which errors have been logged to prevent duplicate logging.
 type StatusTracker struct {
 	mu   sync.Mutex
 	seen map[string]struct{} // Using a single map with hashed keys
@@ -90,7 +91,8 @@ func (s *StatusTracker) MarkLogged(syncID SyncID, commit, message string) {
 	s.seen[key] = struct{}{}
 }
 
-// SyncStatusController reconciles RootSync and RepoSync resources
+// SyncStatusController reconciles RootSync and RepoSync resources by monitoring
+// their status fields for errors and logging them in a structured format.
 type SyncStatusController struct {
 	client        client.Client
 	log           logr.Logger
@@ -98,7 +100,8 @@ type SyncStatusController struct {
 	syncKind      string // Explicit field to indicate what kind of resource we're watching
 }
 
-// NewSyncStatusController creates a new controller instance
+// NewSyncStatusController creates a new controller instance with the specified parameters.
+// It validates the syncKind and initializes the controller with the provided dependencies.
 func NewSyncStatusController(client client.Client, log logr.Logger, statusTracker *StatusTracker, syncKind string) *SyncStatusController {
 	// Validate sync kind
 	if syncKind != RootSyncKind && syncKind != RepoSyncKind {
@@ -112,7 +115,9 @@ func NewSyncStatusController(client client.Client, log logr.Logger, statusTracke
 	}
 }
 
-// Reconcile handles RootSync and RepoSync resources
+// Reconcile implements the reconciliation loop for RootSync and RepoSync resources.
+// It processes both the resource's conditions and status fields to detect and log errors.
+// The function ensures that each unique error is logged only once using the StatusTracker.
 func (c *SyncStatusController) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
 	var syncID SyncID
 	var status v1beta1.Status
@@ -173,7 +178,15 @@ func (c *SyncStatusController) getSyncID(req reconcile.Request) SyncID {
 	}
 }
 
-// handleErrors aggregates error messages and logs them if they haven't been logged already
+// handleErrors processes error messages and logs them if they haven't been logged before.
+// It includes metadata such as the sync resource details, commit hash, and generation numbers.
+// Parameters:
+//   - rsyncID: The identifier of the sync resource
+//   - errMessage: The error message to process
+//   - commit: The commit hash associated with the error
+//   - generation: The resource's current generation
+//   - observedGeneration: The last generation that was processed
+//   - isTruncated: Whether the error message was truncated
 func (c *SyncStatusController) handleErrors(rsyncID SyncID, errMessage string, commit string, generation int64, observedGeneration int64, isTruncated bool) error {
 	if errMessage == "" {
 		return nil
@@ -196,6 +209,12 @@ func (c *SyncStatusController) handleErrors(rsyncID SyncID, errMessage string, c
 	return nil
 }
 
+// processRootSyncConditions analyzes RootSync conditions and extracts error information.
+// It aggregates error messages from relevant condition types and returns the combined
+// error message along with the associated commit hash.
+// Returns:
+//   - string: Aggregated error message (empty if no errors)
+//   - string: Associated commit hash (empty if not available)
 func (c *SyncStatusController) processRootSyncConditions(conditions []v1beta1.RootSyncCondition) (string, string) {
 	var errorMessages []string
 	var commit string
@@ -232,6 +251,11 @@ func (c *SyncStatusController) processRootSyncConditions(conditions []v1beta1.Ro
 	return strings.Join(errorMessages, "\n"), commit
 }
 
+// processRepoSyncConditions analyzes RepoSync conditions and extracts error information.
+// Similar to processRootSyncConditions but for RepoSync resources.
+// Returns:
+//   - string: Aggregated error message (empty if no errors)
+//   - string: Associated commit hash (empty if not available)
 func (c *SyncStatusController) processRepoSyncConditions(conditions []v1beta1.RepoSyncCondition) (string, string) {
 	var errorMessages []string
 	var commit string
@@ -312,7 +336,8 @@ func extractErrorAndCommitFromStatus(status v1beta1.Status) (string, string, boo
 	return "", "", false
 }
 
-// aggregateErrors aggregates error messages from a slice of ConfigSyncError
+// aggregateErrors combines multiple Config Sync errors into a single error message.
+// It preserves the individual error messages while creating a consolidated view.
 func aggregateErrors(errors []v1beta1.ConfigSyncError) string {
 	if len(errors) == 0 {
 		return ""

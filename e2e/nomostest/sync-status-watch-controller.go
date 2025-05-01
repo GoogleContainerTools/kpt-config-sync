@@ -68,11 +68,11 @@ func TeardownSyncStatusWatchController(nt *NT) error {
 	nt.T.Log("tearing down sync status watch controller")
 
 	if err := execManifestCommand(nt, "delete"); err != nil {
-		nt.T.Logf("Error deleting resources: %v", err)
+		nt.T.Errorf("Error deleting resources: %v", err)
 	}
 
 	if err := nt.KubeClient.Delete(testSyncStatusWatchNamespace()); err != nil && !apierrors.IsNotFound(err) {
-		nt.T.Logf("Error deleting Namespace: %v", err)
+		nt.T.Errorf("Error deleting Namespace: %v", err)
 	}
 
 	nt.T.Log("Sync status watch controller teardown complete")

@@ -288,13 +288,28 @@ func hasStatusError(status v1beta1.Status) bool {
 
 // extractErrorAndCommitFromStatus extracts errors and the associated commit from the status
 func extractErrorAndCommitFromStatus(status v1beta1.Status) (string, string, bool) {
-	if status.Source.Errors != nil {
-		return aggregateErrors(status.Source.Errors), status.Source.Commit, status.Source.ErrorSummary.Truncated
+	if len(status.Source.Errors) > 0 {
+		truncated := false
+		if status.Source.ErrorSummary != nil {
+			truncated = status.Source.ErrorSummary.Truncated
+		}
+		return aggregateErrors(status.Source.Errors), status.Source.Commit, truncated
 	}
-	if status.Rendering.Errors != nil {
-		return aggregateErrors(status.Rendering.Errors), status.Rendering.Commit, status.Rendering.ErrorSummary.Truncated
+	if len(status.Rendering.Errors) > 0 {
+		truncated := false
+		if status.Rendering.ErrorSummary != nil {
+			truncated = status.Rendering.ErrorSummary.Truncated
+		}
+		return aggregateErrors(status.Rendering.Errors), status.Rendering.Commit, truncated
 	}
-	return aggregateErrors(status.Sync.Errors), status.Sync.Commit, status.Sync.ErrorSummary.Truncated
+	if len(status.Sync.Errors) > 0 {
+		truncated := false
+		if status.Sync.ErrorSummary != nil {
+			truncated = status.Sync.ErrorSummary.Truncated
+		}
+		return aggregateErrors(status.Sync.Errors), status.Sync.Commit, truncated
+	}
+	return "", "", false
 }
 
 // aggregateErrors aggregates error messages from a slice of ConfigSyncError

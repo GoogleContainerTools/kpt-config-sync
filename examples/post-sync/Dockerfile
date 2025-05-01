@@ -12,6 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Global build arguments - these can be overridden with --build-arg
+ARG GOOS=linux
+ARG GOARCH
+
 # Build stage
 ARG GOLANG_IMAGE=golang:1.24
 
@@ -29,18 +33,23 @@ RUN go mod tidy && \
 COPY . .
 
 # Build the binary
-ARG TARGETOS
-ARG TARGETARCH
-RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o sync-status-watch .
+RUN if [ -z "${GOARCH}" ]; then \
+        GOARCH=$(go env GOARCH); \
+    fi
+RUN mkdir -p .output/go/bin/${GOARCH} && \
+    CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} go build -o .output/go/bin/${GOARCH}/sync-status-watch .
 
 # Final stage
 FROM gcr.io/distroless/static:nonroot
+
+# Re-declare build arguments - inherits value from global ARG if set
+ARG GOARCH
 
 # Create and set working directory
 WORKDIR /app
 
 # Copy the built binary from the builder stage
-COPY --from=builder /workspace/sync-status-watch /app/sync-status-watch
+COPY --from=builder /workspace/.output/go/bin/${GOARCH}/sync-status-watch /app/sync-status-watch
 
 # Expose health check port
 EXPOSE 8081

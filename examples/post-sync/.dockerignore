@@ -1,5 +1,6 @@
-# Ignore binary
-sync-status-watch
-controller_test.go
+# Ignore binary and build artifacts
+.output/
+*.test
+*_test.go
 vendor/
 .gitignore

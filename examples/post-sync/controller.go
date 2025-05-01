@@ -60,9 +60,9 @@ func NewStatusTracker() *StatusTracker {
 func generateKey(syncID SyncID, commit, message string) string {
 	// Include SyncID information in the key
 	key := fmt.Sprintf("%s:%s:%s:%s:%s",
-		syncID.Name,
 		syncID.Kind,
 		syncID.Namespace,
+		syncID.Name,
 		commit,
 		message)
 
@@ -118,7 +118,7 @@ func (c *SyncStatusController) Reconcile(ctx context.Context, req reconcile.Requ
 	var status v1beta1.Status
 	var generation int64
 	var observedGeneration int64
-	var errs, commit string
+	var conditionErrorMessage, commit string
 
 	// Use the explicit syncKind to know which type to fetch
 	switch c.syncKind {
@@ -131,7 +131,7 @@ func (c *SyncStatusController) Reconcile(ctx context.Context, req reconcile.Requ
 		status = root.Status.Status
 		generation = root.Generation
 		observedGeneration = root.Status.ObservedGeneration
-		errs, commit = c.processRootSyncConditions(root.Status.Conditions)
+		conditionErrorMessage, commit = c.processRootSyncConditions(root.Status.Conditions)
 
 	case RepoSyncKind:
 		var repo v1beta1.RepoSync
@@ -142,7 +142,7 @@ func (c *SyncStatusController) Reconcile(ctx context.Context, req reconcile.Requ
 		status = repo.Status.Status
 		generation = repo.Generation
 		observedGeneration = repo.Status.ObservedGeneration
-		errs, commit = c.processRepoSyncConditions(repo.Status.Conditions)
+		conditionErrorMessage, commit = c.processRepoSyncConditions(repo.Status.Conditions)
 
 	default:
 		c.log.Error(fmt.Errorf("unknown sync kind: %s", c.syncKind), "unrecognized syncKind")
@@ -150,14 +150,14 @@ func (c *SyncStatusController) Reconcile(ctx context.Context, req reconcile.Requ
 	}
 
 	// Process any errors from conditions
-	if err := c.handleErrors(syncID, errs, commit, generation, observedGeneration, false); err != nil {
+	if err := c.handleErrors(syncID, conditionErrorMessage, commit, generation, observedGeneration, false); err != nil {
 		return reconcile.Result{}, err
 	}
 
 	// Process sync status
 	if !isSuccessfulSync(status, generation) {
-		errMessage, commit, isTruncated := extractErrorAndCommitFromStatus(status)
-		if err := c.handleErrors(syncID, errMessage, commit, generation, observedGeneration, isTruncated); err != nil {
+		statusErrorMessage, commit, isTruncated := extractErrorAndCommitFromStatus(status)
+		if err := c.handleErrors(syncID, statusErrorMessage, commit, generation, observedGeneration, isTruncated); err != nil {
 			return reconcile.Result{}, err
 		}
 	}
@@ -182,13 +182,13 @@ func (c *SyncStatusController) handleErrors(rsyncID SyncID, errMessage string, c
 		return nil
 	}
 	c.log.Info("Sync error detected",
-		"sync", rsyncID.Name,
-		"namespace", rsyncID.Namespace,
 		"kind", rsyncID.Kind,
+		"namespace", rsyncID.Namespace,
+		"sync", rsyncID.Name,
 		"commit", commit,
-		"status", "failed",
 		"generation", generation,
 		"observedGeneration", observedGeneration,
+		"status", "error",
 		"error", errMessage,
 		"truncated", isTruncated)
 

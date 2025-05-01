@@ -6,6 +6,13 @@ GAR_REPO_NAME ?= sync-status-watch
 IMAGE_TAG ?= latest
 IMAGE_URI = ${REGION}-docker.pkg.dev/${PROJECT_ID}/${GAR_REPO_NAME}/${IMAGE_NAME}:${IMAGE_TAG}
 
+# System architecture defaults
+GOOS ?= $(shell go env GOOS)
+GOARCH ?= $(shell go env GOARCH)
+
+# Build output directory
+OUTPUT_DIR = .output/go/bin/$(GOARCH)
+
 # Supported platforms for multi-arch build
 PLATFORMS ?= linux/amd64,linux/arm64
 
@@ -20,6 +27,7 @@ buildx-setup:
 build: buildx-setup
 	@echo "Building multi-arch Docker images..."
 	docker buildx build --platform=$(PLATFORMS) \
+		--build-arg GOOS=linux \
 		-t $(IMAGE_URI) \
 		--push \
 		.
@@ -27,7 +35,16 @@ build: buildx-setup
 # Build for a single platform (useful for local development)
 build-local:
 	@echo "Building Docker image for local architecture..."
-	docker build -t $(IMAGE_URI) .
+	docker build \
+		--build-arg GOOS=$(GOOS) \
+		--build-arg GOARCH=$(GOARCH) \
+		-t $(IMAGE_URI) .
+
+# Build the binary
+build-binary:
+	@echo "Building binary..."
+	mkdir -p $(OUTPUT_DIR)
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -o $(OUTPUT_DIR)/sync-status-watch .
 
 # Push is now part of the build target when using buildx
 push: build
@@ -41,6 +58,7 @@ test:
 	@echo "Running unit tests..."
 	go test -v ./...
 
-# Clean up buildx builder
+# Clean up buildx builder and output directory
 clean:
 	docker buildx rm multi-arch-builder || true
+	rm -rf .output

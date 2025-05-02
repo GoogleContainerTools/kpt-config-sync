@@ -125,7 +125,18 @@ make retag-images \
  REGISTRY=gcr.io/bat \
  IMAGE_TAG=bar 
 ```
+### Deleting old images
+Docker does not automatically clean up old, unused images. Our local e2e tests create several large images where a single run can take up hundreds of MB of disk space.
 
+In order to to prevent your hard drive from being filled up with these unused images, regularly run the following commands:
+```shell
+docker image prune -a   # Removes all images without at least one container associated to them
+docker container prune  # Removes all stopped containers
+```
+Or run the following to prune everything (including unused networks):
+```shell
+docker system prune -a
+```
 ## Run
 Running Config Sync is as simple as applying the generated manifests to your
 cluster (from the Config Sync directory):

@@ -1,0 +1,6 @@
+# Ignore binary and build artifacts
+.output/
+*.test
+*_test.go
+vendor/
+.gitignore

@@ -407,7 +407,7 @@ func validateDeploymentLogHasFailure(nt *nomostest.NT, deployment, namespace, er
 }
 
 func validateDeploymentLogHasNoFailure(nt *nomostest.NT, deployment, namespace, errorString string, startTime time.Time) error {
-	entry, err := nt.GetPodLogs(namespace, deployment, "", true, &startTime)
+	entry, err := nt.GetPodLogs(namespace, deployment, "", false, &startTime)
 	if err != nil {
 		return err
 	}

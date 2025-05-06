@@ -53,7 +53,7 @@ func Retry(timeout time.Duration, fn func() error) (time.Duration, error) {
 // Retries once per second until context closes.
 // Returns how long the function retried, and the last error if the context
 // was closed.
-func WithContext(ctx context.Context, fn func() error) (time.Duration, error) {
+func WithContext(ctx context.Context, interval time.Duration, fn func() error) (time.Duration, error) {
 	start := time.Now()
 	err := func() error {
 		lastError := fmt.Errorf("retry.WithContext function never ran")
@@ -67,7 +67,7 @@ func WithContext(ctx context.Context, fn func() error) (time.Duration, error) {
 			if lastError == nil || !defaultErrorFilter(lastError) {
 				return lastError
 			}
-			time.Sleep(time.Second)
+			time.Sleep(interval)
 		}
 	}()
 	return time.Since(start), err

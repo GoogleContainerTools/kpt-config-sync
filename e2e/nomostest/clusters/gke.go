@@ -165,7 +165,7 @@ func deleteGKECluster(t testing.NTB, name string) error {
 	// chances for the delete operation.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultOperationTimeoutGKE)
 	defer cancel()
-	took, err := retry.WithContext(ctx, func() error {
+	took, err := retry.WithContext(ctx, 5*time.Second, func() error {
 		if err := listAndWaitForOperations(ctx, t, name); err != nil {
 			return err
 		}
@@ -257,7 +257,7 @@ func createGKECluster(t testing.NTB, name string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create cluster %s: %v\nstdout/stderr:\n%s", name, err, string(out))
 	}
-	return listAndWaitForOperations(context.Background(), t, name)
+	return waitForReadyGKECluster(context.Background(), t, name)
 }
 
 // getGKECredentials fetches GKE credentials at the specified kubeconfig path.
@@ -290,7 +290,7 @@ func getGKECredentials(t testing.NTB, clusterName, kubeconfig string) error {
 	}
 	// after getting credentials, wait for any running operations to complete
 	// before handing over this cluster to the test environment
-	return listAndWaitForOperations(context.Background(), t, clusterName)
+	return waitForReadyGKECluster(context.Background(), t, clusterName)
 }
 
 func clusterExistsGKE(t testing.NTB, clusterName string) (bool, error) {
@@ -343,4 +343,64 @@ func getClusterHash(t testing.NTB, clusterName, kubeconfig string) (string, erro
 		return "", fmt.Errorf("failed to get cluster hash: %v\nstdout/stderr:\n%s", err, string(out))
 	}
 	return string(out), nil
+}
+
+const (
+	statusRunning  = "RUNNING"
+	statusUnknown  = "UNKNOWN"
+	gkeWaitTimeout = 30 * time.Minute
+)
+
+func waitForReadyGKECluster(ctx context.Context, t testing.NTB, clusterName string) error {
+	ctx, cancel := context.WithTimeoutCause(ctx, gkeWaitTimeout,
+		fmt.Errorf("timed out (%v) waiting for cluster %q to be %q", gkeWaitTimeout, clusterName, statusRunning))
+	defer cancel()
+	if err := listAndWaitForOperations(ctx, t, clusterName); err != nil {
+		return err
+	}
+	interval := 15 * time.Second
+	elapsed, err := retry.WithContext(ctx, interval, func() error {
+		status, err := clusterStatusGKE(t, clusterName)
+		if err != nil {
+			return err
+		}
+		if status != statusRunning {
+			t.Logf("Waiting %v for cluster to be %q...", interval, statusRunning)
+			return fmt.Errorf("expected cluster %q to have status %q, but got %q",
+				clusterName, statusRunning, status)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	t.Logf("Waited %v for cluster to be %q", elapsed, statusRunning)
+	return nil
+}
+
+func clusterStatusGKE(t testing.NTB, clusterName string) (string, error) {
+	args := []string{
+		"container", "clusters", "list",
+		"--project", *e2e.GCPProject,
+		"--filter", fmt.Sprintf("name ~ ^%s$", clusterName),
+		"--format", "value(status)",
+	}
+	if *e2e.GCPZone != "" {
+		args = append(args, "--zone", *e2e.GCPZone)
+	}
+	if *e2e.GCPRegion != "" {
+		args = append(args, "--region", *e2e.GCPRegion)
+	}
+	t.Logf("gcloud %s", strings.Join(args, " "))
+	cmd := exec.Command("gcloud", args...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return statusUnknown, fmt.Errorf("failed to list cluster (%s): %v\nstdout/stderr:\n%s",
+			clusterName, err, string(out))
+	}
+	statuses := strings.Fields(strings.TrimSpace(string(out)))
+	if len(statuses) == 1 {
+		return statuses[0], nil
+	}
+	return statusUnknown, nil
 }

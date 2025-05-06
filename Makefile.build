@@ -333,6 +333,7 @@ build-push-sync-status-watch-controller:
 		-t $(E2E_TEST_IMAGE_SYNC_STATUS_WATCH_CONTROLLER) \
 		--push \
 		examples/post-sync/
+	docker buildx rm multi-arch-builder || true
 
 .PHONY: deploy
 deploy:

@@ -379,8 +379,7 @@ func waitForLogEntryInCloudLogs(nt *nomostest.NT, filter string, expectedCount i
 			lastLogs = append(lastLogs, fmt.Sprintf("%s: %v", entry.Timestamp.Format(time.RFC3339), entry.Payload))
 		}
 
-		nt.Must(assertLogEntryHasCount(lastLogs, expectedCount, commit, rname, rnamespace, messages))
-		return nil
+		return assertLogEntryHasCount(lastLogs, expectedCount, commit, rname, rnamespace, messages)
 	})
 
 	if err != nil {

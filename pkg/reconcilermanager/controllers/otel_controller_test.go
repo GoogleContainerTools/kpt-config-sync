@@ -49,7 +49,7 @@ const (
 	// otel-collector ConfigMap.
 	// See `CollectorConfigGooglecloud` in `pkg/metrics/otel.go`
 	// Used by TestOtelReconcilerGooglecloud.
-	depAnnotationGooglecloud = "e2fc77f25de5df75866195ff0d00f6df"
+	depAnnotationGooglecloud = "e5cf31ab812961f26bb9307a5ed46a33"
 	// depAnnotationGooglecloud is the expected hash of the custom
 	// otel-collector ConfigMap test artifact.
 	// Used by TestOtelReconcilerCustom.
@@ -141,10 +141,14 @@ func TestOtelReconcilerGooglecloud(t *testing.T) {
 		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
 	}
 
+	configYAML, err := metrics.CollectorConfigGooglecloudYAML()
+	if err != nil {
+		t.Fatalf("failed to generate otel-collector-googlecloud config YAML: %v", err)
+	}
 	wantConfigMap := configMapWithData(
 		configmanagement.MonitoringNamespace,
 		metrics.OtelCollectorGooglecloud,
-		map[string]string{"otel-collector-config.yaml": metrics.CollectorConfigGooglecloud},
+		map[string]string{"otel-collector-config.yaml": configYAML},
 		core.Labels(map[string]string{
 			"app":                metrics.OpenTelemetry,
 			"component":          metrics.OtelCollectorName,
@@ -165,7 +169,7 @@ func TestOtelReconcilerGooglecloud(t *testing.T) {
 	// compare ConfigMap
 	cmKey := client.ObjectKeyFromObject(wantConfigMap)
 	gotConfigMap := &corev1.ConfigMap{}
-	err := fakeClient.Get(ctx, cmKey, gotConfigMap)
+	err = fakeClient.Get(ctx, cmKey, gotConfigMap)
 	require.NoError(t, err, "ConfigMap[%s] not found", cmKey)
 	asserter.Equal(t, wantConfigMap, gotConfigMap, "ConfigMap")
 

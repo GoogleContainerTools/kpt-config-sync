@@ -31,7 +31,7 @@ import (
 )
 
 const (
-	bitbucketWorkspace = "config-sync-ci-20241007"
+	bitbucketWorkspace = "config-sync-ci-20250510"
 	bitbucketProject   = "CSCI"
 
 	// PrivateSSHKey is secret name of the private SSH key stored in the Cloud Secret Manager.

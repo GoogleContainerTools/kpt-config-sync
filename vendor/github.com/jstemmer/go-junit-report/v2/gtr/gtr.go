@@ -10,7 +10,6 @@ import (
 // Result is the result of a test.
 type Result int
 
-// Test results.
 const (
 	Unknown Result = iota
 	Pass
@@ -61,7 +60,7 @@ type Package struct {
 	Duration   time.Duration
 	Coverage   float64
 	Output     []string
-	Properties []Property
+	Properties map[string]string
 
 	Tests []Test
 
@@ -73,28 +72,10 @@ type Package struct {
 // property with the given key already exists, its old value will be
 // overwritten with the given value.
 func (p *Package) SetProperty(key, value string) {
-	// TODO(jstemmer): Delete this method in the next major release.
-	// Delete all the properties whose name is the specified key,
-	// then add the specified key-value property.
-	i := 0
-	for _, prop := range p.Properties {
-		if key != prop.Name {
-			p.Properties[i] = prop
-			i++
-		}
+	if p.Properties == nil {
+		p.Properties = make(map[string]string)
 	}
-	p.Properties = p.Properties[:i]
-	p.AddProperty(key, value)
-}
-
-// AddProperty appends a name/value property in the current package.
-func (p *Package) AddProperty(name, value string) {
-	p.Properties = append(p.Properties, Property{Name: name, Value: value})
-}
-
-// Property is a name/value property.
-type Property struct {
-	Name, Value string
+	p.Properties[key] = value
 }
 
 // Test contains the results of a single test.
@@ -135,7 +116,7 @@ func TrimPrefixSpaces(line string, indent int) string {
 	// from a test.
 	prefixLen := strings.IndexFunc(line, func(r rune) bool { return r != ' ' })
 	if prefixLen%4 == 0 {
-		// Use the subtest level to trim a consistently sized prefix from the
+		// Use the subtest level to trim a consistenly sized prefix from the
 		// output lines.
 		for i := 0; i <= indent; i++ {
 			line = strings.TrimPrefix(line, "    ")

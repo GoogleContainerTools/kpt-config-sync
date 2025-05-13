@@ -35,6 +35,11 @@ echo "Tests took $(( end_time - start_time )) seconds"
 # enables running this script more flexibly, e.g. without docker in docker.
 if [[ -n "${ARTIFACTS}" && -d "${ARTIFACTS}" ]]; then
   echo "Creating junit xml report"
+  # Go 1.20 started using "=== NAME" when tests resume instead of "=== CONT".
+  # go-junit-report does not yet properly parse "=== NAME", so this hack enables
+  # proper parsing.
+  # TODO: revert when fixed https://github.com/jstemmer/go-junit-report/issues/169
+  sed -i -e 's/=== NAME/=== CONT/g' test_results.txt
   go-junit-report --subtest-mode=exclude-parents < test_results.txt > "${ARTIFACTS}/junit_report.xml"
   if [ "$exit_code" -eq 0 ]; then
     echo "Running junit-report post processor"

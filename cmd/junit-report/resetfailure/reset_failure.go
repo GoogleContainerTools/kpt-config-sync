@@ -17,6 +17,7 @@ package resetfailure
 import (
 	"encoding/xml"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/jstemmer/go-junit-report/v2/junit"
@@ -77,5 +78,20 @@ func updateReport(t *junit.Testsuites, path string) error {
 	if err != nil {
 		return err
 	}
-	return t.WriteXML(f)
+	return writeXML(t, f)
+}
+
+// copied from https://github.com/jstemmer/go-junit-report/blob/075629ad5f2934f016fa8fe79deb821f98bd8b44/junit/junit.go#L41
+// TODO: remove the duplicate when a new go-junit-report release is available.
+func writeXML(t *junit.Testsuites, w io.Writer) error {
+	enc := xml.NewEncoder(w)
+	enc.Indent("", "\t")
+	if err := enc.Encode(t); err != nil {
+		return err
+	}
+	if err := enc.Flush(); err != nil {
+		return err
+	}
+	_, err := fmt.Fprintf(w, "\n")
+	return err
 }

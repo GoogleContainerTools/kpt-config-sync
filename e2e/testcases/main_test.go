@@ -58,7 +58,7 @@ func setDefaultArgs() {
 	}
 	// default to creating clusters for KinD. this is an acceptable default for
 	// KinD, but for GKE the user should explicitly request creating clusters.
-	if *e2e.TestCluster == e2e.Kind && len(*e2e.ClusterNames) == 0 {
+	if *e2e.TestCluster == e2e.Kind && len(*e2e.ClusterNames) == 0 && *e2e.CreateClusters == e2e.CreateClustersDisabled {
 		*e2e.CreateClusters = e2e.CreateClustersEnabled
 	}
 

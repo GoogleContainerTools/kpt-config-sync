@@ -1167,6 +1167,22 @@ func TestNomosStatus(t *testing.T) {
 	}
 }
 
+func TestNomosStatusJSON(t *testing.T) {
+	nt := nomostest.New(t, nomostesting.NomosCLI)
+
+	// get status
+	cmd := nt.Shell.Command("nomos", "status", "--format", "json")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		nt.T.Log(string(out))
+		nt.T.Fatal(err)
+	}
+
+	if !strings.Contains(string(out), `"status": "SYNCED"`) {
+		nt.T.Fatalf("Expected to find \"status\": \"SYNCED\" in string output:\n%s\n", string(out))
+	}
+}
+
 func TestNomosVersion(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.NomosCLI)
 
@@ -1275,6 +1291,26 @@ func TestNomosStatusNameFilter(t *testing.T) {
 
 	if strings.Contains(string(out4), "bookinfo:crontab-sync") {
 		nt.T.Fatalf("Expected to not find bookinfo:crontab-sync component in output:\n%s\n", string(out4))
+	}
+
+	// get status with name and namespace
+	cmd5 := nt.Shell.Command("nomos", "status", "--namespace", "bookinfo", "--name", "bookinfo-repo-sync", "--format", "json")
+	out5, err := cmd5.CombinedOutput()
+	if err != nil {
+		nt.T.Log(string(out5))
+		nt.T.Fatal(err)
+	}
+
+	if !strings.Contains(string(out5), `"scope": "bookinfo"`) {
+		nt.T.Fatalf("Expected to find \"scope\": \"bookinfo\" component in output:\n%s\n", string(out5))
+	}
+
+	if !strings.Contains(string(out5), `"syncName": "bookinfo-repo-sync"`) {
+		nt.T.Fatalf("Expected to find \"syncName\": \"bookinfo-repo-sync\" in output:\n%s\n", string(out5))
+	}
+
+	if strings.Contains(string(out5), `"syncName": "crontab-sync"`) {
+		nt.T.Fatalf("Expected to not find bookinfo:crontab-sync component in output:\n%s\n", string(out5))
 	}
 }
 

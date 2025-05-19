@@ -47,15 +47,41 @@ type ClusterState struct {
 	isMulti *bool
 }
 
-func (c *ClusterState) printRows(writer io.Writer) {
-	util.MustFprintf(writer, "\n")
-	util.MustFprintf(writer, "%s\n", c.Ref)
-	if c.status != "" || c.Error != "" {
-		util.MustFprintf(writer, "%s%s\n", util.Indent, util.Separator)
-		util.MustFprintf(writer, "%s%s\t%s\n", util.Indent, c.status, c.Error)
-	}
+// ClusterStateOutput is the JSON representation of the sync status of all repos on a cluster.
+// It's printed out directly when the `nomos status --format=json` command is invoked.
+type ClusterStateOutput struct {
+	Name   string             `json:"name"`
+	Status string             `json:"status"`
+	Error  string             `json:"error"`
+	Repos  []*RepoStateOutput `json:"repos"`
+}
+
+func (c *ClusterState) toClusterStateOutput() *ClusterStateOutput {
+	repos := []*RepoStateOutput{}
+
 	for _, repo := range c.repos {
-		if name == "" || name == repo.syncName {
+		if syncName == "" || syncName == repo.syncName {
+			repos = append(repos, repo.toRepoStateOutput())
+		}
+	}
+
+	return &ClusterStateOutput{
+		Name:   c.Ref,
+		Status: c.status,
+		Error:  c.Error,
+		Repos:  repos,
+	}
+}
+
+func (c *ClusterStateOutput) printRows(writer io.Writer) {
+	util.MustFprintf(writer, "\n")
+	util.MustFprintf(writer, "%s\n", c.Name)
+	if c.Status != "" || c.Error != "" {
+		util.MustFprintf(writer, "%s%s\n", util.Indent, util.Separator)
+		util.MustFprintf(writer, "%s%s\t%s\n", util.Indent, c.Status, c.Error)
+	}
+	for _, repo := range c.Repos {
+		if syncName == "" || syncName == repo.SyncName {
 			util.MustFprintf(writer, "%s%s\n", util.Indent, util.Separator)
 			repo.printRows(writer)
 		}
@@ -89,37 +115,65 @@ type RepoState struct {
 	resources    []resourceState
 }
 
-func (r *RepoState) printRows(writer io.Writer) {
-	util.MustFprintf(writer, "%s%s:%s\t%s\t\n", util.Indent, r.scope, r.syncName, sourceString(r.sourceType, r.git, r.oci, r.helm))
-	if r.status == syncedMsg {
-		util.MustFprintf(writer, "%s%s @ %v\t%s\t\n", util.Indent, r.status, r.lastSyncTimestamp, r.commit)
+// RepoStateOutput is the JSON representation of a single repo on a cluster.
+// It's printed out directly when the `nomos status --format=json` command is invoked.
+type RepoStateOutput struct {
+	Scope             string                `json:"scope"`
+	SyncName          string                `json:"syncName"`
+	Source            string                `json:"source"`
+	Status            string                `json:"status"`
+	Commit            string                `json:"commit,omitempty"`
+	Errors            []string              `json:"errors,omitempty"`
+	LastSyncTimestamp metav1.Time           `json:"lastSyncTimestamp,omitzero"`
+	ErrorSummary      *v1beta1.ErrorSummary `json:"errorSummary,omitempty"`
+	Resources         []resourceState       `json:"resources,omitempty"`
+}
+
+func (r *RepoState) toRepoStateOutput() *RepoStateOutput {
+	return &RepoStateOutput{
+		Scope:             r.scope,
+		SyncName:          r.syncName,
+		Source:            sourceString(r.sourceType, r.git, r.oci, r.helm),
+		Status:            r.status,
+		Errors:            r.errors,
+		ErrorSummary:      r.errorSummary,
+		Resources:         r.resources,
+		LastSyncTimestamp: r.lastSyncTimestamp,
+		Commit:            r.commit,
+	}
+}
+
+func (r *RepoStateOutput) printRows(writer io.Writer) {
+	util.MustFprintf(writer, "%s%s:%s\t%s\t\n", util.Indent, r.Scope, r.SyncName, r.Source)
+	if r.Status == syncedMsg {
+		util.MustFprintf(writer, "%s%s @ %v\t%s\t\n", util.Indent, r.Status, r.LastSyncTimestamp, r.Commit)
 	} else {
-		util.MustFprintf(writer, "%s%s\t%s\t\n", util.Indent, r.status, r.commit)
+		util.MustFprintf(writer, "%s%s\t%s\t\n", util.Indent, r.Status, r.Commit)
 	}
 
-	if r.errorSummary != nil && r.errorSummary.TotalCount > 0 {
-		if r.errorSummary.Truncated {
+	if r.ErrorSummary != nil && r.ErrorSummary.TotalCount > 0 {
+		if r.ErrorSummary.Truncated {
 			util.MustFprintf(writer, "%sTotalErrorCount: %d, ErrorTruncated: %v, ErrorCountAfterTruncation: %d\n", util.Indent,
-				r.errorSummary.TotalCount, r.errorSummary.Truncated, r.errorSummary.ErrorCountAfterTruncation)
+				r.ErrorSummary.TotalCount, r.ErrorSummary.Truncated, r.ErrorSummary.ErrorCountAfterTruncation)
 		} else {
-			util.MustFprintf(writer, "%sTotalErrorCount: %d\n", util.Indent, r.errorSummary.TotalCount)
+			util.MustFprintf(writer, "%sTotalErrorCount: %d\n", util.Indent, r.ErrorSummary.TotalCount)
 		}
 	}
 
-	for _, err := range r.errors {
+	for _, err := range r.Errors {
 		util.MustFprintf(writer, "%sError:\t%s\t\n", util.Indent, err)
 	}
 
-	if resourceStatus && len(r.resources) > 0 {
-		sort.Sort(byNamespaceAndType(r.resources))
+	if resourceStatus && len(r.Resources) > 0 {
+		sort.Sort(byNamespaceAndType(r.Resources))
 		util.MustFprintf(writer, "%sManaged resources:\n", util.Indent)
-		hasSourceHash := r.resources[0].SourceHash != ""
+		hasSourceHash := r.Resources[0].SourceHash != ""
 		if !hasSourceHash {
 			util.MustFprintf(writer, "%s\tNAMESPACE\tNAME\tSTATUS\n", util.Indent)
 		} else {
 			util.MustFprintf(writer, "%s\tNAMESPACE\tNAME\tSTATUS\tSOURCEHASH\n", util.Indent)
 		}
-		for _, r := range r.resources {
+		for _, r := range r.Resources {
 			if !hasSourceHash {
 				util.MustFprintf(writer, "%s\t%s\t%s\t%s\n", util.Indent, r.Namespace, r.String(), r.Status)
 			} else {

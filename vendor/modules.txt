@@ -1,3 +1,6 @@
+# al.essio.dev/pkg/shellescape v1.5.1
+## explicit; go 1.18
+al.essio.dev/pkg/shellescape
 # cloud.google.com/go v0.115.1
 ## explicit; go 1.20
 cloud.google.com/go
@@ -76,9 +79,6 @@ github.com/Masterminds/semver
 # github.com/Masterminds/semver/v3 v3.2.1
 ## explicit; go 1.18
 github.com/Masterminds/semver/v3
-# github.com/alessio/shellescape v1.4.1
-## explicit; go 1.14
-github.com/alessio/shellescape
 # github.com/beorn7/perks v1.0.1
 ## explicit; go 1.11
 github.com/beorn7/perks/quantile
@@ -304,10 +304,6 @@ github.com/google/s2a-go/internal/v2/remotesigner
 github.com/google/s2a-go/internal/v2/tlsconfigstore
 github.com/google/s2a-go/retry
 github.com/google/s2a-go/stream
-# github.com/google/safetext v0.0.0-20220905092116-b49f7bc46da2
-## explicit; go 1.19
-github.com/google/safetext/common
-github.com/google/safetext/yamltemplate
 # github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 ## explicit; go 1.13
 github.com/google/shlex
@@ -1616,7 +1612,7 @@ sigs.k8s.io/controller-tools/pkg/webhook
 ## explicit; go 1.21
 sigs.k8s.io/json
 sigs.k8s.io/json/internal/golang/encoding/json
-# sigs.k8s.io/kind v0.23.0
+# sigs.k8s.io/kind v0.28.0
 ## explicit; go 1.17
 sigs.k8s.io/kind
 sigs.k8s.io/kind/cmd/kind/app
@@ -1656,6 +1652,7 @@ sigs.k8s.io/kind/pkg/cmd/kind/build/nodeimage
 sigs.k8s.io/kind/pkg/cmd/kind/completion
 sigs.k8s.io/kind/pkg/cmd/kind/completion/bash
 sigs.k8s.io/kind/pkg/cmd/kind/completion/fish
+sigs.k8s.io/kind/pkg/cmd/kind/completion/powershell
 sigs.k8s.io/kind/pkg/cmd/kind/completion/zsh
 sigs.k8s.io/kind/pkg/cmd/kind/create
 sigs.k8s.io/kind/pkg/cmd/kind/create/cluster

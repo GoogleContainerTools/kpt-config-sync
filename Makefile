@@ -69,6 +69,8 @@ KIND := $(BIN_DIR)/kind
 # used by tests or local make targets
 CRANE := $(BIN_DIR)/crane
 
+GO_JUNIT_REPORT := $(BIN_DIR)/go-junit-report
+
 # End vendored tools
 
 # golangci-lint is GPL, so it must not be vendored.
@@ -482,6 +484,17 @@ clean-helm:
 .PHONY: install-kind
 # install kind (user-friendly target alias)
 install-kind: "$(KIND)"
+
+.PHONY: clean-go-junit-report
+clean-go-junit-report:
+	@rm -rf $(GO_JUNIT_REPORT)
+
+.PHONY: install-go-junit-report
+# install go-junit-report (user-friendly target alias)
+install-go-junit-report: "$(GO_JUNIT_REPORT)"
+
+"$(GO_JUNIT_REPORT)": buildenv-dirs
+	CGO_ENABLED=0 go install github.com/jstemmer/go-junit-report/v2
 
 # Set CGO_ENABLED=0 for compatibility with containers missing glibc
 "$(GOBIN)/crane":

@@ -46,7 +46,7 @@ test-e2e: config-sync-manifest-local __install-nomos-local test-e2e-nobuild
 # Run the Go e2e tests without building images/manifests.
 # Useful for modifying test code and rerunning tests without rebuilding images.
 .PHONY: test-e2e-go-nobuild
-test-e2e-nobuild: "$(KUSTOMIZE)" "$(HELM)" "$(CRANE)" "$(COSIGN)"
+test-e2e-nobuild: "$(KUSTOMIZE)" "$(HELM)" "$(CRANE)" "$(COSIGN)" "$(GO_JUNIT_REPORT)"
 	./scripts/e2e.sh $(E2E_ARGS)
 
 # Run the Go e2e tests on GKE without building images/manifests.
@@ -68,7 +68,7 @@ test-e2e-gke: config-sync-manifest test-e2e-gke-nobuild
 KIND_IMAGE := "kind-image"
 
 .PHONY: build-kind-e2e
-build-kind-e2e: "$(KIND)" "$(KUSTOMIZE)" "$(HELM)" "$(CRANE)" "$(COSIGN)"
+build-kind-e2e: "$(KIND)" "$(KUSTOMIZE)" "$(HELM)" "$(CRANE)" "$(COSIGN)" "$(GO_JUNIT_REPORT)"
 	@echo "+++ Building $(KIND_IMAGE)"
 	docker buildx build . \
 		--target kind-e2e \

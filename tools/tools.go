@@ -24,6 +24,7 @@ import (
 	_ "github.com/google/addlicense"
 	_ "github.com/google/go-containerregistry/cmd/crane"
 	_ "github.com/google/go-licenses/v2"
+	_ "github.com/jstemmer/go-junit-report/v2"
 	_ "k8s.io/code-generator"
 	_ "sigs.k8s.io/controller-runtime/tools/setup-envtest"
 	_ "sigs.k8s.io/controller-tools/cmd/controller-gen"

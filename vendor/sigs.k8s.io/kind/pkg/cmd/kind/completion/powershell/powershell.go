@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Kubernetes Authors.
+Copyright 2024 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,37 +14,25 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package export implements the `export` command
-package export
+// Package powershell implements the `powershell` command
+package powershell
 
 import (
-	"errors"
-
 	"github.com/spf13/cobra"
 
 	"sigs.k8s.io/kind/pkg/cmd"
-	"sigs.k8s.io/kind/pkg/cmd/kind/export/kubeconfig"
-	"sigs.k8s.io/kind/pkg/cmd/kind/export/logs"
 	"sigs.k8s.io/kind/pkg/log"
 )
 
-// NewCommand returns a new cobra.Command for export
+// NewCommand returns a new cobra.Command for cluster creation
 func NewCommand(logger log.Logger, streams cmd.IOStreams) *cobra.Command {
 	cmd := &cobra.Command{
-		// TODO(bentheelder): more detailed usage
-		Use:   "export",
-		Short: "Exports one of [kubeconfig, logs]",
-		Long:  "Exports one of [kubeconfig, logs]",
+		Args:  cobra.NoArgs,
+		Use:   "powershell",
+		Short: "Output shell completions for powershell",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			err := cmd.Help()
-			if err != nil {
-				return err
-			}
-			return errors.New("Subcommand is required")
+			return cmd.Parent().Parent().GenPowerShellCompletion(streams.Out)
 		},
 	}
-	// add subcommands
-	cmd.AddCommand(logs.NewCommand(logger, streams))
-	cmd.AddCommand(kubeconfig.NewCommand(logger, streams))
 	return cmd
 }

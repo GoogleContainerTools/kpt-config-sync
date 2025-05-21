@@ -45,13 +45,25 @@ func NewFilteredNamespaceSelectorInformer(client versioned.Interface, resyncPeri
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ConfigmanagementV1().NamespaceSelectors().List(context.TODO(), options)
+				return client.ConfigmanagementV1().NamespaceSelectors().List(context.Background(), options)
 			},
 			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ConfigmanagementV1().NamespaceSelectors().Watch(context.TODO(), options)
+				return client.ConfigmanagementV1().NamespaceSelectors().Watch(context.Background(), options)
+			},
+			ListWithContextFunc: func(ctx context.Context, options metav1.ListOptions) (runtime.Object, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.ConfigmanagementV1().NamespaceSelectors().List(ctx, options)
+			},
+			WatchFuncWithContext: func(ctx context.Context, options metav1.ListOptions) (watch.Interface, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.ConfigmanagementV1().NamespaceSelectors().Watch(ctx, options)
 			},
 		},
 		&apiconfigmanagementv1.NamespaceSelector{},

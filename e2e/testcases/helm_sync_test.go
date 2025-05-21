@@ -922,8 +922,8 @@ func rootSyncForWordpressHelmChart(nt *nomostest.NT, valuesMutator func(map[stri
 		rs.Spec.SafeOverride().Resources = []v1beta1.ContainerResourcesSpec{
 			{ // This chart sometimes causes OOMKill on Autopilot with default limit
 				ContainerName: reconcilermanager.HelmSync,
-				MemoryRequest: resource.MustParse("512Mi"),
-				MemoryLimit:   resource.MustParse("512Mi"),
+				MemoryRequest: resource.MustParse("600Mi"),
+				MemoryLimit:   resource.MustParse("600Mi"),
 			},
 		}
 	}

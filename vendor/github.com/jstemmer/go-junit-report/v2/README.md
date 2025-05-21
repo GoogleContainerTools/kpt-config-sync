@@ -3,15 +3,9 @@
 go-junit-report is a tool that converts [`go test`] output to a JUnit compatible
 XML report, suitable for use with applications such as [Jenkins].
 
-[![Build status][github-actions-badge]][github-actions-link]
-
-The test output parser and JUnit XML report generator are also available as Go
-packages. This can be helpful if you want to create your own custom JUnit
-reports for example. See the package documentation on pkg.go.dev for more
-information:
-
-- [go-junit-report/v2/pkg/parser/gotest]
-- [go-junit-report/v2/pkg/junit]
+[![Build status](https://github.com/jstemmer/go-junit-report/actions/workflows/main.yml/badge.svg)](https://github.com/jstemmer/go-junit-report/actions)
+[![Go Reference](https://pkg.go.dev/badge/github.com/jstemmer/go-junit-report/v2.svg)](https://pkg.go.dev/github.com/jstemmer/go-junit-report/v2)
+[![Go Report Card](https://goreportcard.com/badge/github.com/jstemmer/go-junit-report/v2)](https://goreportcard.com/report/github.com/jstemmer/go-junit-report/v2)
 
 ## Install from package (recommended)
 
@@ -23,7 +17,7 @@ page.
 Download and install the latest stable version from source by running:
 
 ```bash
-go install github.com/jstemmer/go-junit-report@latest
+go install github.com/jstemmer/go-junit-report/v2@latest
 ```
 
 ## Usage
@@ -85,16 +79,60 @@ Run `go-junit-report -help` for a list of all supported flags.
 | `-subtest-mode`       | set subtest `mode`, modes are: `ignore-parent-results`, `exclude-parents`       |
 | `-version`            | print version and exit                                                          |
 
+## Go packages
+
+The test output parser and JUnit XML report generator are also available as Go
+packages. This can be helpful if you want to use the `go test` output parser or
+create your own custom JUnit reports for example. See the package documentation
+on pkg.go.dev for more information:
+
+- [github.com/jstemmer/go-junit-report/v2/parser/gotest]
+- [github.com/jstemmer/go-junit-report/v2/junit]
+
+## Changelog
+
+### v2.1.0
+
+- Fix #147: Make timestamps in generated report more accurate.
+- Fix #140: Escape illegal XML characters in junit output.
+- Fix #145: Handle build errors in test packages with the `_test` suffix.
+- Fix #145: Don't ignore build errors that did not belong to a package.
+- Fix #134: Json test output was not parsed correctly when using the `-race` flag in `go test`.
+- Add support for `=== NAME` lines introduced in Go1.20
+- junit: Add File attribute to `testsuite`.
+- junit: Allow multiple properties with the same name.
+- junit: Add the `Testsuites.WriteXML` convenience method.
+
+### v2.0.0
+
+- Support for parsing `go test -json` output.
+- Distinguish between build/runtime errors and test failures.
+- JUnit report now includes output for all tests and benchmarks, and global output that doesn't belong to any test.
+- Use full Go package name in generated report instead of only last path segment.
+- Add support for reading skipped/failed benchmarks.
+- Add `-subtest-mode` flag to exclude or ignore results of subtest parent tests.
+- Add `-in` and `-out` flags for specifying input and output files respectively.
+- Add `-iocopy` flag to copy stdin directly to stdout.
+- Add `-prop` flags to set key/value properties in generated report.
+- Add `-parser` flag to switch between regular `go test` (default) and `go test -json` parsing.
+- Output in JUnit XML is written in `<![CDATA[]]>` tags for improved readability.
+- Add `hostname`, `timestamp` and `id` attributes to JUnit XML.
+- Improve accuracy of benchmark time calculation and update formatting in report.
+- No longer strip leading whitespace from test output.
+- The `formatter` and `parser` packages have been replaced with `junit` and `parser/gotest` packages respectively.
+- Add support for parsing lines longer than 64KiB.
+- The JUnit errors/failures attributes are now required fields.
+- Drop support for parsing pre-Go1.13 test output.
+- Deprecate `-go-version` flag.
+
 ## Contributing
 
 See [CONTRIBUTING.md].
 
 [`go test`]: https://pkg.go.dev/cmd/go#hdr-Test_packages
 [Jenkins]: https://www.jenkins.io/
-[github-actions-badge]: https://github.com/jstemmer/go-junit-report/actions/workflows/main.yml/badge.svg
-[github-actions-link]: https://github.com/jstemmer/go-junit-report/actions
-[go-junit-report/v2/pkg/parser/gotest]: https://pkg.go.dev/github.com/jstemmer/go-junit-report/v2/pkg/parser/gotest
-[go-junit-report/v2/pkg/junit]: https://pkg.go.dev/github.com/jstemmer/go-junit-report/v2/pkg/junit
+[github.com/jstemmer/go-junit-report/v2/parser/gotest]: https://pkg.go.dev/github.com/jstemmer/go-junit-report/v2/parser/gotest
+[github.com/jstemmer/go-junit-report/v2/junit]: https://pkg.go.dev/github.com/jstemmer/go-junit-report/v2/junit
 [Releases]: https://github.com/jstemmer/go-junit-report/releases
 [testing]: https://pkg.go.dev/testing
 [CONTRIBUTING.md]: https://github.com/jstemmer/go-junit-report/blob/master/CONTRIBUTING.md

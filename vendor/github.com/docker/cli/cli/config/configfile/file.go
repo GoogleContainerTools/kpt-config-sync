@@ -36,11 +36,14 @@ type ConfigFile struct {
 	NodesFormat          string                       `json:"nodesFormat,omitempty"`
 	PruneFilters         []string                     `json:"pruneFilters,omitempty"`
 	Proxies              map[string]ProxyConfig       `json:"proxies,omitempty"`
-	Experimental         string                       `json:"experimental,omitempty"`
 	CurrentContext       string                       `json:"currentContext,omitempty"`
 	CLIPluginsExtraDirs  []string                     `json:"cliPluginsExtraDirs,omitempty"`
 	Plugins              map[string]map[string]string `json:"plugins,omitempty"`
 	Aliases              map[string]string            `json:"aliases,omitempty"`
+	Features             map[string]string            `json:"features,omitempty"`
+
+	// Deprecated: experimental CLI features are always enabled and this field is no longer used. Use [Features] instead for optional features. This field will be removed in a future release.
+	Experimental string `json:"experimental,omitempty"`
 }
 
 // ProxyConfig contains proxy configuration settings
@@ -94,6 +97,9 @@ func (configFile *ConfigFile) ContainsAuth() bool {
 
 // GetAuthConfigs returns the mapping of repo to auth configuration
 func (configFile *ConfigFile) GetAuthConfigs() map[string]types.AuthConfig {
+	if configFile.AuthConfigs == nil {
+		configFile.AuthConfigs = make(map[string]types.AuthConfig)
+	}
 	return configFile.AuthConfigs
 }
 
@@ -299,6 +305,7 @@ func (configFile *ConfigFile) GetAllCredentials() (map[string]types.AuthConfig, 
 	for registryHostname := range configFile.CredentialHelpers {
 		newAuth, err := configFile.GetAuthConfig(registryHostname)
 		if err != nil {
+			// TODO(thaJeztah): use context-logger, so that this output can be suppressed (in tests).
 			logrus.WithError(err).Warnf("Failed to get credentials for registry: %s", registryHostname)
 			continue
 		}

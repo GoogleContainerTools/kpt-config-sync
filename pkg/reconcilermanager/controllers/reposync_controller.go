@@ -1007,7 +1007,7 @@ func (r *RepoSyncReconciler) validateDependencies(ctx context.Context, rs *v1bet
 		return validate.InvalidSourceType(r.syncGVK.Kind)
 	}
 	if _, ok := err.(status.Error); err != nil && !ok {
-		return validate.InvalidSource(err)
+		return validate.SourceError(err)
 	}
 	return err
 }

@@ -870,7 +870,7 @@ func (r *RootSyncReconciler) validateDependencies(ctx context.Context, rs *v1bet
 		return validate.InvalidSourceType(r.syncGVK.Kind)
 	}
 	if err != nil {
-		return validate.InvalidSource(err)
+		return validate.SourceError(err)
 	}
 	return nil
 }

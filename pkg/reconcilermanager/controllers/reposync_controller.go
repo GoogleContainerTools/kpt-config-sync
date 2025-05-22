@@ -1006,10 +1006,10 @@ func (r *RepoSyncReconciler) validateDependencies(ctx context.Context, rs *v1bet
 	default:
 		return validate.InvalidSourceType(r.syncGVK.Kind)
 	}
-	if err != nil {
-		return validate.InvalidSource(rs.Kind, err)
+	if _, ok := err.(status.Error); err != nil && !ok {
+		return validate.InvalidSource(err)
 	}
-	return nil
+	return err
 }
 
 func (r *RepoSyncReconciler) validateGitDependencies(ctx context.Context, rs *v1beta1.RepoSync, reconcilerName string) error {

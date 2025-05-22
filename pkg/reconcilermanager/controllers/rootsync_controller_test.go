@@ -4355,7 +4355,7 @@ For more information, see https://g.co/cloud/acm-errors#knv1061`))
 
 	wantRs = k8sobjects.RootSyncObjectV1Beta1(rs.Name)
 	rootsync.SetStalled(wantRs, "Validation",
-		fmt.Errorf(`git secretType was set as "githubapp" but github-app-private-key key is not present in %s secret`, secretRef))
+		validate.InvalidSource(rs.Kind, fmt.Errorf(`git secretType was set as "githubapp" but github-app-private-key key is not present in %s secret`, secretRef)))
 	validateRootSyncStatus(t, wantRs, fakeClient)
 
 	// Create a fully valid configuration

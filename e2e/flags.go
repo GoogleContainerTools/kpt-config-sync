@@ -116,7 +116,7 @@ var Debug = flag.Bool("debug", false,
 
 // KubernetesVersion is the version of Kubernetes to test against. Only has effect
 // when testing against test-created Kind clusters.
-var KubernetesVersion = flag.String("kubernetes-version", "1.30",
+var KubernetesVersion = flag.String("kubernetes-version", "1.33",
 	"The version of Kubernetes to create")
 
 // DefaultImagePrefix points to the local docker registry.

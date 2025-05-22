@@ -15,6 +15,7 @@
 package e2e
 
 import (
+	"fmt"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -30,31 +31,31 @@ func TestDeclaredFieldsPod(t *testing.T) {
 		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured))
 	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
 
+	podName := "nginx"
+	podNs := "bookstore"
+
 	namespace := k8sobjects.NamespaceObject("bookstore")
 	nt.Must(rootSyncGitRepo.Add("acme/ns.yaml", namespace))
 	// We use literal YAML here instead of an object as:
 	// 1) If we used a literal struct the protocol field would implicitly be added.
 	// 2) It's really annoying to specify this as Unstructureds.
-	nt.Must(rootSyncGitRepo.AddFile("acme/pod.yaml", []byte(`
+	nt.Must(rootSyncGitRepo.AddFile("acme/pod.yaml", []byte(fmt.Sprintf(`
 apiVersion: v1
 kind: Pod
 metadata:
-  name: nginx
-  namespace: bookstore
+  name: %s
+  namespace: %s
 spec:
   containers:
-  - image: nginx:1.7.9
+  - image: %s
     name: nginx
     ports:
     - containerPort: 80
-`)))
+`, podName, podNs, nomostesting.NginxImage))))
 	nt.Must(rootSyncGitRepo.CommitAndPush("add pod missing protocol from port"))
 	nt.Must(nt.WatchForAllSyncs())
 
-	// Parse the pod yaml into an object
-	pod := rootSyncGitRepo.MustGet(nt.T, "acme/pod.yaml")
-
-	err := nt.Validate(pod.GetName(), pod.GetNamespace(), &corev1.Pod{})
+	err := nt.Validate(podName, podNs, &corev1.Pod{})
 	if err != nil {
 		nt.T.Fatal(err)
 	}
@@ -63,7 +64,7 @@ spec:
 	nt.Must(rootSyncGitRepo.CommitAndPush("Remove the pod"))
 	nt.Must(nt.WatchForAllSyncs())
 
-	err = nt.Watcher.WatchForNotFound(kinds.Pod(), pod.GetName(), pod.GetNamespace())
+	err = nt.Watcher.WatchForNotFound(kinds.Pod(), podName, podNs)
 	if err != nil {
 		nt.T.Fatal(err)
 	}

@@ -25,7 +25,7 @@ require (
 	github.com/google/go-containerregistry v0.20.4
 	github.com/google/go-licenses/v2 v2.0.0-alpha.1
 	github.com/google/uuid v1.6.0
-	github.com/jstemmer/go-junit-report/v2 v2.0.0
+	github.com/jstemmer/go-junit-report/v2 v2.1.0
 	github.com/kylelemons/godebug v1.1.0
 	github.com/open-policy-agent/cert-controller v0.10.2-0.20240531181455-2649f121ab97
 	github.com/prometheus/client_golang v1.20.4

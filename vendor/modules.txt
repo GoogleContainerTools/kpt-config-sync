@@ -1,8 +1,8 @@
 # al.essio.dev/pkg/shellescape v1.5.1
 ## explicit; go 1.18
 al.essio.dev/pkg/shellescape
-# cloud.google.com/go v0.115.1
-## explicit; go 1.20
+# cloud.google.com/go v0.118.3
+## explicit; go 1.23.0
 cloud.google.com/go
 # cloud.google.com/go/auth v0.16.1
 ## explicit; go 1.23.0
@@ -27,27 +27,27 @@ cloud.google.com/go/auth/oauth2adapt
 # cloud.google.com/go/compute/metadata v0.6.0
 ## explicit; go 1.21
 cloud.google.com/go/compute/metadata
-# cloud.google.com/go/iam v1.2.0
-## explicit; go 1.21
+# cloud.google.com/go/iam v1.4.0
+## explicit; go 1.22.7
 cloud.google.com/go/iam/apiv1/iampb
-# cloud.google.com/go/logging v1.11.0
-## explicit; go 1.20
+# cloud.google.com/go/logging v1.13.0
+## explicit; go 1.21
 cloud.google.com/go/logging
 cloud.google.com/go/logging/apiv2
 cloud.google.com/go/logging/apiv2/loggingpb
 cloud.google.com/go/logging/internal
 cloud.google.com/go/logging/logadmin
-# cloud.google.com/go/longrunning v0.6.0
-## explicit; go 1.21
+# cloud.google.com/go/longrunning v0.6.6
+## explicit; go 1.23.0
 cloud.google.com/go/longrunning
 cloud.google.com/go/longrunning/autogen
 cloud.google.com/go/longrunning/autogen/longrunningpb
-# cloud.google.com/go/monitoring v1.21.0
-## explicit; go 1.21
+# cloud.google.com/go/monitoring v1.24.2
+## explicit; go 1.23.0
 cloud.google.com/go/monitoring/apiv3/v2
 cloud.google.com/go/monitoring/apiv3/v2/monitoringpb
 cloud.google.com/go/monitoring/internal
-# cloud.google.com/go/trace v1.11.0
+# cloud.google.com/go/trace v1.11.3
 ## explicit; go 1.21
 cloud.google.com/go/trace/apiv2
 cloud.google.com/go/trace/apiv2/tracepb
@@ -322,6 +322,7 @@ github.com/googleapis/gax-go/v2/apierror/internal/proto
 github.com/googleapis/gax-go/v2/callctx
 github.com/googleapis/gax-go/v2/internal
 github.com/googleapis/gax-go/v2/internallog
+github.com/googleapis/gax-go/v2/internallog/grpclog
 github.com/googleapis/gax-go/v2/internallog/internal
 github.com/googleapis/gax-go/v2/iterator
 # github.com/gorilla/websocket v1.5.0
@@ -695,16 +696,17 @@ google.golang.org/api/option/internaloption
 google.golang.org/api/support/bundler
 google.golang.org/api/transport/grpc
 google.golang.org/api/transport/http
-# google.golang.org/genproto v0.0.0-20240903143218-8af14fe29dc1
-## explicit; go 1.21
+# google.golang.org/genproto v0.0.0-20250303144028-a0af3efb3deb
+## explicit; go 1.23.0
 google.golang.org/genproto/googleapis/appengine/logging/v1
 google.golang.org/genproto/googleapis/cloud/audit
 google.golang.org/genproto/googleapis/iam/v1
 google.golang.org/genproto/googleapis/logging/type
 google.golang.org/genproto/googleapis/type/calendarperiod
 google.golang.org/genproto/googleapis/type/expr
-# google.golang.org/genproto/googleapis/api v0.0.0-20250218202821-56aae31c358a
-## explicit; go 1.22
+google.golang.org/genproto/googleapis/type/timeofday
+# google.golang.org/genproto/googleapis/api v0.0.0-20250414145226-207652e42e2e
+## explicit; go 1.23.0
 google.golang.org/genproto/googleapis/api
 google.golang.org/genproto/googleapis/api/annotations
 google.golang.org/genproto/googleapis/api/distribution

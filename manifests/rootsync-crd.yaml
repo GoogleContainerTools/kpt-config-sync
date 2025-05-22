@@ -16,7 +16,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.15.0
+    controller-gen.kubebuilder.io/version: v0.18.0
   labels:
     configmanagement.gke.io/arch: csmr
     configmanagement.gke.io/system: "true"
@@ -537,10 +537,8 @@ spec:
                   sourceFormat specifies how the repository is formatted.
                   See documentation for specifics of what these options do.
 
-
                   Must be one of hierarchy, unstructured. Optional. Set to
                   hierarchy if not specified.
-
 
                   The validation of this is case-sensitive.
                 pattern: ^(hierarchy|unstructured|)$
@@ -549,7 +547,6 @@ spec:
                 default: git
                 description: |-
                   sourceType specifies the type of the source of truth.
-
 
                   Must be one of git, oci, helm. Optional. Set to git if not specified.
                 pattern: ^(git|oci|helm)$
@@ -1714,10 +1711,8 @@ spec:
                   sourceFormat specifies how the repository is formatted.
                   See documentation for specifics of what these options do.
 
-
                   Must be one of hierarchy, unstructured. Optional. Set to
                   hierarchy if not specified.
-
 
                   The validation of this is case-sensitive.
                 pattern: ^(hierarchy|unstructured|)$
@@ -1726,7 +1721,6 @@ spec:
                 default: git
                 description: |-
                   sourceType specifies the type of the source of truth.
-
 
                   Must be one of git, oci, helm. Optional. Set to git if not specified.
                 pattern: ^(git|oci|helm)$

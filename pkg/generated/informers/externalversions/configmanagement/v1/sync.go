@@ -45,13 +45,25 @@ func NewFilteredSyncInformer(client versioned.Interface, resyncPeriod time.Durat
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ConfigmanagementV1().Syncs().List(context.TODO(), options)
+				return client.ConfigmanagementV1().Syncs().List(context.Background(), options)
 			},
 			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.ConfigmanagementV1().Syncs().Watch(context.TODO(), options)
+				return client.ConfigmanagementV1().Syncs().Watch(context.Background(), options)
+			},
+			ListWithContextFunc: func(ctx context.Context, options metav1.ListOptions) (runtime.Object, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.ConfigmanagementV1().Syncs().List(ctx, options)
+			},
+			WatchFuncWithContext: func(ctx context.Context, options metav1.ListOptions) (watch.Interface, error) {
+				if tweakListOptions != nil {
+					tweakListOptions(&options)
+				}
+				return client.ConfigmanagementV1().Syncs().Watch(ctx, options)
 			},
 		},
 		&apiconfigmanagementv1.Sync{},

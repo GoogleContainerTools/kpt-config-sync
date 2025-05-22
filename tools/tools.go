@@ -26,6 +26,7 @@ import (
 	_ "github.com/google/go-licenses/v2"
 	_ "github.com/jstemmer/go-junit-report/v2"
 	_ "k8s.io/code-generator"
+	_ "k8s.io/code-generator/cmd/validation-gen"
 	_ "sigs.k8s.io/controller-runtime/tools/setup-envtest"
 	_ "sigs.k8s.io/controller-tools/cmd/controller-gen"
 	_ "sigs.k8s.io/kind"

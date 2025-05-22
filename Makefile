@@ -38,7 +38,7 @@ GO_DIR := $(OUTPUT_DIR)/go
 
 # Base image used for all golang containers
 # Uses trusted google-built golang image
-GOLANG_IMAGE_VERSION := 1.23.4
+GOLANG_IMAGE_VERSION := 1.24.3
 GOLANG_IMAGE := google-go.pkg.dev/golang:$(GOLANG_IMAGE_VERSION)
 # Base image used for debian containers
 # When updating you can use this command:
@@ -68,6 +68,8 @@ KIND := $(BIN_DIR)/kind
 # crane cli version used for publishing OCI images
 # used by tests or local make targets
 CRANE := $(BIN_DIR)/crane
+
+GO_JUNIT_REPORT := $(BIN_DIR)/go-junit-report
 
 # End vendored tools
 
@@ -482,6 +484,20 @@ clean-helm:
 .PHONY: install-kind
 # install kind (user-friendly target alias)
 install-kind: "$(KIND)"
+
+.PHONY: clean-go-junit-report
+clean-go-junit-report:
+	@rm -rf $(GO_JUNIT_REPORT)
+
+.PHONY: install-go-junit-report
+# install go-junit-report (user-friendly target alias)
+install-go-junit-report: "$(GO_JUNIT_REPORT)"
+
+"$(GOBIN)/go-junit-report":
+	CGO_ENABLED=0 go install github.com/jstemmer/go-junit-report/v2
+
+"$(GO_JUNIT_REPORT)": "$(GOBIN)/go-junit-report" buildenv-dirs
+	cp $(GOBIN)/go-junit-report $(GO_JUNIT_REPORT)
 
 # Set CGO_ENABLED=0 for compatibility with containers missing glibc
 "$(GOBIN)/crane":

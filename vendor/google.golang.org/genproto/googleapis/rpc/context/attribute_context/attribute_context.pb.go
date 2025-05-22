@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright 2025 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -775,7 +775,8 @@ type AttributeContext_Resource struct {
 	// may be set by external tools to store and retrieve arbitrary metadata.
 	// They are not queryable and should be preserved when modifying objects.
 	//
-	// More info: https://kubernetes.io/docs/user-guide/annotations
+	// More info:
+	// https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
 	Annotations map[string]string `protobuf:"bytes,6,rep,name=annotations,proto3" json:"annotations,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 	// Mutable. The display name set by clients. Must be <= 63 characters.
 	DisplayName string `protobuf:"bytes,7,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`

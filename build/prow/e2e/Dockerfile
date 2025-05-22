@@ -32,9 +32,6 @@ ENV GO111MODULE=on
 # Build static binaries; otherwise go test complains.
 ENV CGO_ENABLED=0
 
-# Get go-junit-report
-RUN go install github.com/jstemmer/go-junit-report/v2@v2.0.0
-
 # Build e2e image
 FROM ${DOCKER_CLI_IMAGE} as gke-e2e
 
@@ -55,7 +52,6 @@ COPY --from=gcloud-install /usr/bin/kubectl /usr/bin/kubectl
 # Copy golang and built binaries into image
 COPY --from=builder /usr/local/go /usr/local/go
 COPY --from=builder /go /go
-COPY --from=builder /go/bin/go-junit-report /go/bin/go-junit-report
 ENV PATH /go/bin:/usr/local/go/bin:/opt/gcloud/google-cloud-sdk/bin:$PATH
 
 ENTRYPOINT ["/usr/bin/bash"]

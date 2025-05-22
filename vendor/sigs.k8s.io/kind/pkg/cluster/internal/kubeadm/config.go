@@ -21,8 +21,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-
-	"github.com/google/safetext/yamltemplate"
+	"text/template"
 
 	"sigs.k8s.io/kind/pkg/errors"
 
@@ -79,10 +78,6 @@ type ConfigData struct {
 	// RootlessProvider is true if kind is running with rootless mode
 	RootlessProvider bool
 
-	// DisableLocalStorageCapacityIsolation is typically set true based on RootlessProvider
-	// based on the Kubernetes version, if true kubelet localStorageCapacityIsolation is set false
-	DisableLocalStorageCapacityIsolation bool
-
 	// DerivedConfigData contains fields computed from the other fields for use
 	// in the config templates and should only be populated by calling Derive()
 	DerivedConfigData
@@ -107,6 +102,10 @@ type DerivedConfigData struct {
 	IPv6 bool
 	// kubelet cgroup driver, based on kubernetes version
 	CgroupDriver string
+	// JoinSkipPhases are the skipPhases values for the JoinConfiguration.
+	JoinSkipPhases []string
+	// InitSkipPhases are the skipPhases values for the InitConfiguration.
+	InitSkipPhases []string
 }
 
 type FeatureGate struct {
@@ -166,6 +165,15 @@ func (c *ConfigData) Derive() {
 		runtimeConfig = append(runtimeConfig, fmt.Sprintf("%s=%s", k, v))
 	}
 	c.RuntimeConfigString = strings.Join(runtimeConfig, ",")
+
+	// Skip preflight to avoid pulling images.
+	// Kind pre-pulls images and preflight may conflict with that.
+	// requires kubeadm 1.22+
+	c.JoinSkipPhases = []string{"preflight"}
+	c.InitSkipPhases = []string{"preflight"}
+	if c.KubeProxyMode == string(config.NoneProxyMode) {
+		c.InitSkipPhases = append(c.InitSkipPhases, "addon/kube-proxy")
+	}
 }
 
 // See docs for these APIs at:
@@ -183,7 +191,7 @@ kubernetesVersion: {{.KubernetesVersion}}
 clusterName: "{{.ClusterName}}"
 {{ if .KubeadmFeatureGates}}featureGates:
 {{ range $key, $value := .KubeadmFeatureGates }}
-  "{{ (StructuralData $key) }}": {{ $value }}
+  "{{ $key }}": {{ $value }}
 {{end}}{{end}}
 controlPlaneEndpoint: "{{ .ControlPlaneEndpoint }}"
 # on docker for mac we have to expose the api server via port forward,
@@ -283,7 +291,7 @@ evictionHard:
   imagefs.available: "0%"
 {{if .FeatureGates}}featureGates:
 {{ range $index, $gate := .SortedFeatureGates }}
-  "{{ (StructuralData $gate.Name) }}": {{ $gate.Value }}
+  "{{ $gate.Name }}": {{ $gate.Value }}
 {{end}}{{end}}
 {{if ne .KubeProxyMode "none"}}
 ---
@@ -294,7 +302,7 @@ metadata:
 mode: "{{ .KubeProxyMode }}"
 {{if .FeatureGates}}featureGates:
 {{ range $index, $gate := .SortedFeatureGates }}
-  "{{ (StructuralData $gate.Name) }}": {{ $gate.Value }}
+  "{{ $gate.Name }}": {{ $gate.Value }}
 {{end}}{{end}}
 iptables:
   minSyncPeriod: 1s
@@ -326,7 +334,7 @@ kubernetesVersion: {{.KubernetesVersion}}
 clusterName: "{{.ClusterName}}"
 {{ if .KubeadmFeatureGates}}featureGates:
 {{ range $key, $value := .KubeadmFeatureGates }}
-  "{{ (StructuralData $key) }}": {{ $value }}
+  "{{ $key }}": {{ $value }}
 {{end}}{{end}}
 controlPlaneEndpoint: "{{ .ControlPlaneEndpoint }}"
 # on docker for mac we have to expose the api server via port forward,
@@ -380,6 +388,12 @@ nodeRegistration:
     node-ip: "{{ .NodeAddress }}"
     provider-id: "kind://{{.NodeProvider}}/{{.ClusterName}}/{{.NodeName}}"
     node-labels: "{{ .NodeLabels }}"
+{{ if .InitSkipPhases -}}
+skipPhases:
+  {{- range $phase := .InitSkipPhases }}
+  - "{{ $phase }}"
+  {{- end }}
+{{- end }}
 ---
 # no-op entry that exists solely so it can be patched
 apiVersion: kubeadm.k8s.io/v1beta3
@@ -403,6 +417,12 @@ discovery:
     apiServerEndpoint: "{{ .ControlPlaneEndpoint }}"
     token: "{{ .Token }}"
     unsafeSkipCAVerification: true
+{{ if .JoinSkipPhases -}}
+skipPhases:
+  {{ range $phase := .JoinSkipPhases -}}
+  - "{{ $phase }}"
+  {{- end }}
+{{- end }}
 ---
 apiVersion: kubelet.config.k8s.io/v1beta1
 kind: KubeletConfiguration
@@ -426,9 +446,8 @@ evictionHard:
   imagefs.available: "0%"
 {{if .FeatureGates}}featureGates:
 {{ range $index, $gate := .SortedFeatureGates }}
-  "{{ (StructuralData $gate.Name) }}": {{ $gate.Value }}
+  "{{ $gate.Name }}": {{ $gate.Value }}
 {{end}}{{end}}
-{{if .DisableLocalStorageCapacityIsolation}}localStorageCapacityIsolation: false{{end}}
 {{if ne .KubeProxyMode "none"}}
 ---
 apiVersion: kubeproxy.config.k8s.io/v1alpha1
@@ -438,7 +457,7 @@ metadata:
 mode: "{{ .KubeProxyMode }}"
 {{if .FeatureGates}}featureGates:
 {{ range $index, $gate := .SortedFeatureGates }}
-  "{{ (StructuralData $gate.Name) }}": {{ $gate.Value }}
+  "{{ $gate.Name }}": {{ $gate.Value }}
 {{end}}{{end}}
 iptables:
   minSyncPeriod: 1s
@@ -480,16 +499,6 @@ func Config(data ConfigData) (config string, err error) {
 			return "", errors.Errorf("version %q is not compatible with rootless provider (hint: kind v0.11.x may work with this version)", ver)
 		}
 		data.FeatureGates["KubeletInUserNamespace"] = true
-
-		// For avoiding err="failed to get rootfs info: failed to get device for dir \"/var/lib/kubelet\": could not find device with major: 0, minor: 41 in cached partitions map"
-		// https://github.com/kubernetes-sigs/kind/issues/2524
-		if ver.LessThan(version.MustParseSemantic("v1.25.0-alpha.3.440+0064010cddfa00")) {
-			// this feature gate was removed in v1.25 and replaced by an opt-out to disable
-			data.FeatureGates["LocalStorageCapacityIsolation"] = false
-		} else {
-			// added in v1.25 https://github.com/kubernetes/kubernetes/pull/111513
-			data.DisableLocalStorageCapacityIsolation = true
-		}
 	}
 
 	// assume the latest API version, then fallback if the k8s version is too low
@@ -498,7 +507,7 @@ func Config(data ConfigData) (config string, err error) {
 		templateSource = ConfigTemplateBetaV2
 	}
 
-	t, err := yamltemplate.New("kubeadm-config").Parse(templateSource)
+	t, err := template.New("kubeadm-config").Parse(templateSource)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to parse config template")
 	}

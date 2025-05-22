@@ -493,8 +493,11 @@ clean-go-junit-report:
 # install go-junit-report (user-friendly target alias)
 install-go-junit-report: "$(GO_JUNIT_REPORT)"
 
-"$(GO_JUNIT_REPORT)": buildenv-dirs
+"$(GOBIN)/go-junit-report":
 	CGO_ENABLED=0 go install github.com/jstemmer/go-junit-report/v2
+
+"$(GO_JUNIT_REPORT)": "$(GOBIN)/go-junit-report" buildenv-dirs
+	cp $(GOBIN)/go-junit-report $(GO_JUNIT_REPORT)
 
 # Set CGO_ENABLED=0 for compatibility with containers missing glibc
 "$(GOBIN)/crane":

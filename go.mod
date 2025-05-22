@@ -16,7 +16,7 @@ require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/elliotchance/orderedmap/v2 v2.2.0
 	github.com/ettle/strcase v0.2.0
-	github.com/evanphx/json-patch v5.6.0+incompatible
+	github.com/evanphx/json-patch v5.9.11+incompatible
 	github.com/go-logr/logr v1.4.2
 	github.com/golang/protobuf v1.5.4
 	github.com/google/addlicense v1.1.1

@@ -395,6 +395,13 @@ func validGCPServiceAccountEmail(email string) bool {
 	return false
 }
 
+// InvalidSource reports that a source in a RootSync/RepoSync is invalid.
+func InvalidSource(syncKind string, err error) status.Error {
+	return invalidSyncBuilder.
+		Sprintf("%s spec source validation failed: %q", syncKind, err).
+		Build()
+}
+
 // InvalidSourceType reports that a RootSync/RepoSync doesn't use one of the
 // supported source types.
 func InvalidSourceType(syncKind string) status.Error {

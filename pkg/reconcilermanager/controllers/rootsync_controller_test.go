@@ -1207,7 +1207,7 @@ func TestRootSyncReconcileWithInvalidCACertSecret(t *testing.T) {
 
 			// rootsync should be in stalled status
 			wantRs := k8sobjects.RootSyncObjectV1Beta1(rootsyncName)
-			rootsync.SetStalled(wantRs, "Validation", fmt.Errorf("caCertSecretRef was set, but %s key is not present in %s Secret", CACertSecretKey, caCertSecret))
+			rootsync.SetStalled(wantRs, "Validation", validate.InvalidSource(tc.rootSync.Kind, fmt.Errorf("caCertSecretRef was set, but %s key is not present in %s Secret", CACertSecretKey, caCertSecret)))
 			validateRootSyncStatus(t, wantRs, fakeClient)
 		})
 	}

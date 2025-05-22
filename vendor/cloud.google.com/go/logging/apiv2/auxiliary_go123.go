@@ -1,4 +1,4 @@
-// Copyright 2025 Google LLC
+// Copyright 2024 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,32 +16,56 @@
 
 //go:build go1.23
 
-package monitoring
+package logging
 
 import (
 	"iter"
 
-	monitoringpb "cloud.google.com/go/monitoring/apiv3/v2/monitoringpb"
+	loggingpb "cloud.google.com/go/logging/apiv2/loggingpb"
+	longrunningpb "cloud.google.com/go/longrunning/autogen/longrunningpb"
 	"github.com/googleapis/gax-go/v2/iterator"
-	metricpb "google.golang.org/genproto/googleapis/api/metric"
 	monitoredrespb "google.golang.org/genproto/googleapis/api/monitoredres"
 )
 
 // All returns an iterator. If an error is returned by the iterator, the
 // iterator will stop after that iteration.
-func (it *AlertPolicyIterator) All() iter.Seq2[*monitoringpb.AlertPolicy, error] {
+func (it *LinkIterator) All() iter.Seq2[*loggingpb.Link, error] {
 	return iterator.RangeAdapter(it.Next)
 }
 
 // All returns an iterator. If an error is returned by the iterator, the
 // iterator will stop after that iteration.
-func (it *GroupIterator) All() iter.Seq2[*monitoringpb.Group, error] {
+func (it *LogBucketIterator) All() iter.Seq2[*loggingpb.LogBucket, error] {
 	return iterator.RangeAdapter(it.Next)
 }
 
 // All returns an iterator. If an error is returned by the iterator, the
 // iterator will stop after that iteration.
-func (it *MetricDescriptorIterator) All() iter.Seq2[*metricpb.MetricDescriptor, error] {
+func (it *LogEntryIterator) All() iter.Seq2[*loggingpb.LogEntry, error] {
+	return iterator.RangeAdapter(it.Next)
+}
+
+// All returns an iterator. If an error is returned by the iterator, the
+// iterator will stop after that iteration.
+func (it *LogExclusionIterator) All() iter.Seq2[*loggingpb.LogExclusion, error] {
+	return iterator.RangeAdapter(it.Next)
+}
+
+// All returns an iterator. If an error is returned by the iterator, the
+// iterator will stop after that iteration.
+func (it *LogMetricIterator) All() iter.Seq2[*loggingpb.LogMetric, error] {
+	return iterator.RangeAdapter(it.Next)
+}
+
+// All returns an iterator. If an error is returned by the iterator, the
+// iterator will stop after that iteration.
+func (it *LogSinkIterator) All() iter.Seq2[*loggingpb.LogSink, error] {
+	return iterator.RangeAdapter(it.Next)
+}
+
+// All returns an iterator. If an error is returned by the iterator, the
+// iterator will stop after that iteration.
+func (it *LogViewIterator) All() iter.Seq2[*loggingpb.LogView, error] {
 	return iterator.RangeAdapter(it.Next)
 }
 
@@ -53,60 +77,12 @@ func (it *MonitoredResourceDescriptorIterator) All() iter.Seq2[*monitoredrespb.M
 
 // All returns an iterator. If an error is returned by the iterator, the
 // iterator will stop after that iteration.
-func (it *MonitoredResourceIterator) All() iter.Seq2[*monitoredrespb.MonitoredResource, error] {
+func (it *OperationIterator) All() iter.Seq2[*longrunningpb.Operation, error] {
 	return iterator.RangeAdapter(it.Next)
 }
 
 // All returns an iterator. If an error is returned by the iterator, the
 // iterator will stop after that iteration.
-func (it *NotificationChannelDescriptorIterator) All() iter.Seq2[*monitoringpb.NotificationChannelDescriptor, error] {
-	return iterator.RangeAdapter(it.Next)
-}
-
-// All returns an iterator. If an error is returned by the iterator, the
-// iterator will stop after that iteration.
-func (it *NotificationChannelIterator) All() iter.Seq2[*monitoringpb.NotificationChannel, error] {
-	return iterator.RangeAdapter(it.Next)
-}
-
-// All returns an iterator. If an error is returned by the iterator, the
-// iterator will stop after that iteration.
-func (it *ServiceIterator) All() iter.Seq2[*monitoringpb.Service, error] {
-	return iterator.RangeAdapter(it.Next)
-}
-
-// All returns an iterator. If an error is returned by the iterator, the
-// iterator will stop after that iteration.
-func (it *ServiceLevelObjectiveIterator) All() iter.Seq2[*monitoringpb.ServiceLevelObjective, error] {
-	return iterator.RangeAdapter(it.Next)
-}
-
-// All returns an iterator. If an error is returned by the iterator, the
-// iterator will stop after that iteration.
-func (it *SnoozeIterator) All() iter.Seq2[*monitoringpb.Snooze, error] {
-	return iterator.RangeAdapter(it.Next)
-}
-
-// All returns an iterator. If an error is returned by the iterator, the
-// iterator will stop after that iteration.
-func (it *TimeSeriesDataIterator) All() iter.Seq2[*monitoringpb.TimeSeriesData, error] {
-	return iterator.RangeAdapter(it.Next)
-}
-
-// All returns an iterator. If an error is returned by the iterator, the
-// iterator will stop after that iteration.
-func (it *TimeSeriesIterator) All() iter.Seq2[*monitoringpb.TimeSeries, error] {
-	return iterator.RangeAdapter(it.Next)
-}
-
-// All returns an iterator. If an error is returned by the iterator, the
-// iterator will stop after that iteration.
-func (it *UptimeCheckConfigIterator) All() iter.Seq2[*monitoringpb.UptimeCheckConfig, error] {
-	return iterator.RangeAdapter(it.Next)
-}
-
-// All returns an iterator. If an error is returned by the iterator, the
-// iterator will stop after that iteration.
-func (it *UptimeCheckIpIterator) All() iter.Seq2[*monitoringpb.UptimeCheckIp, error] {
+func (it *StringIterator) All() iter.Seq2[string, error] {
 	return iterator.RangeAdapter(it.Next)
 }

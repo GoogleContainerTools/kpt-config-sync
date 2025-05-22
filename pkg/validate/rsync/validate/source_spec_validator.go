@@ -395,8 +395,8 @@ func validGCPServiceAccountEmail(email string) bool {
 	return false
 }
 
-// InvalidSource reports that a source in a RootSync/RepoSync is invalid.
-func InvalidSource(err error) status.Error {
+// SourceError wraps an error from an invalid source in a RootSync/RepoSync.
+func SourceError(err error) status.Error {
 	return invalidSyncBuilder.
 		Wrap(err).
 		Build()

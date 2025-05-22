@@ -147,7 +147,7 @@ func (r *RootSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		if err := r.validateRootSync(ctx, rs, reconcilerRef.Name); err != nil {
 			r.Logger(ctx).Error(err, "RootSync spec invalid")
 			_, updateErr := r.updateSyncStatus(ctx, rs, reconcilerRef, func(_ *v1beta1.RootSync) error {
-				rootsync.SetStalled(rs, "Validation", err)
+				rootsync.SetStalled(rs, "Validation", status.ObjectParseError(rs, err))
 				return nil
 			})
 			// Use the validation error for metric tagging.

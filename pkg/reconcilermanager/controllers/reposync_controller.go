@@ -180,7 +180,7 @@ func (r *RepoSyncReconciler) Reconcile(ctx context.Context, req controllerruntim
 		if err := r.validateRepoSync(ctx, rs, reconcilerRef.Name); err != nil {
 			r.Logger(ctx).Error(err, "Invalid RepoSync Spec")
 			_, updateErr := r.updateSyncStatus(ctx, rs, reconcilerRef, func(_ *v1beta1.RepoSync) error {
-				reposync.SetStalled(rs, "Validation", err)
+				reposync.SetStalled(rs, "Validation", status.ObjectParseError(rs, err))
 				return nil
 			})
 			// Use the validation error for metric tagging.

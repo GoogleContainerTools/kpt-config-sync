@@ -327,6 +327,17 @@ test-kustomization:
 		OTELCONTRIBCOL_VERSION=placeholder
 	@./scripts/test-kustomization.sh
 
+# helper make target for generating the expected output
+.PHONY: update-expected-kustomization
+update-expected-kustomization:
+	$(MAKE) build-manifests \
+		STAGING_DIR=$(OUTPUT_DIR)/testing \
+		REGISTRY=gcr.io/cs-test \
+		IMAGE_TAG=placeholder \
+		GIT_SYNC_VERSION=placeholder \
+		OTELCONTRIBCOL_VERSION=placeholder
+	UPDATE_EXPECTED_OUTPUT="true" ./scripts/test-kustomization.sh
+
 # Runs unit tests and linter.
 .PHONY: test
 test: test-unit test-kustomization lint test-post-sync

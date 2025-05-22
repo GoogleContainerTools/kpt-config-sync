@@ -19,4 +19,11 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 
 out=$(kustomize build --load-restrictor=LoadRestrictionsNone "${REPO_ROOT}/test/kustomization" | sed -e "s|gcr.io/cs-test/|example.com/|g")
 
-diff "${REPO_ROOT}/test/kustomization/expected.yaml" <( echo "${out}" )
+expected_file="${REPO_ROOT}/test/kustomization/expected.yaml"
+
+if [[ "${UPDATE_EXPECTED_OUTPUT:-}" == "true" ]]; then
+  echo "${out}" > "${expected_file}"
+  exit 0
+fi
+
+diff "${expected_file}" <( echo "${out}" )

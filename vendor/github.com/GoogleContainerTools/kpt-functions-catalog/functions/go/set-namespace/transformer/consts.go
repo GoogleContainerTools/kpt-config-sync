@@ -16,25 +16,22 @@ package transformer
 import (
 	"fmt"
 	"regexp"
-
-	"github.com/GoogleContainerTools/kpt-functions-sdk/go/fn"
 )
 
 const (
-	// Constants for FunctionConfig `SetNamespace`
-	fnConfigGroup   = "fn.kpt.dev"
-	fnConfigVersion = "v1alpha1"
-	fnConfigKind    = "SetNamespace"
-	// The ConfigMap name generated from variant constructor
-	builtinConfigMapName = "kptfile.kpt.dev"
-	dependsOnAnnotation  = "config.kubernetes.io/depends-on"
-	namespaceIdx         = 2
+	fnConfigAPIVersion  = "fn.kpt.dev/v1alpha1"
+	fnConfigKind        = "SetNamespace"
+	dependsOnAnnotation = "config.kubernetes.io/depends-on"
+	groupIdx            = 0
+	namespaceIdx        = 2
+	kindIdx             = 3
+	nameIdx             = 4
 )
 
 var (
 	// <group>/namespaces/<namespace>/<kind>/<name>
 	namespacedResourcePattern = regexp.MustCompile(`\A([-.\w]*)/namespaces/([-.\w]*)/([-.\w]*)/([-.\w]*)\z`)
-	nsScopedDependsOnFromId   = func(id *fn.ResourceIdentifier) string {
-		return fmt.Sprintf("%v/namespaces/%v/%v/%v", id.Group, id.Namespace, id.Kind, id.Name)
+	dependsOnKeyPattern       = func(group, kind, name string) string {
+		return fmt.Sprintf("%s/%s/%s", group, kind, name)
 	}
 )

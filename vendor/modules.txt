@@ -63,7 +63,7 @@ github.com/Azure/go-ansiterm/winterm
 ## explicit; go 1.18
 github.com/BurntSushi/toml
 github.com/BurntSushi/toml/internal
-# github.com/GoogleContainerTools/kpt-functions-catalog/functions/go/set-namespace v0.4.1-0.20220713210718-d955e7d3a800
+# github.com/GoogleContainerTools/kpt-functions-catalog/functions/go/set-namespace v0.4.1
 ## explicit; go 1.17
 github.com/GoogleContainerTools/kpt-functions-catalog/functions/go/set-namespace/transformer
 # github.com/GoogleContainerTools/kpt-functions-sdk/go/fn v0.0.0-20220706221933-7181f451a663

@@ -48,7 +48,7 @@ require (
 	k8s.io/cluster-registry v0.0.6
 	k8s.io/code-generator v0.32.5
 	k8s.io/klog/v2 v2.130.1
-	k8s.io/kube-aggregator v0.32.2
+	k8s.io/kube-aggregator v0.32.5
 	k8s.io/kube-openapi v0.0.0-20241105132330-32ad38e42d3f
 	k8s.io/kubectl v0.32.2
 	k8s.io/kubernetes v1.32.2

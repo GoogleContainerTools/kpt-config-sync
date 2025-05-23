@@ -59,8 +59,8 @@ github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.49
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.49.0/go.mod h1:6fTWu4m3jocfUZLYF5KsZC1TUfRvEjs7lM4crme/irw=
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.49.0 h1:GYUJLfvd++4DMuMhCFLgLXvFwofIxh/qOwoGuS/LTew=
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.49.0/go.mod h1:wRbFgBQUVm1YXrvWKofAEmq9HNJTDphbAaJSSX01KUI=
-github.com/GoogleContainerTools/kpt-functions-catalog/functions/go/set-namespace v0.4.1-0.20220713210718-d955e7d3a800 h1:zkYLHNaONv6smzpiEEgFZ3IXbqWOFFoxWeH6tO2OMV0=
-github.com/GoogleContainerTools/kpt-functions-catalog/functions/go/set-namespace v0.4.1-0.20220713210718-d955e7d3a800/go.mod h1:6QqfpRPrJEFhWP4ncBi4z7Sk4idKLJ3iBkYcAbDDIEA=
+github.com/GoogleContainerTools/kpt-functions-catalog/functions/go/set-namespace v0.4.1 h1:4/PW8UQST7f6oBIA+vEOHeFFQYkX+FOWYwQyS7lZAVI=
+github.com/GoogleContainerTools/kpt-functions-catalog/functions/go/set-namespace v0.4.1/go.mod h1:5XWywBvOyBmuIoD9waCvtL2jXaZBYAY6QH+s9UunlVY=
 github.com/GoogleContainerTools/kpt-functions-sdk/go/fn v0.0.0-20220706221933-7181f451a663 h1:s4DHgdExcmtZDTW7W5ueFTaNJtHlhKTaSsV6ilDiGiA=
 github.com/GoogleContainerTools/kpt-functions-sdk/go/fn v0.0.0-20220706221933-7181f451a663/go.mod h1:ZV3I9JCWgFEWI/174M7LZmCM2U+twuuN2OXicEMVOfU=
 github.com/MakeNowJust/heredoc v1.0.0 h1:cXCdzVdstXyiTqTvfqk9SDHpKNjxuom+DOlyEeQ4pzQ=

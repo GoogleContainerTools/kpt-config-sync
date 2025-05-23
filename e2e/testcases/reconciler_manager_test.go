@@ -754,6 +754,12 @@ func hasTolerations(tolerations []corev1.Toleration) testpredicates.Predicate {
 		if !ok {
 			return testpredicates.WrongTypeErr(d, &appsv1.Deployment{})
 		}
+		// two lists are equal if they have the same length and each element is equal.
+		// the for loop below also would segfault (index out of range) if len(actual) > len(want).
+		if len(d.Spec.Template.Spec.Tolerations) != len(tolerations) {
+			return fmt.Errorf("expected %d tolerations but got %d",
+				len(tolerations), len(d.Spec.Template.Spec.Tolerations))
+		}
 		for i, toleration := range d.Spec.Template.Spec.Tolerations {
 			if !equality.Semantic.DeepEqual(toleration, tolerations[i]) {
 				return fmt.Errorf("expected toleration is: %s, got: %s", tolerations[i].String(), toleration.String())

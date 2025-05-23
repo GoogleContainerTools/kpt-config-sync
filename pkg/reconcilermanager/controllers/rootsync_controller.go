@@ -858,16 +858,21 @@ func (r *RootSyncReconciler) validateRootSync(ctx context.Context, rs *v1beta1.R
 }
 
 func (r *RootSyncReconciler) validateDependencies(ctx context.Context, rs *v1beta1.RootSync) error {
+	var err error
 	switch rs.Spec.SourceType {
 	case configsync.GitSource:
-		return r.validateGitDependencies(ctx, rs)
+		err = r.validateGitDependencies(ctx, rs)
 	case configsync.OciSource:
-		return r.validateOciDependencies(ctx, rs)
+		err = r.validateOciDependencies(ctx, rs)
 	case configsync.HelmSource:
-		return r.validateHelmDependencies(ctx, rs)
+		err = r.validateHelmDependencies(ctx, rs)
 	default:
 		return validate.InvalidSourceType(r.syncGVK.Kind)
 	}
+	if err != nil {
+		return validate.SourceError(err)
+	}
+	return nil
 }
 
 func (r *RootSyncReconciler) validateGitDependencies(ctx context.Context, rs *v1beta1.RootSync) error {

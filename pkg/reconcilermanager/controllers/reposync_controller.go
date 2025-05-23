@@ -995,16 +995,21 @@ func (r *RepoSyncReconciler) validateRepoSync(ctx context.Context, rs *v1beta1.R
 }
 
 func (r *RepoSyncReconciler) validateDependencies(ctx context.Context, rs *v1beta1.RepoSync, reconcilerName string) error {
+	var err error
 	switch rs.Spec.SourceType {
 	case configsync.GitSource:
-		return r.validateGitDependencies(ctx, rs, reconcilerName)
+		err = r.validateGitDependencies(ctx, rs, reconcilerName)
 	case configsync.OciSource:
-		return r.validateOciDependencies(ctx, rs)
+		err = r.validateOciDependencies(ctx, rs)
 	case configsync.HelmSource:
-		return r.validateHelmDependencies(ctx, rs)
+		err = r.validateHelmDependencies(ctx, rs)
 	default:
 		return validate.InvalidSourceType(r.syncGVK.Kind)
 	}
+	if _, ok := err.(status.Error); err != nil && !ok {
+		return validate.SourceError(err)
+	}
+	return err
 }
 
 func (r *RepoSyncReconciler) validateGitDependencies(ctx context.Context, rs *v1beta1.RepoSync, reconcilerName string) error {

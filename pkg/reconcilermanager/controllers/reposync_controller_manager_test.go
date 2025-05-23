@@ -17,6 +17,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -200,7 +201,7 @@ func TestReconcileInvalidRepoSyncLifecycle(t *testing.T) {
 		if event.Type == watch.Modified {
 			rsObj = event.Object.(*v1beta1.RepoSync)
 			for _, cond := range rsObj.Status.Conditions {
-				if cond.Reason == "Validation" && cond.Message == `git secretType was set as "token" but token key is not present in ssh-key secret` {
+				if cond.Reason == "Validation" && strings.Contains(cond.Message, `git secretType was set as "token" but token key is not present in ssh-key secret`) {
 					return nil
 				}
 			}
@@ -306,7 +307,7 @@ func TestReconcileRepoSyncLifecycleValidToInvalid(t *testing.T) {
 		if event.Type == watch.Modified {
 			rsObj = event.Object.(*v1beta1.RepoSync)
 			for _, cond := range rsObj.Status.Conditions {
-				if cond.Reason == "Validation" && cond.Message == `git secretType was set as "token" but token key is not present in ssh-key secret` {
+				if cond.Reason == "Validation" && strings.Contains(cond.Message, `git secretType was set as "token" but token key is not present in ssh-key secret`) {
 					return nil
 				}
 			}

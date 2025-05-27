@@ -49,7 +49,7 @@ require (
 	k8s.io/code-generator v0.32.5
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kube-aggregator v0.32.5
-	k8s.io/kube-openapi v0.0.0-20241105132330-32ad38e42d3f
+	k8s.io/kube-openapi v0.0.0-20241212222426-2c72e554b1e7
 	k8s.io/kubectl v0.32.2
 	k8s.io/kubernetes v1.32.5
 	k8s.io/utils v0.0.0-20241210054802-24370beab758
@@ -58,8 +58,8 @@ require (
 	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20231023142458-b9f29826ee83
 	sigs.k8s.io/controller-tools v0.15.0
 	sigs.k8s.io/kind v0.28.0 // When upgrading, update the node image versions at e2e/nomostest/clusters/kind.go
-	sigs.k8s.io/kustomize/api v0.18.0
-	sigs.k8s.io/kustomize/kyaml v0.18.1
+	sigs.k8s.io/kustomize/api v0.19.0
+	sigs.k8s.io/kustomize/kyaml v0.19.0
 	sigs.k8s.io/structured-merge-diff/v4 v4.7.0
 	sigs.k8s.io/yaml v1.4.0
 )

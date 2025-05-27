@@ -15,6 +15,7 @@
 package e2e
 
 import (
+	"fmt"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/types"
@@ -30,6 +31,7 @@ import (
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
+	"kpt.dev/configsync/pkg/validate/rsync/validate"
 )
 
 const (
@@ -88,7 +90,7 @@ func TestGithubAppRootSync(t *testing.T) {
 	}
 	nt.Must(nt.KubeClient.Apply(rs))
 	nt.Must(nt.Watcher.WatchForRootSyncStalledError(rs.Name, "Validation",
-		`Secret empty-secret not found: create one to allow client authentication`))
+		validate.MissingSecret("empty-secret").Error()))
 	// Verify reconciler-manager checks validity of Secret data fields
 	nt.T.Log("The reconciler-manager should report a validation error for invalid Secret")
 	emptySecret := k8sobjects.SecretObject(emptySecretNN.Name, core.Namespace(rootSyncNN.Namespace))
@@ -97,7 +99,7 @@ func TestGithubAppRootSync(t *testing.T) {
 	})
 	nt.Must(nt.KubeClient.Create(emptySecret))
 	nt.Must(nt.Watcher.WatchForRootSyncStalledError(rs.Name, "Validation",
-		`git secretType was set as "githubapp" but github-app-private-key key is not present in empty-secret secret`))
+		validate.InvalidSecret(fmt.Errorf(`git secretType was set as "githubapp" but github-app-private-key key is not present in empty-secret secret`)).Error()))
 	// Verify reconciler can sync using client ID
 	nt.T.Log("The reconciler should successfully sync using githubapp auth with client ID")
 	secretWithClientIDNN := types.NamespacedName{Name: "githubapp-creds-clientid", Namespace: rootSyncNN.Namespace}
@@ -189,7 +191,7 @@ func TestGithubAppRepoSync(t *testing.T) {
 	}
 	nt.Must(nt.KubeClient.Apply(rs))
 	nt.Must(nt.Watcher.WatchForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation",
-		`Secret empty-secret not found: create one to allow client authentication`))
+		validate.MissingSecret("empty-secret").Error()))
 	// Verify reconciler-manager checks validity of Secret data fields
 	nt.T.Log("The reconciler-manager should report a validation error for invalid Secret")
 	emptySecret := k8sobjects.SecretObject(emptySecretNN.Name, core.Namespace(repoSyncNN.Namespace))
@@ -198,7 +200,7 @@ func TestGithubAppRepoSync(t *testing.T) {
 	})
 	nt.Must(nt.KubeClient.Create(emptySecret))
 	nt.Must(nt.Watcher.WatchForRepoSyncStalledError(rs.Namespace, rs.Name, "Validation",
-		`git secretType was set as "githubapp" but github-app-private-key key is not present in empty-secret secret`))
+		validate.InvalidSecret(fmt.Errorf(`git secretType was set as "githubapp" but github-app-private-key key is not present in empty-secret secret`)).Error()))
 	// Verify reconciler can sync using client ID
 	nt.T.Log("The reconciler should successfully sync using githubapp auth with client ID")
 	secretWithClientIDNN := types.NamespacedName{

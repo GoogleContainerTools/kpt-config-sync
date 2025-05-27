@@ -11,6 +11,22 @@ func NewOrderedMap[K comparable, V any]() *OrderedMap[K, V] {
 	}
 }
 
+// NewOrderedMapWithCapacity creates a map with enough pre-allocated space to
+// hold the specified number of elements.
+func NewOrderedMapWithCapacity[K comparable, V any](capacity int) *OrderedMap[K, V] {
+	return &OrderedMap[K, V]{
+		kv: make(map[K]*Element[K, V], capacity),
+	}
+}
+
+func NewOrderedMapWithElements[K comparable, V any](els ...*Element[K, V]) *OrderedMap[K, V] {
+	om := NewOrderedMapWithCapacity[K, V](len(els))
+	for _, el := range els {
+		om.Set(el.Key, el.Value)
+	}
+	return om
+}
+
 // Get returns the value for a key. If the key does not exist, the second return
 // parameter will be false and the value will be nil.
 func (m *OrderedMap[K, V]) Get(key K) (value V, ok bool) {
@@ -35,6 +51,21 @@ func (m *OrderedMap[K, V]) Set(key K, value V) bool {
 	element := m.ll.PushBack(key, value)
 	m.kv[key] = element
 	return true
+}
+
+// ReplaceKey replaces an existing key with a new key while preserving order of
+// the value. This function will return true if the operation was successful, or
+// false if 'originalKey' is not found OR 'newKey' already exists (which would be an overwrite).
+func (m *OrderedMap[K, V]) ReplaceKey(originalKey, newKey K) bool {
+	element, originalExists := m.kv[originalKey]
+	_, newKeyExists := m.kv[newKey]
+	if originalExists && !newKeyExists {
+		delete(m.kv, originalKey)
+		m.kv[newKey] = element
+		element.Key = newKey
+		return true
+	}
+	return false
 }
 
 // GetOrDefault returns the value for a key. If the key does not exist, returns
@@ -101,9 +132,15 @@ func (m *OrderedMap[K, V]) Back() *Element[K, V] {
 // Copy returns a new OrderedMap with the same elements.
 // Using Copy while there are concurrent writes may mangle the result.
 func (m *OrderedMap[K, V]) Copy() *OrderedMap[K, V] {
-	m2 := NewOrderedMap[K, V]()
+	m2 := NewOrderedMapWithCapacity[K, V](m.Len())
 	for el := m.Front(); el != nil; el = el.Next() {
 		m2.Set(el.Key, el.Value)
 	}
 	return m2
+}
+
+// Has checks if a key exists in the map.
+func (m *OrderedMap[K, V]) Has(key K) bool {
+	_, exists := m.kv[key]
+	return exists
 }

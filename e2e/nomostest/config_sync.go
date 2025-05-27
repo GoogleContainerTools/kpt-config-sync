@@ -56,6 +56,7 @@ import (
 	ocmetrics "kpt.dev/configsync/pkg/metrics"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
+	"kpt.dev/configsync/pkg/validate/rsync/validate"
 	webhookconfig "kpt.dev/configsync/pkg/webhook/configuration"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/cli-utils/pkg/object/dependson"
@@ -1495,13 +1496,12 @@ func SetupFakeSSHCreds(nt *NT, rsKind string, rsRef types.NamespacedName, auth c
 	}
 
 	nt.T.Logf("The %s/%s Secret doesn't exist with auth %q, so creating a fake one", rsRef.Namespace, secretName, auth)
-	msg := fmt.Sprintf("Secret %s not found: create one to allow client authentication", secretName)
 	if rsKind == kinds.RootSyncV1Beta1().Kind {
-		if err := nt.Watcher.WatchForRootSyncStalledError(rsRef.Name, "Validation", msg); err != nil {
+		if err := nt.Watcher.WatchForRootSyncStalledError(rsRef.Name, "Validation", validate.MissingSecret(secretName).Error()); err != nil {
 			return err
 		}
 	} else {
-		if err := nt.Watcher.WatchForRepoSyncStalledError(rsRef.Namespace, rsRef.Name, "Validation", msg); err != nil {
+		if err := nt.Watcher.WatchForRepoSyncStalledError(rsRef.Namespace, rsRef.Name, "Validation", validate.MissingSecret(secretName).Error()); err != nil {
 			return err
 		}
 	}

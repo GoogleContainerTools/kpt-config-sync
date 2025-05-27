@@ -54,7 +54,7 @@ require (
 	k8s.io/kubernetes v1.33.1
 	k8s.io/utils v0.0.0-20241210054802-24370beab758
 	sigs.k8s.io/cli-utils v0.37.3-0.20250410211241-63a8e151c476
-	sigs.k8s.io/controller-runtime v0.20.4
+	sigs.k8s.io/controller-runtime v0.21.0
 	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20231023142458-b9f29826ee83
 	sigs.k8s.io/controller-tools v0.18.0
 	sigs.k8s.io/kind v0.28.0 // When upgrading, update the node image versions at e2e/nomostest/clusters/kind.go

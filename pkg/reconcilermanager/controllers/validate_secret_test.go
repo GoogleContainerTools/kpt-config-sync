@@ -16,7 +16,6 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -26,6 +25,7 @@ import (
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
+	"kpt.dev/configsync/pkg/validate/rsync/validate"
 )
 
 func TestValidateSecretExist(t *testing.T) {
@@ -130,7 +130,7 @@ func TestValidateSecretData(t *testing.T) {
 				"github-app-client-id":       []byte("client-id-0"),
 				"github-app-installation-id": []byte("installation-id-0"),
 			},
-			wantError: fmt.Errorf(`git secretType was set as "githubapp" but github-app-private-key key is not present in foo secret`),
+			wantError: validate.MissingKeyInAuthSecret(configsync.AuthGithubApp, "github-app-private-key", "foo"),
 		},
 		"Invalid Github App auth with missing installation ID": {
 			auth: configsync.AuthGithubApp,
@@ -138,7 +138,7 @@ func TestValidateSecretData(t *testing.T) {
 				"github-app-private-key": []byte("private-key-0"),
 				"github-app-client-id":   []byte("client-id-0"),
 			},
-			wantError: fmt.Errorf(`git secretType was set as "githubapp" but github-app-installation-id key is not present in foo secret`),
+			wantError: validate.MissingKeyInAuthSecret(configsync.AuthGithubApp, "github-app-installation-id", "foo"),
 		},
 		"Invalid Github App auth with client ID AND application ID": {
 			auth: configsync.AuthGithubApp,
@@ -148,7 +148,7 @@ func TestValidateSecretData(t *testing.T) {
 				"github-app-application-id":  []byte("application-id-0"),
 				"github-app-installation-id": []byte("installation-id-0"),
 			},
-			wantError: fmt.Errorf(`git secretType was set to "githubapp" but more than one of (github-app-application-id, github-app-client-id) is present in foo secret`),
+			wantError: validate.AmbiguousGithubAppIDInSecret("foo"),
 		},
 		"Invalid Github App auth with neither client ID NOR application ID": {
 			auth: configsync.AuthGithubApp,
@@ -156,7 +156,7 @@ func TestValidateSecretData(t *testing.T) {
 				"github-app-private-key":     []byte("private-key-0"),
 				"github-app-installation-id": []byte("installation-id-0"),
 			},
-			wantError: fmt.Errorf(`git secretType was set to "githubapp" but one of (github-app-application-id, github-app-client-id) is not present in foo secret`),
+			wantError: validate.MissingGithubAppIDInSecret("foo"),
 		},
 		"Invalid Github App auth with empty client ID": {
 			auth: configsync.AuthGithubApp,
@@ -165,7 +165,7 @@ func TestValidateSecretData(t *testing.T) {
 				"github-app-client-id":       []byte(""),
 				"github-app-installation-id": []byte("installation-id-0"),
 			},
-			wantError: fmt.Errorf(`git secretType was set to "githubapp" but one of (github-app-application-id, github-app-client-id) is not present in foo secret`),
+			wantError: validate.MissingGithubAppIDInSecret("foo"),
 		},
 		"Invalid Github App auth with empty application ID": {
 			auth: configsync.AuthGithubApp,
@@ -174,7 +174,7 @@ func TestValidateSecretData(t *testing.T) {
 				"github-app-application-id":  []byte(""),
 				"github-app-installation-id": []byte("installation-id-0"),
 			},
-			wantError: fmt.Errorf(`git secretType was set to "githubapp" but one of (github-app-application-id, github-app-client-id) is not present in foo secret`),
+			wantError: validate.MissingGithubAppIDInSecret("foo"),
 		},
 		"Invalid Github App auth with empty private key": {
 			auth: configsync.AuthGithubApp,
@@ -183,7 +183,7 @@ func TestValidateSecretData(t *testing.T) {
 				"github-app-client-id":       []byte("client-id-0"),
 				"github-app-installation-id": []byte("installation-id-0"),
 			},
-			wantError: fmt.Errorf(`git secretType was set as "githubapp" but github-app-private-key key is not present in foo secret`),
+			wantError: validate.MissingKeyInAuthSecret(configsync.AuthGithubApp, "github-app-private-key", "foo"),
 		},
 		"Invalid Github App auth with empty installation ID": {
 			auth: configsync.AuthGithubApp,
@@ -192,11 +192,11 @@ func TestValidateSecretData(t *testing.T) {
 				"github-app-client-id":       []byte("client-id-0"),
 				"github-app-installation-id": []byte(""),
 			},
-			wantError: fmt.Errorf(`git secretType was set as "githubapp" but github-app-installation-id key is not present in foo secret`),
+			wantError: validate.MissingKeyInAuthSecret(configsync.AuthGithubApp, "github-app-installation-id", "foo"),
 		},
 		"Usupported auth": {
 			auth:      "( ͡° ͜ʖ ͡°)",
-			wantError: fmt.Errorf(`git secretType is set to unsupported value: "( ͡° ͜ʖ ͡°)"`),
+			wantError: validate.InvalidSecretAuthType(`( ͡° ͜ʖ ͡°)`),
 		},
 	}
 

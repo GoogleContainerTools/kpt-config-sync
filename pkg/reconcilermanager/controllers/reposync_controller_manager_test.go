@@ -37,6 +37,7 @@ import (
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/util/mutate"
 	watchutil "kpt.dev/configsync/pkg/util/watch"
+	"kpt.dev/configsync/pkg/validate/rsync/validate"
 	"sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -200,7 +201,7 @@ func TestReconcileInvalidRepoSyncLifecycle(t *testing.T) {
 		if event.Type == watch.Modified {
 			rsObj = event.Object.(*v1beta1.RepoSync)
 			for _, cond := range rsObj.Status.Conditions {
-				if cond.Reason == "Validation" && cond.Message == `git secretType was set as "token" but token key is not present in ssh-key secret` {
+				if cond.Reason == "Validation" && cond.Message == validate.MissingKeyInAuthSecret(configsync.AuthToken, "token", "ssh-key").Error() {
 					return nil
 				}
 			}
@@ -306,7 +307,7 @@ func TestReconcileRepoSyncLifecycleValidToInvalid(t *testing.T) {
 		if event.Type == watch.Modified {
 			rsObj = event.Object.(*v1beta1.RepoSync)
 			for _, cond := range rsObj.Status.Conditions {
-				if cond.Reason == "Validation" && cond.Message == `git secretType was set as "token" but token key is not present in ssh-key secret` {
+				if cond.Reason == "Validation" && cond.Message == validate.MissingKeyInAuthSecret(configsync.AuthToken, "token", "ssh-key").Error() {
 					return nil
 				}
 			}

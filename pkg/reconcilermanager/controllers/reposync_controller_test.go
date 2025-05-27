@@ -1377,7 +1377,7 @@ func TestRepoSyncReconcileWithInvalidCACertSecret(t *testing.T) {
 
 			// reposync should be in stalled status
 			wantRs := k8sobjects.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
-			reposync.SetStalled(wantRs, "Validation", fmt.Errorf("caCertSecretRef was set, but %s key is not present in %s Secret", CACertSecretKey, caCertSecret))
+			reposync.SetStalled(wantRs, "Validation", validate.MissingKeyInCACertSecret(CACertSecretKey, caCertSecret))
 			validateRepoSyncStatus(t, wantRs, fakeClient)
 		})
 	}
@@ -1390,13 +1390,13 @@ func TestRepoSyncValidateCACertSecret(t *testing.T) {
 		err  string
 	}{
 		"caCertSecretRef set but missing Secret": {
-			err: fmt.Sprintf("Secret %s not found, create one to allow client connections with CA certificate", caCertSecret),
+			err: validate.MissingSecret(caCertSecret).Error(),
 		},
 		"caCertSecretRef set but invalid Secret": {
 			objs: []client.Object{
 				k8sobjects.SecretObject(caCertSecret, core.Namespace(reposyncNs)),
 			},
-			err: fmt.Sprintf("caCertSecretRef was set, but %s key is not present in %s Secret", CACertSecretKey, caCertSecret),
+			err: validate.MissingKeyInCACertSecret(CACertSecretKey, caCertSecret).Error(),
 		},
 	}
 	for name, tc := range testCases {
@@ -4663,7 +4663,7 @@ For more information, see https://g.co/cloud/acm-errors#knv1061`))
 
 	wantRs = k8sobjects.RepoSyncObjectV1Beta1(rs.Namespace, rs.Name)
 	reposync.SetStalled(wantRs, "Validation",
-		fmt.Errorf(`git secretType was set as "githubapp" but github-app-private-key key is not present in %s secret`, secretRef))
+		validate.MissingKeyInAuthSecret(configsync.AuthGithubApp, "github-app-private-key", secretRef))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	// Create a fully valid configuration

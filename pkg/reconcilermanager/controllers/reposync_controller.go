@@ -994,7 +994,7 @@ func (r *RepoSyncReconciler) validateRepoSync(ctx context.Context, rs *v1beta1.R
 	return r.validateDependencies(ctx, rs, reconcilerName)
 }
 
-func (r *RepoSyncReconciler) validateDependencies(ctx context.Context, rs *v1beta1.RepoSync, reconcilerName string) error {
+func (r *RepoSyncReconciler) validateDependencies(ctx context.Context, rs *v1beta1.RepoSync, reconcilerName string) status.Error {
 	switch rs.Spec.SourceType {
 	case configsync.GitSource:
 		return r.validateGitDependencies(ctx, rs, reconcilerName)
@@ -1007,18 +1007,18 @@ func (r *RepoSyncReconciler) validateDependencies(ctx context.Context, rs *v1bet
 	}
 }
 
-func (r *RepoSyncReconciler) validateGitDependencies(ctx context.Context, rs *v1beta1.RepoSync, reconcilerName string) error {
+func (r *RepoSyncReconciler) validateGitDependencies(ctx context.Context, rs *v1beta1.RepoSync, reconcilerName string) status.Error {
 	if err := r.validateCACertSecret(ctx, rs.Namespace, v1beta1.GetSecretName(rs.Spec.Git.CACertSecretRef)); err != nil {
 		return err
 	}
 	return r.validateNamespaceSecret(ctx, rs, reconcilerName)
 }
 
-func (r *RepoSyncReconciler) validateOciDependencies(ctx context.Context, rs *v1beta1.RepoSync) error {
+func (r *RepoSyncReconciler) validateOciDependencies(ctx context.Context, rs *v1beta1.RepoSync) status.Error {
 	return r.validateCACertSecret(ctx, rs.Namespace, v1beta1.GetSecretName(rs.Spec.Oci.CACertSecretRef))
 }
 
-func (r *RepoSyncReconciler) validateHelmDependencies(ctx context.Context, rs *v1beta1.RepoSync) error {
+func (r *RepoSyncReconciler) validateHelmDependencies(ctx context.Context, rs *v1beta1.RepoSync) status.Error {
 	if err := r.validateCACertSecret(ctx, rs.Namespace, v1beta1.GetSecretName(rs.Spec.Helm.CACertSecretRef)); err != nil {
 		return err
 	}
@@ -1026,7 +1026,7 @@ func (r *RepoSyncReconciler) validateHelmDependencies(ctx context.Context, rs *v
 }
 
 // validateNamespaceSecret verify that any necessary Secret is present before creating ConfigMaps and Deployments.
-func (r *RepoSyncReconciler) validateNamespaceSecret(ctx context.Context, repoSync *v1beta1.RepoSync, reconcilerName string) error {
+func (r *RepoSyncReconciler) validateNamespaceSecret(ctx context.Context, repoSync *v1beta1.RepoSync, reconcilerName string) status.Error {
 	var authType configsync.AuthType
 	var namespaceSecretName string
 	if repoSync.Spec.SourceType == configsync.GitSource {
@@ -1043,7 +1043,7 @@ func (r *RepoSyncReconciler) validateNamespaceSecret(ctx context.Context, repoSy
 
 	secretName := ReconcilerResourceName(reconcilerName, namespaceSecretName)
 	if errs := validation.IsDNS1123Subdomain(secretName); errs != nil {
-		return fmt.Errorf("The managed secret name %q is invalid: %s. To fix it, update '.spec.git.secretRef.name'", secretName, strings.Join(errs, ", "))
+		return validate.InvalidSecretName(secretName, strings.Join(errs, ", "))
 	}
 
 	secret, err := validateSecretExist(ctx,
@@ -1052,9 +1052,9 @@ func (r *RepoSyncReconciler) validateNamespaceSecret(ctx context.Context, repoSy
 		r.client)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			return fmt.Errorf("Secret %s not found: create one to allow client authentication", namespaceSecretName)
+			return validate.MissingSecret(namespaceSecretName)
 		}
-		return fmt.Errorf("Secret %s get failed: %w", namespaceSecretName, err)
+		return status.APIServerError(err, fmt.Sprintf("failed to get secret %q", namespaceSecretName))
 	}
 
 	_, r.knownHostExist = secret.Data[KnownHostsKey]

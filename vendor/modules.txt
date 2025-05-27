@@ -128,7 +128,7 @@ github.com/docker/distribution/registry/client/auth/challenge
 ## explicit; go 1.21
 github.com/docker/docker-credential-helpers/client
 github.com/docker/docker-credential-helpers/credentials
-# github.com/elliotchance/orderedmap/v2 v2.2.0
+# github.com/elliotchance/orderedmap/v2 v2.7.0
 ## explicit; go 1.18
 github.com/elliotchance/orderedmap/v2
 # github.com/emicklei/go-restful/v3 v3.12.0

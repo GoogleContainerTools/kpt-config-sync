@@ -306,6 +306,41 @@ var InvalidSyncCode = "1061"
 
 var invalidSyncBuilder = status.NewErrorBuilder(InvalidSyncCode)
 
+// InvalidSecretName reports that a secret name is invalid.
+func InvalidSecretName(errs []string, secretName string) status.Error {
+	return invalidSyncBuilder.
+		Sprintf("The managed secret name %q is invalid: %s. To fix it, update '.spec.git.secretRef.name'", secretName, strings.Join(errs, ", ")).
+		Build()
+}
+
+// MissingSecret reports that a secret was not found.
+func MissingSecret(namespaceSecretName string) status.Error {
+	return invalidSyncBuilder.
+		Sprintf("Secret %s not found: create one to allow client authentication", namespaceSecretName).
+		Build()
+}
+
+// ErrorFetchingSecret reports that there was an error getting a secret.
+func ErrorFetchingSecret(namespaceSecretName string, err error) status.Error {
+	return invalidSyncBuilder.Wrap(err).
+		Sprintf("Secret %s get failed", namespaceSecretName).
+		Build()
+}
+
+// InvalidSecret reports that the secret is invalid.
+func InvalidSecret(err error) status.Error {
+	return invalidSyncBuilder.Wrap(err).
+		Sprintf("Invalid secret").
+		Build()
+}
+
+// MissingCertKey reports that the cert secret key is missing in a secret.
+func MissingCertKey(CACertSecretKey, caCertSecretRefName string) status.Error {
+	return invalidSyncBuilder.
+		Sprintf("caCertSecretRef was set, but %s key is not present in %s Secret", CACertSecretKey, caCertSecretRefName).
+		Build()
+}
+
 // MissingGitSpec reports that a RootSync/RepoSync doesn't declare the git spec
 // when spec.sourceType is set to `git`.
 func MissingGitSpec(syncKind string) status.Error {

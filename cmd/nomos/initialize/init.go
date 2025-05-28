@@ -58,6 +58,10 @@ initialize nonempty directories.`,
 
 		return Initialize(flags.Path, forceValue)
 	},
+	PostRunE: func(_ *cobra.Command, _ []string) error {
+		_, err := fmt.Fprintf(os.Stdout, "Done!\n")
+		return err
+	},
 }
 
 // Initialize initializes a Nomos directory

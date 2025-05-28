@@ -26,7 +26,6 @@ import (
 	"kpt.dev/configsync/cmd/nomos/initialize"
 	"kpt.dev/configsync/cmd/nomos/migrate"
 	"kpt.dev/configsync/cmd/nomos/status"
-	"kpt.dev/configsync/cmd/nomos/util"
 	"kpt.dev/configsync/cmd/nomos/version"
 	"kpt.dev/configsync/cmd/nomos/vet"
 	"kpt.dev/configsync/pkg/api/configmanagement"
@@ -91,6 +90,4 @@ func main() {
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
-
-	util.MustFprintf(os.Stdout, "Done!\n")
 }

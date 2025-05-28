@@ -58,7 +58,7 @@ initialize nonempty directories.`,
 
 		return Initialize(flags.Path, forceValue)
 	},
-	PostRun: func(cmd *cobra.Command, _ []string) {
+	PostRun: func(_ *cobra.Command, _ []string) {
 		util.MustFprintf(os.Stdout, "Done!\n")
 	},
 }

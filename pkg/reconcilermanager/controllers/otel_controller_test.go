@@ -17,9 +17,11 @@ package controllers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	goauth "cloud.google.com/go/auth"
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
@@ -35,6 +37,7 @@ import (
 	"sigs.k8s.io/cli-utils/pkg/testutil"
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 )
 
 // These constants hard-code the hash of the ConfigMaps that configure the
@@ -49,7 +52,7 @@ const (
 	// otel-collector ConfigMap.
 	// See `CollectorConfigGooglecloud` in `pkg/metrics/otel.go`
 	// Used by TestOtelReconcilerGooglecloud.
-	depAnnotationGooglecloud = "e2fc77f25de5df75866195ff0d00f6df"
+	depAnnotationGooglecloud = "e5cf31ab812961f26bb9307a5ed46a33"
 	// depAnnotationGooglecloud is the expected hash of the custom
 	// otel-collector ConfigMap test artifact.
 	// Used by TestOtelReconcilerCustom.
@@ -58,6 +61,358 @@ const (
 	// otel-collector ConfigMap test artifact.
 	// Used by TestOtelReconcilerDeleteCustom.
 	depAnnotationCustomDeleted = "271a8db08c5b57017546587f9b78864d"
+	configYAML                 = `apiVersion: v1
+data:
+  otel-collector-config.yaml: |
+    exporters:
+      googlecloud:
+        metric:
+          prefix: custom.googleapis.com/opencensus/config_sync/
+          resource_filters:
+          - prefix: cloud.account.id
+          - prefix: cloud.availability.zone
+          - prefix: cloud.platform
+          - prefix: cloud.provider
+          - prefix: k8s.pod.ip
+          - prefix: k8s.pod.namespace
+          - prefix: k8s.pod.uid
+          - prefix: k8s.container.name
+          - prefix: host.id
+          - prefix: host.name
+          - prefix: k8s.deployment.name
+          - prefix: k8s.node.name
+          skip_create_descriptor: true
+        sending_queue:
+          enabled: false
+      googlecloud/kubernetes:
+        metric:
+          create_service_timeseries: true
+          instrumentation_library_labels: false
+          prefix: kubernetes.io/internal/addons/config_sync/
+          service_resource_labels: false
+          skip_create_descriptor: true
+        sending_queue:
+          enabled: false
+      prometheus:
+        endpoint: 0.0.0.0:8675
+        namespace: config_sync
+        resource_to_telemetry_conversion:
+          enabled: true
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+    processors:
+      batch: null
+      filter/cloudmonitoring:
+        metrics:
+          include:
+            match_type: strict
+            metric_names:
+            - reconciler_errors
+            - apply_duration_seconds
+            - reconcile_duration_seconds
+            - rg_reconcile_duration_seconds
+            - last_sync_timestamp
+            - pipeline_error_observed
+            - declared_resources
+            - apply_operations_total
+            - resource_fights_total
+            - internal_errors_total
+            - kcc_resource_count
+            - resource_count
+            - ready_resource_count
+            - cluster_scoped_resource_count
+            - resource_ns_count
+            - api_duration_seconds
+      filter/kubernetes:
+        metrics:
+          include:
+            match_type: regexp
+            metric_names:
+            - kustomize.*
+            - api_duration_seconds
+            - reconciler_errors
+            - pipeline_error_observed
+            - reconcile_duration_seconds
+            - rg_reconcile_duration_seconds
+            - parser_duration_seconds
+            - declared_resources
+            - apply_operations_total
+            - apply_duration_seconds
+            - resource_fights_total
+            - remediate_duration_seconds
+            - resource_conflicts_total
+            - internal_errors_total
+            - kcc_resource_count
+            - last_sync_timestamp
+      metricstransform/cloudmonitoring:
+        transforms:
+        - action: update
+          include: last_sync_timestamp
+          operations:
+          - action: aggregate_labels
+            aggregation_type: max
+            label_set:
+            - configsync.sync.kind
+            - configsync.sync.name
+            - configsync.sync.namespace
+            - status
+        - action: update
+          include: declared_resources
+          operations:
+          - action: aggregate_labels
+            aggregation_type: max
+            label_set:
+            - configsync.sync.kind
+            - configsync.sync.name
+            - configsync.sync.namespace
+        - action: update
+          include: apply_duration_seconds
+          operations:
+          - action: aggregate_labels
+            aggregation_type: max
+            label_set:
+            - configsync.sync.kind
+            - configsync.sync.name
+            - configsync.sync.namespace
+            - status
+      metricstransform/kubernetes:
+        transforms:
+        - action: update
+          include: api_duration_seconds
+          operations:
+          - action: aggregate_labels
+            aggregation_type: max
+            label_set:
+            - status
+            - operation
+        - action: update
+          include: declared_resources
+          new_name: current_declared_resources
+          operations:
+          - action: aggregate_labels
+            aggregation_type: max
+            label_set: []
+        - action: update
+          include: kcc_resource_count
+          operations:
+          - action: aggregate_labels
+            aggregation_type: max
+            label_set:
+            - resourcegroup
+        - action: update
+          include: reconciler_errors
+          new_name: last_reconciler_errors
+          operations:
+          - action: aggregate_labels
+            aggregation_type: max
+            label_set:
+            - component
+            - errorclass
+        - action: update
+          include: reconcile_duration_seconds
+          operations:
+          - action: aggregate_labels
+            aggregation_type: max
+            label_set:
+            - status
+        - action: update
+          include: rg_reconcile_duration_seconds
+          operations:
+          - action: aggregate_labels
+            aggregation_type: max
+            label_set:
+            - stallreason
+        - action: update
+          include: last_sync_timestamp
+          operations:
+          - action: aggregate_labels
+            aggregation_type: max
+            label_set:
+            - status
+        - action: update
+          include: parser_duration_seconds
+          operations:
+          - action: aggregate_labels
+            aggregation_type: max
+            label_set:
+            - status
+            - source
+            - trigger
+        - action: update
+          include: pipeline_error_observed
+          new_name: last_pipeline_error_observed
+          operations:
+          - action: aggregate_labels
+            aggregation_type: max
+            label_set:
+            - name
+            - component
+            - reconciler
+        - action: update
+          include: apply_operations_total
+          new_name: apply_operations_count
+          operations:
+          - action: aggregate_labels
+            aggregation_type: max
+            label_set:
+            - controller
+            - operation
+            - status
+        - action: update
+          include: apply_duration_seconds
+          operations:
+          - action: aggregate_labels
+            aggregation_type: max
+            label_set:
+            - status
+        - action: update
+          include: resource_fights_total
+          new_name: resource_fights_count
+          operations:
+          - action: aggregate_labels
+            aggregation_type: max
+            label_set:
+            - name
+            - component
+            - reconciler
+        - action: update
+          include: resource_conflicts_total
+          new_name: resource_conflicts_count
+          operations:
+          - action: aggregate_labels
+            aggregation_type: max
+            label_set: []
+        - action: update
+          include: internal_errors_total
+          new_name: internal_errors_count
+          operations:
+          - action: aggregate_labels
+            aggregation_type: max
+            label_set: []
+        - action: update
+          include: remediate_duration_seconds
+          operations:
+          - action: aggregate_labels
+            aggregation_type: max
+            label_set:
+            - status
+        - action: update
+          include: kustomize_field_count
+          operations:
+          - action: aggregate_labels
+            aggregation_type: max
+            label_set:
+            - field_name
+        - action: update
+          include: kustomize_deprecating_field_count
+          operations:
+          - action: aggregate_labels
+            aggregation_type: max
+            label_set:
+            - deprecating_field
+        - action: update
+          include: kustomize_simplification_adoption_count
+          operations:
+          - action: aggregate_labels
+            aggregation_type: max
+            label_set:
+            - simplification_field
+        - action: update
+          include: kustomize_builtin_transformers
+          operations:
+          - action: aggregate_labels
+            aggregation_type: max
+            label_set:
+            - k8s_metadata_transformer
+        - action: update
+          include: kustomize_helm_inflator_count
+          operations:
+          - action: aggregate_labels
+            aggregation_type: max
+            label_set:
+            - helm_inflator
+        - action: update
+          include: kustomize_base_count
+          operations:
+          - action: aggregate_labels
+            aggregation_type: max
+            label_set:
+            - base_source
+        - action: update
+          include: kustomize_patch_count
+          operations:
+          - action: aggregate_labels
+            aggregation_type: max
+            label_set:
+            - patch_field
+        - action: update
+          include: kustomize_ordered_top_tier_metrics
+          operations:
+          - action: aggregate_labels
+            aggregation_type: max
+            label_set:
+            - top_tier_field
+        - action: update
+          include: kustomize_resource_count
+          operations:
+          - action: aggregate_labels
+            aggregation_type: max
+            label_set: []
+        - action: update
+          include: kustomize_build_latency
+          operations:
+          - action: aggregate_labels
+            aggregation_type: max
+            label_set: []
+      resourcedetection:
+        detectors:
+        - env
+        - gcp
+    receivers:
+      opencensus:
+        endpoint: 0.0.0.0:55678
+    service:
+      extensions:
+      - health_check
+      pipelines:
+        metrics/cloudmonitoring:
+          exporters:
+          - googlecloud
+          processors:
+          - batch
+          - filter/cloudmonitoring
+          - metricstransform/cloudmonitoring
+          - resourcedetection
+          receivers:
+          - opencensus
+        metrics/kubernetes:
+          exporters:
+          - googlecloud/kubernetes
+          processors:
+          - batch
+          - filter/kubernetes
+          - metricstransform/kubernetes
+          - resourcedetection
+          receivers:
+          - opencensus
+        metrics/prometheus:
+          exporters:
+          - prometheus
+          processors:
+          - batch
+          receivers:
+          - opencensus
+kind: ConfigMap
+metadata:
+  labels:
+    app: opentelemetry
+    component: otel-collector
+    configmanagement.gke.io/arch: csmr
+    configmanagement.gke.io/system: "true"
+  name: otel-collector-googlecloud
+  namespace: config-management-monitoring
+`
 )
 
 func setupOtelReconciler(t *testing.T, credentialprovider auth.CredentialProvider, objs ...client.Object) (*syncerFake.Client, *OtelReconciler) {
@@ -144,7 +499,7 @@ func TestOtelReconcilerGooglecloud(t *testing.T) {
 	wantConfigMap := configMapWithData(
 		configmanagement.MonitoringNamespace,
 		metrics.OtelCollectorGooglecloud,
-		map[string]string{"otel-collector-config.yaml": metrics.CollectorConfigGooglecloud},
+		map[string]string{"otel-collector-config.yaml": configYAML},
 		core.Labels(map[string]string{
 			"app":                metrics.OpenTelemetry,
 			"component":          metrics.OtelCollectorName,
@@ -167,7 +522,13 @@ func TestOtelReconcilerGooglecloud(t *testing.T) {
 	gotConfigMap := &corev1.ConfigMap{}
 	err := fakeClient.Get(ctx, cmKey, gotConfigMap)
 	require.NoError(t, err, "ConfigMap[%s] not found", cmKey)
-	asserter.Equal(t, wantConfigMap, gotConfigMap, "ConfigMap")
+
+	// Compare the YAML content as strings
+	gotYAML := gotConfigMapToYAML(gotConfigMap)
+	if diff := cmp.Diff(configYAML, gotYAML); diff != "" {
+		fmt.Printf("Full otel-collector-googlecloud YAML string to update configYAML with:\n%s", gotYAML)
+		t.Fatalf("ConfigMap YAML does not match (-expected +got):\n%s", diff)
+	}
 
 	// compare Deployment annotation
 	deployKey := client.ObjectKeyFromObject(wantDeployment)
@@ -177,6 +538,22 @@ func TestOtelReconcilerGooglecloud(t *testing.T) {
 	asserter.Equal(t, wantDeployment.Spec.Template.Annotations, gotDeployment.Spec.Template.Annotations, "Deployment annotations")
 
 	t.Log("ConfigMap and Deployment successfully updated")
+}
+
+// Helper to convert a ConfigMap object to YAML string for comparison
+func gotConfigMapToYAML(cm *corev1.ConfigMap) string {
+	cmForMarshal := map[string]interface{}{
+		"apiVersion": "v1",
+		"kind":       "ConfigMap",
+		"metadata": map[string]interface{}{
+			"name":      cm.ObjectMeta.Name,
+			"namespace": cm.ObjectMeta.Namespace,
+			"labels":    cm.ObjectMeta.Labels,
+		},
+		"data": cm.Data,
+	}
+	out, _ := yaml.Marshal(cmForMarshal)
+	return string(out)
 }
 
 func TestOtelReconcilerCustom(t *testing.T) {

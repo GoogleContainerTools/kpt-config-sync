@@ -17,7 +17,7 @@ require (
 	github.com/elliotchance/orderedmap/v2 v2.7.0
 	github.com/ettle/strcase v0.2.0
 	github.com/evanphx/json-patch v5.9.11+incompatible
-	github.com/go-logr/logr v1.4.2
+	github.com/go-logr/logr v1.4.3
 	github.com/golang/protobuf v1.5.4
 	github.com/google/addlicense v1.1.1
 	github.com/google/gnostic-models v0.6.9

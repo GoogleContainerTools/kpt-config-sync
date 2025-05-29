@@ -20,17 +20,22 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
+	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/applier"
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
+	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
+	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/syncer/differ"
 	"kpt.dev/configsync/pkg/util"
 	"sigs.k8s.io/cli-utils/pkg/common"
@@ -327,4 +332,86 @@ func TestPreventDeletionSpecialNamespaces(t *testing.T) {
 	// because its  finalizer will block until all objects in that namespace are
 	// deleted.
 	nt.Must(nt.Watcher.WatchForNotFound(kinds.Namespace(), bookstoreNS.Name, bookstoreNS.Namespace))
+}
+
+// TestAdoptImplicitNamespace verifies that an implicit Namespace created by
+// one RootSync can be adopted by another RootSync.
+func TestAdoptImplicitNamespace(t *testing.T) {
+	rootSyncID := nomostest.DefaultRootSyncID
+	rootSync2ID := core.RootSyncID("root-sync-2")
+	nt := nomostest.New(t, nomostesting.Lifecycle,
+		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured),
+		ntopts.SyncWithGitSource(rootSync2ID, ntopts.Unstructured))
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(nomostest.DefaultRootSyncID)
+	rootSync2GitRepo := nt.SyncSourceGitReadWriteRepository(rootSync2ID)
+
+	// The webhook must be disabled for adoption to be successful. If the webhook
+	// is enabled, root-sync-2 will be rejected from updating the implicit namespace.
+	nomostest.StopWebhook(nt)
+	ns := "shipping"
+	nt.Must(nt.ValidateNotFound(ns, "", &corev1.Namespace{}))
+	// Declare namespaced resource to force creation of implicit namespace.
+	cm := k8sobjects.ConfigMapObject(core.Name("shipping-cm"), core.Namespace(ns))
+	nt.Must(rootSyncGitRepo.Add("acme/cm.yaml", cm))
+	nt.Must(rootSyncGitRepo.CommitAndPush("declare ConfigMap and create implicit namespace"))
+	nt.Must(nt.WatchForAllSyncs())
+	nt.Must(nt.Validate(ns, "", &corev1.Namespace{},
+		testpredicates.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
+		testpredicates.IsManagedBy(nt.Scheme, declared.RootScope, rootSyncID.Name)))
+
+	// This explicitly declares the Namespace in root-sync-2, however the RootSyncs
+	// fight over ownership because this removes the preventDeletion annotation
+	// from the Namespace.
+	nsObj := k8sobjects.NamespaceObject(ns)
+	nt.Must(rootSync2GitRepo.Add("acme/ns.yaml", nsObj))
+	nt.Must(rootSync2GitRepo.CommitAndPush("declare explicit Namespace"))
+	tg := taskgroup.New()
+	tg.Go(func() error {
+		return nt.Watcher.WatchForRootSyncSyncError(rootSyncID.Name, status.ManagementConflictErrorCode,
+			`The ":root" reconciler detected a management conflict with the ":root_root-sync-2" reconciler. Remove the object from one of the sources of truth so that the object is only managed by one reconciler.`,
+			[]v1beta1.ResourceRef{
+				{
+					SourcePath: "acme/ns.yaml",
+					Name:       ns,
+					GVK: metav1.GroupVersionKind{
+						Group:   nsObj.GroupVersionKind().Group,
+						Version: nsObj.GroupVersionKind().Version,
+						Kind:    nsObj.GroupVersionKind().Kind,
+					},
+				},
+			})
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchForRootSyncSyncError(rootSyncID.Name, applier.ApplierErrorCode,
+			`skipped apply of ConfigMap, shipping/shipping-cm: dependency scheduled for delete: _shipping__Namespace`,
+			[]v1beta1.ResourceRef{})
+	})
+	tg.Go(func() error {
+		return nt.Watcher.WatchForRootSyncSyncError(rootSyncID.Name, applier.ApplierErrorCode,
+			`skipped delete of Namespace, /shipping: namespace still in use: shipping`,
+			[]v1beta1.ResourceRef{})
+	})
+	nt.Must(tg.Wait())
+
+	// The explicitly declared namespace must have the preventDeletion annotation
+	// for successful adoption. Otherwise, root-sync fights over ownership of the
+	// implicit namespace.
+	nsObj = k8sobjects.NamespaceObject(ns, preventDeletion)
+	nt.Must(rootSync2GitRepo.Add("acme/ns.yaml", nsObj))
+	nt.Must(rootSync2GitRepo.CommitAndPush("set preventDeletion on explicit Namespace"))
+	nt.Must(nt.WatchForAllSyncs())
+	// Verify that the implicit namespace has been adopted by root-sync-2
+	nt.Must(nt.Validate(ns, "", &corev1.Namespace{},
+		testpredicates.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
+		testpredicates.IsManagedBy(nt.Scheme, declared.RootScope, rootSync2ID.Name)))
+
+	// Create a new object in root-sync to ensure it can continue syncing
+	sa := k8sobjects.ServiceAccountObject("shipping-sa", core.Namespace(ns))
+	nt.Must(rootSyncGitRepo.Add("acme/sa.yaml", sa))
+	nt.Must(rootSyncGitRepo.CommitAndPush("declare ServiceAccount"))
+	nt.Must(nt.WatchForAllSyncs())
+	// Verify that the implicit namespace is still managed by root-sync-2
+	nt.Must(nt.Validate(ns, "", &corev1.Namespace{},
+		testpredicates.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
+		testpredicates.IsManagedBy(nt.Scheme, declared.RootScope, rootSync2ID.Name)))
 }

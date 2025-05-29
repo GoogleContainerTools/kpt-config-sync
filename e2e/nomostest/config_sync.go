@@ -1497,9 +1497,13 @@ func SetupFakeSSHCreds(nt *NT, rsKind string, rsRef types.NamespacedName, auth c
 	nt.T.Logf("The %s/%s Secret doesn't exist with auth %q, so creating a fake one", rsRef.Namespace, secretName, auth)
 	msg := fmt.Sprintf("Secret %s not found: create one to allow client authentication", secretName)
 	if rsKind == kinds.RootSyncV1Beta1().Kind {
-		nt.WaitForRootSyncStalledError(rsRef.Name, "Validation", msg)
+		if err := nt.Watcher.WatchForRootSyncStalledError(rsRef.Name, "Validation", msg); err != nil {
+			return err
+		}
 	} else {
-		nt.WaitForRepoSyncStalledError(rsRef.Namespace, rsRef.Name, "Validation", msg)
+		if err := nt.Watcher.WatchForRepoSyncStalledError(rsRef.Namespace, rsRef.Name, "Validation", msg); err != nil {
+			return err
+		}
 	}
 	secret.Data = map[string][]byte{"ssh": {}}
 	if err = nt.KubeClient.Create(secret); err != nil {

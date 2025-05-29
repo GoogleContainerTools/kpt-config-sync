@@ -1018,6 +1018,64 @@ func RepoSyncHasSyncError(errCode, errMessage string, resources []v1beta1.Resour
 	}
 }
 
+// RootSyncHasStalledError returns an error if the RootSync does not have the
+// specified Stalled error reason and message.
+// TODO: update this with standard errCode checking once stalled always has code
+func RootSyncHasStalledError(reason, message string) Predicate {
+	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
+		rs, ok := o.(*v1beta1.RootSync)
+		if !ok {
+			return WrongTypeErr(o, &v1beta1.RootSync{})
+		}
+		stalledCondition := rootsync.GetCondition(rs.Status.Conditions, v1beta1.RootSyncStalled)
+		if stalledCondition == nil {
+			return fmt.Errorf("stalled condition not found")
+		}
+		if stalledCondition.Status != metav1.ConditionTrue {
+			return fmt.Errorf("expected status.conditions['Stalled'].status is True, got %s", stalledCondition.Status)
+		}
+		if stalledCondition.Reason != reason {
+			return fmt.Errorf("expected status.conditions['Stalled'].reason is %s, got %s", reason, stalledCondition.Reason)
+		}
+		if !strings.Contains(stalledCondition.Message, message) {
+			return fmt.Errorf("expected status.conditions['Stalled'].message to contain %s, got %s", message, stalledCondition.Message)
+		}
+		return nil
+	}
+}
+
+// RepoSyncHasStalledError returns an error if the RepoSync does not have the
+// specified Stalled error reason and message.
+// TODO: update this with standard errCode checking once stalled always has code
+func RepoSyncHasStalledError(reason, message string) Predicate {
+	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
+		rs, ok := o.(*v1beta1.RepoSync)
+		if !ok {
+			return WrongTypeErr(o, &v1beta1.RepoSync{})
+		}
+		stalledCondition := reposync.GetCondition(rs.Status.Conditions, v1beta1.RepoSyncStalled)
+		if stalledCondition == nil {
+			return fmt.Errorf("stalled condition not found")
+		}
+		if stalledCondition.Status != metav1.ConditionTrue {
+			return fmt.Errorf("expected status.conditions['Stalled'].status is True, got %s", stalledCondition.Status)
+		}
+		if stalledCondition.Reason != reason {
+			return fmt.Errorf("expected status.conditions['Stalled'].reason is %s, got %s", reason, stalledCondition.Reason)
+		}
+		if !strings.Contains(stalledCondition.Message, message) {
+			return fmt.Errorf("expected status.conditions['Stalled'].message to contain %s, got %s", message, stalledCondition.Message)
+		}
+		return nil
+	}
+}
+
 // HasFinalizer returns a predicate that tests that an Object has the specified finalizer.
 func HasFinalizer(name string) Predicate {
 	return func(o client.Object) error {

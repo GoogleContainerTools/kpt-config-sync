@@ -16,10 +16,8 @@ package nomostest
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/e2e/nomostest/retry"
@@ -28,11 +26,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
 	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configsync"
-	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
-	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
-	"kpt.dev/configsync/pkg/reposync"
-	"kpt.dev/configsync/pkg/rootsync"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 )
 
@@ -268,68 +262,4 @@ func (nt *NT) WatchForSync(
 		return fmt.Errorf("waiting for ResourceGroup: %w", err)
 	}
 	return nil
-}
-
-// WaitForRootSyncStalledError waits until the given Stalled error is present on the RootSync resource.
-func (nt *NT) WaitForRootSyncStalledError(rsName, reason, message string) {
-	nt.T.Helper()
-	Wait(nt.T, fmt.Sprintf("RootSync %s/%s stalled error", configsync.ControllerNamespace, rsName), nt.DefaultWaitTimeout,
-		func() error {
-			rs := &v1beta1.RootSync{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      rsName,
-					Namespace: configsync.ControllerNamespace,
-				},
-				TypeMeta: k8sobjects.ToTypeMeta(kinds.RootSyncV1Beta1()),
-			}
-			if err := nt.KubeClient.Get(rsName, configsync.ControllerNamespace, rs); err != nil {
-				return err
-			}
-			stalledCondition := rootsync.GetCondition(rs.Status.Conditions, v1beta1.RootSyncStalled)
-			if stalledCondition == nil {
-				return fmt.Errorf("stalled condition not found")
-			}
-			if stalledCondition.Status != metav1.ConditionTrue {
-				return fmt.Errorf("expected status.conditions['Stalled'].status is True, got %s", stalledCondition.Status)
-			}
-			if stalledCondition.Reason != reason {
-				return fmt.Errorf("expected status.conditions['Stalled'].reason is %s, got %s", reason, stalledCondition.Reason)
-			}
-			if !strings.Contains(stalledCondition.Message, message) {
-				return fmt.Errorf("expected status.conditions['Stalled'].message to contain %s, got %s", message, stalledCondition.Message)
-			}
-			return nil
-		})
-}
-
-// WaitForRepoSyncStalledError waits until the given Stalled error is present on the RepoSync resource.
-func (nt *NT) WaitForRepoSyncStalledError(rsNamespace, rsName, reason, message string) {
-	nt.T.Helper()
-	Wait(nt.T, fmt.Sprintf("RepoSync %s/%s stalled error", rsNamespace, rsName), nt.DefaultWaitTimeout,
-		func() error {
-			rs := &v1beta1.RepoSync{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      rsName,
-					Namespace: rsNamespace,
-				},
-				TypeMeta: k8sobjects.ToTypeMeta(kinds.RepoSyncV1Beta1()),
-			}
-			if err := nt.KubeClient.Get(rsName, rsNamespace, rs); err != nil {
-				return err
-			}
-			stalledCondition := reposync.GetCondition(rs.Status.Conditions, v1beta1.RepoSyncStalled)
-			if stalledCondition == nil {
-				return fmt.Errorf("stalled condition not found")
-			}
-			if stalledCondition.Status != metav1.ConditionTrue {
-				return fmt.Errorf("expected status.conditions['Stalled'].status is True, got %s", stalledCondition.Status)
-			}
-			if stalledCondition.Reason != reason {
-				return fmt.Errorf("expected status.conditions['Stalled'].reason is %s, got %s", reason, stalledCondition.Reason)
-			}
-			if !strings.Contains(stalledCondition.Message, message) {
-				return fmt.Errorf("expected status.conditions['Stalled'].message to contain %s, got %s", message, stalledCondition.Message)
-			}
-			return nil
-		})
 }

@@ -170,8 +170,8 @@ func TestReconcilerManagerTeardownInvalidRSyncs(t *testing.T) {
 	if err = nomostest.SetupFakeSSHCreds(nt, rootSync.Kind, nomostest.RootSyncNN(rootSync.Name), configsync.AuthToken, controllers.GitCredentialVolume); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.WaitForRootSyncStalledError(rootSync.Name,
-		"Validation", `git secretType was set as "token" but token key is not present in git-creds secret`)
+	nt.Must(nt.Watcher.WatchForRootSyncStalledError(rootSync.Name, "Validation",
+		`git secretType was set as "token" but token key is not present in git-creds secret`))
 
 	t.Log("Validate the RepoSync")
 	repoSync := k8sobjects.RepoSyncObjectV1Beta1(repoSyncID.Namespace, repoSyncID.Name)
@@ -200,8 +200,8 @@ func TestReconcilerManagerTeardownInvalidRSyncs(t *testing.T) {
 	if err = nomostest.SetupFakeSSHCreds(nt, repoSync.Kind, nomostest.RepoSyncNN(repoSync.Namespace, repoSync.Name), configsync.AuthToken, "ssh-key"); err != nil {
 		nt.T.Fatal(err)
 	}
-	nt.WaitForRepoSyncStalledError(repoSync.Namespace, repoSync.Name,
-		"Validation", `git secretType was set as "token" but token key is not present in ssh-key secret`)
+	nt.Must(nt.Watcher.WatchForRepoSyncStalledError(repoSync.Namespace, repoSync.Name,
+		"Validation", `git secretType was set as "token" but token key is not present in ssh-key secret`))
 
 	t.Log("Delete the RootSync and wait for it to be not found")
 	err = nomostest.DeleteObjectsAndWait(nt, rootSync)

@@ -445,3 +445,21 @@ func (w *Watcher) WatchForRepoSyncSourceError(ns, rsName, code, message string, 
 	opts = append(opts, WatchPredicates(predicates...))
 	return w.WatchObject(kinds.RepoSyncV1Beta1(), rsName, ns, opts...)
 }
+
+// WatchForRootSyncStalledError waits until the given error is present on the RootSync resource
+func (w *Watcher) WatchForRootSyncStalledError(rsName, reason, message string, opts ...WatchOption) error {
+	predicates := []testpredicates.Predicate{
+		testpredicates.RootSyncHasStalledError(reason, message),
+	}
+	opts = append(opts, WatchPredicates(predicates...))
+	return w.WatchObject(kinds.RootSyncV1Beta1(), rsName, configsync.ControllerNamespace, opts...)
+}
+
+// WatchForRepoSyncStalledError waits until the given error is present on the RepoSync resource
+func (w *Watcher) WatchForRepoSyncStalledError(ns, rsName, reason, message string, opts ...WatchOption) error {
+	predicates := []testpredicates.Predicate{
+		testpredicates.RepoSyncHasStalledError(reason, message),
+	}
+	opts = append(opts, WatchPredicates(predicates...))
+	return w.WatchObject(kinds.RepoSyncV1Beta1(), rsName, ns, opts...)
+}

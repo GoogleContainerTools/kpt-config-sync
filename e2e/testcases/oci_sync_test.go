@@ -216,10 +216,12 @@ func TestSwitchFromGitToOciDelegated(t *testing.T) {
 	rs := k8sobjects.RepoSyncObjectV1Beta1(repoSyncID.Namespace, repoSyncID.Name)
 	nt.T.Log("Manually patch RepoSync object to miss Git spec when sourceType is git")
 	nt.MustMergePatch(rs, `{"spec":{"sourceType":"git", "git":null, "oci": null}}`)
-	nt.WaitForRepoSyncStalledError(repoSyncID.Namespace, repoSyncID.Name, "Validation", `KNV1061: RepoSyncs must specify spec.git when spec.sourceType is "git"`)
+	nt.Must(nt.Watcher.WatchForRepoSyncStalledError(repoSyncID.Namespace, repoSyncID.Name, "Validation",
+		`KNV1061: RepoSyncs must specify spec.git when spec.sourceType is "git"`))
 	nt.T.Log("Manually patch RepoSync object to miss OCI spec when sourceType is oci")
 	nt.MustMergePatch(rs, `{"spec":{"sourceType":"oci"}}`)
-	nt.WaitForRepoSyncStalledError(repoSyncID.Namespace, repoSyncID.Name, "Validation", `KNV1061: RepoSyncs must specify spec.oci when spec.sourceType is "oci"`)
+	nt.Must(nt.Watcher.WatchForRepoSyncStalledError(repoSyncID.Namespace, repoSyncID.Name, "Validation",
+		`KNV1061: RepoSyncs must specify spec.oci when spec.sourceType is "oci"`))
 }
 
 // resourceQuotaHasHardPods validates if the RepoSync has the expected sourceType.

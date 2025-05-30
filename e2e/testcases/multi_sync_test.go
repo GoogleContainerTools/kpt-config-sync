@@ -766,7 +766,7 @@ func TestControllerValidationErrors(t *testing.T) {
 	t.Cleanup(func() {
 		nt.Must(nomostest.DeleteObjectsAndWait(nt, rootSync))
 	})
-	// Can't use WaitForRootSyncStalledError because it doesn't take other namespaces
+	// Can't use WatchForRootSyncStalledError because it doesn't take other namespaces
 	expectedCondition := &v1beta1.RootSyncCondition{
 		Type:    v1beta1.RootSyncStalled,
 		Status:  metav1.ConditionTrue,
@@ -788,8 +788,8 @@ func TestControllerValidationErrors(t *testing.T) {
 	t.Cleanup(func() {
 		nt.Must(nomostest.DeleteObjectsAndWait(nt, rsControllerNamespace))
 	})
-	nt.WaitForRepoSyncStalledError(rsControllerNamespace.Namespace, rsControllerNamespace.Name, "Validation",
-		"RepoSync objects are not allowed in the config-management-system namespace")
+	nt.Must(nt.Watcher.WatchForRepoSyncStalledError(rsControllerNamespace.Namespace, rsControllerNamespace.Name, "Validation",
+		`RepoSync objects are not allowed in the config-management-system namespace`))
 
 	nt.T.Logf("Validate an invalid config with a long RepoSync name")
 	longBytes := make([]byte, validation.DNS1123SubdomainMaxLength)
@@ -804,8 +804,8 @@ func TestControllerValidationErrors(t *testing.T) {
 	t.Cleanup(func() {
 		nt.Must(nomostest.DeleteObjectsAndWait(nt, rsTooLong))
 	})
-	nt.WaitForRepoSyncStalledError(rsTooLong.Namespace, rsTooLong.Name, "Validation",
-		`maximum combined length of RepoSync name and namespace is 45, but found 260`)
+	nt.Must(nt.Watcher.WatchForRepoSyncStalledError(rsTooLong.Namespace, rsTooLong.Name, "Validation",
+		`maximum combined length of RepoSync name and namespace is 45, but found 260`))
 
 	nt.T.Logf("Validate an invalid config with a long RepoSync Secret name")
 	rsInvalidSecretRef := k8sobjects.RepoSyncObjectV1Beta1(testNs, "repo-test")
@@ -821,9 +821,9 @@ func TestControllerValidationErrors(t *testing.T) {
 	t.Cleanup(func() {
 		nt.Must(nomostest.DeleteObjectsAndWait(nt, rsInvalidSecretRef))
 	})
-	nt.WaitForRepoSyncStalledError(rsInvalidSecretRef.Namespace, rsInvalidSecretRef.Name, "Validation",
+	nt.Must(nt.Watcher.WatchForRepoSyncStalledError(rsInvalidSecretRef.Namespace, rsInvalidSecretRef.Name, "Validation",
 		fmt.Sprintf(`The managed secret name "%s-%s" is invalid: must be no more than %d characters. To fix it, update '.spec.git.secretRef.name'`,
-			core.NsReconcilerName(rsInvalidSecretRef.Namespace, rsInvalidSecretRef.Name), veryLongName, validation.DNS1123SubdomainMaxLength))
+			core.NsReconcilerName(rsInvalidSecretRef.Namespace, rsInvalidSecretRef.Name), veryLongName, validation.DNS1123SubdomainMaxLength)))
 }
 
 func rootPodRole() *rbacv1.Role {

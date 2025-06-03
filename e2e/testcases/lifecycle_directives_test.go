@@ -338,7 +338,7 @@ func TestPreventDeletionSpecialNamespaces(t *testing.T) {
 // one RootSync can be adopted by another RootSync.
 func TestAdoptImplicitNamespace(t *testing.T) {
 	rootSyncID := nomostest.DefaultRootSyncID
-	rootSync2ID := core.RootSyncID("root-sync-2")
+	rootSync2ID := core.RootSyncID("sync-a")
 	nt := nomostest.New(t, nomostesting.Lifecycle,
 		ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured),
 		ntopts.SyncWithGitSource(rootSync2ID, ntopts.Unstructured))
@@ -346,7 +346,7 @@ func TestAdoptImplicitNamespace(t *testing.T) {
 	rootSync2GitRepo := nt.SyncSourceGitReadWriteRepository(rootSync2ID)
 
 	// The webhook must be disabled for adoption to be successful. If the webhook
-	// is enabled, root-sync-2 will be rejected from updating the implicit namespace.
+	// is enabled, sync-a will be rejected from updating the implicit namespace.
 	nomostest.StopWebhook(nt)
 	ns := "shipping"
 	nt.Must(nt.ValidateNotFound(ns, "", &corev1.Namespace{}))
@@ -359,7 +359,7 @@ func TestAdoptImplicitNamespace(t *testing.T) {
 		testpredicates.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
 		testpredicates.IsManagedBy(nt.Scheme, declared.RootScope, rootSyncID.Name)))
 
-	// This explicitly declares the Namespace in root-sync-2, however the RootSyncs
+	// This explicitly declares the Namespace in sync-a, however the RootSyncs
 	// fight over ownership because this removes the preventDeletion annotation
 	// from the Namespace.
 	nsObj := k8sobjects.NamespaceObject(ns)
@@ -368,7 +368,7 @@ func TestAdoptImplicitNamespace(t *testing.T) {
 	tg := taskgroup.New()
 	tg.Go(func() error {
 		return nt.Watcher.WatchForRootSyncSyncError(rootSyncID.Name, status.ManagementConflictErrorCode,
-			`The ":root" reconciler detected a management conflict with the ":root_root-sync-2" reconciler. Remove the object from one of the sources of truth so that the object is only managed by one reconciler.`,
+			`The ":root" reconciler detected a management conflict with the ":root_sync-a" reconciler. Remove the object from one of the sources of truth so that the object is only managed by one reconciler.`,
 			[]v1beta1.ResourceRef{
 				{
 					SourcePath: "acme/ns.yaml",
@@ -400,7 +400,7 @@ func TestAdoptImplicitNamespace(t *testing.T) {
 	nt.Must(rootSync2GitRepo.Add("acme/ns.yaml", nsObj))
 	nt.Must(rootSync2GitRepo.CommitAndPush("set preventDeletion on explicit Namespace"))
 	nt.Must(nt.WatchForAllSyncs())
-	// Verify that the implicit namespace has been adopted by root-sync-2
+	// Verify that the implicit namespace has been adopted by sync-a
 	nt.Must(nt.Validate(ns, "", &corev1.Namespace{},
 		testpredicates.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
 		testpredicates.IsManagedBy(nt.Scheme, declared.RootScope, rootSync2ID.Name)))
@@ -410,7 +410,7 @@ func TestAdoptImplicitNamespace(t *testing.T) {
 	nt.Must(rootSyncGitRepo.Add("acme/sa.yaml", sa))
 	nt.Must(rootSyncGitRepo.CommitAndPush("declare ServiceAccount"))
 	nt.Must(nt.WatchForAllSyncs())
-	// Verify that the implicit namespace is still managed by root-sync-2
+	// Verify that the implicit namespace is still managed by sync-a
 	nt.Must(nt.Validate(ns, "", &corev1.Namespace{},
 		testpredicates.HasAnnotation(common.LifecycleDeleteAnnotation, common.PreventDeletion),
 		testpredicates.IsManagedBy(nt.Scheme, declared.RootScope, rootSync2ID.Name)))

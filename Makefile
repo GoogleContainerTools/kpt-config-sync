@@ -43,7 +43,7 @@ GOLANG_IMAGE := google-go.pkg.dev/golang:$(GOLANG_IMAGE_VERSION)
 # Base image used for debian containers
 # When updating you can use this command:
 # gcloud container images list-tags gcr.io/gke-release/debian-base --filter="tags:bookworm*"
-DEBIAN_BASE_IMAGE := gcr.io/gke-release/debian-base:bookworm-v1.0.4-gke.8
+DEBIAN_BASE_IMAGE := gcr.io/gke-release/debian-base:bookworm-v1.0.4-gke.17
 # Base image used for gcloud install, primarily for test images.
 # We use -slim for a smaller base image where we can choose which components to install.
 # https://cloud.google.com/sdk/docs/downloads-docker#docker_image_options
@@ -86,7 +86,7 @@ HELM_STAGING_DIR := $(OUTPUT_DIR)/third_party/helm
 COSIGN_VERSION := v2.4.1
 COSIGN := $(BIN_DIR)/cosign
 
-GIT_SYNC_VERSION := v4.3.0-gke.18__linux_amd64
+GIT_SYNC_VERSION := v4.3.0-gke.19__linux_amd64
 GIT_SYNC_IMAGE_NAME := gcr.io/config-management-release/git-sync:$(GIT_SYNC_VERSION)
 
 OTELCONTRIBCOL_VERSION := v0.118.0-gke.9

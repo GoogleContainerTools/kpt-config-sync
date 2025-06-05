@@ -136,7 +136,7 @@ func (u *Updater) update(ctx context.Context, cache *cacheForCommit) status.Mult
 	}
 
 	// Update the resource watches (triggers for the Remediator).
-	if !cache.watchesUpdated {
+	if !cache.watchesUpdated || u.needToUpdateWatch() {
 		declaredGVKs, _ := u.Resources.DeclaredGVKs()
 		err := u.updateWatches(ctx, declaredGVKs, cache.source.commit)
 		if err != nil {

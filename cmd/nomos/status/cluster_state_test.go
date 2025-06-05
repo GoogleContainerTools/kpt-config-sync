@@ -70,195 +70,195 @@ var (
 	lastSyncTimestamp = metav1.Now()
 )
 
-func TestRepoState_PrintRows(t *testing.T) {
+func TestRepoStateOutput_PrintRows(t *testing.T) {
 	testCases := []struct {
 		name string
-		repo *RepoState
+		repo *RepoStateOutput
 		want string
 	}{
 		{
 			"optional git fields missing",
-			&RepoState{
-				scope:    "<root>",
-				syncName: "root-sync",
-				git: &v1beta1.Git{
+			&RepoStateOutput{
+				Scope:    "<root>",
+				SyncName: "root-sync",
+				Source: gitString(&v1beta1.Git{
 					Repo: "https://github.com/tester/sample/",
-				},
-				status:    "SYNCED",
-				commit:    "abc123",
-				resources: exampleResources("abc123"),
+				}),
+				Status:    "SYNCED",
+				Commit:    "abc123",
+				Resources: exampleResources("abc123"),
 			},
 			"  <root>:root-sync\thttps://github.com/tester/sample@master\t\n  SYNCED @ 0001-01-01 00:00:00 +0000 UTC\tabc123\t\n  Managed resources:\n  \tNAMESPACE\tNAME\tSTATUS\tSOURCEHASH\n  \tbookstore\tdeployment.apps/test\tCurrent\tabc123\n  \tbookstore\tservice/test\tFailed\tabc123\n        A detailed message explaining the current condition.\n  \tbookstore\tservice/test2\tConflict\tabc123\n        A detailed message explaining why it is in the status ownership overlap.\n",
 		},
 		{
 			"optional git subdirectory specified",
-			&RepoState{
-				scope:    "<root>",
-				syncName: "root-sync",
-				git: &v1beta1.Git{
+			&RepoStateOutput{
+				Scope:    "<root>",
+				SyncName: "root-sync",
+				Source: gitString(&v1beta1.Git{
 					Repo: "https://github.com/tester/sample/",
 					Dir:  "quickstart//multirepo//root/",
-				},
-				status:            "SYNCED",
-				lastSyncTimestamp: lastSyncTimestamp,
-				commit:            "abc123",
+				}),
+				Status:            "SYNCED",
+				LastSyncTimestamp: lastSyncTimestamp,
+				Commit:            "abc123",
 			},
 			fmt.Sprintf("  <root>:root-sync\thttps://github.com/tester/sample/quickstart/multirepo/root@master\t\n  SYNCED @ %v\tabc123\t\n", lastSyncTimestamp),
 		},
 		{
 			"optional git subdirectory is '/'",
-			&RepoState{
-				scope:    "<root>",
-				syncName: "root-sync",
-				git: &v1beta1.Git{
+			&RepoStateOutput{
+				Scope:    "<root>",
+				SyncName: "root-sync",
+				Source: gitString(&v1beta1.Git{
 					Repo: "https://github.com/tester/sample/",
 					Dir:  "/",
-				},
-				status:            "SYNCED",
-				lastSyncTimestamp: lastSyncTimestamp,
-				commit:            "abc123",
+				}),
+				Status:            "SYNCED",
+				LastSyncTimestamp: lastSyncTimestamp,
+				Commit:            "abc123",
 			},
 			fmt.Sprintf("  <root>:root-sync\thttps://github.com/tester/sample@master\t\n  SYNCED @ %v\tabc123\t\n", lastSyncTimestamp),
 		},
 		{
 			"optional git subdirectory is '.'",
-			&RepoState{
-				scope:    "<root>",
-				syncName: "root-sync",
-				git: &v1beta1.Git{
+			&RepoStateOutput{
+				Scope:    "<root>",
+				SyncName: "root-sync",
+				Source: gitString(&v1beta1.Git{
 					Repo: "https://github.com/tester/sample/",
 					Dir:  ".",
-				},
-				status:            "SYNCED",
-				lastSyncTimestamp: lastSyncTimestamp,
-				commit:            "abc123",
+				}),
+				Status:            "SYNCED",
+				LastSyncTimestamp: lastSyncTimestamp,
+				Commit:            "abc123",
 			},
 			fmt.Sprintf("  <root>:root-sync\thttps://github.com/tester/sample@master\t\n  SYNCED @ %v\tabc123\t\n", lastSyncTimestamp),
 		},
 		{
 			"optional git subdirectory starts with '/'",
-			&RepoState{
-				scope:    "<root>",
-				syncName: "root-sync",
-				git: &v1beta1.Git{
+			&RepoStateOutput{
+				Scope:    "<root>",
+				SyncName: "root-sync",
+				Source: gitString(&v1beta1.Git{
 					Repo: "https://github.com/tester/sample/",
 					Dir:  "/admin",
-				},
-				status:            "SYNCED",
-				lastSyncTimestamp: lastSyncTimestamp,
-				commit:            "abc123",
+				}),
+				Status:            "SYNCED",
+				LastSyncTimestamp: lastSyncTimestamp,
+				Commit:            "abc123",
 			},
 			fmt.Sprintf("  <root>:root-sync\thttps://github.com/tester/sample/admin@master\t\n  SYNCED @ %v\tabc123\t\n", lastSyncTimestamp),
 		},
 		{
 			"optional git branch specified",
-			&RepoState{
-				scope:    "bookstore",
-				syncName: "repo-sync",
-				git: &v1beta1.Git{
+			&RepoStateOutput{
+				Scope:    "bookstore",
+				SyncName: "repo-sync",
+				Source: gitString(&v1beta1.Git{
 					Repo:   "https://github.com/tester/sample",
 					Branch: "feature",
-				},
-				status:            "SYNCED",
-				lastSyncTimestamp: lastSyncTimestamp,
-				commit:            "abc123",
+				}),
+				Status:            "SYNCED",
+				LastSyncTimestamp: lastSyncTimestamp,
+				Commit:            "abc123",
 			},
 			fmt.Sprintf("  bookstore:repo-sync\thttps://github.com/tester/sample@feature\t\n  SYNCED @ %v\tabc123\t\n", lastSyncTimestamp),
 		},
 		{
 			"optional git revision specified",
-			&RepoState{
-				scope:    "bookstore",
-				syncName: "repo-sync",
-				git: &v1beta1.Git{
+			&RepoStateOutput{
+				Scope:    "bookstore",
+				SyncName: "repo-sync",
+				Source: gitString(&v1beta1.Git{
 					Repo:     "https://github.com/tester/sample",
 					Revision: "v1",
-				},
-				status:            "SYNCED",
-				lastSyncTimestamp: lastSyncTimestamp,
-				commit:            "abc123",
+				}),
+				Status:            "SYNCED",
+				LastSyncTimestamp: lastSyncTimestamp,
+				Commit:            "abc123",
 			},
 			fmt.Sprintf("  bookstore:repo-sync\thttps://github.com/tester/sample@v1\t\n  SYNCED @ %v\tabc123\t\n", lastSyncTimestamp),
 		},
 		{
 			"optional default git revision HEAD specified",
-			&RepoState{
-				scope:    "bookstore",
-				syncName: "repo-sync",
-				git: &v1beta1.Git{
+			&RepoStateOutput{
+				Scope:    "bookstore",
+				SyncName: "repo-sync",
+				Source: gitString(&v1beta1.Git{
 					Repo:     "https://github.com/tester/sample",
 					Revision: "HEAD",
-				},
-				status:            "SYNCED",
-				lastSyncTimestamp: lastSyncTimestamp,
-				commit:            "abc123",
+				}),
+				Status:            "SYNCED",
+				LastSyncTimestamp: lastSyncTimestamp,
+				Commit:            "abc123",
 			},
 			fmt.Sprintf("  bookstore:repo-sync\thttps://github.com/tester/sample@master\t\n  SYNCED @ %v\tabc123\t\n", lastSyncTimestamp),
 		},
 		{
 			"optional default git revision HEAD and branch specified",
-			&RepoState{
-				scope:    "bookstore",
-				syncName: "repo-sync",
-				git: &v1beta1.Git{
+			&RepoStateOutput{
+				Scope:    "bookstore",
+				SyncName: "repo-sync",
+				Source: gitString(&v1beta1.Git{
 					Repo:     "git@github.com:tester/sample",
 					Revision: "HEAD",
 					Branch:   "feature",
-				},
-				status:            "SYNCED",
-				lastSyncTimestamp: lastSyncTimestamp,
-				commit:            "abc123",
+				}),
+				Status:            "SYNCED",
+				LastSyncTimestamp: lastSyncTimestamp,
+				Commit:            "abc123",
 			},
 			fmt.Sprintf("  bookstore:repo-sync\tgit@github.com:tester/sample@feature\t\n  SYNCED @ %v\tabc123\t\n", lastSyncTimestamp),
 		},
 		{
 			"all optional git fields specified",
-			&RepoState{
-				scope:    "bookstore",
-				syncName: "repo-sync",
-				git: &v1beta1.Git{
+			&RepoStateOutput{
+				Scope:    "bookstore",
+				SyncName: "repo-sync",
+				Source: gitString(&v1beta1.Git{
 					Repo:     "git@github.com:tester/sample",
 					Dir:      "books",
 					Branch:   "feature",
 					Revision: "v1",
-				},
-				status:            "SYNCED",
-				lastSyncTimestamp: lastSyncTimestamp,
-				commit:            "abc123",
+				}),
+				Status:            "SYNCED",
+				LastSyncTimestamp: lastSyncTimestamp,
+				Commit:            "abc123",
 			},
 			fmt.Sprintf("  bookstore:repo-sync\tgit@github.com:tester/sample/books@v1\t\n  SYNCED @ %v\tabc123\t\n", lastSyncTimestamp),
 		},
 		{
 			"repo with errors",
-			&RepoState{
-				scope:    "bookstore",
-				syncName: "repo-sync",
-				git: &v1beta1.Git{
+			&RepoStateOutput{
+				Scope:    "bookstore",
+				SyncName: "repo-sync",
+				Source: gitString(&v1beta1.Git{
 					Repo:     "git@github.com:tester/sample",
 					Dir:      "books",
 					Revision: "v1",
-				},
-				status:       "ERROR",
-				commit:       "abc123",
-				errors:       []string{"error1", "error2"},
-				errorSummary: errorSummayWithTwoErrors,
+				}),
+				Status:       "ERROR",
+				Commit:       "abc123",
+				Errors:       []string{"error1", "error2"},
+				ErrorSummary: errorSummayWithTwoErrors,
 			},
 			"  bookstore:repo-sync\tgit@github.com:tester/sample/books@v1\t\n  ERROR\tabc123\t\n  TotalErrorCount: 2\n  Error:\terror1\t\n  Error:\terror2\t\n",
 		},
 		{
 			"repo with errors (truncated)",
-			&RepoState{
-				scope:    "bookstore",
-				syncName: "repo-sync",
-				git: &v1beta1.Git{
+			&RepoStateOutput{
+				Scope:    "bookstore",
+				SyncName: "repo-sync",
+				Source: gitString(&v1beta1.Git{
 					Repo:     "git@github.com:tester/sample",
 					Dir:      "books",
 					Revision: "v1",
-				},
-				status: "ERROR",
-				commit: "abc123",
-				errors: []string{"error1", "error2"},
-				errorSummary: &v1beta1.ErrorSummary{
+				}),
+				Status: "ERROR",
+				Commit: "abc123",
+				Errors: []string{"error1", "error2"},
+				ErrorSummary: &v1beta1.ErrorSummary{
 					TotalCount:                20,
 					Truncated:                 true,
 					ErrorCountAfterTruncation: 2,
@@ -268,81 +268,79 @@ func TestRepoState_PrintRows(t *testing.T) {
 		},
 		{
 			"unsynced repo",
-			&RepoState{
-				scope:    "bookstore",
-				syncName: "repo-sync",
-				git: &v1beta1.Git{
+			&RepoStateOutput{
+				Scope:    "bookstore",
+				SyncName: "repo-sync",
+				Source: gitString(&v1beta1.Git{
 					Repo:     "git@github.com:tester/sample",
 					Revision: "v1",
-				},
-				status: "PENDING",
+				}),
+				Status: "PENDING",
 			},
 			"  bookstore:repo-sync\tgit@github.com:tester/sample@v1\t\n  PENDING\t\t\n",
 		},
 		{
 			"OCI repo with source error",
-			&RepoState{
-				scope:      "bookstore",
-				syncName:   "repo-sync",
-				sourceType: configsync.OciSource,
-				oci: &v1beta1.Oci{
+			&RepoStateOutput{
+				Scope:    "bookstore",
+				SyncName: "repo-sync",
+				Source: ociString(&v1beta1.Oci{
 					Image: "us-docker.pkg.dev/test-project/test-ar-repo/sample",
 					Dir:   "test",
-				},
-				status:       "ERROR",
-				commit:       "abc123",
-				errors:       []string{"error1", "error2"},
-				errorSummary: errorSummayWithTwoErrors,
+				}),
+				Status:       "ERROR",
+				Commit:       "abc123",
+				Errors:       []string{"error1", "error2"},
+				ErrorSummary: errorSummayWithTwoErrors,
 			},
 			"  bookstore:repo-sync\tus-docker.pkg.dev/test-project/test-ar-repo/sample/test\t\n  ERROR\tabc123\t\n  TotalErrorCount: 2\n  Error:\terror1\t\n  Error:\terror2\t\n",
 		},
 		{
 			"Helm repo with source error",
-			&RepoState{
-				scope:        "bookstore",
-				syncName:     "repo-sync",
-				sourceType:   configsync.HelmSource,
-				helm:         helm,
-				status:       "ERROR",
-				commit:       "abc123",
-				errors:       []string{"error1", "error2"},
-				errorSummary: errorSummayWithTwoErrors,
+			&RepoStateOutput{
+				Scope:        "bookstore",
+				SyncName:     "repo-sync",
+				Source:       helmString(helm),
+				Status:       "ERROR",
+				Commit:       "abc123",
+				Errors:       []string{"error1", "error2"},
+				ErrorSummary: errorSummayWithTwoErrors,
 			},
 			"  bookstore:repo-sync\toci://us-central1-docker.pkg.dev/your-dev-project/sample/test:0.1.0\t\n  ERROR\tabc123\t\n  TotalErrorCount: 2\n  Error:\terror1\t\n  Error:\terror2\t\n",
 		},
 		{
 			"Git field is missing when sourceType is git",
-			&RepoState{
-				scope:        "bookstore",
-				syncName:     "repo-sync",
-				sourceType:   configsync.GitSource,
-				status:       "ERROR",
-				errors:       []string{"missing Git config"},
-				errorSummary: errorSummayWithOneError,
+			&RepoStateOutput{
+				Scope:        "bookstore",
+				SyncName:     "repo-sync",
+				Source:       gitString(nil),
+				Status:       "ERROR",
+				Errors:       []string{"missing Git config"},
+				ErrorSummary: errorSummayWithOneError,
 			},
 			"  bookstore:repo-sync\tN/A\t\n  ERROR\t\t\n  TotalErrorCount: 1\n  Error:\tmissing Git config\t\n",
 		},
 		{
 			"OCI field is missing when sourceType is oci",
-			&RepoState{
-				scope:        "bookstore",
-				syncName:     "repo-sync",
-				sourceType:   configsync.OciSource,
-				status:       "ERROR",
-				errors:       []string{"missing OCI config"},
-				errorSummary: errorSummayWithOneError,
+			&RepoStateOutput{
+				Scope:        "bookstore",
+				SyncName:     "repo-sync",
+				Source:       ociString(nil),
+				Status:       "ERROR",
+				Errors:       []string{"missing OCI config"},
+				ErrorSummary: errorSummayWithOneError,
 			},
 			"  bookstore:repo-sync\tN/A\t\n  ERROR\t\t\n  TotalErrorCount: 1\n  Error:\tmissing OCI config\t\n",
 		},
 		{
 			"Helm field is missing when sourceType is helm",
-			&RepoState{
-				scope:        "bookstore",
-				syncName:     "repo-sync",
-				sourceType:   configsync.HelmSource,
-				status:       "ERROR",
-				errors:       []string{"missing Helm config"},
-				errorSummary: errorSummayWithOneError,
+			&RepoStateOutput{
+				Scope:        "bookstore",
+				SyncName:     "repo-sync",
+				Source:       helmString(nil),
+				Status:       "ERROR",
+				Errors:       []string{"missing Helm config"},
+				ErrorSummary: errorSummayWithOneError,
 			},
 			"  bookstore:repo-sync\tN/A\t\n  ERROR\t\t\n  TotalErrorCount: 1\n  Error:\tmissing Helm config\t\n",
 		},
@@ -354,6 +352,155 @@ func TestRepoState_PrintRows(t *testing.T) {
 			got := buffer.String()
 			if got != tc.want {
 				t.Errorf("got:\n%s\nwant:\n%s", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestRepoState_ToRepoStateOutput(t *testing.T) {
+	testCases := []struct {
+		name string
+		repo *RepoState
+		want *RepoStateOutput
+	}{
+		{
+			name: "git repo with errors and resources",
+			repo: &RepoState{
+				scope:             "<root>",
+				syncName:          "root-sync",
+				sourceType:        configsync.GitSource,
+				git:               git,
+				status:            syncedMsg,
+				commit:            "abc123de",
+				lastSyncTimestamp: lastSyncTimestamp,
+				errors:            []string{"error1", "error2"},
+				errorSummary:      errorSummayWithTwoErrors,
+				resources:         exampleResources("abc123"),
+			},
+			want: &RepoStateOutput{
+				Scope:             "<root>",
+				SyncName:          "root-sync",
+				Source:            "git@github.com:tester/sample/admin@v1",
+				Status:            syncedMsg,
+				Commit:            "abc123de",
+				LastSyncTimestamp: lastSyncTimestamp,
+				Errors:            []string{"error1", "error2"},
+				ErrorSummary:      errorSummayWithTwoErrors,
+				Resources:         exampleResources("abc123"),
+			},
+		},
+		{
+			name: "oci repo with errors and resources ",
+			repo: &RepoState{
+				scope:             "<root>",
+				syncName:          "root-sync-oci",
+				sourceType:        configsync.OciSource,
+				oci:               oci,
+				status:            syncedMsg,
+				commit:            "sha256:abcdef",
+				errors:            []string{"oci fetch error"},
+				errorSummary:      errorSummayWithOneError,
+				lastSyncTimestamp: lastSyncTimestamp,
+				resources:         exampleResources("abc123"),
+			},
+			want: &RepoStateOutput{
+				Scope:             "<root>",
+				SyncName:          "root-sync-oci",
+				Source:            "us-docker.pkg.dev/test-project/test-ar-repo/sample/test",
+				Status:            syncedMsg,
+				Commit:            "sha256:abcdef",
+				LastSyncTimestamp: lastSyncTimestamp,
+				Errors:            []string{"oci fetch error"},
+				ErrorSummary:      errorSummayWithOneError,
+				Resources:         exampleResources("abc123"),
+			},
+		},
+		{
+			name: "helm repo with errors and resources",
+			repo: &RepoState{
+				scope:             "<root>",
+				syncName:          "root-sync-helm",
+				sourceType:        configsync.HelmSource,
+				helm:              helm,
+				status:            syncedMsg,
+				errors:            []string{"oci fetch error"},
+				errorSummary:      errorSummayWithOneError,
+				lastSyncTimestamp: lastSyncTimestamp,
+				resources:         exampleResources("abc123"),
+			},
+			want: &RepoStateOutput{
+				Scope:             "<root>",
+				SyncName:          "root-sync-helm",
+				Source:            "oci://us-central1-docker.pkg.dev/your-dev-project/sample/test:0.1.0",
+				Status:            syncedMsg,
+				LastSyncTimestamp: lastSyncTimestamp,
+				Errors:            []string{"oci fetch error"},
+				ErrorSummary:      errorSummayWithOneError,
+				Resources:         exampleResources("abc123"),
+			},
+		},
+
+		{
+			name: "oci repo with errors and resources",
+			repo: &RepoState{
+				scope:        "bookstore",
+				syncName:     "repo-sync-oci",
+				sourceType:   configsync.OciSource,
+				oci:          oci,
+				status:       util.ErrorMsg,
+				commit:       "sha256:123",
+				errors:       []string{"oci fetch error"},
+				errorSummary: errorSummayWithOneError,
+				resources:    exampleResources("sha256:123"),
+			},
+			want: &RepoStateOutput{
+				Scope:             "bookstore",
+				SyncName:          "repo-sync-oci",
+				Source:            "us-docker.pkg.dev/test-project/test-ar-repo/sample/test",
+				Status:            util.ErrorMsg,
+				Commit:            "sha256:123",
+				LastSyncTimestamp: metav1.Time{},
+				Errors:            []string{"oci fetch error"},
+				ErrorSummary:      errorSummayWithOneError,
+				Resources:         exampleResources("sha256:123"),
+			},
+		},
+		{
+			name: "git repo with truncated errors",
+			repo: &RepoState{
+				scope:      "<root>",
+				syncName:   "root-sync-errors",
+				sourceType: configsync.GitSource,
+				git:        git,
+				status:     util.ErrorMsg,
+				commit:     "abc123de",
+				errors:     []string{"error1", "error2"},
+				errorSummary: &v1beta1.ErrorSummary{
+					TotalCount:                10,
+					Truncated:                 true,
+					ErrorCountAfterTruncation: 2,
+				},
+			},
+			want: &RepoStateOutput{
+				Scope:    "<root>",
+				SyncName: "root-sync-errors",
+				Source:   "git@github.com:tester/sample/admin@v1",
+				Status:   util.ErrorMsg,
+				Commit:   "abc123de",
+				Errors:   []string{"error1", "error2"},
+				ErrorSummary: &v1beta1.ErrorSummary{
+					TotalCount:                10,
+					Truncated:                 true,
+					ErrorCountAfterTruncation: 2,
+				},
+			},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tc.repo.toRepoStateOutput()
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Error(diff)
 			}
 		})
 	}
@@ -2856,17 +3003,17 @@ func TestRepoState_RootRepoStatus(t *testing.T) {
 	}
 }
 
-func TestClusterState_PrintRows(t *testing.T) {
+func TestClusterStateOutput_PrintRows(t *testing.T) {
 	testCases := []struct {
 		name    string
-		cluster *ClusterState
+		cluster *ClusterStateOutput
 		want    string
 	}{
 		{
 			"cluster without config sync",
-			&ClusterState{
-				Ref:    "gke_sample-project_europe-west1-b_cluster-1",
-				status: "UNINSTALLED",
+			&ClusterStateOutput{
+				Name:   "gke_sample-project_europe-west1-b_cluster-1",
+				Status: "UNINSTALLED",
 			},
 			`
 gke_sample-project_europe-west1-b_cluster-1
@@ -2876,9 +3023,9 @@ gke_sample-project_europe-west1-b_cluster-1
 		},
 		{
 			"cluster without repos",
-			&ClusterState{
-				Ref:    "gke_sample-project_europe-west1-b_cluster-1",
-				status: "UNCONFIGURED",
+			&ClusterStateOutput{
+				Name:   "gke_sample-project_europe-west1-b_cluster-1",
+				Status: "UNCONFIGURED",
 				Error:  "Missing git-creds secret",
 			},
 			`
@@ -2889,7 +3036,163 @@ gke_sample-project_europe-west1-b_cluster-1
 		},
 		{
 			"cluster with Git repos",
-			&ClusterState{
+			&ClusterStateOutput{
+				Name: "gke_sample-project_europe-west1-b_cluster-2",
+				Repos: []*RepoStateOutput{
+					{
+						Scope:    "<root>",
+						SyncName: "root-sync",
+						Source: gitString(&v1beta1.Git{
+							Repo: "git@github.com:tester/sample",
+						}),
+						Status: "SYNCED",
+						Commit: "abc123",
+					},
+					{
+						Scope:    "bookstore",
+						SyncName: "repos-sync",
+						Source: gitString(&v1beta1.Git{
+							Repo:   "git@github.com:tester/sample",
+							Branch: "feature",
+						}),
+						Status: "SYNCED",
+						Commit: "abc123",
+					},
+				},
+			},
+			`
+gke_sample-project_europe-west1-b_cluster-2
+  --------------------
+  <root>:root-sync	git@github.com:tester/sample@master	
+  SYNCED @ 0001-01-01 00:00:00 +0000 UTC	abc123	
+  --------------------
+  bookstore:repos-sync	git@github.com:tester/sample@feature	
+  SYNCED @ 0001-01-01 00:00:00 +0000 UTC	abc123	
+`,
+		},
+		{
+			"cluster with Oci image",
+			&ClusterStateOutput{
+				Name: "gke_sample-project_europe-west1-b_cluster-2",
+				Repos: []*RepoStateOutput{
+					{
+						Scope:    "<root>",
+						SyncName: "root-sync",
+						Source: ociString(&v1beta1.Oci{
+							Image: "us-docker.pkg.dev/test-project/test-ar-repo/sample",
+						}),
+						Status: "SYNCED",
+						Commit: "abc123",
+					},
+					{
+						Scope:    "bookstore",
+						SyncName: "repos-sync",
+						Source: ociString(&v1beta1.Oci{
+							Image: "us-docker.pkg.dev/test-project/test-ar-repo/sample-repo",
+							Dir:   "test",
+						}),
+						Status: "SYNCED",
+						Commit: "abc123",
+					},
+				},
+			},
+			`
+gke_sample-project_europe-west1-b_cluster-2
+  --------------------
+  <root>:root-sync	us-docker.pkg.dev/test-project/test-ar-repo/sample	
+  SYNCED @ 0001-01-01 00:00:00 +0000 UTC	abc123	
+  --------------------
+  bookstore:repos-sync	us-docker.pkg.dev/test-project/test-ar-repo/sample-repo/test	
+  SYNCED @ 0001-01-01 00:00:00 +0000 UTC	abc123	
+`,
+		},
+		{
+			"cluster with Helm chart",
+			&ClusterStateOutput{
+				Name: "gke_sample-project_europe-west1-b_cluster-2",
+				Repos: []*RepoStateOutput{
+					{
+						Scope:    "<root>",
+						SyncName: "root-sync",
+						Source: helmString(&v1beta1.HelmBase{
+							Repo:  "oci://us-central1-docker.pkg.dev/your-dev-project/sample",
+							Chart: "test",
+						}),
+						Status: "SYNCED",
+						Commit: "abc123",
+					},
+					{
+						Scope:    "bookstore",
+						SyncName: "repos-sync",
+						Source: helmString(&v1beta1.HelmBase{
+							Repo:    "oci://us-central1-docker.pkg.dev/your-dev-project/sample",
+							Chart:   "test",
+							Version: "0.2.0",
+						}),
+						Status: "SYNCED",
+						Commit: "abc123",
+					},
+				},
+			},
+			`
+gke_sample-project_europe-west1-b_cluster-2
+  --------------------
+  <root>:root-sync	oci://us-central1-docker.pkg.dev/your-dev-project/sample/test:latest	
+  SYNCED @ 0001-01-01 00:00:00 +0000 UTC	abc123	
+  --------------------
+  bookstore:repos-sync	oci://us-central1-docker.pkg.dev/your-dev-project/sample/test:0.2.0	
+  SYNCED @ 0001-01-01 00:00:00 +0000 UTC	abc123	
+`,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var buffer bytes.Buffer
+			tc.cluster.printRows(&buffer)
+			got := buffer.String()
+			if got != tc.want {
+				t.Errorf("got:\n%s\nwant:\n%s", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestClusterState_ToClusterStateOutput(t *testing.T) {
+	testCases := []struct {
+		name       string
+		cluster    *ClusterState
+		syncFilter string
+		want       *ClusterStateOutput
+	}{
+		{
+			name: "cluster without config sync",
+			cluster: &ClusterState{
+				Ref:    "gke_sample-project_europe-west1-b_cluster-1",
+				status: util.NotInstalledMsg,
+			},
+			want: &ClusterStateOutput{
+				Name:   "gke_sample-project_europe-west1-b_cluster-1",
+				Status: util.NotInstalledMsg,
+				Repos:  []*RepoStateOutput{},
+			},
+		},
+		{
+			name: "cluster without repos",
+			cluster: &ClusterState{
+				Ref:    "gke_sample-project_europe-west1-b_cluster-1",
+				status: util.NotConfiguredMsg,
+				Error:  "Missing git-creds secret",
+			},
+			want: &ClusterStateOutput{
+				Name:   "gke_sample-project_europe-west1-b_cluster-1",
+				Status: util.NotConfiguredMsg,
+				Error:  "Missing git-creds secret",
+				Repos:  []*RepoStateOutput{},
+			},
+		},
+		{
+			name: "cluster with Git repos",
+			cluster: &ClusterState{
 				Ref: "gke_sample-project_europe-west1-b_cluster-2",
 				repos: []*RepoState{
 					{
@@ -2915,19 +3218,17 @@ gke_sample-project_europe-west1-b_cluster-1
 					},
 				},
 			},
-			`
-gke_sample-project_europe-west1-b_cluster-2
-  --------------------
-  <root>:root-sync	git@github.com:tester/sample@master	
-  SYNCED @ 0001-01-01 00:00:00 +0000 UTC	abc123	
-  --------------------
-  bookstore:repos-sync	git@github.com:tester/sample@feature	
-  SYNCED @ 0001-01-01 00:00:00 +0000 UTC	abc123	
-`,
+			want: &ClusterStateOutput{
+				Name: "gke_sample-project_europe-west1-b_cluster-2",
+				Repos: []*RepoStateOutput{
+					{Scope: "<root>", SyncName: "root-sync", Source: "git@github.com:tester/sample@master", Status: "SYNCED", Commit: "abc123"},
+					{Scope: "bookstore", SyncName: "repos-sync", Source: "git@github.com:tester/sample@feature", Status: "SYNCED", Commit: "abc123"},
+				},
+			},
 		},
 		{
-			"cluster with Oci image",
-			&ClusterState{
+			name: "cluster with OCI image",
+			cluster: &ClusterState{
 				Ref: "gke_sample-project_europe-west1-b_cluster-2",
 				repos: []*RepoState{
 					{
@@ -2953,19 +3254,17 @@ gke_sample-project_europe-west1-b_cluster-2
 					},
 				},
 			},
-			`
-gke_sample-project_europe-west1-b_cluster-2
-  --------------------
-  <root>:root-sync	us-docker.pkg.dev/test-project/test-ar-repo/sample	
-  SYNCED @ 0001-01-01 00:00:00 +0000 UTC	abc123	
-  --------------------
-  bookstore:repos-sync	us-docker.pkg.dev/test-project/test-ar-repo/sample-repo/test	
-  SYNCED @ 0001-01-01 00:00:00 +0000 UTC	abc123	
-`,
+			want: &ClusterStateOutput{
+				Name: "gke_sample-project_europe-west1-b_cluster-2",
+				Repos: []*RepoStateOutput{
+					{Scope: "<root>", SyncName: "root-sync", Source: "us-docker.pkg.dev/test-project/test-ar-repo/sample", Status: "SYNCED", Commit: "abc123"},
+					{Scope: "bookstore", SyncName: "repos-sync", Source: "us-docker.pkg.dev/test-project/test-ar-repo/sample-repo/test", Status: "SYNCED", Commit: "abc123"},
+				},
+			},
 		},
 		{
-			"cluster with Helm chart",
-			&ClusterState{
+			name: "cluster with Helm chart",
+			cluster: &ClusterState{
 				Ref: "gke_sample-project_europe-west1-b_cluster-2",
 				repos: []*RepoState{
 					{
@@ -2993,71 +3292,83 @@ gke_sample-project_europe-west1-b_cluster-2
 					},
 				},
 			},
-			`
-gke_sample-project_europe-west1-b_cluster-2
-  --------------------
-  <root>:root-sync	oci://us-central1-docker.pkg.dev/your-dev-project/sample/test:latest	
-  SYNCED @ 0001-01-01 00:00:00 +0000 UTC	abc123	
-  --------------------
-  bookstore:repos-sync	oci://us-central1-docker.pkg.dev/your-dev-project/sample/test:0.2.0	
-  SYNCED @ 0001-01-01 00:00:00 +0000 UTC	abc123	
-`,
+			want: &ClusterStateOutput{
+				Name: "gke_sample-project_europe-west1-b_cluster-2",
+				Repos: []*RepoStateOutput{
+					{Scope: "<root>", SyncName: "root-sync", Source: "oci://us-central1-docker.pkg.dev/your-dev-project/sample/test:latest", Status: "SYNCED", Commit: "abc123"},
+					{Scope: "bookstore", SyncName: "repos-sync", Source: "oci://us-central1-docker.pkg.dev/your-dev-project/sample/test:0.2.0", Status: "SYNCED", Commit: "abc123"},
+				},
+			},
+		},
+		{
+			name: "cluster with multiple repos, with syncName filter",
+			cluster: &ClusterState{
+				Ref: "test-cluster-filtered",
+				repos: []*RepoState{
+					{syncName: "root-sync-1", git: git, sourceType: configsync.GitSource},
+					{syncName: "repo-sync-oci", oci: oci, sourceType: configsync.OciSource},
+				},
+			},
+			syncFilter: "repo-sync-oci",
+			want: &ClusterStateOutput{
+				Name: "test-cluster-filtered",
+				Repos: []*RepoStateOutput{
+					{SyncName: "repo-sync-oci", Source: "us-docker.pkg.dev/test-project/test-ar-repo/sample/test"},
+				},
+			},
 		},
 	}
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			var buffer bytes.Buffer
-			tc.cluster.printRows(&buffer)
-			got := buffer.String()
-			if got != tc.want {
-				t.Errorf("got:\n%s\nwant:\n%s", got, tc.want)
+			syncName = tc.syncFilter
+			got := tc.cluster.toClusterStateOutput()
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("toClusterStateOutput() returned diff (-want +got):\n%s", diff)
 			}
 		})
 	}
 }
 
-func TestClusterState_PrintRowsWithNameFilter(t *testing.T) {
+func TestClusterStateOutput_PrintRowsWithNameFilter(t *testing.T) {
 	testCases := []struct {
 		name    string
-		cluster *ClusterState
+		cluster *ClusterStateOutput
 		want    string
 	}{
 		{
 			"cluster with multiple root sync",
-			&ClusterState{
-				Ref: "gke_sample-project_europe-west1-b_cluster-2",
-				repos: []*RepoState{
+			&ClusterStateOutput{
+				Name: "gke_sample-project_europe-west1-b_cluster-2",
+				Repos: []*RepoStateOutput{
 					{
-						scope:      "<root>",
-						syncName:   "root-sync",
-						sourceType: configsync.GitSource,
-						git: &v1beta1.Git{
+						Scope:    "<root>",
+						SyncName: "root-sync",
+						Source: gitString(&v1beta1.Git{
 							Repo: "git@github.com:tester/sample",
-						},
-						status: "SYNCED",
-						commit: "abc123",
+						}),
+						Status: "SYNCED",
+						Commit: "abc123",
 					},
 					{
-						scope:      "<root>",
-						syncName:   "root-sync-2",
-						sourceType: configsync.GitSource,
-						git: &v1beta1.Git{
+						Scope:    "<root>",
+						SyncName: "root-sync-2",
+						Source: gitString(&v1beta1.Git{
 							Repo:   "git@github.com:tester/sample",
 							Branch: "feature",
-						},
-						status: "SYNCED",
-						commit: "abc123",
+						}),
+						Status: "SYNCED",
+						Commit: "abc123",
 					},
 					{
-						scope:      "<root>",
-						syncName:   "root-sync-3",
-						sourceType: configsync.GitSource,
-						git: &v1beta1.Git{
+						Scope:    "<root>",
+						SyncName: "root-sync-3",
+						Source: gitString(&v1beta1.Git{
 							Repo:   "git@github.com:tester/sample",
 							Branch: "dev",
-						},
-						status: "SYNCED",
-						commit: "abc123",
+						}),
+						Status: "SYNCED",
+						Commit: "abc123",
 					},
 				},
 			},
@@ -3072,7 +3383,7 @@ gke_sample-project_europe-west1-b_cluster-2
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			var buffer bytes.Buffer
-			name = "root-sync-2"
+			syncName = "root-sync-2"
 			tc.cluster.printRows(&buffer)
 			got := buffer.String()
 			if got != tc.want {

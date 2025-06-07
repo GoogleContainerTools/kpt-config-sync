@@ -17,6 +17,7 @@ package controllers
 import (
 	"fmt"
 	"os"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -128,7 +129,8 @@ func reconcilerEnvs(opts reconcilerOptions) []corev1.EnvVar {
 		syncDir = opts.ociConfig.Dir
 	case configsync.HelmSource:
 		syncRepo = opts.helmConfig.Repo
-		syncDir = opts.helmConfig.Chart
+		syncDir = path.Base(opts.helmConfig.Chart)
+
 		if opts.helmConfig.Version != "" {
 			syncRevision = opts.helmConfig.Version
 		} else {

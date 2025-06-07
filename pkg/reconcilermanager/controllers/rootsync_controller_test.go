@@ -3937,7 +3937,6 @@ func TestPopulateRootContainerEnvs(t *testing.T) {
 			filesystem.SourceFormatKey:                "",
 			reconcilermanager.NamespaceStrategy:       string(configsync.NamespaceStrategyImplicit),
 			reconcilermanager.StatusMode:              "enabled",
-			reconcilermanager.SourceBranchKey:         "master",
 			reconcilermanager.SourceRevKey:            "HEAD",
 			reconcilermanager.APIServerTimeout:        restconfig.DefaultTimeout.String(),
 			reconcilermanager.ReconcileTimeout:        "5m0s",
@@ -3950,6 +3949,15 @@ func TestPopulateRootContainerEnvs(t *testing.T) {
 			gitSyncRef:        "master",
 			GitSyncDepth:      "1",
 			gitSyncPeriod:     "15s",
+		},
+		reconcilermanager.HelmSync: { // Basic check for HelmSync presence and key vars
+			reconcilermanager.HelmSyncWait:         fmt.Sprintf("%f", configsync.DefaultHelmSyncVersionPollingPeriod.Seconds()),
+			reconcilermanager.HelmIncludeCRDs:      "false",
+			reconcilermanager.HelmValuesYAML:       "",
+			reconcilermanager.HelmAuthType:         string(configsync.AuthNone), // default from rootSyncWithHelm
+			reconcilermanager.HelmDeployNamespace:  "",
+			reconcilermanager.HelmReleaseName:      "",
+			reconcilermanager.HelmReleaseNamespace: "",
 		},
 	}
 
@@ -3992,7 +4000,9 @@ func TestPopulateRootContainerEnvs(t *testing.T) {
 			rootSync: rootSyncWithGit(rootsyncName,
 				rootsyncRenderingRequired(false),
 			),
-			expected: createEnv(map[string]map[string]string{}),
+			expected: createEnv(map[string]map[string]string{
+				reconcilermanager.Reconciler: {reconcilermanager.SourceBranchKey: "master"},
+			}),
 		},
 		{
 			name: "override uses override value",
@@ -4001,7 +4011,7 @@ func TestPopulateRootContainerEnvs(t *testing.T) {
 				rootsyncRenderingRequired(false),
 			),
 			expected: createEnv(map[string]map[string]string{
-				reconcilermanager.Reconciler: {reconcilermanager.APIServerTimeout: "40s"},
+				reconcilermanager.Reconciler: {reconcilermanager.APIServerTimeout: "40s", reconcilermanager.SourceBranchKey: "master"},
 			}),
 		},
 		{
@@ -4010,7 +4020,7 @@ func TestPopulateRootContainerEnvs(t *testing.T) {
 				rootsyncRenderingRequired(true),
 			),
 			expected: createEnv(map[string]map[string]string{
-				reconcilermanager.Reconciler: {reconcilermanager.RenderingEnabled: "true"},
+				reconcilermanager.Reconciler: {reconcilermanager.RenderingEnabled: "true", reconcilermanager.SourceBranchKey: "master"},
 			}),
 		},
 		{
@@ -4020,7 +4030,7 @@ func TestPopulateRootContainerEnvs(t *testing.T) {
 				rootsyncDynamicNSSelectorEnabled(true),
 			),
 			expected: createEnv(map[string]map[string]string{
-				reconcilermanager.Reconciler: {reconcilermanager.DynamicNSSelectorEnabled: "true"},
+				reconcilermanager.Reconciler: {reconcilermanager.DynamicNSSelectorEnabled: "true", reconcilermanager.SourceBranchKey: "master"},
 			}),
 		},
 		{
@@ -4029,6 +4039,103 @@ func TestPopulateRootContainerEnvs(t *testing.T) {
 				rootsyncSecretType("invalid-secret-type"),
 			),
 			expectedErr: fmt.Errorf("Unrecognized secret type \"invalid-secret-type\""),
+		},
+		{
+			name: "helm chart with repo prefix",
+			rootSync: rootSyncWithHelm(rootsyncName,
+				func(rs *v1beta1.RootSync) {
+					rs.Spec.Helm.Chart = "my-repo/my-chart"
+					rs.Spec.Helm.Version = "1.2.3"
+					rs.Spec.Helm.ReleaseName = "my-release"
+					rs.Spec.Helm.Namespace = "helm-namespace"
+					rs.Spec.Helm.Auth = configsync.AuthNone
+				},
+				rootsyncRenderingRequired(false),
+			),
+			expected: createEnv(map[string]map[string]string{
+				reconcilermanager.Reconciler: {
+					reconcilermanager.SourceTypeKey: string(configsync.HelmSource),
+					reconcilermanager.SyncDirKey:    "my-chart",
+					reconcilermanager.SourceRepoKey: helmRepo,
+					reconcilermanager.SourceRevKey:  "1.2.3",
+				},
+				reconcilermanager.HydrationController: {
+					reconcilermanager.SourceTypeKey: string(configsync.HelmSource),
+					reconcilermanager.SyncDirKey:    ".", // Default for Helm hydration
+				},
+				reconcilermanager.GitSync: nil,
+				reconcilermanager.HelmSync: {
+					reconcilermanager.HelmRepo:             helmRepo,
+					reconcilermanager.HelmChart:            "my-repo/my-chart",
+					reconcilermanager.HelmChartVersion:     "1.2.3",
+					reconcilermanager.HelmReleaseName:      "my-release",
+					reconcilermanager.HelmReleaseNamespace: "helm-namespace",
+					reconcilermanager.HelmDeployNamespace:  "",
+				},
+			}),
+		},
+		{
+			name: "helm chart with multi-part repo prefix",
+			rootSync: rootSyncWithHelm(rootsyncName,
+				func(rs *v1beta1.RootSync) {
+					rs.Spec.Helm.Chart = "test/my-repo/my-chart"
+					rs.Spec.Helm.Version = "1.2.3"
+					rs.Spec.Helm.ReleaseName = "my-release"
+					rs.Spec.Helm.Namespace = "helm-namespace"
+					rs.Spec.Helm.Auth = configsync.AuthNone
+				},
+				rootsyncRenderingRequired(false),
+			),
+			expected: createEnv(map[string]map[string]string{
+				reconcilermanager.Reconciler: {
+					reconcilermanager.SourceTypeKey: string(configsync.HelmSource),
+					reconcilermanager.SyncDirKey:    "my-chart",
+					reconcilermanager.SourceRepoKey: helmRepo,
+					reconcilermanager.SourceRevKey:  "1.2.3",
+				},
+				reconcilermanager.HydrationController: {
+					reconcilermanager.SourceTypeKey: string(configsync.HelmSource),
+					reconcilermanager.SyncDirKey:    ".", // Default for Helm hydration
+				},
+				reconcilermanager.GitSync: nil,
+				reconcilermanager.HelmSync: {
+					reconcilermanager.HelmRepo:             helmRepo,
+					reconcilermanager.HelmChart:            "test/my-repo/my-chart",
+					reconcilermanager.HelmChartVersion:     "1.2.3",
+					reconcilermanager.HelmReleaseName:      "my-release",
+					reconcilermanager.HelmReleaseNamespace: "helm-namespace",
+					reconcilermanager.HelmDeployNamespace:  "",
+				},
+			}),
+		},
+		{
+			name: "helm chart without repo prefix",
+			rootSync: rootSyncWithHelm(rootsyncName,
+				func(rs *v1beta1.RootSync) {
+					rs.Spec.Helm.Chart = "my-chart-no-prefix"
+					rs.Spec.Helm.Version = "4.5.6"
+					rs.Spec.Helm.Auth = configsync.AuthNone
+				},
+				rootsyncRenderingRequired(false),
+			),
+			expected: createEnv(map[string]map[string]string{
+				reconcilermanager.Reconciler: {
+					reconcilermanager.SourceTypeKey: string(configsync.HelmSource),
+					reconcilermanager.SyncDirKey:    "my-chart-no-prefix",
+					reconcilermanager.SourceRepoKey: helmRepo,
+					reconcilermanager.SourceRevKey:  "4.5.6",
+				},
+				reconcilermanager.HydrationController: {
+					reconcilermanager.SourceTypeKey: string(configsync.HelmSource),
+					reconcilermanager.SyncDirKey:    ".",
+				},
+				reconcilermanager.GitSync: nil,
+				reconcilermanager.HelmSync: {
+					reconcilermanager.HelmRepo:         helmRepo,
+					reconcilermanager.HelmChart:        "my-chart-no-prefix",
+					reconcilermanager.HelmChartVersion: "4.5.6",
+				},
+			}),
 		},
 	}
 

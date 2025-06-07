@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -346,6 +347,44 @@ func TestHelmDefaultNamespace(t *testing.T) {
 
 	nt.Must(nt.Validate("deploy-default", "default", &appsv1.Deployment{}))
 	nt.Must(nt.Validate("deploy-ns", "ns", &appsv1.Deployment{}))
+}
+
+// TestHelmChartNameHasRepoName verifies the Config Sync behavior for helm charts when helm.spec.chart is of the form <repo-name>/<chart-name>.
+// This test will work only with following pre-requisite:
+// Google service account `e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for accessing images in Artifact Registry.
+func TestHelmChartNameHasRepoName(t *testing.T) {
+	rootSyncID := nomostest.DefaultRootSyncID
+	nt := nomostest.New(t,
+		nomostesting.SyncSource,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
+		ntopts.RequireHelmProvider,
+	)
+
+	newVersion := "1.0.0"
+	chart, err := nt.BuildAndPushHelmPackage(rootSyncID.ObjectKey,
+		registryproviders.HelmSourceChart(privateSimpleHelmChart),
+		registryproviders.HelmChartVersion(newVersion))
+	if err != nil {
+		nt.T.Fatalf("failed to push helm chart: %v", err)
+	}
+
+	rs := nt.RootSyncObjectHelm(configsync.RootSyncName, chart.HelmChartID)
+	rs.Spec.Helm.Version = ""
+	rs.Spec.Helm.DeployNamespace = "simple"
+
+	repoSuffix := path.Base(rs.Spec.Helm.Repo)
+	rs.Spec.Helm.Chart = fmt.Sprintf("%s/%s", repoSuffix, rs.Spec.Helm.Chart)
+	rs.Spec.Helm.Repo = strings.TrimSuffix(rs.Spec.Helm.Repo, "/"+repoSuffix)
+
+	nt.T.Log("Update RootSync to sync from a helm chart")
+	nt.Must(nt.KubeClient.Apply(rs))
+
+	nt.T.Logf("Wait for RootSync to sync from helm chart: %s", chart.HelmChartID)
+	nt.Must(nt.WatchForAllSyncs())
+
+	nt.T.Log("Validate Helm chart Deployments exist")
+	nt.Must(nt.Validate("deploy-default", "simple", &appsv1.Deployment{}))
+	nt.Must(nt.Validate("deploy-ns", "simple", &appsv1.Deployment{}))
 }
 
 // TestHelmLatestVersion verifies the Config Sync behavior for helm charts when helm.spec.version is not specified. The helm-sync

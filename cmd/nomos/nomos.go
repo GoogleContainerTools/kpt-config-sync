@@ -20,6 +20,8 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	// kubectl auth provider plugins - needed for oidc plugin
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/cmd/nomos/bugreport"
 	"kpt.dev/configsync/cmd/nomos/hydrate"

@@ -23,7 +23,6 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp" // register gcp auth provider plugin
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/textlogger"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"

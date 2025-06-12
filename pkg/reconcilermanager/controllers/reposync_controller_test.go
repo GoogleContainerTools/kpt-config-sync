@@ -3775,6 +3775,9 @@ func TestRepoSyncWithOCI(t *testing.T) {
 }
 
 func TestRepoSyncSpecValidation(t *testing.T) {
+	// Mock out parseDeployment for testing.
+	parseDeployment = parsedDeployment
+
 	rs := k8sobjects.RepoSyncObjectV1Beta1(reposyncNs, reposyncName)
 	reqNamespacedName := namespacedName(rs.Name, rs.Namespace)
 	fakeClient, _, testReconciler := setupNSReconciler(t, rs)
@@ -3912,6 +3915,24 @@ func TestRepoSyncSpecValidation(t *testing.T) {
 	}
 	wantRs.Spec = rs.Spec
 	reposync.SetStalled(wantRs, "Validation", validate.InvalidHelmAuthType(configsync.RepoSyncKind))
+	validateRepoSyncStatus(t, wantRs, fakeClient)
+
+	// verify invalid Helm chart name
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the repo sync: %v", err)
+	}
+	rs.Spec.SourceType = configsync.HelmSource
+	rs.Spec.Git = nil
+	rs.Spec.Oci = nil
+	rs.Spec.Helm = &v1beta1.HelmRepoSync{HelmBase: v1beta1.HelmBase{Repo: helmRepo, Chart: "test/" + helmChart, Auth: configsync.AuthNone}}
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
+		t.Fatalf("failed to update the repo sync request, got error: %v", err)
+	}
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	wantRs.Spec = rs.Spec
+	reposync.SetStalled(wantRs, "Validation", validate.IllegalHelmChartName(configsync.RepoSyncKind))
 	validateRepoSyncStatus(t, wantRs, fakeClient)
 
 	// verify valid OCI spec

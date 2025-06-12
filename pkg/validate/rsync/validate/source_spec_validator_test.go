@@ -89,7 +89,7 @@ func repoSyncWithGit(opts ...func(*v1beta1.RepoSync)) *v1beta1.RepoSync {
 	rs := k8sobjects.RepoSyncObjectV1Beta1("test-ns", configsync.RepoSyncName)
 	rs.Spec.SourceType = configsync.GitSource
 	rs.Spec.Git = &v1beta1.Git{
-		Repo: "fake repo",
+		Repo: "fake-repo",
 		Auth: configsync.AuthNone,
 	}
 	for _, opt := range opts {
@@ -102,7 +102,7 @@ func repoSyncWithOci(opts ...func(*v1beta1.RepoSync)) *v1beta1.RepoSync {
 	rs := k8sobjects.RepoSyncObjectV1Beta1("test-ns", configsync.RepoSyncName)
 	rs.Spec.SourceType = configsync.OciSource
 	rs.Spec.Oci = &v1beta1.Oci{
-		Image: "fake image",
+		Image: "fake-image",
 		Auth:  configsync.AuthNone,
 	}
 	for _, opt := range opts {
@@ -115,8 +115,8 @@ func repoSyncWithHelm(opts ...func(*v1beta1.RepoSync)) *v1beta1.RepoSync {
 	rs := k8sobjects.RepoSyncObjectV1Beta1("test-ns", configsync.RepoSyncName)
 	rs.Spec.SourceType = configsync.HelmSource
 	rs.Spec.Helm = &v1beta1.HelmRepoSync{HelmBase: v1beta1.HelmBase{
-		Repo:  "fake repo",
-		Chart: "fake chart",
+		Repo:  "fake-repo",
+		Chart: "fake-chart",
 		Auth:  configsync.AuthNone,
 	}}
 	for _, opt := range opts {
@@ -155,7 +155,7 @@ func rootSyncWithGit(opts ...func(*v1beta1.RootSync)) *v1beta1.RootSync {
 	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	rs.Spec.SourceType = configsync.GitSource
 	rs.Spec.Git = &v1beta1.Git{
-		Repo: "fake repo",
+		Repo: "fake-repo",
 		Auth: configsync.AuthNone,
 	}
 	for _, opt := range opts {
@@ -168,8 +168,8 @@ func rootSyncWithHelm(opts ...func(*v1beta1.RootSync)) *v1beta1.RootSync {
 	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	rs.Spec.SourceType = configsync.HelmSource
 	rs.Spec.Helm = &v1beta1.HelmRootSync{HelmBase: v1beta1.HelmBase{
-		Repo:  "fake repo",
-		Chart: "fake chart",
+		Repo:  "fake-repo",
+		Chart: "fake-chart",
 		Auth:  configsync.AuthNone,
 	}}
 	for _, opt := range opts {
@@ -301,6 +301,11 @@ func TestValidateRepoSyncSpec(t *testing.T) {
 			wantErr: MissingHelmChart(configsync.RepoSyncKind),
 		},
 		{
+			name:    "illegal helm chart name with slash",
+			obj:     repoSyncWithHelm(func(rs *v1beta1.RepoSync) { rs.Spec.Helm.Chart = "foo/bar" }),
+			wantErr: IllegalHelmChartName(configsync.RepoSyncKind),
+		},
+		{
 			name:    "invalid auth type",
 			obj:     repoSyncWithHelm(helmAuth("invalid auth")),
 			wantErr: InvalidHelmAuthType(configsync.RepoSyncKind),
@@ -417,6 +422,11 @@ func TestValidateRootSyncSpec(t *testing.T) {
 				sync.Spec.Helm.DeployNamespace = "test-ns"
 			}),
 			wantErr: HelmNSAndDeployNS(configsync.RootSyncKind),
+		},
+		{
+			name:    "invalid helm chart name with slash",
+			obj:     rootSyncWithHelm(func(rs *v1beta1.RootSync) { rs.Spec.Helm.Chart = "foo/bar" }),
+			wantErr: IllegalHelmChartName(configsync.RootSyncKind),
 		},
 		{
 			name: "valid spec.override.roleRefs Role",

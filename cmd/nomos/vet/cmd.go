@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package hydrate
+package vet
 
 import (
 	"github.com/spf13/cobra"
@@ -20,42 +20,47 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 )
 
-// globalFlags holds the hydrate command flags
-var globalFlags = NewHydrateFlags()
+// globalFlags holds the vet command flags
+var globalFlags = NewVetFlags()
 
-func init() {
-	// Initialize flags for the hydrate command
-	// This separation keeps flag definitions isolated from command execution logic
-	globalFlags.AddFlags(Cmd)
-}
-
-// Cmd is the Cobra object representing the hydrate command.
+// Cmd is the Cobra object representing the nomos vet command.
 var Cmd = &cobra.Command{
-	Use:   "hydrate",
-	Short: "Compiles the local repository to the exact form that would be sent to the APIServer.",
-	Long: `Compiles the local repository to the exact form that would be sent to the APIServer.
-
-The output directory consists of one directory per declared Cluster, and defaultcluster/ for
-clusters without declarations. Each directory holds the full set of configs for a single cluster,
-which you could kubectl apply -fR to the cluster, or have Config Sync sync to the cluster.`,
+	Use:   "vet",
+	Short: "Validate an Anthos Configuration Management directory",
+	Long: `Validate an Anthos Configuration Management directory
+Checks for semantic and syntactic errors in an Anthos Configuration Management directory
+that will interfere with applying resources. Prints found errors to STDERR and
+returns a non-zero error code if any issues are found.
+`,
+	Example: `  nomos vet
+  nomos vet --path=my/directory
+  nomos vet --path=/path/to/my/directory`,
 	Args: cobra.ExactArgs(0),
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		// Don't show usage on error, as argument validation passed.
 		cmd.SilenceUsage = true
 
 		// Create execution parameters from parsed flags
-		params := HydrateExecutionParams{
+		params := VetExecutionParams{
 			Clusters:         flags.Clusters,
 			Path:             flags.Path,
 			SkipAPIServer:    flags.SkipAPIServer,
 			SourceFormat:     configsync.SourceFormat(flags.SourceFormat),
 			OutputFormat:     flags.OutputFormat,
 			APIServerTimeout: flags.APIServerTimeout,
-			Flat:             globalFlags.Flat,
+			Namespace:        globalFlags.NamespaceValue,
+			KeepOutput:       globalFlags.KeepOutput,
+			MaxObjectCount:   globalFlags.Threshold,
 			OutPath:          globalFlags.OutPath,
 		}
 
-		// Execute the hydrate command logic
-		return ExecuteHydrate(cmd.Context(), params)
+		// Execute the vet command logic
+		return ExecuteVet(cmd.Context(), cmd.OutOrStderr(), params)
 	},
+}
+
+func init() {
+	// Initialize flags for the vet command
+	// This separation keeps flag definitions isolated from command execution logic
+	globalFlags.AddFlags(Cmd)
 }

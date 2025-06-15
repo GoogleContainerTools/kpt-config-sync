@@ -350,7 +350,7 @@ func TestRepoState_PrintRows(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			var buffer bytes.Buffer
-			tc.repo.printRows(&buffer)
+			tc.repo.printRows(&buffer, true) // Enable resource status for tests
 			got := buffer.String()
 			if got != tc.want {
 				t.Errorf("got:\n%s\nwant:\n%s", got, tc.want)
@@ -3007,7 +3007,7 @@ gke_sample-project_europe-west1-b_cluster-2
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			var buffer bytes.Buffer
-			tc.cluster.printRows(&buffer)
+			tc.cluster.printRows(&buffer, "", true) // No name filter, enable resource status
 			got := buffer.String()
 			if got != tc.want {
 				t.Errorf("got:\n%s\nwant:\n%s", got, tc.want)
@@ -3072,8 +3072,7 @@ gke_sample-project_europe-west1-b_cluster-2
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			var buffer bytes.Buffer
-			name = "root-sync-2"
-			tc.cluster.printRows(&buffer)
+			tc.cluster.printRows(&buffer, "root-sync-2", true) // Filter by name, enable resource status
 			got := buffer.String()
 			if got != tc.want {
 				t.Errorf("got:\n%s\nwant:\n%s", got, tc.want)

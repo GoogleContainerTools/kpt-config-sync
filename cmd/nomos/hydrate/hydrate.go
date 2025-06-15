@@ -44,7 +44,7 @@ which you could kubectl apply -fR to the cluster, or have Config Sync sync to th
 		cmd.SilenceUsage = true
 
 		// Create execution parameters from parsed flags
-		params := HydrateExecutionParams{
+		params := ExecParams{
 			Clusters:         flags.Clusters,
 			Path:             flags.Path,
 			SkipAPIServer:    flags.SkipAPIServer,

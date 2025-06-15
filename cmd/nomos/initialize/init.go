@@ -30,7 +30,7 @@ import (
 )
 
 // globalFlags holds the initialize command flags
-var globalFlags = NewInitializeFlags()
+var globalFlags = NewFlags()
 
 func init() {
 	// Initialize flags for the initialize command
@@ -58,7 +58,7 @@ initialize nonempty directories.`,
 		cmd.SilenceUsage = true
 
 		// Create execution parameters from parsed flags
-		params := InitializeExecutionParams{
+		params := ExecParams{
 			Path:  flags.Path,
 			Force: globalFlags.Force,
 		}

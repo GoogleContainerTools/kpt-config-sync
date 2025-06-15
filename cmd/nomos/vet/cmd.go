@@ -21,7 +21,7 @@ import (
 )
 
 // globalFlags holds the vet command flags
-var globalFlags = NewVetFlags()
+var globalFlags = NewFlags()
 
 // Cmd is the Cobra object representing the nomos vet command.
 var Cmd = &cobra.Command{
@@ -41,7 +41,7 @@ returns a non-zero error code if any issues are found.
 		cmd.SilenceUsage = true
 
 		// Create execution parameters from parsed flags
-		params := VetExecutionParams{
+		params := ExecParams{
 			Clusters:         flags.Clusters,
 			Path:             flags.Path,
 			SkipAPIServer:    flags.SkipAPIServer,

@@ -22,8 +22,8 @@ import (
 	"kpt.dev/configsync/pkg/client/restconfig"
 )
 
-// StatusFlags holds all the flags specific to the status command
-type StatusFlags struct {
+// Flags holds all the flags specific to the status command
+type Flags struct {
 	// PollingInterval is the interval for continuous polling
 	PollingInterval time.Duration
 	// Namespace filters the output by specified namespace
@@ -34,9 +34,9 @@ type StatusFlags struct {
 	Name string
 }
 
-// NewStatusFlags creates a new instance of StatusFlags with default values
-func NewStatusFlags() *StatusFlags {
-	return &StatusFlags{
+// NewFlags creates a new instance of Flags with default values
+func NewFlags() *Flags {
+	return &Flags{
 		PollingInterval: 0 * time.Second,
 		Namespace:       "",
 		ResourceStatus:  true,
@@ -46,7 +46,7 @@ func NewStatusFlags() *StatusFlags {
 
 // AddFlags adds all status-specific flags to the command
 // This function centralizes flag definitions and keeps them separate from command logic
-func (sf *StatusFlags) AddFlags(cmd *cobra.Command) {
+func (sf *Flags) AddFlags(cmd *cobra.Command) {
 	// Add shared flags from the global flags package
 	flags.AddContexts(cmd)
 

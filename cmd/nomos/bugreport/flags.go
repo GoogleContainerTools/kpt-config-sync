@@ -22,22 +22,22 @@ import (
 	"kpt.dev/configsync/pkg/client/restconfig"
 )
 
-// BugreportFlags holds all the flags specific to the bugreport command
-type BugreportFlags struct {
+// Flags holds all the flags specific to the bugreport command
+type Flags struct {
 	// ClientTimeout is the timeout for connecting to the cluster
 	ClientTimeout time.Duration
 }
 
-// NewBugreportFlags creates a new instance of BugreportFlags with default values
-func NewBugreportFlags() *BugreportFlags {
-	return &BugreportFlags{
+// NewFlags creates a new instance of BugreportFlags with default values
+func NewFlags() *Flags {
+	return &Flags{
 		ClientTimeout: restconfig.DefaultTimeout,
 	}
 }
 
 // AddFlags adds all bugreport-specific flags to the command
 // This function centralizes flag definitions and keeps them separate from command logic
-func (bf *BugreportFlags) AddFlags(cmd *cobra.Command) {
+func (bf *Flags) AddFlags(cmd *cobra.Command) {
 	// Add bugreport-specific flags
 	cmd.Flags().DurationVar(&flags.ClientTimeout, "timeout", bf.ClientTimeout, "Timeout for connecting to the cluster")
 }

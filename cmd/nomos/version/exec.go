@@ -25,16 +25,16 @@ import (
 	"kpt.dev/configsync/pkg/client/restconfig"
 )
 
-// VersionExecutionParams contains all parameters needed to execute the version command
+// ExecParams contains all parameters needed to execute the version command
 // This struct is completely independent of cobra command structures
-type VersionExecutionParams struct {
+type ExecParams struct {
 	Contexts      []string
 	ClientTimeout time.Duration
 }
 
 // ExecuteVersion executes the core version command logic without any cobra dependencies
 // This function encapsulates all the business logic for the version command
-func ExecuteVersion(ctx context.Context, params VersionExecutionParams) error {
+func ExecuteVersion(ctx context.Context, params ExecParams) error {
 	allCfgs, err := getAllKubectlConfigs(params.Contexts, params.ClientTimeout)
 	versionInternal(ctx, allCfgs, os.Stdout)
 

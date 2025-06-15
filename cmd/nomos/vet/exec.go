@@ -22,9 +22,9 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 )
 
-// VetExecutionParams contains all parameters needed to execute the vet command
+// ExecParams contains all parameters needed to execute the vet command
 // This struct is completely independent of cobra command structures
-type VetExecutionParams struct {
+type ExecParams struct {
 	Clusters         []string
 	Path             string
 	SkipAPIServer    bool
@@ -39,7 +39,7 @@ type VetExecutionParams struct {
 
 // ExecuteVet executes the core vet command logic without any cobra dependencies
 // This function encapsulates all the business logic for the vet command
-func ExecuteVet(ctx context.Context, out io.Writer, params VetExecutionParams) error {
+func ExecuteVet(ctx context.Context, out io.Writer, params ExecParams) error {
 	// Create vet options from execution parameters
 	// This separates the cobra command structure from the actual business logic
 	opts := vetOptions{

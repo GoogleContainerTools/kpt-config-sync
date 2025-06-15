@@ -19,8 +19,8 @@ import (
 	"kpt.dev/configsync/cmd/nomos/flags"
 )
 
-// HydrateFlags holds all the flags specific to the hydrate command
-type HydrateFlags struct {
+// Flags holds all the flags specific to the hydrate command
+type Flags struct {
 	// Flat determines whether to print all output to a single file
 	Flat bool
 	// OutPath specifies the location to write hydrated configuration to
@@ -28,8 +28,8 @@ type HydrateFlags struct {
 }
 
 // NewHydrateFlags creates a new instance of HydrateFlags with default values
-func NewHydrateFlags() *HydrateFlags {
-	return &HydrateFlags{
+func NewHydrateFlags() *Flags {
+	return &Flags{
 		Flat:    false,
 		OutPath: flags.DefaultHydrationOutput,
 	}
@@ -37,7 +37,7 @@ func NewHydrateFlags() *HydrateFlags {
 
 // AddFlags adds all hydrate-specific flags to the command
 // This function centralizes flag definitions and keeps them separate from command logic
-func (hf *HydrateFlags) AddFlags(cmd *cobra.Command) {
+func (hf *Flags) AddFlags(cmd *cobra.Command) {
 	// Add shared flags from the global flags package
 	flags.AddClusters(cmd)
 	flags.AddPath(cmd)

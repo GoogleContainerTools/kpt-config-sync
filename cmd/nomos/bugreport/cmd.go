@@ -23,7 +23,7 @@ import (
 )
 
 // globalFlags holds the bugreport command flags
-var globalFlags = NewBugreportFlags()
+var globalFlags = NewFlags()
 
 // Cmd retrieves readers for all relevant nomos container logs and cluster state commands and writes them to a zip file
 var Cmd = &cobra.Command{
@@ -35,7 +35,7 @@ var Cmd = &cobra.Command{
 		cmd.SilenceUsage = true
 
 		// Create execution parameters from parsed flags
-		params := BugreportExecutionParams{
+		params := ExecParams{
 			ClientTimeout: flags.ClientTimeout,
 		}
 

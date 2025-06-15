@@ -19,16 +19,16 @@ import (
 	"os"
 )
 
-// InitializeExecutionParams contains all parameters needed to execute the initialize command
+// ExecParams contains all parameters needed to execute the initialize command
 // This struct is completely independent of cobra command structures
-type InitializeExecutionParams struct {
+type ExecParams struct {
 	Path  string
 	Force bool
 }
 
 // ExecuteInitialize executes the core initialize command logic without any cobra dependencies
 // This function encapsulates all the business logic for the initialize command
-func ExecuteInitialize(params InitializeExecutionParams) error {
+func ExecuteInitialize(params ExecParams) error {
 	err := Initialize(params.Path, params.Force)
 	if err != nil {
 		return err

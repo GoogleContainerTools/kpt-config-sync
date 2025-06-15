@@ -83,7 +83,7 @@ of the "nomos" client binary for debugging purposes.`,
 			cmd.SilenceUsage = true
 
 			// Create execution parameters from parsed flags
-			params := VersionExecutionParams{
+			params := ExecParams{
 				Contexts:      flags.Contexts,
 				ClientTimeout: flags.ClientTimeout,
 			}

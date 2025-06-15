@@ -32,7 +32,7 @@ func resetFlags() {
 	// independent.
 	flags.Path = flags.PathDefault
 	flags.SkipAPIServer = true
-	forceValue = false
+	globalFlags.Force = false
 }
 
 type testCase struct {

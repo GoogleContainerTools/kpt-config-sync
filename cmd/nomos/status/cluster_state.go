@@ -47,7 +47,8 @@ type ClusterState struct {
 	isMulti *bool
 }
 
-func (c *ClusterState) printRows(writer io.Writer) {
+// printRows prints cluster state information, filtering by name if provided
+func (c *ClusterState) printRows(writer io.Writer, nameFilter string, showResourceStatus bool) {
 	util.MustFprintf(writer, "\n")
 	util.MustFprintf(writer, "%s\n", c.Ref)
 	if c.status != "" || c.Error != "" {
@@ -55,9 +56,9 @@ func (c *ClusterState) printRows(writer io.Writer) {
 		util.MustFprintf(writer, "%s%s\t%s\n", util.Indent, c.status, c.Error)
 	}
 	for _, repo := range c.repos {
-		if name == "" || name == repo.syncName {
+		if nameFilter == "" || nameFilter == repo.syncName {
 			util.MustFprintf(writer, "%s%s\n", util.Indent, util.Separator)
-			repo.printRows(writer)
+			repo.printRows(writer, showResourceStatus)
 		}
 	}
 }
@@ -89,7 +90,8 @@ type RepoState struct {
 	resources    []resourceState
 }
 
-func (r *RepoState) printRows(writer io.Writer) {
+// printRows prints repo state information, showing resource status if enabled
+func (r *RepoState) printRows(writer io.Writer, showResourceStatus bool) {
 	util.MustFprintf(writer, "%s%s:%s\t%s\t\n", util.Indent, r.scope, r.syncName, sourceString(r.sourceType, r.git, r.oci, r.helm))
 	if r.status == syncedMsg {
 		util.MustFprintf(writer, "%s%s @ %v\t%s\t\n", util.Indent, r.status, r.lastSyncTimestamp, r.commit)
@@ -110,7 +112,7 @@ func (r *RepoState) printRows(writer io.Writer) {
 		util.MustFprintf(writer, "%sError:\t%s\t\n", util.Indent, err)
 	}
 
-	if resourceStatus && len(r.resources) > 0 {
+	if showResourceStatus && len(r.resources) > 0 {
 		sort.Sort(byNamespaceAndType(r.resources))
 		util.MustFprintf(writer, "%sManaged resources:\n", util.Indent)
 		hasSourceHash := r.resources[0].SourceHash != ""

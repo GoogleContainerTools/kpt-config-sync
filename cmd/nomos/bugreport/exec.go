@@ -26,15 +26,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// BugreportExecutionParams contains all parameters needed to execute the bugreport command
+// ExecParams contains all parameters needed to execute the bugreport command
 // This struct is completely independent of cobra command structures
-type BugreportExecutionParams struct {
+type ExecParams struct {
 	ClientTimeout time.Duration
 }
 
 // ExecuteBugreport executes the core bugreport command logic without any cobra dependencies
 // This function encapsulates all the business logic for the bugreport command
-func ExecuteBugreport(ctx context.Context, params BugreportExecutionParams) error {
+func ExecuteBugreport(ctx context.Context, params ExecParams) error {
 	// Send all logs to STDERR.
 	if err := setStderrThreshold(); err != nil {
 		klog.Errorf("failed to increase logging STDERR threshold: %v", err)

@@ -32,9 +32,9 @@ import (
 	"kpt.dev/configsync/pkg/status"
 )
 
-// HydrateExecutionParams contains all parameters needed to execute the hydrate command
+// ExecParams contains all parameters needed to execute the hydrate command
 // This struct is completely independent of cobra command structures
-type HydrateExecutionParams struct {
+type ExecParams struct {
 	Clusters         []string
 	Path             string
 	SkipAPIServer    bool
@@ -47,7 +47,7 @@ type HydrateExecutionParams struct {
 
 // ExecuteHydrate executes the core hydrate command logic without any cobra dependencies
 // This function encapsulates all the business logic for the hydrate command
-func ExecuteHydrate(ctx context.Context, params HydrateExecutionParams) error {
+func ExecuteHydrate(ctx context.Context, params ExecParams) error {
 	sourceFormat := params.SourceFormat
 	if sourceFormat == "" {
 		sourceFormat = configsync.SourceFormatHierarchy

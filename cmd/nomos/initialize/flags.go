@@ -19,22 +19,22 @@ import (
 	"kpt.dev/configsync/cmd/nomos/flags"
 )
 
-// InitializeFlags holds all the flags specific to the initialize command
-type InitializeFlags struct {
+// Flags holds all the flags specific to the initialize command
+type Flags struct {
 	// Force determines whether to write to directory even if nonempty, overwriting conflicting files
 	Force bool
 }
 
-// NewInitializeFlags creates a new instance of InitializeFlags with default values
-func NewInitializeFlags() *InitializeFlags {
-	return &InitializeFlags{
+// NewFlags creates a new instance of Flags with default values
+func NewFlags() *Flags {
+	return &Flags{
 		Force: false,
 	}
 }
 
 // AddFlags adds all initialize-specific flags to the command
 // This function centralizes flag definitions and keeps them separate from command logic
-func (inf *InitializeFlags) AddFlags(cmd *cobra.Command) {
+func (inf *Flags) AddFlags(cmd *cobra.Command) {
 	// Add shared flags from the global flags package
 	flags.AddPath(cmd)
 

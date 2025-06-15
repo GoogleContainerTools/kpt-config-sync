@@ -24,8 +24,8 @@ import (
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/system"
 )
 
-// VetFlags holds all the flags specific to the vet command
-type VetFlags struct {
+// Flags holds all the flags specific to the vet command
+type Flags struct {
 	// NamespaceValue specifies the namespace for validation
 	NamespaceValue string
 	// KeepOutput determines whether to keep hydrated output
@@ -36,9 +36,9 @@ type VetFlags struct {
 	OutPath string
 }
 
-// NewVetFlags creates a new instance of VetFlags with default values
-func NewVetFlags() *VetFlags {
-	return &VetFlags{
+// NewFlags creates a new instance of Flags with default values
+func NewFlags() *Flags {
+	return &Flags{
 		NamespaceValue: "",
 		KeepOutput:     false,
 		Threshold:      system.DefaultMaxObjectCountDisabled,
@@ -48,7 +48,7 @@ func NewVetFlags() *VetFlags {
 
 // AddFlags adds all vet-specific flags to the command
 // This function centralizes flag definitions and keeps them separate from command logic
-func (vf *VetFlags) AddFlags(cmd *cobra.Command) {
+func (vf *Flags) AddFlags(cmd *cobra.Command) {
 	// Add shared flags from the global flags package
 	flags.AddClusters(cmd)
 	flags.AddPath(cmd)

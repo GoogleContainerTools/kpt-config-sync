@@ -20,7 +20,7 @@ import (
 )
 
 // globalFlags holds the status command flags
-var globalFlags = NewStatusFlags()
+var globalFlags = NewFlags()
 
 // Cmd runs a loop that fetches ACM objects from all available clusters and prints a summary of the
 // status of Config Management for each cluster.

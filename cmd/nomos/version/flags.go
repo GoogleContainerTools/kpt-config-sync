@@ -22,25 +22,25 @@ import (
 	"kpt.dev/configsync/pkg/client/restconfig"
 )
 
-// VersionFlags holds all the flags specific to the version command
-type VersionFlags struct {
+// Flags holds all the flags specific to the version command
+type Flags struct {
 	// ClientTimeout is the timeout for connecting to each cluster
 	ClientTimeout time.Duration
 }
 
-// NewVersionFlags creates a new instance of VersionFlags with default values
-func NewVersionFlags() *VersionFlags {
-	return &VersionFlags{
+// NewVersionFlags creates a new instance of Flags with default values
+func NewVersionFlags() *Flags {
+	return &Flags{
 		ClientTimeout: restconfig.DefaultTimeout,
 	}
 }
 
 // AddFlags adds all version-specific flags to the command
 // This function centralizes flag definitions and keeps them separate from command logic
-func (vf *VersionFlags) AddFlags(cmd *cobra.Command) {
+func (vf *Flags) AddFlags(cmd *cobra.Command) {
 	// Add shared flags from the global flags package
 	flags.AddContexts(cmd)
-	
+
 	// Add version-specific flags
 	cmd.Flags().DurationVar(&flags.ClientTimeout, "timeout", vf.ClientTimeout, "Timeout for connecting to each cluster")
 }

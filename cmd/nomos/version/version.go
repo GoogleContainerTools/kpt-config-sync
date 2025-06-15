@@ -16,7 +16,6 @@ package version
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -42,8 +41,10 @@ import (
 )
 
 func init() {
-	flags.AddContexts(Cmd)
-	Cmd.Flags().DurationVar(&flags.ClientTimeout, "timeout", restconfig.DefaultTimeout, "Timeout for connecting to each cluster")
+	// Initialize flags for the version command
+	// This separation keeps flag definitions isolated from command execution logic
+	globalFlags := NewVersionFlags()
+	globalFlags.AddFlags(Cmd)
 }
 
 // GetVersionReadCloser returns a ReadCloser with the output produced by running the "nomos version" command as a string
@@ -81,30 +82,22 @@ of the "nomos" client binary for debugging purposes.`,
 			// Don't show usage on error, as argument validation passed.
 			cmd.SilenceUsage = true
 
-			allCfgs, err := allKubectlConfigs()
-			versionInternal(cmd.Context(), allCfgs, os.Stdout)
-
-			if err != nil {
-				return fmt.Errorf("unable to parse kubectl config: %w", err)
+			// Create execution parameters from parsed flags
+			params := ExecParams{
+				Contexts:      flags.Contexts,
+				ClientTimeout: flags.ClientTimeout,
 			}
-			return nil
+
+			// Execute the version command logic
+			return ExecuteVersion(cmd.Context(), params)
 		},
 	}
 )
 
 // allKubectlConfigs gets all kubectl configs, with error handling
+// This function is maintained for backward compatibility with existing code
 func allKubectlConfigs() (map[string]*rest.Config, error) {
-	allCfgs, err := restconfig.AllKubectlConfigs(flags.ClientTimeout, flags.Contexts)
-	if err != nil {
-		var pathErr *os.PathError
-		if errors.As(err, &pathErr) {
-			err = pathErr
-		}
-
-		fmt.Printf("failed to create client configs: %v\n", err)
-	}
-
-	return allCfgs, err
+	return getAllKubectlConfigs(flags.Contexts, flags.ClientTimeout)
 }
 
 // versionInternal allows stubbing out the config for tests.

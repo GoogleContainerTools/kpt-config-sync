@@ -29,12 +29,13 @@ import (
 	"kpt.dev/configsync/pkg/status"
 )
 
-var forceValue bool
+// localFlags holds the initialize command flags
+var localFlags = NewFlags()
 
 func init() {
-	flags.AddPath(Cmd)
-	Cmd.Flags().BoolVar(&forceValue, "force", false,
-		"write to directory even if nonempty, overwriting conflicting files")
+	// Initialize flags for the initialize command
+	// This separation keeps flag definitions isolated from command execution logic
+	localFlags.AddFlags(Cmd)
 }
 
 // Cmd is the Cobra object representing the nomos init command
@@ -56,11 +57,14 @@ initialize nonempty directories.`,
 		// Don't show usage on error, as argument validation passed.
 		cmd.SilenceUsage = true
 
-		return Initialize(flags.Path, forceValue)
-	},
-	PostRunE: func(_ *cobra.Command, _ []string) error {
-		_, err := fmt.Fprintf(os.Stdout, "Done!\n")
-		return err
+		// Create execution parameters from parsed flags
+		params := ExecParams{
+			Path:  flags.Path,
+			Force: localFlags.Force,
+		}
+
+		// Execute the initialize command logic
+		return ExecuteInitialize(params)
 	},
 }
 

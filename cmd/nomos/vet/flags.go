@@ -24,66 +24,60 @@ import (
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/system"
 )
 
-var (
-	namespaceValue string
-	keepOutput     bool
-	threshold      int
-	outPath        string
-)
+// Flags holds all the flags specific to the vet command
+type Flags struct {
+	// NamespaceValue specifies the namespace for validation
+	NamespaceValue string
+	// KeepOutput determines whether to keep hydrated output
+	KeepOutput bool
+	// Threshold sets the maximum object count
+	Threshold int
+	// OutPath specifies the output location for hydrated output
+	OutPath string
+}
 
-func init() {
-	flags.AddClusters(Cmd)
-	flags.AddPath(Cmd)
-	flags.AddSkipAPIServerCheck(Cmd)
-	flags.AddSourceFormat(Cmd)
-	flags.AddOutputFormat(Cmd)
-	flags.AddAPIServerTimeout(Cmd)
-	Cmd.Flags().StringVar(&namespaceValue, "namespace", "",
+// NewFlags creates a new instance of Flags with default values
+func NewFlags() *Flags {
+	return &Flags{
+		NamespaceValue: "",
+		KeepOutput:     false,
+		Threshold:      system.DefaultMaxObjectCountDisabled,
+		OutPath:        flags.DefaultHydrationOutput,
+	}
+}
+
+// AddFlags adds all vet-specific flags to the command
+// This function centralizes flag definitions and keeps them separate from command logic
+func (vf *Flags) AddFlags(cmd *cobra.Command) {
+	// Add shared flags from the global flags package
+	flags.AddClusters(cmd)
+	flags.AddPath(cmd)
+	flags.AddSkipAPIServerCheck(cmd)
+	flags.AddSourceFormat(cmd)
+	flags.AddOutputFormat(cmd)
+	flags.AddAPIServerTimeout(cmd)
+
+	// Add vet-specific flags
+	cmd.Flags().StringVar(&vf.NamespaceValue, "namespace", vf.NamespaceValue,
 		fmt.Sprintf(
 			"If set, validate the repository as a Namespace Repo with the provided name. Automatically sets --source-format=%s",
 			configsync.SourceFormatUnstructured))
 
-	Cmd.Flags().BoolVar(&keepOutput, "keep-output", false,
+	cmd.Flags().BoolVar(&vf.KeepOutput, "keep-output", vf.KeepOutput,
 		`If enabled, keep the hydrated output`)
 
 	// The --threshold flag has three modes:
 	// 1. When `--threshold` is not specified, the validation is disabled.
 	// 2. When `--threshold` is specified with no value, the validation is enabled, using the default value, same as `--threshold=1000`.
 	// 3. When `--threshold=1000` is specified with a value, the validation is enabled, using the specified maximum.
-	Cmd.Flags().IntVar(&threshold, "threshold", system.DefaultMaxObjectCountDisabled,
+	cmd.Flags().IntVar(&vf.Threshold, "threshold", vf.Threshold,
 		fmt.Sprintf(`Maximum objects allowed per repository; errors if exceeded. Omit or set to %d to disable. `, system.DefaultMaxObjectCountDisabled)+
 			fmt.Sprintf(`Provide flag without value for default (%d), or use --threshold=N for a specific limit.`, system.DefaultMaxObjectCount))
 	// Using NoOptDefVal allows the flag to be specified without a value, but
 	// changes flag parsing such that the key and value must be in the same
 	// argument, like `--threshold=1000`, instead of `--threshold 1000`.
-	Cmd.Flags().Lookup("threshold").NoOptDefVal = strconv.Itoa(system.DefaultMaxObjectCount)
+	cmd.Flags().Lookup("threshold").NoOptDefVal = strconv.Itoa(system.DefaultMaxObjectCount)
 
-	Cmd.Flags().StringVar(&outPath, "output", flags.DefaultHydrationOutput,
+	cmd.Flags().StringVar(&vf.OutPath, "output", vf.OutPath,
 		`Location of the hydrated output`)
-}
-
-// Cmd is the Cobra object representing the nomos vet command.
-var Cmd = &cobra.Command{
-	Use:   "vet",
-	Short: "Validate an Anthos Configuration Management directory",
-	Long: `Validate an Anthos Configuration Management directory
-Checks for semantic and syntactic errors in an Anthos Configuration Management directory
-that will interfere with applying resources. Prints found errors to STDERR and
-returns a non-zero error code if any issues are found.
-`,
-	Example: `  nomos vet
-  nomos vet --path=my/directory
-  nomos vet --path=/path/to/my/directory`,
-	Args: cobra.ExactArgs(0),
-	RunE: func(cmd *cobra.Command, _ []string) error {
-		// Don't show usage on error, as argument validation passed.
-		cmd.SilenceUsage = true
-
-		return runVet(cmd.Context(), cmd.OutOrStderr(), vetOptions{
-			Namespace:        namespaceValue,
-			SourceFormat:     configsync.SourceFormat(flags.SourceFormat),
-			APIServerTimeout: flags.APIServerTimeout,
-			MaxObjectCount:   threshold,
-		})
-	},
 }

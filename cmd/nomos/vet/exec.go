@@ -38,11 +38,48 @@ import (
 	"kpt.dev/configsync/pkg/status"
 )
 
+// ExecParams contains all parameters needed to execute the vet command
+// This struct is completely independent of cobra command structures
+type ExecParams struct {
+	Clusters         []string
+	Path             string
+	SkipAPIServer    bool
+	SourceFormat     configsync.SourceFormat
+	OutputFormat     string
+	APIServerTimeout time.Duration
+	Namespace        string
+	KeepOutput       bool
+	MaxObjectCount   int
+	OutPath          string
+}
+
+// ExecuteVet executes the core vet command logic without any cobra dependencies
+// This function encapsulates all the business logic for the vet command
+func ExecuteVet(ctx context.Context, out io.Writer, params ExecParams) error {
+	// Create vet options from execution parameters
+	// This separates the cobra command structure from the actual business logic
+	opts := vetOptions{
+		Namespace:        params.Namespace,
+		SourceFormat:     params.SourceFormat,
+		APIServerTimeout: params.APIServerTimeout,
+		MaxObjectCount:   params.MaxObjectCount,
+		KeepOutput:       params.KeepOutput,
+		OutPath:          params.OutPath,
+		OutputFormat:     params.OutputFormat,
+	}
+
+	// Execute the actual vet logic
+	return runVet(ctx, out, opts)
+}
+
 type vetOptions struct {
 	Namespace        string
 	SourceFormat     configsync.SourceFormat
 	APIServerTimeout time.Duration
 	MaxObjectCount   int
+	KeepOutput       bool
+	OutPath          string
+	OutputFormat     string
 }
 
 // vet runs nomos vet with the specified options.
@@ -161,15 +198,15 @@ func runVet(ctx context.Context, out io.Writer, opts vetOptions) error {
 			}.Error())
 		}
 
-		if keepOutput {
+		if opts.KeepOutput {
 			allObjects = append(allObjects, fileObjects...)
 		}
 	}
 	hydrate.ForEachCluster(ctx, parseOpts, validateOpts, clusterFilterFunc)
-	if keepOutput {
+	if opts.KeepOutput {
 		multiCluster := numClusters > 1
 		fileObjects := hydrate.GenerateFileObjects(multiCluster, allObjects...)
-		if err := hydrate.PrintDirectoryOutput(outPath, flags.OutputFormat, fileObjects); err != nil {
+		if err := hydrate.PrintDirectoryOutput(opts.OutPath, opts.OutputFormat, fileObjects); err != nil {
 			_ = util.PrintErr(err)
 		}
 	}

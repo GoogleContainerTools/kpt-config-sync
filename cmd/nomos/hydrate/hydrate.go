@@ -20,13 +20,13 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 )
 
-// globalFlags holds the hydrate command flags
-var globalFlags = NewFlags()
+// localFlags holds the hydrate command flags
+var localFlags = NewFlags()
 
 func init() {
 	// Initialize flags for the hydrate command
 	// This separation keeps flag definitions isolated from command execution logic
-	globalFlags.AddFlags(Cmd)
+	localFlags.AddFlags(Cmd)
 }
 
 // Cmd is the Cobra object representing the hydrate command.
@@ -51,8 +51,8 @@ which you could kubectl apply -fR to the cluster, or have Config Sync sync to th
 			SourceFormat:     configsync.SourceFormat(flags.SourceFormat),
 			OutputFormat:     flags.OutputFormat,
 			APIServerTimeout: flags.APIServerTimeout,
-			Flat:             globalFlags.Flat,
-			OutPath:          globalFlags.OutPath,
+			Flat:             localFlags.Flat,
+			OutPath:          localFlags.OutPath,
 		}
 
 		// Execute the hydrate command logic

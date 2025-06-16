@@ -22,9 +22,6 @@ import (
 	"kpt.dev/configsync/pkg/api/configmanagement"
 )
 
-// globalFlags holds the bugreport command flags
-var globalFlags = NewFlags()
-
 // Cmd retrieves readers for all relevant nomos container logs and cluster state commands and writes them to a zip file
 var Cmd = &cobra.Command{
 	Use:   "bugreport",
@@ -47,5 +44,5 @@ var Cmd = &cobra.Command{
 func init() {
 	// Initialize flags for the bugreport command
 	// This separation keeps flag definitions isolated from command execution logic
-	globalFlags.AddFlags(Cmd)
+	flags.AddClientTimeout(Cmd)
 }

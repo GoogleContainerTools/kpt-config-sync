@@ -153,5 +153,5 @@ func ExecuteHydrate(ctx context.Context, params ExecParams) error {
 // allClusters returns true if all clusters should be processed.
 // This is extracted from the flags package to avoid dependency
 func allClusters(clusters []string) bool {
-	return clusters == nil
+	return len(clusters) == 0
 }

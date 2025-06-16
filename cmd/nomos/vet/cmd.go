@@ -20,8 +20,8 @@ import (
 	"kpt.dev/configsync/pkg/api/configsync"
 )
 
-// globalFlags holds the vet command flags
-var globalFlags = NewFlags()
+// localFlags holds the vet command flags
+var localFlags = NewFlags()
 
 // Cmd is the Cobra object representing the nomos vet command.
 var Cmd = &cobra.Command{
@@ -48,10 +48,10 @@ returns a non-zero error code if any issues are found.
 			SourceFormat:     configsync.SourceFormat(flags.SourceFormat),
 			OutputFormat:     flags.OutputFormat,
 			APIServerTimeout: flags.APIServerTimeout,
-			Namespace:        globalFlags.NamespaceValue,
-			KeepOutput:       globalFlags.KeepOutput,
-			MaxObjectCount:   globalFlags.Threshold,
-			OutPath:          globalFlags.OutPath,
+			Namespace:        localFlags.NamespaceValue,
+			KeepOutput:       localFlags.KeepOutput,
+			MaxObjectCount:   localFlags.Threshold,
+			OutPath:          localFlags.OutPath,
 		}
 
 		// Execute the vet command logic
@@ -62,5 +62,5 @@ returns a non-zero error code if any issues are found.
 func init() {
 	// Initialize flags for the vet command
 	// This separation keeps flag definitions isolated from command execution logic
-	globalFlags.AddFlags(Cmd)
+	localFlags.AddFlags(Cmd)
 }

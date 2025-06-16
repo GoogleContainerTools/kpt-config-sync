@@ -19,8 +19,8 @@ import (
 	"kpt.dev/configsync/cmd/nomos/flags"
 )
 
-// globalFlags holds the status command flags
-var globalFlags = NewFlags()
+// localFlags holds the status command flags
+var localFlags = NewFlags()
 
 // Cmd runs a loop that fetches ACM objects from all available clusters and prints a summary of the
 // status of Config Management for each cluster.
@@ -36,10 +36,10 @@ var Cmd = &cobra.Command{
 		params := ExecutionParams{
 			Contexts:        flags.Contexts,
 			ClientTimeout:   flags.ClientTimeout,
-			PollingInterval: globalFlags.PollingInterval,
-			Namespace:       globalFlags.Namespace,
-			ResourceStatus:  globalFlags.ResourceStatus,
-			Name:            globalFlags.Name,
+			PollingInterval: localFlags.PollingInterval,
+			Namespace:       localFlags.Namespace,
+			ResourceStatus:  localFlags.ResourceStatus,
+			Name:            localFlags.Name,
 		}
 
 		// Execute the status command logic
@@ -50,5 +50,5 @@ var Cmd = &cobra.Command{
 func init() {
 	// Initialize flags for the status command
 	// This separation keeps flag definitions isolated from command execution logic
-	globalFlags.AddFlags(Cmd)
+	localFlags.AddFlags(Cmd)
 }

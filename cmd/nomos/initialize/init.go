@@ -29,13 +29,13 @@ import (
 	"kpt.dev/configsync/pkg/status"
 )
 
-// globalFlags holds the initialize command flags
-var globalFlags = NewFlags()
+// localFlags holds the initialize command flags
+var localFlags = NewFlags()
 
 func init() {
 	// Initialize flags for the initialize command
 	// This separation keeps flag definitions isolated from command execution logic
-	globalFlags.AddFlags(Cmd)
+	localFlags.AddFlags(Cmd)
 }
 
 // Cmd is the Cobra object representing the nomos init command
@@ -60,7 +60,7 @@ initialize nonempty directories.`,
 		// Create execution parameters from parsed flags
 		params := ExecParams{
 			Path:  flags.Path,
-			Force: globalFlags.Force,
+			Force: localFlags.Force,
 		}
 
 		// Execute the initialize command logic

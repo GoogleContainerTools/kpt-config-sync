@@ -46,9 +46,9 @@ func resetFlags() {
 	flags.Path = flags.PathDefault
 	flags.SkipAPIServer = true
 	flags.SourceFormat = string(configsync.SourceFormatHierarchy)
-	globalFlags.NamespaceValue = ""
-	globalFlags.KeepOutput = false
-	globalFlags.OutPath = flags.DefaultHydrationOutput
+	localFlags.NamespaceValue = ""
+	localFlags.KeepOutput = false
+	localFlags.OutPath = flags.DefaultHydrationOutput
 	flags.OutputFormat = flags.OutputYAML
 }
 

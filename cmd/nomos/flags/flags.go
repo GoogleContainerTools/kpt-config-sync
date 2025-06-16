@@ -119,6 +119,12 @@ func AddOutputFormat(cmd *cobra.Command) {
 		`Output format. Accepts 'yaml' and 'json'.`)
 }
 
+// AddClientTimeout adds the --timeout flag
+func AddClientTimeout(cmd *cobra.Command) {
+	cmd.Flags().DurationVar(&ClientTimeout, "timeout", restconfig.DefaultTimeout,
+		fmt.Sprintf("Timeout for client connections; defaults to %s", restconfig.DefaultTimeout))
+}
+
 // AddAPIServerTimeout adds the --api-server-timeout flag
 func AddAPIServerTimeout(cmd *cobra.Command) {
 	cmd.Flags().DurationVar(&APIServerTimeout, "api-server-timeout", restconfig.DefaultTimeout, fmt.Sprintf("Client-side timeout for talking to the API server; defaults to %s", restconfig.DefaultTimeout))

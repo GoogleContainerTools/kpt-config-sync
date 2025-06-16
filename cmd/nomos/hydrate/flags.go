@@ -27,8 +27,8 @@ type Flags struct {
 	OutPath string
 }
 
-// NewHydrateFlags creates a new instance of HydrateFlags with default values
-func NewHydrateFlags() *Flags {
+// NewFlags creates a new instance of HydrateFlags with default values
+func NewFlags() *Flags {
 	return &Flags{
 		Flat:    false,
 		OutPath: flags.DefaultHydrationOutput,

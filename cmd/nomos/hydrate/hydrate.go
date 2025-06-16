@@ -21,7 +21,7 @@ import (
 )
 
 // globalFlags holds the hydrate command flags
-var globalFlags = NewHydrateFlags()
+var globalFlags = NewFlags()
 
 func init() {
 	// Initialize flags for the hydrate command

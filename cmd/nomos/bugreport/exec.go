@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/bugreport"
 	"kpt.dev/configsync/pkg/client/restconfig"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -35,10 +34,6 @@ type ExecParams struct {
 // ExecuteBugreport executes the core bugreport command logic without any cobra dependencies
 // This function encapsulates all the business logic for the bugreport command
 func ExecuteBugreport(ctx context.Context, params ExecParams) error {
-	// Send all logs to STDERR.
-	if err := setStderrThreshold(); err != nil {
-		klog.Errorf("failed to increase logging STDERR threshold: %v", err)
-	}
 
 	cfg, err := restconfig.NewRestConfig(params.ClientTimeout)
 	if err != nil {
@@ -69,13 +64,5 @@ func ExecuteBugreport(ctx context.Context, params ExecParams) error {
 	report.AddNomosVersionToZip(ctx)
 
 	report.Close()
-	return nil
-}
-
-// setStderrThreshold is a helper function to set the stderr threshold
-// This is abstracted since we cannot easily access cmd.InheritedFlags() without cobra dependency
-func setStderrThreshold() error {
-	// This function would need to be implemented based on how flags are handled
-	// For now, we'll use klog directly
 	return nil
 }

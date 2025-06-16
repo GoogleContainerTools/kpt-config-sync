@@ -41,10 +41,9 @@ import (
 )
 
 func init() {
-	// Initialize flags for the version command
+	// Initialize flags for the bugreport command
 	// This separation keeps flag definitions isolated from command execution logic
-	globalFlags := NewVersionFlags()
-	globalFlags.AddFlags(Cmd)
+	flags.AddClientTimeout(Cmd)
 }
 
 // GetVersionReadCloser returns a ReadCloser with the output produced by running the "nomos version" command as a string
@@ -65,34 +64,31 @@ func GetVersionReadCloser(ctx context.Context) (io.ReadCloser, error) {
 	return io.NopCloser(r), nil
 }
 
-var (
-	// clientVersion is a function that obtains the local client version.
-	clientVersion = func() string {
-		return version.VERSION
-	}
+var clientVersion = func() string {
+	return version.VERSION
+}
 
-	// Cmd is the Cobra object representing the nomos version command.
-	Cmd = &cobra.Command{
-		Use:   "version",
-		Short: "Prints the version of ACM for each cluster as well this CLI",
-		Long: `Prints the version of Configuration Management installed on each cluster and the version
+// Cmd is the Cobra object representing the nomos version command.
+var Cmd = &cobra.Command{
+	Use:   "version",
+	Short: "Prints the version of ACM for each cluster as well this CLI",
+	Long: `Prints the version of Configuration Management installed on each cluster and the version
 of the "nomos" client binary for debugging purposes.`,
-		Example: `  nomos version`,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			// Don't show usage on error, as argument validation passed.
-			cmd.SilenceUsage = true
+	Example: `  nomos version`,
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		// Don't show usage on error, as argument validation passed.
+		cmd.SilenceUsage = true
 
-			// Create execution parameters from parsed flags
-			params := ExecParams{
-				Contexts:      flags.Contexts,
-				ClientTimeout: flags.ClientTimeout,
-			}
+		// Create execution parameters from parsed flags
+		params := ExecParams{
+			Contexts:      flags.Contexts,
+			ClientTimeout: flags.ClientTimeout,
+		}
 
-			// Execute the version command logic
-			return ExecuteVersion(cmd.Context(), params)
-		},
-	}
-)
+		// Execute the version command logic
+		return ExecuteVersion(cmd.Context(), params)
+	},
+}
 
 // allKubectlConfigs gets all kubectl configs, with error handling
 // This function is maintained for backward compatibility with existing code

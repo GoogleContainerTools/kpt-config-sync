@@ -14,6 +14,8 @@
 
 package controllers
 
+import "kpt.dev/configsync/pkg/reconcilermanager"
+
 const (
 	// GCPSAAnnotationKey is used to annotate the following service accounts:
 	// 1) the RepoSync/RootSync controller SA when
@@ -44,16 +46,16 @@ const (
 	// GitSecretGithubAppInstallationID is the key at which the githubapp installation id is stored
 	GitSecretGithubAppInstallationID = "github-app-installation-id"
 	// GitSecretGithubAppApplicationID is the key at which the githubapp app id is stored
-	GitSecretGithubAppApplicationID = "github-app-application-id"
+	GitSecretGithubAppApplicationID = reconcilermanager.GitSecretGithubAppApplicationID
 	// GitSecretGithubAppClientID is the key at which the githubapp client id is stored
-	GitSecretGithubAppClientID = "github-app-client-id"
+	GitSecretGithubAppClientID = reconcilermanager.GitSecretGithubAppClientID
 	// GitSecretGithubAppBaseURL is the key at which the optional githubapp base url is stored
 	GitSecretGithubAppBaseURL = "github-app-base-url"
 )
 
 // Helm secret data key names
 const (
-	// HelmSecretKeyToken is the key at which a token's value is stored
+	// HelmSecretKeyPassword is the key at which a token's value is stored
 	HelmSecretKeyPassword = "password"
 	// HelmSecretKeyUsername is the key at which a token's username is stored
 	HelmSecretKeyUsername = "username"

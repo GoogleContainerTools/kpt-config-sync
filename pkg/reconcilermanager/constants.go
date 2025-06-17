@@ -199,3 +199,11 @@ const (
 	// Thus, the max length name for a RootSync is 38 characters.
 	MaxRootSyncNameLength = 38
 )
+
+// these constants are kept here to avoid import cycle
+const (
+	// GitSecretGithubAppApplicationID is the key at which the githubapp app id is stored
+	GitSecretGithubAppApplicationID = "github-app-application-id"
+	// GitSecretGithubAppClientID is the key at which the githubapp client id is stored
+	GitSecretGithubAppClientID = "github-app-client-id"
+)

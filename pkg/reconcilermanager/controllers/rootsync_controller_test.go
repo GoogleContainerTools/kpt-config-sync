@@ -3788,6 +3788,23 @@ func TestRootSyncSpecValidation(t *testing.T) {
 	rootsync.SetStalled(wantRs, "Validation", validate.InvalidHelmAuthType(configsync.RootSyncKind))
 	validateRootSyncStatus(t, wantRs, fakeClient)
 
+	// verify invalid Helm chart name
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
+	}
+	invalidHelmChart := fmt.Sprintf("%s/", helmChart)
+	rs.Spec.SourceType = configsync.HelmSource
+	rs.Spec.Helm = &v1beta1.HelmRootSync{HelmBase: v1beta1.HelmBase{Repo: helmRepo, Chart: invalidHelmChart}}
+	if err := fakeClient.Update(ctx, rs, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
+		t.Fatalf("failed to update the root sync request, got error: %v", err)
+	}
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	wantRs.Spec = rs.Spec
+	rootsync.SetStalled(wantRs, "Validation", validate.IllegalHelmChartName(configsync.RootSyncKind))
+	validateRootSyncStatus(t, wantRs, fakeClient)
+
 	// verify valid OCI spec
 	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs), rs); err != nil {
 		t.Fatalf("failed to get the root sync: %v", err)

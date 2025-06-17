@@ -199,6 +199,12 @@ func HelmSpec(helm *v1beta1.HelmBase, syncKind string) status.Error {
 		return MissingHelmChart(syncKind)
 	}
 
+	// Validates chart name such that it contains no slashes
+	// See https://helm.sh/docs/chart_best_practices/conventions/ for more details
+	if strings.Contains(helm.Chart, "/") {
+		return IllegalHelmChartName(syncKind)
+	}
+
 	// Ensure auth is a valid value.
 	// Note that Auth is a case-sensitive field, so ones with arbitrary capitalization
 	// will fail to apply.
@@ -389,6 +395,13 @@ func NoOpProxy(syncKind string) status.Error {
 	return invalidSyncBuilder.
 		Sprintf("%ss which specify spec.git.proxy must also specify spec.git.auth as one of %q, %q or %q",
 			syncKind, configsync.AuthNone, configsync.AuthCookieFile, configsync.AuthToken).
+		Build()
+}
+
+// IllegalHelmChartName reports that a RootSync/RepoSync declares an invalid helm chart name.
+func IllegalHelmChartName(syncKind string) status.Error {
+	return invalidSyncBuilder.
+		Sprintf("%s field spec.helm.chart must not contain a slash (/)", syncKind).
 		Build()
 }
 

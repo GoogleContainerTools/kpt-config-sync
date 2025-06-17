@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -135,6 +136,47 @@ func TestPublicHelm(t *testing.T) {
 	nt.Must(nt.Watcher.WatchForCurrentStatus(kinds.Deployment(), "my-wordpress", configsync.DefaultHelmReleaseNamespace))
 	nt.Must(nt.Watcher.WatchForNotFound(kinds.Deployment(), "my-wordpress", "wordpress"))
 	nt.Must(nt.Watcher.WatchForNotFound(kinds.Deployment(), "my-wordpress", "deploy-ns"))
+
+	nt.T.Log("Update RootSync to sync from a public Helm chart of the form <repo-name>/<chart-name>")
+	repoSuffix := path.Base(rs.Spec.Helm.Repo)
+	chart := fmt.Sprintf("%s/%s", repoSuffix, rs.Spec.Helm.Chart)
+	repo := strings.TrimSuffix(rs.Spec.Helm.Repo, "/"+repoSuffix)
+	nt.MustMergePatch(rs, fmt.Sprintf(`{"spec": {"helm": {"chart": "%s", "repo": "%s"}}}`, chart, repo))
+	nt.Must(nt.Watcher.WatchForRootSyncStalledError(rs.Name, "Validation",
+		`KNV1061: RootSync field spec.helm.chart must not contain a slash (/)`))
+}
+
+// TestOCIHelmChartNameContainsSlash verifies the Config Sync behavior for OCI-based Helm charts when helm.spec.chart is of the form <repo-name>/<chart-name>
+// This test will work only with following pre-requisite:
+// Google service account `e2e-test-ar-reader@${GCP_PROJECT}.iam.gserviceaccount.com` is created with `roles/artifactregistry.reader` for accessing images in Artifact Registry.
+func TestOCIHelmChartNameContainsSlash(t *testing.T) {
+	rootSyncID := nomostest.DefaultRootSyncID
+	nt := nomostest.New(t,
+		nomostesting.SyncSource,
+		ntopts.SyncWithGitSource(nomostest.DefaultRootSyncID, ntopts.Unstructured),
+		ntopts.RequireHelmProvider,
+	)
+
+	newVersion := "1.0.0"
+	chart, err := nt.BuildAndPushHelmPackage(rootSyncID.ObjectKey,
+		registryproviders.HelmSourceChart(privateSimpleHelmChart),
+		registryproviders.HelmChartVersion(newVersion))
+	if err != nil {
+		nt.T.Fatalf("failed to push helm chart: %v", err)
+	}
+
+	rs := nt.RootSyncObjectHelm(configsync.RootSyncName, chart.HelmChartID)
+	rs.Spec.Helm.Version = ""
+	rs.Spec.Helm.DeployNamespace = "simple"
+
+	repoSuffix := path.Base(rs.Spec.Helm.Repo)
+	rs.Spec.Helm.Chart = fmt.Sprintf("%s/%s", repoSuffix, rs.Spec.Helm.Chart)
+	rs.Spec.Helm.Repo = strings.TrimSuffix(rs.Spec.Helm.Repo, "/"+repoSuffix)
+
+	nt.T.Log("Update RootSync to sync from a helm chart")
+	nt.Must(nt.KubeClient.Apply(rs))
+	nt.Must(nt.Watcher.WatchForRootSyncStalledError(rs.Name, "Validation",
+		`KNV1061: RootSync field spec.helm.chart must not contain a slash (/)`))
 }
 
 // TestHelmWatchConfigMap can run on both Kind and GKE clusters.

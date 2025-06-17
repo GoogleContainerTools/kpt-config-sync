@@ -560,7 +560,7 @@ func (r *reconcilerBase) validateSyncMetadata(syncObj client.Object) error {
 }
 
 // validateCACertSecret verify that caCertSecretRef is well formed with a key named "cert"
-func (r *reconcilerBase) validateCACertSecret(ctx context.Context, namespace, caCertSecretRefName string) error {
+func (r *reconcilerBase) validateCACertSecret(ctx context.Context, namespace, caCertSecretRefName string) status.Error {
 	if useCACert(caCertSecretRefName) {
 		secret, err := validateSecretExist(ctx,
 			caCertSecretRefName,
@@ -568,12 +568,12 @@ func (r *reconcilerBase) validateCACertSecret(ctx context.Context, namespace, ca
 			r.client)
 		if err != nil {
 			if apierrors.IsNotFound(err) {
-				return fmt.Errorf("Secret %s not found, create one to allow client connections with CA certificate", caCertSecretRefName)
+				return validate.MissingSecret(caCertSecretRefName)
 			}
-			return fmt.Errorf("Secret %s get failed: %w", caCertSecretRefName, err)
+			return status.APIServerError(err, fmt.Sprintf("failed to get secret %q", caCertSecretRefName))
 		}
 		if _, ok := secret.Data[CACertSecretKey]; !ok {
-			return fmt.Errorf("caCertSecretRef was set, but %s key is not present in %s Secret", CACertSecretKey, caCertSecretRefName)
+			return validate.MissingKeyInCACertSecret(CACertSecretKey, caCertSecretRefName)
 		}
 	}
 	return nil

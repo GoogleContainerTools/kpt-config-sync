@@ -54,6 +54,7 @@ import (
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/util/log"
+	"kpt.dev/configsync/pkg/validate/rsync/validate"
 	kstatus "sigs.k8s.io/cli-utils/pkg/kstatus/status"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -171,7 +172,7 @@ func TestReconcilerManagerTeardownInvalidRSyncs(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	nt.Must(nt.Watcher.WatchForRootSyncStalledError(rootSync.Name, "Validation",
-		`git secretType was set as "token" but token key is not present in git-creds secret`))
+		validate.MissingKeyInAuthSecret(configsync.AuthToken, "token", "git-creds").Error()))
 
 	t.Log("Validate the RepoSync")
 	repoSync := k8sobjects.RepoSyncObjectV1Beta1(repoSyncID.Namespace, repoSyncID.Name)
@@ -201,7 +202,7 @@ func TestReconcilerManagerTeardownInvalidRSyncs(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 	nt.Must(nt.Watcher.WatchForRepoSyncStalledError(repoSync.Namespace, repoSync.Name,
-		"Validation", `git secretType was set as "token" but token key is not present in ssh-key secret`))
+		"Validation", validate.MissingKeyInAuthSecret(configsync.AuthToken, "token", "ssh-key").Error()))
 
 	t.Log("Delete the RootSync and wait for it to be not found")
 	err = nomostest.DeleteObjectsAndWait(nt, rootSync)

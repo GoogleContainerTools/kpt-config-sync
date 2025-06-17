@@ -306,6 +306,57 @@ var InvalidSyncCode = "1061"
 
 var invalidSyncBuilder = status.NewErrorBuilder(InvalidSyncCode)
 
+// InvalidSecretName reports that a secret name is invalid.
+func InvalidSecretName(secretName, reasons string) status.Error {
+	return invalidSyncBuilder.
+		Sprintf("The managed secret name %q is invalid: %s. To fix it, update '.spec.git.secretRef.name'", secretName, reasons).
+		Build()
+}
+
+// MissingSecret reports that a secret was not found.
+func MissingSecret(namespaceSecretName string) status.Error {
+	return invalidSyncBuilder.
+		Sprintf("Secret %s not found: create one to allow client authentication", namespaceSecretName).
+		Build()
+}
+
+// InvalidSecretAuthType reports that the secret auth type is invalid.
+func InvalidSecretAuthType(auth configsync.AuthType) status.Error {
+	return invalidSyncBuilder.
+		Sprintf("git secretType is set to unsupported value: %q", auth).
+		Build()
+}
+
+// MissingGithubAppIDInSecret reports that a GithubApp auth ID is missing in a secret.
+func MissingGithubAppIDInSecret(secretName string) status.Error {
+	return invalidSyncBuilder.
+		Sprintf("git secretType was set to %q but one of (github-app-application-id, github-app-client-id) is not present in %v secret",
+			configsync.AuthGithubApp, secretName).
+		Build()
+}
+
+// AmbiguousGithubAppIDInSecret reports that the GithubApp auth ID is ambiguous in a secret.
+func AmbiguousGithubAppIDInSecret(secretName string) status.Error {
+	return invalidSyncBuilder.
+		Sprintf("git secretType was set to %q but more than one of (github-app-application-id, github-app-client-id) is present in %v secret",
+			configsync.AuthGithubApp, secretName).
+		Build()
+}
+
+// MissingKeyInAuthSecret reports that a key is missing in an auth secret.
+func MissingKeyInAuthSecret(authType configsync.AuthType, key, secretName string) status.Error {
+	return invalidSyncBuilder.
+		Sprintf("git secretType was set as %q but %q key is not present in %q secret", authType, key, secretName).
+		Build()
+}
+
+// MissingKeyInCACertSecret reports that a key is missing in a CA cert secret.
+func MissingKeyInCACertSecret(caCertSecretKey, caCertSecretRefName string) status.Error {
+	return invalidSyncBuilder.
+		Sprintf("caCertSecretRef was set, but %q key is not present in %q secret", caCertSecretKey, caCertSecretRefName).
+		Build()
+}
+
 // MissingGitSpec reports that a RootSync/RepoSync doesn't declare the git spec
 // when spec.sourceType is set to `git`.
 func MissingGitSpec(syncKind string) status.Error {

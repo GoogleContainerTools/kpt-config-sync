@@ -16,10 +16,11 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
+	"kpt.dev/configsync/pkg/status"
+	"kpt.dev/configsync/pkg/validate/rsync/validate"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -38,7 +39,7 @@ func validateSecretExist(ctx context.Context, secretRef, namespace string, c cli
 }
 
 // validateSecretData verify secret data for the given auth type.
-func validateSecretData(auth configsync.AuthType, secret *corev1.Secret) error {
+func validateSecretData(auth configsync.AuthType, secret *corev1.Secret) status.Error {
 	hasDataKey := func(key string) bool {
 		val, ok := secret.Data[key]
 		return ok && len(val) > 0
@@ -46,42 +47,38 @@ func validateSecretData(auth configsync.AuthType, secret *corev1.Secret) error {
 	switch auth {
 	case configsync.AuthSSH:
 		if _, ok := secret.Data[GitSecretConfigKeySSH]; !ok {
-			return fmt.Errorf("git secretType was set as %q but ssh key is not present in %v secret", auth, secret.Name)
+			return validate.MissingKeyInAuthSecret(auth, GitSecretConfigKeySSH, secret.Name)
 		}
 	case configsync.AuthCookieFile:
 		if _, ok := secret.Data[GitSecretConfigKeyCookieFile]; !ok {
-			return fmt.Errorf("git secretType was set as %q but cookie_file key is not present in %v secret", auth, secret.Name)
+			return validate.MissingKeyInAuthSecret(auth, GitSecretConfigKeyCookieFile, secret.Name)
 		}
 	case configsync.AuthToken:
 		if _, ok := secret.Data[GitSecretConfigKeyToken]; !ok {
-			return fmt.Errorf("git secretType was set as %q but token key is not present in %v secret", auth, secret.Name)
+			return validate.MissingKeyInAuthSecret(auth, GitSecretConfigKeyToken, secret.Name)
 		}
 		if _, ok := secret.Data[GitSecretConfigKeyTokenUsername]; !ok {
-			return fmt.Errorf("git secretType was set as %q but username key is not present in %v secret", auth, secret.Name)
+			return validate.MissingKeyInAuthSecret(auth, GitSecretConfigKeyTokenUsername, secret.Name)
 		}
 	case configsync.AuthGithubApp:
 		if !hasDataKey(GitSecretGithubAppPrivateKey) {
-			return fmt.Errorf("git secretType was set as %q but %s key is not present in %v secret",
-				auth, GitSecretGithubAppPrivateKey, secret.Name)
+			return validate.MissingKeyInAuthSecret(auth, GitSecretGithubAppPrivateKey, secret.Name)
 		}
 		if !hasDataKey(GitSecretGithubAppInstallationID) {
-			return fmt.Errorf("git secretType was set as %q but %s key is not present in %v secret",
-				auth, GitSecretGithubAppInstallationID, secret.Name)
+			return validate.MissingKeyInAuthSecret(auth, GitSecretGithubAppInstallationID, secret.Name)
 		}
 		hasAppID := hasDataKey(GitSecretGithubAppApplicationID)
 		hasClientID := hasDataKey(GitSecretGithubAppClientID)
 		if !(hasAppID || hasClientID) {
-			return fmt.Errorf("git secretType was set to %q but one of (%s, %s) is not present in %v secret",
-				auth, GitSecretGithubAppApplicationID, GitSecretGithubAppClientID, secret.Name)
+			return validate.MissingGithubAppIDInSecret(secret.Name)
 		}
 		if hasAppID && hasClientID {
-			return fmt.Errorf("git secretType was set to %q but more than one of (%s, %s) is present in %v secret",
-				auth, GitSecretGithubAppApplicationID, GitSecretGithubAppClientID, secret.Name)
+			return validate.AmbiguousGithubAppIDInSecret(secret.Name)
 		}
 	case configsync.AuthNone:
 	case configsync.AuthGCENode:
 	default:
-		return fmt.Errorf("git secretType is set to unsupported value: %q", auth)
+		return validate.InvalidSecretAuthType(auth)
 	}
 	return nil
 }

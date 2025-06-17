@@ -889,7 +889,7 @@ func (r *RootSyncReconciler) validateHelmDependencies(ctx context.Context, rs *v
 }
 
 // validateRootSecret verify that any necessary Secret is present before creating ConfigMaps and Deployments.
-func (r *RootSyncReconciler) validateRootSecret(ctx context.Context, rootSync *v1beta1.RootSync) error {
+func (r *RootSyncReconciler) validateRootSecret(ctx context.Context, rootSync *v1beta1.RootSync) status.Error {
 	if SkipForAuth(rootSync.Spec.Auth) {
 		// There is no Secret to check for the Config object.
 		return nil
@@ -901,9 +901,9 @@ func (r *RootSyncReconciler) validateRootSecret(ctx context.Context, rootSync *v
 		r.client)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			return fmt.Errorf("Secret %s not found: create one to allow client authentication", v1beta1.GetSecretName(rootSync.Spec.SecretRef))
+			return validate.MissingSecret(v1beta1.GetSecretName(rootSync.Spec.SecretRef))
 		}
-		return fmt.Errorf("Secret %s get failed: %w", v1beta1.GetSecretName(rootSync.Spec.SecretRef), err)
+		return status.APIServerError(err, fmt.Sprintf("failed to get secret %q", v1beta1.GetSecretName(rootSync.Spec.SecretRef)))
 	}
 
 	_, r.knownHostExist = secret.Data[KnownHostsKey]

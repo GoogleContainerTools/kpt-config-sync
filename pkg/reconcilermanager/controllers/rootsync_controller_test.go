@@ -1207,7 +1207,7 @@ func TestRootSyncReconcileWithInvalidCACertSecret(t *testing.T) {
 
 			// rootsync should be in stalled status
 			wantRs := k8sobjects.RootSyncObjectV1Beta1(rootsyncName)
-			rootsync.SetStalled(wantRs, "Validation", fmt.Errorf("caCertSecretRef was set, but %s key is not present in %s Secret", CACertSecretKey, caCertSecret))
+			rootsync.SetStalled(wantRs, "Validation", validate.MissingKeyInCACertSecret(CACertSecretKey, caCertSecret))
 			validateRootSyncStatus(t, wantRs, fakeClient)
 		})
 	}
@@ -1220,13 +1220,13 @@ func TestRootSyncValidateCACertSecret(t *testing.T) {
 		err  string
 	}{
 		"caCertSecretRef set but missing Secret": {
-			err: fmt.Sprintf("Secret %s not found, create one to allow client connections with CA certificate", caCertSecret),
+			err: validate.MissingSecret(caCertSecret).Error(),
 		},
 		"caCertSecretRef set but invalid Secret": {
 			objs: []client.Object{
 				k8sobjects.SecretObject(caCertSecret, core.Namespace(configsync.ControllerNamespace)),
 			},
-			err: fmt.Sprintf("caCertSecretRef was set, but %s key is not present in %s Secret", CACertSecretKey, caCertSecret),
+			err: validate.MissingKeyInCACertSecret(CACertSecretKey, caCertSecret).Error(),
 		},
 	}
 	for name, tc := range testCases {
@@ -4355,7 +4355,7 @@ For more information, see https://g.co/cloud/acm-errors#knv1061`))
 
 	wantRs = k8sobjects.RootSyncObjectV1Beta1(rs.Name)
 	rootsync.SetStalled(wantRs, "Validation",
-		fmt.Errorf(`git secretType was set as "githubapp" but github-app-private-key key is not present in %s secret`, secretRef))
+		validate.MissingKeyInAuthSecret(configsync.AuthGithubApp, "github-app-private-key", secretRef))
 	validateRootSyncStatus(t, wantRs, fakeClient)
 
 	// Create a fully valid configuration

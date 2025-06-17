@@ -20,8 +20,10 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reposync"
 	"kpt.dev/configsync/pkg/rootsync"
 	"kpt.dev/configsync/pkg/status"
@@ -301,6 +303,57 @@ func OverrideSpec(override *v1beta1.OverrideSpec, syncKind string) status.Error 
 	return nil
 }
 
+// ReconcilerName validates the reconciler name.
+func ReconcilerName(reconcilerName string) status.Error {
+	if errs := validation.IsDNS1123Subdomain(reconcilerName); errs != nil {
+		return InvalidReconcilerName(reconcilerName, strings.Join(errs, ", "))
+	}
+	return nil
+}
+
+// RootSyncName validates the RootSync name length.
+func RootSyncName(rs *v1beta1.RootSync) status.Error {
+	nameLength := len(rs.Name)
+	if nameLength > reconcilermanager.MaxRootSyncNameLength {
+		return RootSyncNameLengthExceeded(nameLength)
+	}
+	return nil
+}
+
+// RootSyncMetadata validates name, namespace, and annotations.
+func RootSyncMetadata(rs *v1beta1.RootSync) status.Error {
+	if rs.Namespace != configsync.ControllerNamespace {
+		return InvalidRootSyncNamespace(rs.Namespace)
+	}
+
+	if err := RootSyncName(rs); err != nil {
+		return err
+	}
+	return DeletionPropagationAnnotation(rs, "RootSync")
+}
+
+// RepoSyncName validates RepoSync NN length.
+func RepoSyncName(rs *v1beta1.RepoSync) status.Error {
+	nnLength := len(rs.Name) + len(rs.Namespace)
+	if nnLength > reconcilermanager.MaxRepoSyncNNLength {
+		return RepoSyncNNLengthExceeded(nnLength)
+	}
+	return nil
+}
+
+// RepoSyncMetadata validates name, namespace, and annotations.
+func RepoSyncMetadata(rs *v1beta1.RepoSync) status.Error {
+	if rs.Namespace == configsync.ControllerNamespace {
+		return InvalidRepoSyncNamespace()
+	}
+
+	if err := RepoSyncName(rs); err != nil {
+		return err
+	}
+
+	return DeletionPropagationAnnotation(rs, "RepoSync")
+}
+
 // InvalidSyncCode is the code for an invalid declared RootSync/RepoSync.
 var InvalidSyncCode = "1061"
 
@@ -451,6 +504,41 @@ func validGCPServiceAccountEmail(email string) bool {
 func InvalidSourceType(syncKind string) status.Error {
 	return invalidSyncBuilder.
 		Sprintf("%ss must specify spec.sourceType to be one of %q, %q, %q", syncKind, configsync.GitSource, configsync.OciSource, configsync.HelmSource).
+		Build()
+}
+
+// RepoSyncNNLengthExceeded reports that the RootSync name and namespace exceeds the max length
+func RepoSyncNNLengthExceeded(length int) status.Error {
+	return invalidSyncBuilder.
+		Sprintf("maximum combined length of RepoSync name and namespace is %d, but found %d", reconcilermanager.MaxRepoSyncNNLength, length).
+		Build()
+}
+
+// RootSyncNameLengthExceeded reports that the RootSync name exceeds the max length
+func RootSyncNameLengthExceeded(length int) status.Error {
+	return invalidSyncBuilder.
+		Sprintf("maximum length of RootSync name is %d, but found %d", reconcilermanager.MaxRootSyncNameLength, length).
+		Build()
+}
+
+// InvalidRepoSyncNamespace reports that a RepoSync has an invalid namespace
+func InvalidRepoSyncNamespace() status.Error {
+	return invalidSyncBuilder.
+		Sprintf("RepoSync objects are not allowed in the %s namespace", configsync.ControllerNamespace).
+		Build()
+}
+
+// InvalidRootSyncNamespace reports that a RootSync has an invalid namespace
+func InvalidRootSyncNamespace(namespace string) status.Error {
+	return invalidSyncBuilder.
+		Sprintf("RootSync objects are only allowed in the %s namespace, not in %s", configsync.ControllerNamespace, namespace).
+		Build()
+}
+
+// InvalidReconcilerName reports that the reconciler name is invalid
+func InvalidReconcilerName(reconcilerName, reasons string) status.Error {
+	return invalidSyncBuilder.
+		Sprintf("Invalid reconciler name %q: %s", reconcilerName, reasons).
 		Build()
 }
 

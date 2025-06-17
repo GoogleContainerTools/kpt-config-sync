@@ -34,7 +34,6 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/configsync"
@@ -823,30 +822,12 @@ func (r *RootSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 	return result, nil
 }
 
-// This check surfaces the RootSync name length constraint earlier as a validation error.
-func validateRootSyncName(rs *v1beta1.RootSync) error {
-	nameLength := len(rs.Name)
-	if nameLength > reconcilermanager.MaxRootSyncNameLength {
-		return fmt.Errorf("maximum RootSync name length is %d, but found %d",
-			reconcilermanager.MaxRootSyncNameLength, nameLength)
-	}
-	return nil
-}
-
-func (r *RootSyncReconciler) validateRootSync(ctx context.Context, rs *v1beta1.RootSync, reconcilerName string) error {
-	if rs.Namespace != configsync.ControllerNamespace {
-		return fmt.Errorf("RootSync objects are only allowed in the %s namespace, not in %s", configsync.ControllerNamespace, rs.Namespace)
-	}
-
-	if err := validateRootSyncName(rs); err != nil {
+func (r *RootSyncReconciler) validateRootSync(ctx context.Context, rs *v1beta1.RootSync, reconcilerName string) status.Error {
+	if err := validate.RootSyncMetadata(rs); err != nil {
 		return err
 	}
 
-	if err := validation.IsDNS1123Subdomain(reconcilerName); err != nil {
-		return fmt.Errorf("invalid reconciler name %q: %s", reconcilerName, strings.Join(err, ", "))
-	}
-
-	if err := r.validateSyncMetadata(rs); err != nil {
+	if err := validate.ReconcilerName(reconcilerName); err != nil {
 		return err
 	}
 
@@ -857,7 +838,7 @@ func (r *RootSyncReconciler) validateRootSync(ctx context.Context, rs *v1beta1.R
 	return r.validateDependencies(ctx, rs)
 }
 
-func (r *RootSyncReconciler) validateDependencies(ctx context.Context, rs *v1beta1.RootSync) error {
+func (r *RootSyncReconciler) validateDependencies(ctx context.Context, rs *v1beta1.RootSync) status.Error {
 	switch rs.Spec.SourceType {
 	case configsync.GitSource:
 		return r.validateGitDependencies(ctx, rs)
@@ -870,18 +851,18 @@ func (r *RootSyncReconciler) validateDependencies(ctx context.Context, rs *v1bet
 	}
 }
 
-func (r *RootSyncReconciler) validateGitDependencies(ctx context.Context, rs *v1beta1.RootSync) error {
+func (r *RootSyncReconciler) validateGitDependencies(ctx context.Context, rs *v1beta1.RootSync) status.Error {
 	if err := r.validateCACertSecret(ctx, rs.Namespace, v1beta1.GetSecretName(rs.Spec.Git.CACertSecretRef)); err != nil {
 		return err
 	}
 	return r.validateRootSecret(ctx, rs)
 }
 
-func (r *RootSyncReconciler) validateOciDependencies(ctx context.Context, rs *v1beta1.RootSync) error {
+func (r *RootSyncReconciler) validateOciDependencies(ctx context.Context, rs *v1beta1.RootSync) status.Error {
 	return r.validateCACertSecret(ctx, rs.Namespace, v1beta1.GetSecretName(rs.Spec.Oci.CACertSecretRef))
 }
 
-func (r *RootSyncReconciler) validateHelmDependencies(ctx context.Context, rs *v1beta1.RootSync) error {
+func (r *RootSyncReconciler) validateHelmDependencies(ctx context.Context, rs *v1beta1.RootSync) status.Error {
 	if err := r.validateCACertSecret(ctx, rs.Namespace, v1beta1.GetSecretName(rs.Spec.Helm.CACertSecretRef)); err != nil {
 		return err
 	}

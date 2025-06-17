@@ -34,6 +34,7 @@ import (
 	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
 	"kpt.dev/configsync/pkg/kinds"
+	"kpt.dev/configsync/pkg/reconcilermanager"
 )
 
 const (
@@ -260,7 +261,7 @@ func TestMaxRootSyncNameLength(t *testing.T) {
 		k8sobjects.NamespaceObject(rootSyncTooLongName)))
 	nt.Must(repo.CommitAndPush("create RootSync with too long name"))
 	nt.Must(nt.Watcher.WatchForRootSyncStalledError(rootSyncTooLongName, "Validation",
-		"maximum RootSync name length is 38, but found 39"))
+		fmt.Sprintf("maximum length of RootSync name is %d, but found %d", reconcilermanager.MaxRootSyncNameLength, 39)))
 
 	// Test scenario for RootSync with exactly the max name length
 	rootSyncMaxLengthName := strings.Repeat("y", 38)
@@ -315,7 +316,7 @@ func TestMaxRepoSyncNameLength(t *testing.T) {
 			core.Name(repoSyncTooLongNN.Name), core.Namespace(repoSyncTooLongNN.Namespace))))
 	nt.Must(repo.CommitAndPush("create RepoSync with too long NN"))
 	nt.Must(nt.Watcher.WatchForRepoSyncStalledError(repoSyncTooLongNN.Namespace, repoSyncTooLongNN.Name,
-		"Validation", "maximum combined length of RepoSync name and namespace is 45, but found 46"))
+		"Validation", fmt.Sprintf("maximum combined length of RepoSync name and namespace is %d, but found %d", reconcilermanager.MaxRepoSyncNNLength, 46)))
 
 	// Test scenario for RepoSync with exactly the max name length
 	repoSyncMaxLengthNN := types.NamespacedName{

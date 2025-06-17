@@ -49,7 +49,6 @@ import (
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reposync"
-	"kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/testerrors"
 	"kpt.dev/configsync/pkg/util"
@@ -2245,7 +2244,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	if err := fakeClient.Create(ctx, rs2, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
-	if err := fakeClient.Create(ctx, rg2, client.FieldOwner(fake.FieldManager)); err != nil {
+	if err := fakeClient.Create(ctx, rg2, client.FieldOwner(syncerFake.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName2); err != nil {
@@ -2310,7 +2309,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	if err := fakeClient.Create(ctx, rs3, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
-	if err := fakeClient.Create(ctx, rg3, client.FieldOwner(fake.FieldManager)); err != nil {
+	if err := fakeClient.Create(ctx, rg3, client.FieldOwner(syncerFake.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName3); err != nil {
@@ -2374,7 +2373,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	if err := fakeClient.Create(ctx, secret4, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
-	if err := fakeClient.Create(ctx, rg4, client.FieldOwner(fake.FieldManager)); err != nil {
+	if err := fakeClient.Create(ctx, rg4, client.FieldOwner(syncerFake.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName4); err != nil {
@@ -2438,7 +2437,7 @@ func TestMultipleRepoSyncs(t *testing.T) {
 	if err := fakeClient.Create(ctx, secret5, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
-	if err := fakeClient.Create(ctx, rg5, client.FieldOwner(fake.FieldManager)); err != nil {
+	if err := fakeClient.Create(ctx, rg5, client.FieldOwner(syncerFake.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName5); err != nil {
@@ -4716,33 +4715,6 @@ For more information, see https://g.co/cloud/acm-errors#knv1061`))
 	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(repoDeployment): repoDeployment}
 	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
-	}
-}
-
-func TestValidateRepoSyncName(t *testing.T) {
-	testCases := map[string]struct {
-		name      string
-		namespace string
-		expectErr error
-	}{
-		"valid name/namespace": {
-			name:      strings.Repeat("x", 30),
-			namespace: strings.Repeat("n", 15),
-			expectErr: nil,
-		},
-		"invalid name/namespace": {
-			name:      strings.Repeat("x", 30),
-			namespace: strings.Repeat("n", 16),
-			expectErr: fmt.Errorf("maximum combined length of RepoSync name and namespace is 45, but found 46"),
-		},
-	}
-	for testName, tc := range testCases {
-		t.Run(testName, func(t *testing.T) {
-			rs := &v1beta1.RepoSync{}
-			rs.Name = tc.name
-			rs.Namespace = tc.namespace
-			require.Equal(t, tc.expectErr, validateRepoSyncName(rs))
-		})
 	}
 }
 

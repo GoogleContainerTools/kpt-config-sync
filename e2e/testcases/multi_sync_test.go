@@ -47,6 +47,7 @@ import (
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/util/log"
+	"kpt.dev/configsync/pkg/validate/rsync/validate"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -771,7 +772,7 @@ func TestControllerValidationErrors(t *testing.T) {
 		Type:    v1beta1.RootSyncStalled,
 		Status:  metav1.ConditionTrue,
 		Reason:  "Validation",
-		Message: "RootSync objects are only allowed in the config-management-system namespace, not in test-ns",
+		Message: validate.InvalidRootSyncNamespace("test-ns").Error(),
 		ErrorSummary: &v1beta1.ErrorSummary{
 			ErrorCountAfterTruncation: 1,
 			TotalCount:                1,
@@ -805,7 +806,7 @@ func TestControllerValidationErrors(t *testing.T) {
 		nt.Must(nomostest.DeleteObjectsAndWait(nt, rsTooLong))
 	})
 	nt.Must(nt.Watcher.WatchForRepoSyncStalledError(rsTooLong.Namespace, rsTooLong.Name, "Validation",
-		`maximum combined length of RepoSync name and namespace is 45, but found 260`))
+		validate.RepoSyncNNLengthExceeded(260).Error()))
 
 	nt.T.Logf("Validate an invalid config with a long RepoSync Secret name")
 	rsInvalidSecretRef := k8sobjects.RepoSyncObjectV1Beta1(testNs, "repo-test")

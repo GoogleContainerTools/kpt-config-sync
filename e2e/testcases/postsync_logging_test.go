@@ -38,6 +38,7 @@ import (
 	"kpt.dev/configsync/pkg/importer/analyzer/validation/system"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/validate/raw/validate"
+	rsyncValidate "kpt.dev/configsync/pkg/validate/rsync/validate"
 )
 
 // TestStatusEventLogRootSync tests that error events from RootSync are properly logged
@@ -156,7 +157,7 @@ func TestConditionEventLogRootSync(t *testing.T) {
 		nt.Must(nomostest.DeleteObjectsAndWait(nt, rootSync))
 	})
 
-	msg := "RootSync objects are only allowed in the config-management-system namespace, not in test-ns"
+	msg := rsyncValidate.InvalidRootSyncNamespace(testNs).Error()
 	expectedCondition := &v1beta1.RootSyncCondition{
 		Type:    v1beta1.RootSyncStalled,
 		Status:  metav1.ConditionTrue,
@@ -176,8 +177,7 @@ func TestConditionEventLogRootSync(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	logMessages := []string{msg}
-	nt.Must(assertLogEntryHasCount(logs, 1, "", rootSync.Name, rootSync.Namespace, logMessages))
+	nt.Must(assertLogEntryHasCount(logs, 1, "", rootSync.Name, rootSync.Namespace, []string{msg}))
 }
 
 // TestCloudLoggingConditionEventRootSync tests that condition-based errors from RootSync
@@ -212,7 +212,7 @@ func TestCloudLoggingConditionEventRootSync(t *testing.T) {
 		nt.Must(nomostest.DeleteObjectsAndWait(nt, rootSync))
 	})
 
-	msg := "RootSync objects are only allowed in the config-management-system namespace, not in test-ns"
+	msg := rsyncValidate.InvalidRootSyncNamespace(testNs).Error()
 	expectedCondition := &v1beta1.RootSyncCondition{
 		Type:    v1beta1.RootSyncStalled,
 		Status:  metav1.ConditionTrue,
@@ -323,23 +323,27 @@ func TestCloudLoggingStatusEventRepoSync(t *testing.T) {
 	nt.Must(waitForLogEntryInCloudLogs(nt, filter, 1, commit, repoSyncID.Name, repoSyncID.Namespace, []string{msg, "\"generation\":1"}, 120*time.Second))
 }
 
-// assertLogEntryHasCount checks if the specified messages appear in the logs
-// exactly the expected number of times, matching the given commit, name, and namespace.
+// assertLogEntryHasCount checks if any of the specified messages appear exactly the
+// expected number of times in the logs matching the given commit, name, and namespace.
 func assertLogEntryHasCount(logs []string, expectedCount int, commit, rname, rnamespace string, messages []string) error {
 	count := 0
 
 	for _, line := range logs {
-		if strings.Contains(line, commit) && strings.Contains(line, rname) && strings.Contains(line, rnamespace) {
-			allFound := false
-			for _, msg := range messages {
-				if !strings.Contains(line, msg) {
+		if !(strings.Contains(line, commit) && strings.Contains(line, rname) && strings.Contains(line, rnamespace)) {
+			continue
+		}
+		for _, msg := range messages {
+			linesMatch := true
+			for msgLine := range strings.SplitSeq(msg, "\n") {
+				if !strings.Contains(line, msgLine) {
+					linesMatch = false
 					break
 				}
-				allFound = true
 			}
-			if allFound {
+			if linesMatch {
 				count++
 			}
+			break
 		}
 	}
 	if count != expectedCount {

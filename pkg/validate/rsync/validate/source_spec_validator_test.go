@@ -15,8 +15,10 @@
 package validate
 
 import (
+	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
@@ -176,6 +178,77 @@ func rootSyncWithHelm(opts ...func(*v1beta1.RootSync)) *v1beta1.RootSync {
 		opt(rs)
 	}
 	return rs
+}
+
+func TestReconcilerName(t *testing.T) {
+	testCases := map[string]struct {
+		name      string
+		shouldErr bool
+	}{
+		"valid name": {
+			name:      "example.com",
+			shouldErr: false,
+		},
+		"invalid name": {
+			name:      "_",
+			shouldErr: true,
+		},
+	}
+	for testName, tc := range testCases {
+		t.Run(testName, func(t *testing.T) {
+			require.Equal(t, tc.shouldErr, ReconcilerName(tc.name) != nil)
+		})
+	}
+}
+
+func TestValidateRepoSyncName(t *testing.T) {
+	testCases := map[string]struct {
+		name      string
+		namespace string
+		expectErr error
+	}{
+		"valid name/namespace": {
+			name:      strings.Repeat("x", 30),
+			namespace: strings.Repeat("n", 15),
+			expectErr: nil,
+		},
+		"invalid name/namespace": {
+			name:      strings.Repeat("x", 30),
+			namespace: strings.Repeat("n", 16),
+			expectErr: RepoSyncNNLengthExceeded(46),
+		},
+	}
+	for testName, tc := range testCases {
+		t.Run(testName, func(t *testing.T) {
+			rs := &v1beta1.RepoSync{}
+			rs.Name = tc.name
+			rs.Namespace = tc.namespace
+			require.Equal(t, tc.expectErr, RepoSyncName(rs))
+		})
+	}
+}
+
+func TestValidateRootSyncName(t *testing.T) {
+	testCases := map[string]struct {
+		name      string
+		expectErr error
+	}{
+		"valid name": {
+			name:      strings.Repeat("x", 38),
+			expectErr: nil,
+		},
+		"invalid name": {
+			name:      strings.Repeat("x", 39),
+			expectErr: RootSyncNameLengthExceeded(39),
+		},
+	}
+	for testName, tc := range testCases {
+		t.Run(testName, func(t *testing.T) {
+			rs := &v1beta1.RootSync{}
+			rs.Name = tc.name
+			require.Equal(t, tc.expectErr, RootSyncName(rs))
+		})
+	}
 }
 
 func TestValidateRepoSyncSpec(t *testing.T) {

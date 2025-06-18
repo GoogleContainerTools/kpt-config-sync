@@ -98,7 +98,7 @@ func TestVet_FooCorp(t *testing.T) {
 
 	os.Args = []string{
 		"vet", // this first argument does nothing, but is required to exist.
-		"--path", examplesDir.Join(cmpath.RelativeSlash("foo-corp-example/foo-corp")).OSPath(),
+		"--path", examplesDir.Join(cmpath.RelativeSlash("foo-corp")).OSPath(),
 	}
 
 	err := Cmd.Execute()

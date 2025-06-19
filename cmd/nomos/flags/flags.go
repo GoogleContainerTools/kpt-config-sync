@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package flags contains flags used by several CLI commands.
+// the local flags will be found in the command folder in the flags.go file.
 package flags
 
 import (

@@ -22,6 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
+	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/reposync"
 	"kpt.dev/configsync/pkg/rootsync"
 	"kpt.dev/configsync/pkg/status"
@@ -326,40 +327,42 @@ func MissingSecret(namespaceSecretName string) status.Error {
 		Build()
 }
 
-// InvalidSecretAuthType reports that the secret auth type is invalid.
-func InvalidSecretAuthType(auth configsync.AuthType) status.Error {
+// InvalidAuthType reports that the auth type is invalid.
+func InvalidAuthType(auth configsync.AuthType) status.Error {
 	return invalidSyncBuilder.
-		Sprintf("git secretType is set to unsupported value: %q", auth).
+		Sprintf("git authType is set to unsupported value: %q", auth).
 		Build()
 }
 
-// MissingGithubAppIDInSecret reports that a GithubApp auth ID is missing in a secret.
+// MissingGithubAppIDInSecret reports that a GithubApp app/client ID is missing in a secret.
 func MissingGithubAppIDInSecret(secretName string) status.Error {
 	return invalidSyncBuilder.
-		Sprintf("git secretType was set to %q but one of (github-app-application-id, github-app-client-id) is not present in %v secret",
-			configsync.AuthGithubApp, secretName).
+		Sprintf("git authType was set to %q but one of (%s, %s) is not present in %q Secret",
+			configsync.AuthGithubApp, reconcilermanager.GitSecretGithubAppApplicationID,
+			reconcilermanager.GitSecretGithubAppClientID, secretName).
 		Build()
 }
 
-// AmbiguousGithubAppIDInSecret reports that the GithubApp auth ID is ambiguous in a secret.
+// AmbiguousGithubAppIDInSecret reports that the GithubApp app/client ID is ambiguous in a secret.
 func AmbiguousGithubAppIDInSecret(secretName string) status.Error {
 	return invalidSyncBuilder.
-		Sprintf("git secretType was set to %q but more than one of (github-app-application-id, github-app-client-id) is present in %v secret",
-			configsync.AuthGithubApp, secretName).
+		Sprintf("git authType was set to %q but more than one of (%s, %s) is present in %q Secret",
+			configsync.AuthGithubApp, reconcilermanager.GitSecretGithubAppApplicationID,
+			reconcilermanager.GitSecretGithubAppClientID, secretName).
 		Build()
 }
 
 // MissingKeyInAuthSecret reports that a key is missing in an auth secret.
 func MissingKeyInAuthSecret(authType configsync.AuthType, key, secretName string) status.Error {
 	return invalidSyncBuilder.
-		Sprintf("git secretType was set as %q but %q key is not present in %q secret", authType, key, secretName).
+		Sprintf("git authType was set as %q but %q key is not present in %q Secret", authType, key, secretName).
 		Build()
 }
 
 // MissingKeyInCACertSecret reports that a key is missing in a CA cert secret.
 func MissingKeyInCACertSecret(caCertSecretKey, caCertSecretRefName string) status.Error {
 	return invalidSyncBuilder.
-		Sprintf("caCertSecretRef was set, but %q key is not present in %q secret", caCertSecretKey, caCertSecretRefName).
+		Sprintf("caCertSecretRef was set, but %q key is not present in %q Secret", caCertSecretKey, caCertSecretRefName).
 		Build()
 }
 

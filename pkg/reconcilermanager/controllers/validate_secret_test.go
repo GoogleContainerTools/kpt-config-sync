@@ -196,7 +196,7 @@ func TestValidateSecretData(t *testing.T) {
 		},
 		"Usupported auth": {
 			auth:      "( ͡° ͜ʖ ͡°)",
-			wantError: validate.InvalidSecretAuthType(`( ͡° ͜ʖ ͡°)`),
+			wantError: validate.InvalidAuthType(`( ͡° ͜ʖ ͡°)`),
 		},
 	}
 

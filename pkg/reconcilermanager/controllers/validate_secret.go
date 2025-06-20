@@ -78,7 +78,7 @@ func validateSecretData(auth configsync.AuthType, secret *corev1.Secret) status.
 	case configsync.AuthNone:
 	case configsync.AuthGCENode:
 	default:
-		return validate.InvalidSecretAuthType(auth)
+		return validate.InvalidAuthType(auth)
 	}
 	return nil
 }

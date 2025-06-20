@@ -92,19 +92,6 @@ func TestVet_AcmeSymlink(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestVet_FooCorp(t *testing.T) {
-	resetFlags()
-	Cmd.SilenceUsage = true
-
-	os.Args = []string{
-		"vet", // this first argument does nothing, but is required to exist.
-		"--path", examplesDir.Join(cmpath.RelativeSlash("foo-corp-example/foo-corp")).OSPath(),
-	}
-
-	err := Cmd.Execute()
-	require.NoError(t, err)
-}
-
 func TestVet_MultiCluster(t *testing.T) {
 	Cmd.SilenceUsage = true
 

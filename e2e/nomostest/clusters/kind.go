@@ -42,15 +42,6 @@ const (
 	maxKindTries = 6
 )
 
-// When upgrading KinD, find the node images from the release at https://github.com/kubernetes-sigs/kind/releases
-// Update this mapping accordingly.
-var kindNodeImages = map[string]KindVersion{
-	"1.33": "kindest/node:v1.33.1@sha256:8d866994839cd096b3590681c55a6fa4a071fdaf33be7b9660e5697d2ed13002",
-	"1.32": "kindest/node:v1.32.5@sha256:36187f6c542fa9b78d2d499de4c857249c5a0ac8cc2241bef2ccd92729a7a259",
-	"1.31": "kindest/node:v1.31.9@sha256:156da58ab617d0cb4f56bbdb4b493f4dc89725505347a4babde9e9544888bb92",
-	"1.30": "kindest/node:v1.30.13@sha256:8673291894dc400e0fb4f57243f5fdc6e355ceaa765505e0e73941aa1b6e0b80",
-}
-
 // KindCluster is a kind cluster for use in the e2e tests
 type KindCluster struct {
 	// T is a testing interface
@@ -60,9 +51,7 @@ type KindCluster struct {
 	// KubeConfigPath is the path to save the kube config
 	KubeConfigPath string
 	// TmpDir is the temporary directory for this test
-	TmpDir string
-	// KubernetesVersion is the version to use when creating the kind cluster
-	KubernetesVersion  string
+	TmpDir             string
 	creationSuccessful bool
 	provider           *cluster.Provider
 }
@@ -91,13 +80,9 @@ func (c *KindCluster) initProvider() {
 // Create the kind cluster
 func (c *KindCluster) Create() error {
 	c.initProvider()
-	version, err := asKindVersion(c.KubernetesVersion)
-	if err != nil {
-		return err
-	}
 	tg := taskgroup.New()
 	tg.Go(func() error {
-		return createKindCluster(c.provider, c.Name, c.KubeConfigPath, version)
+		return createKindCluster(c.provider, c.Name, c.KubeConfigPath)
 	})
 	tg.Go(func() error {
 		return pullImages()
@@ -146,17 +131,7 @@ func (c *KindCluster) Hash() (string, error) {
 	return "N/A for KinD cluster", nil
 }
 
-// asKindVersion returns the latest Kind version associated with a given
-// Kubernetes minor version.
-func asKindVersion(version string) (KindVersion, error) {
-	kindVersion, ok := kindNodeImages[version]
-	if ok {
-		return kindVersion, nil
-	}
-	return "", fmt.Errorf("Unrecognized Kind version: %q", version)
-}
-
-func createKindCluster(p *cluster.Provider, name, kcfgPath string, version KindVersion) error {
+func createKindCluster(p *cluster.Provider, name, kcfgPath string) error {
 	var err error
 	for i := 0; i < maxKindTries; i++ {
 		if i > 0 {
@@ -171,8 +146,6 @@ func createKindCluster(p *cluster.Provider, name, kcfgPath string, version KindV
 		}
 
 		err = p.Create(name,
-			// Use the specified version per --kubernetes-version.
-			cluster.CreateWithNodeImage(string(version)),
 			// Store the KUBECONFIG at the specified path.
 			cluster.CreateWithKubeconfigPath(kcfgPath),
 			// Allow the cluster to see the local Docker container registry.

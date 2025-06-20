@@ -155,11 +155,10 @@ func RestConfig(t testing.NTB, opts *ntopts.New) {
 	switch *e2e.TestCluster {
 	case e2e.Kind:
 		cluster = &clusters.KindCluster{
-			T:                 t,
-			Name:              opts.ClusterName,
-			KubeConfigPath:    opts.KubeconfigPath,
-			TmpDir:            opts.TmpDir,
-			KubernetesVersion: *e2e.KubernetesVersion,
+			T:              t,
+			Name:           opts.ClusterName,
+			KubeConfigPath: opts.KubeconfigPath,
+			TmpDir:         opts.TmpDir,
 		}
 	case e2e.GKE:
 		cluster = &clusters.GKECluster{

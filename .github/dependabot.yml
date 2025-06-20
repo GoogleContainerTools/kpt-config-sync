@@ -23,8 +23,6 @@ updates:
   ignore:
   - dependency-name: k8s.io/*
     update-types: ["version-update:semver-major", "version-update:semver-minor"]
-  # kind requires us to also update the image digests in code
-  - dependency-name: sigs.k8s.io/kind
   groups:
     k8s.io:
       applies-to: version-updates

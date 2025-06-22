@@ -73,7 +73,11 @@ func SkipErrorForResource(err error, id core.ID, strategy actuation.ActuationStr
 
 // largeResourceGroupError indicates that the source repo has too many objects
 // to manage with a single resource group.
-func largeResourceGroupError(err error, id core.ID) status.Error {
+func largeResourceGroupError(_ error, id core.ID) status.Error {
+	// the error is not used because it's confusing to the user.  The current core error
+	// says: Request entity too large: limit is 3145728 (eg)
+	// the actual size is 1.5mb, so it is a bit mislreading.
+	// Possibly in the future if the error changes we will start passing it back to the user.
 	e := fmt.Errorf("the size of the ResourceGroup object for this repository is exceeding the row size. "+
 		"To mitigate follow instructions here https://cloud.google.com/anthos-config-management/docs/how-to/breaking-up-repo. "+
 		": %v", id)

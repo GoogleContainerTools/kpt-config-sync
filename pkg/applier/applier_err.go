@@ -74,10 +74,8 @@ func SkipErrorForResource(err error, id core.ID, strategy actuation.ActuationStr
 // largeResourceGroupError indicates that the source repo has too many objects
 // to manage with a single resource group.
 func largeResourceGroupError(err error, id core.ID) status.Error {
-	e := fmt.Errorf("source repository contains too many resource objects to inventory with a single ResourceGroup: "+
-		"inventory apply failed: %v: %s. "+
-		"To mitigate, spread the source objects across multiple repositories. "+
-		"For how, see https://cloud.google.com/anthos-config-management/docs/how-to/breaking-up-repo",
-		id, err)
+	e := fmt.Errorf("the size of the ResourceGroup object for this repository is exceeding the row size. "+
+		"To mitigate follow instructions here https://cloud.google.com/anthos-config-management/docs/how-to/breaking-up-repo. "+
+		": %v", id)
 	return applierErrorBuilder.Wrap(e).Build()
 }

@@ -80,6 +80,6 @@ func largeResourceGroupError(_ error, id core.ID) status.Error {
 	// Possibly in the future if the error changes we will start passing it back to the user.
 	e := fmt.Errorf("the size of the ResourceGroup object for this repository is exceeding the row size. "+
 		"To mitigate follow instructions here https://cloud.google.com/anthos-config-management/docs/how-to/breaking-up-repo. "+
-		": %v", id)
+		"%v", id)
 	return applierErrorBuilder.Wrap(e).Build()
 }

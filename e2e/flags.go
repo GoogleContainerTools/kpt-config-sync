@@ -114,11 +114,6 @@ var GitHubAppConfigFile = flag.String("githubapp-config-file",
 var Debug = flag.Bool("debug", false,
 	"If true, do not destroy cluster and clean up temporary directory after test.")
 
-// KubernetesVersion is the version of Kubernetes to test against. Only has effect
-// when testing against test-created Kind clusters.
-var KubernetesVersion = flag.String("kubernetes-version", "1.33",
-	"The version of Kubernetes to create")
-
 // DefaultImagePrefix points to the local docker registry.
 const DefaultImagePrefix = "localhost:5000"
 

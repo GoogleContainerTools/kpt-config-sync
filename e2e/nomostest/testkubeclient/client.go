@@ -27,6 +27,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/retry"
 	"kpt.dev/configsync/e2e/nomostest/testlogger"
 	"kpt.dev/configsync/pkg/kinds"
+	"kpt.dev/configsync/pkg/util/log"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -206,8 +207,8 @@ func (tc *KubeClient) GetDeploymentPod(deploymentName, namespace string, retrytT
 			return err
 		}
 		if len(pods.Items) != 1 {
-			return fmt.Errorf("deployment has %d pods, expected 1: %s",
-				len(pods.Items), deploymentNN)
+			return fmt.Errorf("deployment has %d pods, expected 1: %s\n%s",
+				len(pods.Items), deploymentNN, log.AsYAML(pods))
 		}
 		pod = pods.Items[0].DeepCopy()
 		if pod.Status.Phase != corev1.PodRunning {

@@ -133,10 +133,14 @@ var TestCluster = flag.String("test-cluster", Kind,
 var ShareTestEnv = flag.Bool("share-test-env", false,
 	"Specify that the test is using a shared test environment instead of fresh installation per test case.")
 
+// SSMInstanceRegion is the region of the Secure Source Manager instance to be used by SSM tests
+var SSMInstanceRegion = flag.String("ssm-instance-region", util.EnvString("E2E_SSM_INSTANCE_REGION", "us-central1"),
+	"The region of the Secure Source Manager instance to be used by SSM tests. Defaults to E2E_SSM_INSTANCE_REGION env var")
+
 // GitProvider is the provider that hosts the Git repositories.
 var GitProvider = newStringEnum("git-provider", util.EnvString("E2E_GIT_PROVIDER", Local),
 	"The git provider that hosts the Git repositories. Defaults to Local.",
-	[]string{Local, Bitbucket, GitLab, CSR})
+	[]string{Local, Bitbucket, GitLab, CSR, SSM})
 
 // OCIProvider is the provider that hosts the OCI repositories.
 var OCIProvider = newStringEnum("oci-provider", util.EnvString("E2E_OCI_PROVIDER", Local),
@@ -300,6 +304,8 @@ const (
 	CSR = "csr"
 	// ArtifactRegistry indicates using Google Artifact Registry to host the repositories.
 	ArtifactRegistry = "gar"
+	// SSM indicates using Secure Source Manager to host the repositories.
+	SSM = "ssm"
 )
 
 // NumParallel returns the number of parallel test threads

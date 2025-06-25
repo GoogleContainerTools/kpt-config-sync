@@ -22,6 +22,9 @@ const (
 	// CSRHost is the host address of the Cloud Source Repositories
 	CSRHost = "https://source.developers.google.com"
 
+	// SSMInstanceID is the ID of the Secure Source Manager instance to be used by SSM tests
+	SSMInstanceID = "configsync-test"
+
 	// TestInfraContainerRepositoryPath is the Config Sync test-infra repository path
 	TestInfraContainerRepositoryPath = "kpt-config-sync-ci-artifacts"
 	// TestInfraArtifactRepositoryPath is the Config Sync test-infra repository path

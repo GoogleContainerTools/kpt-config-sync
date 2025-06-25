@@ -24,52 +24,58 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/testshell"
 )
 
-// CSRReaderEmail returns the email of the google service account with
-// permission to read from Cloud Source Registry.
-func CSRReaderEmail() string {
-	return fmt.Sprintf("e2e-test-csr-reader@%s.iam.gserviceaccount.com", *e2e.GCPProject)
+// TODO: This SA needs to exist in the CI projects
+// SSMServiceAccountEmail returns the email of the google service account with
+// permission to read from Secure Source Manager.
+func SSMServiceAccountEmail() string {
+	return fmt.Sprintf("test-ssm@%s.iam.gserviceaccount.com", *e2e.GCPProject)
 }
 
-// CSRClient is the client that interacts with Google Cloud Source Repository.
-type CSRClient struct {
+// SSMClient is the client that interacts with Google Secure Source Manager.
+type SSMClient struct {
 	// project in which to store the source repo
 	project string
+	// region in which to store the source repo
+	region string
 	// repoPrefix is used to avoid overlap
 	repoPrefix string
 	// shell used for invoking CLI tools
 	shell *testshell.TestShell
 }
 
-// newCSRClient instantiates a new CSR client.
-func newCSRClient(repoPrefix string, shell *testshell.TestShell) *CSRClient {
-	return &CSRClient{
+var _ GitProvider = &SSMClient{}
+
+// newSSMClient instantiates a new SSM client.
+func newSSMClient(repoPrefix string, shell *testshell.TestShell) *SSMClient {
+	return &SSMClient{
 		project:    *e2e.GCPProject,
+		region:     "us-central1", //TODO(camila-b): Use variable instead of hardcoded value
 		repoPrefix: repoPrefix,
 		shell:      shell,
 	}
 }
 
-func (c *CSRClient) fullName(name string) string {
-	return util.SanitizeRepoName("cs-e2e-"+c.repoPrefix, name)
+func (c *SSMClient) fullName(name string) string {
+	return util.SanitizeRepoName(c.repoPrefix, name)
 }
 
 // Type returns the provider type.
-func (c *CSRClient) Type() string {
-	return e2e.CSR
+func (c *SSMClient) Type() string {
+	return e2e.SSM
 }
 
-// RemoteURL returns the Git URL for the CSR repository.
+// RemoteURL returns the Git URL for the SSM repository.
 // name refers to the repo name in the format of <NAMESPACE>/<NAME> of RootSync|RepoSync.
-func (c *CSRClient) RemoteURL(name string) (string, error) {
+func (c *SSMClient) RemoteURL(name string) (string, error) {
 	return c.SyncURL(name), nil
 }
 
 // SyncURL returns a URL for Config Sync to sync from.
-func (c *CSRClient) SyncURL(name string) string {
-	return fmt.Sprintf("%s/p/%s/r/%s", testing.CSRHost, c.project, name)
+func (c *SSMClient) SyncURL(name string) string {
+	return fmt.Sprintf("%s/%s/%s", testing.SSMHost, c.project, name) //TODO(camila-b): Use variable instead of hardcoded value for SSMHost
 }
 
-func (c *CSRClient) login() error {
+func (c *SSMClient) login() error {
 	_, err := c.shell.ExecWithDebug("gcloud", "init")
 	if err != nil {
 		return fmt.Errorf("authorizing gcloud: %w", err)
@@ -79,13 +85,14 @@ func (c *CSRClient) login() error {
 
 // CreateRepository calls the gcloud SDK to create a remote repository on CSR.
 // It returns the full name with a prefix.
-func (c *CSRClient) CreateRepository(name string) (string, error) {
+func (c *SSMClient) CreateRepository(name string) (string, error) {
 	fullName := c.fullName(name)
 	if err := c.login(); err != nil {
 		return fullName, err
 	}
-	out, err := c.shell.ExecWithDebug("gcloud", "source", "repos",
-		"describe", fullName,
+
+	out, err := c.shell.ExecWithDebug("gcloud", "beta", "source-manager", "repos",
+		"describe", fullName, "--region", c.region,
 		"--project", c.project)
 	if err == nil {
 		return fullName, nil // repo already exists, skip creation
@@ -94,20 +101,33 @@ func (c *CSRClient) CreateRepository(name string) (string, error) {
 		return fullName, fmt.Errorf("describing source repository: %w", err)
 	}
 
-	_, err = c.shell.ExecWithDebug("gcloud", "source", "repos",
-		"create", fullName,
+	_, err = c.shell.ExecWithDebug("gcloud", "beta", "source-manager", "repos",
+		"create", fullName, "--region", c.region,
+		"--instance", "test-ssm",
 		"--project", c.project)
 	if err != nil {
 		return fullName, fmt.Errorf("creating source repository: %w", err)
 	}
+
+	// Add IAM policy binding to allow the service account to write to the repo.
+	_, err = c.shell.ExecWithDebug("gcloud", "beta", "source-manager", "repos",
+		"add-iam-policy-binding", fullName, "--region", c.region,
+		"--member", fmt.Sprintf("serviceAccount:%s", SSMServiceAccountEmail()),
+		"--role", "roles/securesourcemanager.repoWriter",
+		"--project", c.project)
+	if err != nil {
+		return fullName, fmt.Errorf("adding IAM policy binding: %w", err)
+	}
+
 	return fullName, nil
 }
 
 // DeleteRepositories calls the gcloud SDK to delete the provided repositories from CSR.
-func (c *CSRClient) DeleteRepositories(names ...string) error {
+func (c *SSMClient) DeleteRepositories(names ...string) error {
 	for _, name := range names {
-		_, err := c.shell.ExecWithDebug("gcloud", "source", "repos",
+		_, err := c.shell.ExecWithDebug("gcloud", "beta", "source-manager", "repos",
 			"delete", name,
+			"--region", c.region,
 			"--project", c.project)
 		if err != nil {
 			return fmt.Errorf("deleting source repository: %w", err)
@@ -116,9 +136,9 @@ func (c *CSRClient) DeleteRepositories(names ...string) error {
 	return nil
 }
 
-// DeleteObsoleteRepos is a no-op because CSR repo names are determined by the
+// DeleteObsoleteRepos is a no-op because SSM repo names are determined by the
 // test cluster name and RSync namespace and name, so it can be reused if it
 // failed to be deleted after the test.
-func (c *CSRClient) DeleteObsoleteRepos() error {
+func (c *SSMClient) DeleteObsoleteRepos() error {
 	return nil
 }

@@ -62,6 +62,8 @@ func NewGitProvider(t testing.NTB, provider, clusterName string, logger *testlog
 		return client
 	case e2e.CSR:
 		return newCSRClient(clusterName, shell)
+	case e2e.SSM:
+		return newSSMClient(clusterName, shell)
 	default:
 		return &LocalProvider{}
 	}

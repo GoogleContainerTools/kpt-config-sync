@@ -21,6 +21,8 @@ const (
 	GoogleContainerRegistryHost = "gcr.io"
 	// CSRHost is the host address of the Cloud Source Repositories
 	CSRHost = "https://source.developers.google.com"
+	// SSMHost is the host address of the Secure Source Manager instance
+	SSMHost = "https://test-ssm-651054977359-git.us-central1.sourcemanager.dev" //TODO(camila-b): Needs to not be hardcoded
 
 	// TestInfraContainerRepositoryPath is the Config Sync test-infra repository path
 	TestInfraContainerRepositoryPath = "kpt-config-sync-ci-artifacts"

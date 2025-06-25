@@ -136,7 +136,7 @@ var ShareTestEnv = flag.Bool("share-test-env", false,
 // GitProvider is the provider that hosts the Git repositories.
 var GitProvider = newStringEnum("git-provider", util.EnvString("E2E_GIT_PROVIDER", Local),
 	"The git provider that hosts the Git repositories. Defaults to Local.",
-	[]string{Local, Bitbucket, GitLab, CSR})
+	[]string{Local, Bitbucket, GitLab, CSR, SSM})
 
 // OCIProvider is the provider that hosts the OCI repositories.
 var OCIProvider = newStringEnum("oci-provider", util.EnvString("E2E_OCI_PROVIDER", Local),
@@ -300,6 +300,8 @@ const (
 	CSR = "csr"
 	// ArtifactRegistry indicates using Google Artifact Registry to host the repositories.
 	ArtifactRegistry = "gar"
+	// SSM indicates using Secure Source Manager to host the repositories.
+	SSM = "ssm"
 )
 
 // NumParallel returns the number of parallel test threads

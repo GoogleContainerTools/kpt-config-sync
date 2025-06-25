@@ -19,7 +19,7 @@ module "e2e-csr-reader-sa" {
   gcp_sa_id = "e2e-test-csr-reader"
   gcp_sa_display_name = "Test CSR Reader"
   gcp_sa_description = "Service account used to read from Cloud Source Repositories"
-  role = "roles/source.reader"
+  roles = ["roles/source.reader"]
 }
 
 module "e2e-gar-reader-sa" {
@@ -27,7 +27,7 @@ module "e2e-gar-reader-sa" {
   gcp_sa_id = "e2e-test-ar-reader"
   gcp_sa_display_name = "Test GAR Reader"
   gcp_sa_description = "Service account used to read from Artifact Registry"
-  role = "roles/artifactregistry.reader"
+  roles = ["roles/artifactregistry.reader"]
 }
 
 module "e2e-gcr-reader-sa" {
@@ -35,7 +35,18 @@ module "e2e-gcr-reader-sa" {
   gcp_sa_id = "e2e-test-gcr-reader"
   gcp_sa_display_name = "Test GCR Reader"
   gcp_sa_description = "Service account used to read from Container Registry"
-  role = "roles/storage.objectViewer"
+  roles = ["roles/storage.objectViewer"]
+}
+
+module "e2e-ssm-reader-sa" {
+  source = "../modules/service_account"
+  gcp_sa_id = "e2e-ssm-reader-sa"
+  gcp_sa_display_name = "Test SSM Reader"
+  gcp_sa_description = "Service account used to read from Secure Source Manager Repositories"
+  roles    = [
+    "roles/securesourcemanager.repoReader",
+    "roles/securesourcemanager.instanceAccessor",
+  ]
 }
 
 data "google_project" "project" {

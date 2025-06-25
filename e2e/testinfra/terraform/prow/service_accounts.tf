@@ -26,6 +26,7 @@ resource "google_project_iam_member" "test-runner-iam" {
     "roles/secretmanager.admin",
     "roles/source.admin",
     "roles/logging.viewer",
+    "roles/securesourcemanager.admin",
   ])
 
   role    = each.value

@@ -20,19 +20,6 @@ KIND_NUM_CLUSTERS ?= 15
 E2E_CREATE_CLUSTERS ?= "true"
 E2E_DESTROY_CLUSTERS ?= "true"
 
-# Runs nomos vet locally for example repos.
-# Requires kubeconfig set up properly with Nomos cluster.
-# This is now a duplicate of cli.bats from the e2e tests framework,
-# but can run locally without any of the setup.
-test-nomos-vet-local: build
-	@echo "Running test-nomos-vet-local..."
-	$(NOMOS_LOCAL) --validate vet --path=./examples/acme
-	$(NOMOS_LOCAL) vet --path=./examples/foo-corp-example/foo-corp
-
-	@rm -rf ./.output/tmp/empty
-	@mkdir ./.output/tmp/empty
-	@cd ./.output/tmp/empty && git init && git checkout -b main && $(NOMOS_LOCAL) init && $(NOMOS_LOCAL) vet
-
 include Makefile.e2e.ci
 
 __install-nomos-local:

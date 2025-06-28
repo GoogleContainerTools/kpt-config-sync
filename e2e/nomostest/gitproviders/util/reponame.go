@@ -12,8 +12,8 @@ const (
 	repoNameHashLen = 8
 )
 
+// SanitizeRepoName replaces all slashes with hyphens, and truncate the name.
 // repo name may contain between 3 and 63 lowercase letters, digits and hyphens.
-// sanitizeRepoName replaces all slashes with hyphens, and truncate the name.
 func SanitizeRepoName(repoPrefix, name string) string {
 	fullName := "cs-e2e-" + repoPrefix + "-" + name
 	hashBytes := sha1.Sum([]byte(fullName))

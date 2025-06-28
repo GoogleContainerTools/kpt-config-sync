@@ -20,7 +20,6 @@ import (
 
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders/util"
-	"kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testshell"
 )
 
@@ -35,7 +34,11 @@ func SSMServiceAccountEmail() string {
 type SSMClient struct {
 	// project in which to store the source repo
 	project string
-	// region in which to store the source repo
+	// SSM instance URL where the source repo will be stored
+	instanceURL string
+	// SSM instance ID where the source repo will be stored
+	instanceID string
+	// region of the SSM instance in which to store the source repo
 	region string
 	// repoPrefix is used to avoid overlap
 	repoPrefix string
@@ -48,10 +51,12 @@ var _ GitProvider = &SSMClient{}
 // newSSMClient instantiates a new SSM client.
 func newSSMClient(repoPrefix string, shell *testshell.TestShell) *SSMClient {
 	return &SSMClient{
-		project:    *e2e.GCPProject,
-		region:     "us-central1", //TODO(camila-b): Use variable instead of hardcoded value
-		repoPrefix: repoPrefix,
-		shell:      shell,
+		project:     *e2e.GCPProject,
+		instanceID:  *e2e.SSMInstanceID,
+		instanceURL: *e2e.SSMInstanceURL,
+		region:      *e2e.SSMInstanceRegion,
+		repoPrefix:  repoPrefix,
+		shell:       shell,
 	}
 }
 
@@ -72,7 +77,7 @@ func (c *SSMClient) RemoteURL(name string) (string, error) {
 
 // SyncURL returns a URL for Config Sync to sync from.
 func (c *SSMClient) SyncURL(name string) string {
-	return fmt.Sprintf("%s/%s/%s", testing.SSMHost, c.project, name) //TODO(camila-b): Use variable instead of hardcoded value for SSMHost
+	return fmt.Sprintf("%s/%s/%s", c.instanceURL, c.project, name)
 }
 
 func (c *SSMClient) login() error {
@@ -83,7 +88,7 @@ func (c *SSMClient) login() error {
 	return nil
 }
 
-// CreateRepository calls the gcloud SDK to create a remote repository on CSR.
+// CreateRepository calls the gcloud SDK to create a remote repository on SSM.
 // It returns the full name with a prefix.
 func (c *SSMClient) CreateRepository(name string) (string, error) {
 	fullName := c.fullName(name)
@@ -103,7 +108,7 @@ func (c *SSMClient) CreateRepository(name string) (string, error) {
 
 	_, err = c.shell.ExecWithDebug("gcloud", "beta", "source-manager", "repos",
 		"create", fullName, "--region", c.region,
-		"--instance", "test-ssm",
+		"--instance", c.instanceID,
 		"--project", c.project)
 	if err != nil {
 		return fullName, fmt.Errorf("creating source repository: %w", err)
@@ -122,7 +127,7 @@ func (c *SSMClient) CreateRepository(name string) (string, error) {
 	return fullName, nil
 }
 
-// DeleteRepositories calls the gcloud SDK to delete the provided repositories from CSR.
+// DeleteRepositories calls the gcloud SDK to delete the provided repositories from SSM.
 func (c *SSMClient) DeleteRepositories(names ...string) error {
 	for _, name := range names {
 		_, err := c.shell.ExecWithDebug("gcloud", "beta", "source-manager", "repos",

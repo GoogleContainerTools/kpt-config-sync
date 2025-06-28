@@ -20,7 +20,6 @@ import (
 
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/gitproviders/util"
-	"kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testshell"
 )
 
@@ -35,6 +34,8 @@ func SSMServiceAccountEmail() string {
 type SSMClient struct {
 	// project in which to store the source repo
 	project string
+	// SSM instance in which to store the source repo
+	instance string
 	// region in which to store the source repo
 	region string
 	// repoPrefix is used to avoid overlap
@@ -49,6 +50,7 @@ var _ GitProvider = &SSMClient{}
 func newSSMClient(repoPrefix string, shell *testshell.TestShell) *SSMClient {
 	return &SSMClient{
 		project:    *e2e.GCPProject,
+		instance:   *e2e.SSMInstance,
 		region:     "us-central1", //TODO(camila-b): Use variable instead of hardcoded value
 		repoPrefix: repoPrefix,
 		shell:      shell,
@@ -72,7 +74,7 @@ func (c *SSMClient) RemoteURL(name string) (string, error) {
 
 // SyncURL returns a URL for Config Sync to sync from.
 func (c *SSMClient) SyncURL(name string) string {
-	return fmt.Sprintf("%s/%s/%s", testing.SSMHost, c.project, name) //TODO(camila-b): Use variable instead of hardcoded value for SSMHost
+	return fmt.Sprintf("%s/%s/%s", *e2e.SSMInstance, c.project, name) //TODO(camila-b): Use variable instead of hardcoded value for SSMHost
 }
 
 func (c *SSMClient) login() error {

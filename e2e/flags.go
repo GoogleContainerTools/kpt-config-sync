@@ -133,6 +133,10 @@ var TestCluster = flag.String("test-cluster", Kind,
 var ShareTestEnv = flag.Bool("share-test-env", false,
 	"Specify that the test is using a shared test environment instead of fresh installation per test case.")
 
+// SSM instance is the git URL of the Secure Source Manager instance to be used by SSM tests
+var SSMInstance = flag.String("ssm-instance", util.EnvString("E2E_SSM_INSTANCE", ""),
+	"The git URL of the Secure Source Manager instance to be used by SSM tests. It should be of the form https://<INSTANCE_ID>-<PROJECT_NUMBER>-git.<REGION>.sourcemanager.dev")
+
 // GitProvider is the provider that hosts the Git repositories.
 var GitProvider = newStringEnum("git-provider", util.EnvString("E2E_GIT_PROVIDER", Local),
 	"The git provider that hosts the Git repositories. Defaults to Local.",

@@ -45,6 +45,7 @@ import (
 	"kpt.dev/configsync/pkg/declared"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/metadata"
+	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/util/log"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -771,7 +772,7 @@ func TestControllerValidationErrors(t *testing.T) {
 		Type:    v1beta1.RootSyncStalled,
 		Status:  metav1.ConditionTrue,
 		Reason:  "Validation",
-		Message: "RootSync objects are only allowed in the config-management-system namespace, not in test-ns",
+		Message: fmt.Sprintf("KNV1061: RootSync objects are only allowed in the %s namespace, not in %s\n\nFor more information, see https://g.co/cloud/acm-errors#knv1061", configsync.ControllerNamespace, "test-ns"),
 		ErrorSummary: &v1beta1.ErrorSummary{
 			ErrorCountAfterTruncation: 1,
 			TotalCount:                1,
@@ -789,7 +790,9 @@ func TestControllerValidationErrors(t *testing.T) {
 		nt.Must(nomostest.DeleteObjectsAndWait(nt, rsControllerNamespace))
 	})
 	nt.Must(nt.Watcher.WatchForRepoSyncStalledError(rsControllerNamespace.Namespace, rsControllerNamespace.Name, "Validation",
-		`RepoSync objects are not allowed in the config-management-system namespace`))
+		`KNV1061: RepoSync objects are not allowed in the config-management-system namespace
+
+For more information, see https://g.co/cloud/acm-errors#knv1061`))
 
 	nt.T.Logf("Validate an invalid config with a long RepoSync name")
 	longBytes := make([]byte, validation.DNS1123SubdomainMaxLength)
@@ -805,7 +808,9 @@ func TestControllerValidationErrors(t *testing.T) {
 		nt.Must(nomostest.DeleteObjectsAndWait(nt, rsTooLong))
 	})
 	nt.Must(nt.Watcher.WatchForRepoSyncStalledError(rsTooLong.Namespace, rsTooLong.Name, "Validation",
-		`maximum combined length of RepoSync name and namespace is 45, but found 260`))
+		fmt.Sprintf(`KNV1061: maximum combined length of RepoSync name and namespace is %d, but found %d
+
+For more information, see https://g.co/cloud/acm-errors#knv1061`, reconcilermanager.MaxRepoSyncNNLength, 260)))
 
 	nt.T.Logf("Validate an invalid config with a long RepoSync Secret name")
 	rsInvalidSecretRef := k8sobjects.RepoSyncObjectV1Beta1(testNs, "repo-test")

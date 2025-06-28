@@ -156,7 +156,7 @@ func TestConditionEventLogRootSync(t *testing.T) {
 		nt.Must(nomostest.DeleteObjectsAndWait(nt, rootSync))
 	})
 
-	msg := "RootSync objects are only allowed in the config-management-system namespace, not in test-ns"
+	msg := fmt.Sprintf("KNV1061: RootSync objects are only allowed in the %s namespace, not in %s\n\nFor more information, see https://g.co/cloud/acm-errors#knv1061", configsync.ControllerNamespace, testNs)
 	expectedCondition := &v1beta1.RootSyncCondition{
 		Type:    v1beta1.RootSyncStalled,
 		Status:  metav1.ConditionTrue,
@@ -176,7 +176,7 @@ func TestConditionEventLogRootSync(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	logMessages := []string{msg}
+	logMessages := strings.Split(msg, "\n")
 	nt.Must(assertLogEntryHasCount(logs, 1, "", rootSync.Name, rootSync.Namespace, logMessages))
 }
 
@@ -212,7 +212,7 @@ func TestCloudLoggingConditionEventRootSync(t *testing.T) {
 		nt.Must(nomostest.DeleteObjectsAndWait(nt, rootSync))
 	})
 
-	msg := "RootSync objects are only allowed in the config-management-system namespace, not in test-ns"
+	msg := fmt.Sprintf("KNV1061: RootSync objects are only allowed in the %s namespace, not in %s\n\nFor more information, see https://g.co/cloud/acm-errors#knv1061", configsync.ControllerNamespace, testNs)
 	expectedCondition := &v1beta1.RootSyncCondition{
 		Type:    v1beta1.RootSyncStalled,
 		Status:  metav1.ConditionTrue,
@@ -233,7 +233,7 @@ func TestCloudLoggingConditionEventRootSync(t *testing.T) {
 		nt.ClusterName,
 		startTime.Format(time.RFC3339),
 	)
-	nt.Must(waitForLogEntryInCloudLogs(nt, filter, 1, "", rootSync.Name, rootSync.Namespace, []string{msg}, 120*time.Second))
+	nt.Must(waitForLogEntryInCloudLogs(nt, filter, 1, "", rootSync.Name, rootSync.Namespace, strings.Split(msg, "\n"), 120*time.Second))
 }
 
 // TestStatusEventLogRepoSync tests that error events from RepoSync are properly logged

@@ -15,14 +15,23 @@
 package validate
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
+	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/status"
 	"kpt.dev/configsync/pkg/testing/testerrors"
+)
+
+const (
+	invalidRootSyncNS = "default"
+	invalidNameLength = 100
 )
 
 func auth(authType configsync.AuthType) func(*v1beta1.RepoSync) {
@@ -83,6 +92,14 @@ func missingHelmRepo(rs *v1beta1.RepoSync) {
 
 func missingHelmChart(rs *v1beta1.RepoSync) {
 	rs.Spec.Helm.Chart = ""
+}
+
+func invalidName(rs *v1beta1.RepoSync) {
+	rs.Name = strings.Repeat("x", invalidNameLength)
+}
+
+func invalidNamespace(rs *v1beta1.RepoSync) {
+	rs.Namespace = configsync.ControllerNamespace
 }
 
 func repoSyncWithGit(opts ...func(*v1beta1.RepoSync)) *v1beta1.RepoSync {
@@ -151,6 +168,14 @@ func withHelm() func(*v1beta1.RepoSync) {
 	}
 }
 
+func rootSyncInvalidName(rs *v1beta1.RootSync) {
+	rs.Name = strings.Repeat("x", invalidNameLength)
+}
+
+func rootSyncInvalidNamespace(rs *v1beta1.RootSync) {
+	rs.Namespace = invalidRootSyncNS
+}
+
 func rootSyncWithGit(opts ...func(*v1beta1.RootSync)) *v1beta1.RootSync {
 	rs := k8sobjects.RootSyncObjectV1Beta1(configsync.RootSyncName)
 	rs.Spec.SourceType = configsync.GitSource
@@ -176,6 +201,148 @@ func rootSyncWithHelm(opts ...func(*v1beta1.RootSync)) *v1beta1.RootSync {
 		opt(rs)
 	}
 	return rs
+}
+
+func TestRepoSyncMetadata(t *testing.T) {
+	testCases := map[string]struct {
+		rs         *v1beta1.RepoSync
+		wantErrMsg string
+	}{
+		"valid": {
+			rs: repoSyncWithGit(),
+		},
+		"invalid namespace": {
+			rs:         repoSyncWithGit(invalidNamespace),
+			wantErrMsg: fmt.Sprintf("KNV1061: RepoSync objects are not allowed in the %s namespace\n\nFor more information, see https://g.co/cloud/acm-errors#knv1061", configsync.ControllerNamespace),
+		},
+		"invalid name": {
+			rs:         repoSyncWithGit(invalidName),
+			wantErrMsg: fmt.Sprintf("KNV1061: maximum combined length of RepoSync name and namespace is %d, but found %d\n\nFor more information, see https://g.co/cloud/acm-errors#knv1061", reconcilermanager.MaxRepoSyncNNLength, invalidNameLength+len("test-ns")),
+		},
+	}
+	for testName, tc := range testCases {
+		t.Run(testName, func(t *testing.T) {
+			err := RepoSyncMetadata(tc.rs)
+			if tc.wantErrMsg == "" {
+				require.NoError(t, err)
+			} else {
+				require.Equal(t, tc.wantErrMsg, err.Error())
+			}
+		})
+	}
+}
+
+func TestRootSyncMetadata(t *testing.T) {
+	testCases := map[string]struct {
+		rs         *v1beta1.RootSync
+		wantErrMsg string
+	}{
+		"valid": {
+			rs: rootSyncWithGit(),
+		},
+		"invalid namespace": {
+			rs:         rootSyncWithGit(rootSyncInvalidNamespace),
+			wantErrMsg: fmt.Sprintf("KNV1061: RootSync objects are only allowed in the %s namespace, not in %s\n\nFor more information, see https://g.co/cloud/acm-errors#knv1061", configsync.ControllerNamespace, invalidRootSyncNS),
+		},
+		"invalid name": {
+			rs:         rootSyncWithGit(rootSyncInvalidName),
+			wantErrMsg: fmt.Sprintf("KNV1061: maximum length of RootSync name is %d, but found %d\n\nFor more information, see https://g.co/cloud/acm-errors#knv1061", reconcilermanager.MaxRootSyncNameLength, invalidNameLength),
+		},
+	}
+	for testName, tc := range testCases {
+		t.Run(testName, func(t *testing.T) {
+			err := RootSyncMetadata(tc.rs)
+			if tc.wantErrMsg == "" {
+				require.NoError(t, err)
+			} else {
+				require.Equal(t, tc.wantErrMsg, err.Error())
+			}
+		})
+	}
+}
+
+func TestReconcilerName(t *testing.T) {
+	testCases := map[string]struct {
+		name       string
+		wantErrMsg string
+	}{
+		"valid name": {
+			name: "example.com",
+		},
+		"invalid name": {
+			name:       "_",
+			wantErrMsg: fmt.Sprintf("KNV1061: Invalid reconciler name %q: %s", "_", "a lowercase RFC 1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')\n\nFor more information, see https://g.co/cloud/acm-errors#knv1061"),
+		},
+	}
+	for testName, tc := range testCases {
+		t.Run(testName, func(t *testing.T) {
+			err := ReconcilerName(tc.name)
+			if tc.wantErrMsg == "" {
+				require.NoError(t, err)
+			} else {
+				require.Equal(t, tc.wantErrMsg, err.Error())
+			}
+		})
+	}
+}
+
+func TestValidateRepoSyncName(t *testing.T) {
+	testCases := map[string]struct {
+		name       string
+		namespace  string
+		wantErrMsg string
+	}{
+		"valid name/namespace": {
+			name:      strings.Repeat("x", 30),
+			namespace: strings.Repeat("n", 15),
+		},
+		"invalid name/namespace": {
+			name:       strings.Repeat("x", 30),
+			namespace:  strings.Repeat("n", 16),
+			wantErrMsg: fmt.Sprintf("KNV1061: maximum combined length of RepoSync name and namespace is %d, but found %d\n\nFor more information, see https://g.co/cloud/acm-errors#knv1061", reconcilermanager.MaxRepoSyncNNLength, 30+16),
+		},
+	}
+	for testName, tc := range testCases {
+		t.Run(testName, func(t *testing.T) {
+			rs := &v1beta1.RepoSync{}
+			rs.Name = tc.name
+			rs.Namespace = tc.namespace
+			err := RepoSyncName(rs)
+			if tc.wantErrMsg == "" {
+				require.NoError(t, err)
+			} else {
+				require.Equal(t, tc.wantErrMsg, err.Error())
+			}
+		})
+	}
+}
+
+func TestValidateRootSyncName(t *testing.T) {
+	testCases := map[string]struct {
+		name       string
+		wantErrMsg string
+	}{
+		"valid name": {
+			name:       strings.Repeat("x", 38),
+			wantErrMsg: "",
+		},
+		"invalid name": {
+			name:       strings.Repeat("x", 39),
+			wantErrMsg: fmt.Sprintf("KNV1061: maximum length of RootSync name is %d, but found %d\n\nFor more information, see https://g.co/cloud/acm-errors#knv1061", reconcilermanager.MaxRootSyncNameLength, 39),
+		},
+	}
+	for testName, tc := range testCases {
+		t.Run(testName, func(t *testing.T) {
+			rs := &v1beta1.RootSync{}
+			rs.Name = tc.name
+			err := RootSyncName(rs)
+			if tc.wantErrMsg == "" {
+				require.NoError(t, err)
+			} else {
+				require.Equal(t, tc.wantErrMsg, err.Error())
+			}
+		})
+	}
 }
 
 func TestValidateRepoSyncSpec(t *testing.T) {

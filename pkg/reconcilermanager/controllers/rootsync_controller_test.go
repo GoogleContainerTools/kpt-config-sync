@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -50,7 +49,6 @@ import (
 	"kpt.dev/configsync/pkg/metadata"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/rootsync"
-	"kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	syncerFake "kpt.dev/configsync/pkg/syncer/syncertest/fake"
 	"kpt.dev/configsync/pkg/testing/testerrors"
 	"kpt.dev/configsync/pkg/util"
@@ -2312,7 +2310,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	if err := fakeClient.Create(ctx, rs2, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
-	if err := fakeClient.Create(ctx, rg2, client.FieldOwner(fake.FieldManager)); err != nil {
+	if err := fakeClient.Create(ctx, rg2, client.FieldOwner(syncerFake.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName2); err != nil {
@@ -2377,7 +2375,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	if err := fakeClient.Create(ctx, rs3, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
-	if err := fakeClient.Create(ctx, rg3, client.FieldOwner(fake.FieldManager)); err != nil {
+	if err := fakeClient.Create(ctx, rg3, client.FieldOwner(syncerFake.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName3); err != nil {
@@ -2446,7 +2444,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	if err := fakeClient.Create(ctx, secret4, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
-	if err := fakeClient.Create(ctx, rg4, client.FieldOwner(fake.FieldManager)); err != nil {
+	if err := fakeClient.Create(ctx, rg4, client.FieldOwner(syncerFake.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName4); err != nil {
@@ -2516,7 +2514,7 @@ func TestMultipleRootSyncs(t *testing.T) {
 	if err := fakeClient.Create(ctx, secret5, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
-	if err := fakeClient.Create(ctx, rg5, client.FieldOwner(fake.FieldManager)); err != nil {
+	if err := fakeClient.Create(ctx, rg5, client.FieldOwner(syncerFake.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName5); err != nil {
@@ -4421,29 +4419,6 @@ For more information, see https://g.co/cloud/acm-errors#knv1061`))
 	wantDeployments := map[core.ID]*appsv1.Deployment{core.IDOf(rootDeployment): rootDeployment}
 	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
 		t.Errorf("Deployment validation failed. err: %v", err)
-	}
-}
-
-func TestValidateRootSyncName(t *testing.T) {
-	testCases := map[string]struct {
-		name      string
-		expectErr error
-	}{
-		"valid name": {
-			name:      strings.Repeat("x", 38),
-			expectErr: nil,
-		},
-		"invalid name": {
-			name:      strings.Repeat("x", 39),
-			expectErr: fmt.Errorf("maximum RootSync name length is 38, but found 39"),
-		},
-	}
-	for testName, tc := range testCases {
-		t.Run(testName, func(t *testing.T) {
-			rs := &v1beta1.RootSync{}
-			rs.Name = tc.name
-			require.Equal(t, tc.expectErr, validateRootSyncName(rs))
-		})
 	}
 }
 

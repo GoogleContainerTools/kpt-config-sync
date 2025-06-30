@@ -960,30 +960,12 @@ func (r *RepoSyncReconciler) populateContainerEnvs(ctx context.Context, rs *v1be
 	return result, nil
 }
 
-// This check surfaces the RepoSync NN length constraint earlier as a validation error.
-func validateRepoSyncName(rs *v1beta1.RepoSync) error {
-	nnLength := len(rs.Name) + len(rs.Namespace)
-	if nnLength > reconcilermanager.MaxRepoSyncNNLength {
-		return fmt.Errorf("maximum combined length of RepoSync name and namespace is %d, but found %d",
-			reconcilermanager.MaxRepoSyncNNLength, nnLength)
-	}
-	return nil
-}
-
-func (r *RepoSyncReconciler) validateRepoSync(ctx context.Context, rs *v1beta1.RepoSync, reconcilerName string) error {
-	if rs.Namespace == configsync.ControllerNamespace {
-		return fmt.Errorf("RepoSync objects are not allowed in the %s namespace", configsync.ControllerNamespace)
-	}
-
-	if err := validateRepoSyncName(rs); err != nil {
+func (r *RepoSyncReconciler) validateRepoSync(ctx context.Context, rs *v1beta1.RepoSync, reconcilerName string) status.Error {
+	if err := validate.RepoSyncMetadata(rs); err != nil {
 		return err
 	}
 
-	if err := validation.IsDNS1123Subdomain(reconcilerName); err != nil {
-		return fmt.Errorf("Invalid reconciler name %q: %s.", reconcilerName, strings.Join(err, ", "))
-	}
-
-	if err := r.validateSyncMetadata(rs); err != nil {
+	if err := validate.ReconcilerName(reconcilerName); err != nil {
 		return err
 	}
 

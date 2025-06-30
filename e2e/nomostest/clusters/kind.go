@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"k8s.io/apiserver/pkg/features"
 	"kpt.dev/configsync/e2e"
 	"kpt.dev/configsync/e2e/nomostest/docker"
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
@@ -155,6 +156,12 @@ func createKindCluster(p *cluster.Provider, name, kcfgPath string) error {
 					fmt.Sprintf(`[plugins."io.containerd.grpc.v1.cri".registry.mirrors."localhost:%d"]
   endpoint = ["http://%s:%d"]`, docker.RegistryPort, docker.RegistryName, docker.RegistryPort),
 				},
+				FeatureGates: map[string]bool{
+					string(features.MutatingAdmissionPolicy): true,
+				},
+				RuntimeConfig: map[string]string{
+					"admissionregistration.k8s.io/v1alpha1": "true",
+				},
 				// Enable ValidatingAdmissionWebhooks in the Kind cluster, as these
 				// are disabled by default.
 				// Also mount etcd to tmpfs for memory-backed storage.
@@ -166,7 +173,7 @@ etcd:
     dataDir: /tmp/etcd
 apiServer:
   extraArgs:
-    "enable-admission-plugins": "ValidatingAdmissionWebhook"`,
+    "enable-admission-plugins": "ValidatingAdmissionWebhook,MutatingAdmissionPolicy,ValidatingAdmissionPolicy"`,
 				},
 			}),
 			// Retain nodes for debugging logs.

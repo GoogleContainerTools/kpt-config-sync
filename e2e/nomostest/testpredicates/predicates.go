@@ -224,6 +224,28 @@ func HasExactlyLabelKeys(wantKeys ...string) Predicate {
 	}
 }
 
+// HasExactlyNodeAffinity ensures the Pod has the provided nodeAffinity
+func HasExactlyNodeAffinity(nodeAffinity *corev1.NodeAffinity) Predicate {
+	return func(o client.Object) error {
+		if o == nil {
+			return ErrObjectNotFound
+		}
+		pod, ok := o.(*corev1.Pod)
+		if !ok {
+			return WrongTypeErr(pod, &corev1.Pod{})
+		}
+		gotAffinity := &corev1.NodeAffinity{}
+		if pod.Spec.Affinity != nil && pod.Spec.Affinity.NodeAffinity != nil {
+			gotAffinity = pod.Spec.Affinity.NodeAffinity
+		}
+		if !equality.Semantic.DeepEqual(nodeAffinity, gotAffinity) {
+			return fmt.Errorf("expected %s to have spec.affinity.nodeAffinity: %s, but got %s",
+				kinds.ObjectSummary(pod), log.AsJSON(nodeAffinity), log.AsJSON(gotAffinity))
+		}
+		return nil
+	}
+}
+
 // HasExactlyImage ensures a container has the expected image.
 func HasExactlyImage(containerName, expectImageName, expectImageTag, expectImageDigest string) Predicate {
 	return func(o client.Object) error {

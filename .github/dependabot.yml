@@ -28,3 +28,7 @@ updates:
       applies-to: version-updates
       patterns:
       - "k8s.io/*"
+    kustomize:
+      applies-to: version-updates
+      patterns:
+      - "sigs.k8s.io/kustomize/*"

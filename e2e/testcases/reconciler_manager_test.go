@@ -606,7 +606,7 @@ func TestManagingReconciler(t *testing.T) {
 		}
 	})
 	nt.T.Log("Restart the reconciler-manager to pick up the manifests change")
-	nomostest.DeletePodByLabel(nt, "app", reconcilermanager.ManagerName, true)
+	nt.Must(nomostest.DeletePodByLabel(nt, "app", reconcilermanager.ManagerName, true))
 	nt.T.Log("Verify the reconciler Deployment has been updated to the new manifest")
 	generation++ // generation bumped by 1 to apply the new change in the default manifests declared in the Config Map
 	nt.Must(nt.Watcher.WatchObject(kinds.Deployment(), nomostest.DefaultRootReconcilerName, configsync.ControllerNamespace,
@@ -700,7 +700,7 @@ func resetReconcilerDeploymentManifests(nt *nomostest.NT, containerName string, 
 	}
 
 	nt.T.Log("Restart the reconciler-manager to pick up the manifests change")
-	nomostest.DeletePodByLabel(nt, "app", reconcilermanager.ManagerName, true)
+	nt.Must(nomostest.DeletePodByLabel(nt, "app", reconcilermanager.ManagerName, true))
 
 	nt.T.Log("Verify the reconciler Deployment has been reverted to the original manifest")
 	err := nt.Watcher.WatchObject(kinds.Deployment(),

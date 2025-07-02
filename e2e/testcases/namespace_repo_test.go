@@ -156,7 +156,7 @@ func validateRepoSyncRBAC(nt *nomostest.NT, ns string, nsRepo *gitproviders.Read
 	nt.T.Log("Restart the namespace reconciler Pod to force resync instead of waiting for the retry backoff")
 	// Prior updates don't need a restart because the retry backoff is within 1 minute
 	// A Pod restart on Autopilot may take longer than 1 minute
-	nomostest.DeletePodByLabel(nt, "configsync.gke.io/deployment-name", core.NsReconcilerName(ns, configsync.RepoSyncName), false)
+	nt.Must(nomostest.DeletePodByLabel(nt, "configsync.gke.io/deployment-name", core.NsReconcilerName(ns, configsync.RepoSyncName), false))
 	nt.Must(nt.Watcher.WatchForRepoSyncSyncError(ns, configsync.RepoSyncName, applier.ApplierErrorCode,
 		`failed to apply Deployment.apps, bookstore/hello-world: deployments.apps "hello-world" is forbidden: `, []v1beta1.ResourceRef{{
 			SourcePath: "acme/deployment.yaml",

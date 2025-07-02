@@ -20,7 +20,7 @@ require (
 	github.com/go-logr/logr v1.4.3
 	github.com/golang/protobuf v1.5.4
 	github.com/google/addlicense v1.1.1
-	github.com/google/gnostic-models v0.6.9
+	github.com/google/gnostic-models v0.7.0
 	github.com/google/go-cmp v0.7.0
 	github.com/google/go-containerregistry v0.20.6
 	github.com/google/go-licenses/v2 v2.0.0-alpha.1
@@ -49,7 +49,7 @@ require (
 	k8s.io/code-generator v0.33.2
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kube-aggregator v0.33.2
-	k8s.io/kube-openapi v0.0.0-20250318190949-c8a335a9a2ff
+	k8s.io/kube-openapi v0.0.0-20250701173324-9bd5c66d9911
 	k8s.io/kubectl v0.33.2
 	k8s.io/kubernetes v1.33.2
 	k8s.io/utils v0.0.0-20241210054802-24370beab758

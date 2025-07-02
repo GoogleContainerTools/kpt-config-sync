@@ -74,7 +74,7 @@ func TestStatusEventLogRootSync(t *testing.T) {
 	}
 
 	logMessages := []string{"KNV1017: The system/ directory must declare a Repo Resource."}
-	nt.Must(assertLogEntryHasCount(logs, 1, commit, rootSyncID.Name, rootSyncID.Namespace, logMessages))
+	nt.Must(assertSingleLogEntryPerMessage(logs, commit, rootSyncID.Name, rootSyncID.Namespace, logMessages))
 
 	nt.T.Log("Reset test repo")
 	nt.Must(rootSyncGitRepo.Git("reset", "--hard", "HEAD^"))
@@ -117,7 +117,7 @@ func TestCloudLoggingRootSync(t *testing.T) {
 		nt.ClusterName,
 		startTime.Format(time.RFC3339),
 	)
-	nt.Must(waitForLogEntryInCloudLogs(nt, filter, 1, commit, rootSyncID.Name, rootSyncID.Namespace, []string{"KNV1017: The system/ directory must declare a Repo Resource."}, 120*time.Second))
+	nt.Must(waitForLogEntryInCloudLogs(nt, filter, commit, rootSyncID.Name, rootSyncID.Namespace, []string{"KNV1017: The system/ directory must declare a Repo Resource."}, 120*time.Second))
 
 	nt.T.Log("Reset test repo")
 	nt.Must(rootSyncGitRepo.Git("reset", "--hard", "HEAD^"))
@@ -176,8 +176,7 @@ func TestConditionEventLogRootSync(t *testing.T) {
 		nt.T.Fatal(err)
 	}
 
-	logMessages := strings.Split(msg, "\n")
-	nt.Must(assertLogEntryHasCount(logs, 1, "", rootSync.Name, rootSync.Namespace, logMessages))
+	nt.Must(assertSingleLogEntryPerMessage(logs, "", rootSync.Name, rootSync.Namespace, []string{msg}))
 }
 
 // TestCloudLoggingConditionEventRootSync tests that condition-based errors from RootSync
@@ -233,7 +232,7 @@ func TestCloudLoggingConditionEventRootSync(t *testing.T) {
 		nt.ClusterName,
 		startTime.Format(time.RFC3339),
 	)
-	nt.Must(waitForLogEntryInCloudLogs(nt, filter, 1, "", rootSync.Name, rootSync.Namespace, strings.Split(msg, "\n"), 120*time.Second))
+	nt.Must(waitForLogEntryInCloudLogs(nt, filter, "", rootSync.Name, rootSync.Namespace, []string{msg}, 120*time.Second))
 }
 
 // TestStatusEventLogRepoSync tests that error events from RepoSync are properly logged
@@ -276,7 +275,7 @@ func TestStatusEventLogRepoSync(t *testing.T) {
 	}
 
 	logMessages := []string{msg, "\"generation\":1"}
-	nt.Must(assertLogEntryHasCount(logs, 1, commit, repoSyncID.Name, repoSyncID.Namespace, logMessages))
+	nt.Must(assertSingleLogEntryPerMessage(logs, commit, repoSyncID.Name, repoSyncID.Namespace, logMessages))
 }
 
 // TestCloudLoggingStatusEventRepoSync tests that error events from RepoSync are properly sent
@@ -320,37 +319,37 @@ func TestCloudLoggingStatusEventRepoSync(t *testing.T) {
 		nt.ClusterName,
 		startTime.Format(time.RFC3339),
 	)
-	nt.Must(waitForLogEntryInCloudLogs(nt, filter, 1, commit, repoSyncID.Name, repoSyncID.Namespace, []string{msg, "\"generation\":1"}, 120*time.Second))
+	nt.Must(waitForLogEntryInCloudLogs(nt, filter, commit, repoSyncID.Name, repoSyncID.Namespace, []string{msg, "\"generation\":1"}, 120*time.Second))
 }
 
-// assertLogEntryHasCount checks if the specified messages appear in the logs
-// exactly the expected number of times, matching the given commit, name, and namespace.
-func assertLogEntryHasCount(logs []string, expectedCount int, commit, rname, rnamespace string, messages []string) error {
-	count := 0
-
+// assertSingleLogEntryPerMessage checks if each specified message appears in exactly
+// one log entry among logs that match the given commit, resource name, and namespace.
+func assertSingleLogEntryPerMessage(logs []string, commit, resourceName, resourceNamespace string, messages []string) error {
+	messageCounts := make(map[string]int)
+	for _, msg := range messages {
+		messageCounts[msg] = 0
+	}
+	// Count occurrences of each message in relevant logs
 	for _, line := range logs {
-		if strings.Contains(line, commit) && strings.Contains(line, rname) && strings.Contains(line, rnamespace) {
-			allFound := false
-			for _, msg := range messages {
-				if !strings.Contains(line, msg) {
-					break
-				}
-				allFound = true
-			}
-			if allFound {
-				count++
+		if !(strings.Contains(line, commit) && strings.Contains(line, resourceName) && strings.Contains(line, resourceNamespace)) {
+			continue
+		}
+		for _, msg := range messages {
+			if line == msg {
+				messageCounts[msg]++
 			}
 		}
 	}
-	if count != expectedCount {
-		return fmt.Errorf("Expected %d occurrences of error log entry %s, but found %d",
-			expectedCount, messages, count)
+	for _, msg := range messages {
+		if count, ok := messageCounts[msg]; !ok || count != 1 {
+			return fmt.Errorf("failed to find single occurrence of each message in logs, counted: %v", messageCounts)
+		}
 	}
 	return nil
 }
 
 // waitForLogEntryInCloudLogs queries Cloud Logging and asserts the log entry appears within the timeout.
-func waitForLogEntryInCloudLogs(nt *nomostest.NT, filter string, expectedCount int, commit, rname, rnamespace string, messages []string, timeout time.Duration) error {
+func waitForLogEntryInCloudLogs(nt *nomostest.NT, filter string, commit, rname, rnamespace string, messages []string, timeout time.Duration) error {
 	ctx := nt.Context
 	client, err := logadmin.NewClient(ctx, *e2e.GCPProject)
 	if err != nil {
@@ -379,7 +378,7 @@ func waitForLogEntryInCloudLogs(nt *nomostest.NT, filter string, expectedCount i
 			lastLogs = append(lastLogs, fmt.Sprintf("%s: %v", entry.Timestamp.Format(time.RFC3339), entry.Payload))
 		}
 
-		return assertLogEntryHasCount(lastLogs, expectedCount, commit, rname, rnamespace, messages)
+		return assertSingleLogEntryPerMessage(lastLogs, commit, rname, rnamespace, messages)
 	})
 
 	if err != nil {

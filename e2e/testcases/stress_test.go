@@ -291,7 +291,7 @@ func TestStress100CRDs(t *testing.T) {
 	}
 
 	nt.T.Log("Replacing the reconciler Pod to ensure the new CRDs are discovered")
-	nomostest.DeletePodByLabel(nt, "app", reconcilermanager.Reconciler, true)
+	nt.Must(nomostest.DeletePodByLabel(nt, "app", reconcilermanager.Reconciler, true))
 
 	nt.T.Log("Adding a test namespace to the repo to trigger a new sync")
 	nt.Must(rootSyncGitRepo.Add(fmt.Sprintf("%s/ns-%s.yaml", syncPath, ns), k8sobjects.NamespaceObject(ns)))

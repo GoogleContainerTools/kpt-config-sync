@@ -112,10 +112,10 @@ func ClearMembershipInfo(nt *nomostest.NT, fleetMembership, fleetProject, gkeURI
 	// If membership exists before the reconciler-manager is deployed (test leftovers), the reconciler will be updated.
 	// If membership doesn't exist (normal scenario), the reconciler should remain the same after the reconciler-manager restarts.
 	nt.T.Logf("Restart the reconciler-manager to ensure the membership watch is not set up")
-	nomostest.DeletePodByLabel(nt, "app", reconcilermanager.ManagerName, false)
-	nomostest.Wait(nt.T, "wait for FWI credentials to be absent", nt.DefaultWaitTimeout, func() error {
+	nt.Must(nomostest.DeletePodByLabel(nt, "app", reconcilermanager.ManagerName, false))
+	nt.Must(nomostest.Wait(nt.T, "wait for FWI credentials to be absent", nt.DefaultWaitTimeout, func() error {
 		return ReconcilerPodMissingFWICredsAnnotation(nt, nomostest.DefaultRootReconcilerName)
-	})
+	}))
 }
 
 // ReconcilerPodHasFWICredsAnnotation checks whether the reconciler Pod has the

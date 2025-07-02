@@ -272,7 +272,7 @@ func TestWorkloadIdentity(t *testing.T) {
 				// can set up the watch. Once the watch is configured, it can detect the
 				// deletion and creation of the Membership, which implies cluster unregistration and registration.
 				// The underlying reconciler should be updated with FWI creds after the reconciler-manager restarts.
-				nomostest.DeletePodByLabel(nt, "app", reconcilermanager.ManagerName, false)
+				nt.Must(nomostest.DeletePodByLabel(nt, "app", reconcilermanager.ManagerName, false))
 			}
 
 			var rootMeta, nsMeta rsyncValidateMeta

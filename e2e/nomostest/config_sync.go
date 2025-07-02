@@ -1300,7 +1300,7 @@ func setupCentralizedControl(nt *NT) {
 	}
 
 	// Wait for all Namespaces to be applied and reconciled.
-	WaitForNamespaces(nt, nt.DefaultWaitTimeout, namespaces...)
+	nt.Must(WaitForNamespaces(nt, nt.DefaultWaitTimeout, namespaces...))
 
 	// Now that the Namespaces exist, create the Secrets,
 	// which are required for the RepoSyncs to reconcile.
@@ -1422,22 +1422,22 @@ func NewPodReady(nt *NT, labelName, currentLabel, childLabel string, oldCurrentP
 }
 
 // DeletePodByLabel deletes pods that have the label and waits until new pods come up.
-func DeletePodByLabel(nt *NT, label, value string, waitForChildren bool) {
+func DeletePodByLabel(nt *NT, label, value string, waitForChildren bool) error {
 	oldPods := &corev1.PodList{}
 	if err := nt.KubeClient.List(oldPods, client.InNamespace(configmanagement.ControllerNamespace), client.MatchingLabels{label: value}); err != nil {
-		nt.T.Fatal(err)
+		return fmt.Errorf("listing pods: %w", err)
 	}
 	oldReconcilers := &corev1.PodList{}
 	if value == reconcilermanager.ManagerName && waitForChildren {
 		// Get the children pods managed by the reconciler-manager.
 		if err := nt.KubeClient.List(oldReconcilers, client.InNamespace(configmanagement.ControllerNamespace), client.MatchingLabels{label: reconcilermanager.Reconciler}); err != nil {
-			nt.T.Fatal(err)
+			return fmt.Errorf("listing reconciler pods: %w", err)
 		}
 	}
 	if err := nt.KubeClient.DeleteAllOf(&corev1.Pod{}, client.InNamespace(configmanagement.ControllerNamespace), client.MatchingLabels{label: value}); err != nil {
-		nt.T.Fatalf("Pod delete failed: %v", err)
+		return fmt.Errorf("deleting pods: %w", err)
 	}
-	Wait(nt.T, "new pods come up", nt.DefaultWaitTimeout, func() error {
+	return Wait(nt.T, "new pods come up", nt.DefaultWaitTimeout, func() error {
 		if value == reconcilermanager.ManagerName && waitForChildren {
 			// Wait for both the new reconciler-manager pod and the new reconcilers are ready.
 			return NewPodReady(nt, label, value, reconcilermanager.Reconciler, oldPods.Items, oldReconcilers.Items)

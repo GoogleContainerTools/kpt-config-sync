@@ -85,10 +85,10 @@ func TestConstraintTemplateAndConstraintInSameCommit(t *testing.T) {
 
 	// Simulate Gatekeeper's controller behavior.
 	// Wait for the ConstraintTemplate to be applied, then apply the Constraint CRD.
-	nomostest.Wait(nt.T, "ConstraintTemplate on API server", 2*time.Minute, func() error {
+	nt.Must(nomostest.Wait(nt.T, "ConstraintTemplate on API server", 2*time.Minute, func() error {
 		ct := emptyConstraintTemplate()
 		return nt.Validate("k8sallowedrepos", "", &ct)
-	})
+	}))
 	if err := nt.ApplyGatekeeperCRD("constraint-crd.yaml", "k8sallowedrepos.constraints.gatekeeper.sh"); err != nil {
 		nt.T.Fatalf("Failed to create constraint CRD: %v", err)
 	}

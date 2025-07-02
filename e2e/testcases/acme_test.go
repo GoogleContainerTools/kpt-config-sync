@@ -60,7 +60,7 @@ func TestAcmeCorpRepo(t *testing.T) {
 
 	checkResourceCount(nt, kinds.Namespace(), "", len(nsToFolder), nil, configSyncManagementAnnotations)
 	for namespace, folder := range nsToFolder {
-		checkNamespaceExists(nt, namespace, configSyncManagementLabels(namespace, folder), configSyncManagementAnnotations)
+		nt.Must(checkNamespaceExists(nt, namespace, configSyncManagementLabels(namespace, folder), configSyncManagementAnnotations))
 	}
 
 	// Check ClusterRoles (add one for the 'safety' ClusterRole)
@@ -128,7 +128,7 @@ func TestAcmeCorpRepo(t *testing.T) {
 	}
 
 	namespace = "frontend"
-	checkNamespaceExists(nt, namespace, map[string]string{"env": "prod"}, map[string]string{"audit": "true"})
+	nt.Must(checkNamespaceExists(nt, namespace, map[string]string{"env": "prod"}, map[string]string{"audit": "true"}))
 	checkResourceCount(nt, kinds.ConfigMap(), namespace, 1, map[string]string{"app.kubernetes.io/managed-by": "configmanagement.gke.io"}, nil)
 	if err := checkResource(nt, &corev1.ConfigMap{}, namespace, "store-inventory", nil, map[string]string{"configmanagement.gke.io/managed": "enabled"}); err != nil {
 		nt.T.Fatal(err)
@@ -241,8 +241,8 @@ func checkResource(nt *nomostest.NT, obj client.Object, namespace, name string, 
 	return nil
 }
 
-func checkNamespaceExists(nt *nomostest.NT, name string, labels, annotations map[string]string) {
-	nomostest.Wait(nt.T, "namespace exists", nt.DefaultWaitTimeout, func() error {
+func checkNamespaceExists(nt *nomostest.NT, name string, labels, annotations map[string]string) error {
+	return nomostest.Wait(nt.T, "namespace exists", nt.DefaultWaitTimeout, func() error {
 		return checkResource(nt, &corev1.Namespace{}, "", name, labels, annotations)
 	})
 }

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package gitproviders
+package util
 
 import (
 	"testing"
@@ -55,7 +55,7 @@ func TestSanitizeRepoName(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.testName, func(t *testing.T) {
-			gotName := sanitizeRepoName(tc.repoPrefix, tc.repoName)
+			gotName := SanitizeRepoName(tc.repoPrefix, tc.repoName)
 			assert.Equal(t, tc.expectedName, gotName)
 		})
 	}

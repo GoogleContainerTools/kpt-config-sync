@@ -15,19 +15,13 @@
 package gitproviders
 
 import (
-	"crypto/sha1"
-	"encoding/hex"
 	"fmt"
 	"strings"
 
 	"kpt.dev/configsync/e2e"
+	"kpt.dev/configsync/e2e/nomostest/gitproviders/util"
 	"kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testshell"
-)
-
-const (
-	repoNameMaxLen  = 63
-	repoNameHashLen = 8
 )
 
 // CSRReaderEmail returns the email of the google service account with
@@ -56,7 +50,7 @@ func newCSRClient(repoPrefix string, shell *testshell.TestShell) *CSRClient {
 }
 
 func (c *CSRClient) fullName(name string) string {
-	return sanitizeRepoName("cs-e2e-"+c.repoPrefix, name)
+	return util.SanitizeRepoName("cs-e2e-"+c.repoPrefix, name)
 }
 
 // Type returns the provider type.
@@ -127,17 +121,4 @@ func (c *CSRClient) DeleteRepositories(names ...string) error {
 // failed to be deleted after the test.
 func (c *CSRClient) DeleteObsoleteRepos() error {
 	return nil
-}
-
-// CSR repo name may contain between 3 and 63 lowercase letters, digits and hyphens.
-// sanitizeRepoName replaces all slashes with hyphens, and truncate the name.
-func sanitizeRepoName(repoPrefix, name string) string {
-	fullName := "cs-e2e-" + repoPrefix + "-" + name
-	hashBytes := sha1.Sum([]byte(fullName))
-	hashStr := hex.EncodeToString(hashBytes[:])[:repoNameHashLen]
-
-	if len(fullName) > repoNameMaxLen-1-repoNameHashLen {
-		fullName = fullName[:repoNameMaxLen-1-repoNameHashLen]
-	}
-	return fmt.Sprintf("%s-%s", strings.ReplaceAll(fullName, "/", "-"), hashStr)
 }

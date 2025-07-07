@@ -43,6 +43,8 @@ func WaitTimeout(timeout time.Duration) WaitOption {
 
 // Wait provides a logged wait for condition to return nil with options for timeout.
 // It fails the test on errors.
+// Generally it's preferred to use WatchObject when possible. This function can
+// be used for preconditions which are hard/impossible to express with WatchObject/WatchPredicate.
 func Wait(t testing.NTB, opName string, timeout time.Duration, condition func() error, opts ...WaitOption) error {
 	t.Helper()
 

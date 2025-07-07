@@ -761,7 +761,7 @@ func renameCluster(nt *nomostest.NT, configMapName, clusterName string) {
 	}
 	nt.MustMergePatch(cm, fmt.Sprintf(`{"data":{"%s":"%s"}}`, reconcilermanager.ClusterNameKey, clusterName))
 
-	nomostest.DeletePodByLabel(nt, "app", reconcilermanager.ManagerName, true)
+	nt.Must(nomostest.DeletePodByLabel(nt, "app", reconcilermanager.ManagerName, true))
 }
 
 // clusterNameConfigMapName returns the name of the ConfigMap that has the CLUSTER_NAME.

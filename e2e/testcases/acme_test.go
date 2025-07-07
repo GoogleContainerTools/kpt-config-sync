@@ -19,7 +19,10 @@ import (
 	"testing"
 
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
+	"kpt.dev/configsync/e2e/nomostest/testpredicates"
+	"kpt.dev/configsync/e2e/nomostest/testwatcher"
 	"kpt.dev/configsync/pkg/api/configmanagement"
+	"kpt.dev/configsync/pkg/metadata"
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -30,16 +33,6 @@ import (
 	"kpt.dev/configsync/pkg/kinds"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-var configSyncManagementAnnotations = map[string]string{"configmanagement.gke.io/managed": "enabled", "hnc.x-k8s.io/managed-by": "configmanagement.gke.io"}
-
-func configSyncManagementLabels(namespace, folder string) map[string]string {
-	labels := map[string]string{fmt.Sprintf("%s.tree.hnc.x-k8s.io/depth", namespace): "0"}
-	if folder != "" {
-		labels[fmt.Sprintf("%s.tree.hnc.x-k8s.io/depth", folder)] = "1"
-	}
-	return labels
-}
 
 func TestAcmeCorpRepo(t *testing.T) {
 	nt := nomostest.New(t, nomostesting.Reconciliation1)
@@ -58,117 +51,115 @@ func TestAcmeCorpRepo(t *testing.T) {
 	nt.Must(rootSyncGitRepo.CommitAndPush("Initialize the acme directory"))
 	nt.Must(nt.WatchForAllSyncs())
 
-	checkResourceCount(nt, kinds.Namespace(), "", len(nsToFolder), nil, configSyncManagementAnnotations)
+	wantAnnotations := map[string]string{
+		metadata.ManagementModeAnnotationKey: metadata.ManagementEnabled.String(),
+		metadata.HNCManagedBy:                metadata.ManagedByValue,
+	}
+	checkResourceCount(nt, kinds.Namespace(), "", len(nsToFolder), nil, wantAnnotations)
 	for namespace, folder := range nsToFolder {
-		nt.Must(checkNamespaceExists(nt, namespace, configSyncManagementLabels(namespace, folder), configSyncManagementAnnotations))
+		predicates := []testpredicates.Predicate{
+			testpredicates.HasAnnotation(metadata.ManagementModeAnnotationKey, metadata.ManagementEnabled.String()),
+			testpredicates.HasAnnotation(metadata.HNCManagedBy, metadata.ManagedByValue),
+			testpredicates.HasLabel(fmt.Sprintf("%s.tree.hnc.x-k8s.io/depth", namespace), "0"),
+		}
+		if folder != "" {
+			predicates = append(predicates, testpredicates.HasLabel(fmt.Sprintf("%s.tree.hnc.x-k8s.io/depth", folder), "1"))
+		}
+		nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), namespace, "",
+			testwatcher.WatchPredicates(predicates...)))
 	}
 
 	// Check ClusterRoles (add one for the 'safety' ClusterRole)
-	checkResourceCount(nt, kinds.ClusterRole(), "", 4, nil, map[string]string{"configmanagement.gke.io/managed": "enabled"})
-	checkResourceCount(nt, kinds.ClusterRole(), "", 0, nil, map[string]string{"hnc.x-k8s.io/managed-by": "configmanagement.gke.io"})
-	if err := checkResource(nt, &rbacv1.ClusterRole{}, "", "acme-admin", nil, map[string]string{"configmanagement.gke.io/managed": "enabled"}); err != nil {
-		nt.T.Fatal(err)
-	}
-	if err := checkResource(nt, &rbacv1.ClusterRole{}, "", "namespace-viewer", nil, map[string]string{"configmanagement.gke.io/managed": "enabled"}); err != nil {
-		nt.T.Fatal(err)
-	}
-	if err := checkResource(nt, &rbacv1.ClusterRole{}, "", "rbac-viewer", nil, map[string]string{"configmanagement.gke.io/managed": "enabled"}); err != nil {
-		nt.T.Fatal(err)
-	}
+	checkResourceCount(nt, kinds.ClusterRole(), "", 4, nil, map[string]string{metadata.ManagementModeAnnotationKey: metadata.ManagementEnabled.String()})
+	checkResourceCount(nt, kinds.ClusterRole(), "", 0, nil, map[string]string{metadata.HNCManagedBy: metadata.ManagedByValue})
+	nt.Must(nt.Validate("acme-admin", "", &rbacv1.ClusterRole{},
+		testpredicates.HasAnnotation(metadata.ManagementModeAnnotationKey, metadata.ManagementEnabled.String())))
+	nt.Must(nt.Validate("namespace-viewer", "", &rbacv1.ClusterRole{},
+		testpredicates.HasAnnotation(metadata.ManagementModeAnnotationKey, metadata.ManagementEnabled.String())))
+	nt.Must(nt.Validate("rbac-viewer", "", &rbacv1.ClusterRole{},
+		testpredicates.HasAnnotation(metadata.ManagementModeAnnotationKey, metadata.ManagementEnabled.String())))
 
 	// Check ClusterRoleBindings
-	checkResourceCount(nt, kinds.ClusterRoleBinding(), "", 2, nil, map[string]string{"configmanagement.gke.io/managed": "enabled"})
-	checkResourceCount(nt, kinds.ClusterRoleBinding(), "", 0, nil, map[string]string{"hnc.x-k8s.io/managed-by": "configmanagement.gke.io"})
-	if err := checkResource(nt, &rbacv1.ClusterRoleBinding{}, "", "namespace-viewers", nil, map[string]string{"configmanagement.gke.io/managed": "enabled"}); err != nil {
-		nt.T.Fatal(err)
-	}
-	if err := checkResource(nt, &rbacv1.ClusterRoleBinding{}, "", "rbac-viewers", nil, map[string]string{"configmanagement.gke.io/managed": "enabled"}); err != nil {
-		nt.T.Fatal(err)
-	}
+	checkResourceCount(nt, kinds.ClusterRoleBinding(), "", 2, nil, map[string]string{metadata.ManagementModeAnnotationKey: metadata.ManagementEnabled.String()})
+	checkResourceCount(nt, kinds.ClusterRoleBinding(), "", 0, nil, map[string]string{metadata.HNCManagedBy: metadata.ManagedByValue})
+	nt.Must(nt.Validate("namespace-viewers", "", &rbacv1.ClusterRoleBinding{},
+		testpredicates.HasAnnotation(metadata.ManagementModeAnnotationKey, metadata.ManagementEnabled.String())))
+	nt.Must(nt.Validate("rbac-viewers", "", &rbacv1.ClusterRoleBinding{},
+		testpredicates.HasAnnotation(metadata.ManagementModeAnnotationKey, metadata.ManagementEnabled.String())))
 
 	// Check Namespace-scoped resources
 	namespace := "analytics"
 	checkResourceCount(nt, kinds.Role(), namespace, 0, nil, nil)
 	checkResourceCount(nt, kinds.RoleBinding(), namespace, 2, nil, nil)
-	checkResourceCount(nt, kinds.RoleBinding(), namespace, 0, nil, map[string]string{"hnc.x-k8s.io/managed-by": "configmanagement.gke.io"})
-	if err := checkResource(nt, &rbacv1.RoleBinding{}, namespace, "mike-rolebinding", nil, map[string]string{"configmanagement.gke.io/managed": "enabled"}); err != nil {
-		nt.T.Fatal(err)
-	}
-	if err := checkResource(nt, &rbacv1.RoleBinding{}, namespace, "alice-rolebinding", nil, map[string]string{"configmanagement.gke.io/managed": "enabled"}); err != nil {
-		nt.T.Fatal(err)
-	}
-	checkResourceCount(nt, kinds.ResourceQuota(), namespace, 1, nil, map[string]string{"configmanagement.gke.io/managed": "enabled"})
-	checkResourceCount(nt, kinds.ResourceQuota(), namespace, 0, nil, map[string]string{"hnc.x-k8s.io/managed-by": "configmanagement.gke.io"})
-	if err := checkResource(nt, &corev1.ResourceQuota{}, namespace, "pod-quota", nil, map[string]string{"configmanagement.gke.io/managed": "enabled"}); err != nil {
-		nt.T.Fatal(err)
-	}
+	checkResourceCount(nt, kinds.RoleBinding(), namespace, 0, nil, map[string]string{metadata.HNCManagedBy: metadata.ManagedByValue})
+	nt.Must(nt.Validate("mike-rolebinding", namespace, &rbacv1.RoleBinding{},
+		testpredicates.HasAnnotation(metadata.ManagementModeAnnotationKey, metadata.ManagementEnabled.String())))
+	nt.Must(nt.Validate("alice-rolebinding", namespace, &rbacv1.RoleBinding{},
+		testpredicates.HasAnnotation(metadata.ManagementModeAnnotationKey, metadata.ManagementEnabled.String())))
+	checkResourceCount(nt, kinds.ResourceQuota(), namespace, 1, nil, map[string]string{metadata.ManagementModeAnnotationKey: metadata.ManagementEnabled.String()})
+	checkResourceCount(nt, kinds.ResourceQuota(), namespace, 0, nil, map[string]string{metadata.HNCManagedBy: metadata.ManagedByValue})
+	nt.Must(nt.Validate("pod-quota", namespace, &corev1.ResourceQuota{},
+		testpredicates.HasAnnotation(metadata.ManagementModeAnnotationKey, metadata.ManagementEnabled.String())))
 
 	namespace = "backend"
-	checkResourceCount(nt, kinds.ConfigMap(), namespace, 1, map[string]string{"app.kubernetes.io/managed-by": "configmanagement.gke.io"}, nil)
-	if err := checkResource(nt, &corev1.ConfigMap{}, namespace, "store-inventory", nil, map[string]string{"configmanagement.gke.io/managed": "enabled"}); err != nil {
-		nt.T.Fatal(err)
-	}
+	checkResourceCount(nt, kinds.ConfigMap(), namespace, 1, map[string]string{metadata.ManagedByKey: metadata.ManagedByValue}, nil)
+	nt.Must(nt.Validate("store-inventory", namespace, &corev1.ConfigMap{},
+		testpredicates.HasAnnotation(metadata.ManagementModeAnnotationKey, metadata.ManagementEnabled.String())))
 	checkResourceCount(nt, kinds.Role(), namespace, 0, nil, nil)
 	checkResourceCount(nt, kinds.RoleBinding(), namespace, 2, nil, nil)
-	checkResourceCount(nt, kinds.RoleBinding(), namespace, 0, nil, map[string]string{"hnc.x-k8s.io/managed-by": "configmanagement.gke.io"})
-	if err := checkResource(nt, &rbacv1.RoleBinding{}, namespace, "bob-rolebinding", nil, map[string]string{"configmanagement.gke.io/managed": "enabled"}); err != nil {
-		nt.T.Fatal(err)
-	}
-	if err := checkResource(nt, &rbacv1.RoleBinding{}, namespace, "alice-rolebinding", nil, map[string]string{"configmanagement.gke.io/managed": "enabled"}); err != nil {
-		nt.T.Fatal(err)
-	}
-	checkResourceCount(nt, kinds.ResourceQuota(), namespace, 1, nil, map[string]string{"configmanagement.gke.io/managed": "enabled"})
-	checkResourceCount(nt, kinds.ResourceQuota(), namespace, 0, nil, map[string]string{"hnc.x-k8s.io/managed-by": "configmanagement.gke.io"})
-	resourceQuota := &corev1.ResourceQuota{}
-	if err := checkResource(nt, resourceQuota, namespace, "pod-quota", nil, map[string]string{"configmanagement.gke.io/managed": "enabled"}); err != nil {
-		nt.T.Fatal(err)
-	}
-	if resourceQuota.Spec.Hard.Pods().String() != "1" {
-		nt.T.Fatalf("expected resourcequota.spec.hard.pods: 1, got %s", resourceQuota.Spec.Hard.Pods().String())
+	checkResourceCount(nt, kinds.RoleBinding(), namespace, 0, nil, map[string]string{metadata.HNCManagedBy: metadata.ManagedByValue})
+	nt.Must(nt.Validate("bob-rolebinding", namespace, &rbacv1.RoleBinding{},
+		testpredicates.HasAnnotation(metadata.ManagementModeAnnotationKey, metadata.ManagementEnabled.String())))
+	nt.Must(nt.Validate("alice-rolebinding", namespace, &rbacv1.RoleBinding{},
+		testpredicates.HasAnnotation(metadata.ManagementModeAnnotationKey, metadata.ManagementEnabled.String())))
+	checkResourceCount(nt, kinds.ResourceQuota(), namespace, 1, nil, map[string]string{metadata.ManagementModeAnnotationKey: metadata.ManagementEnabled.String()})
+	checkResourceCount(nt, kinds.ResourceQuota(), namespace, 0, nil, map[string]string{metadata.HNCManagedBy: metadata.ManagedByValue})
+	rq := &corev1.ResourceQuota{}
+	nt.Must(nt.Validate("pod-quota", namespace, rq,
+		testpredicates.HasAnnotation(metadata.ManagementModeAnnotationKey, metadata.ManagementEnabled.String())))
+	if rq.Spec.Hard.Pods().String() != "1" {
+		nt.T.Fatalf("expected resourcequota.spec.hard.pods: 1, got %s", rq.Spec.Hard.Pods().String())
 	}
 
 	namespace = "frontend"
-	nt.Must(checkNamespaceExists(nt, namespace, map[string]string{"env": "prod"}, map[string]string{"audit": "true"}))
-	checkResourceCount(nt, kinds.ConfigMap(), namespace, 1, map[string]string{"app.kubernetes.io/managed-by": "configmanagement.gke.io"}, nil)
-	if err := checkResource(nt, &corev1.ConfigMap{}, namespace, "store-inventory", nil, map[string]string{"configmanagement.gke.io/managed": "enabled"}); err != nil {
-		nt.T.Fatal(err)
-	}
+	nt.Must(nt.Watcher.WatchObject(kinds.Namespace(), namespace, "",
+		testwatcher.WatchPredicates(
+			testpredicates.HasLabel("env", "prod"),
+			testpredicates.HasAnnotation("audit", "true"),
+		)))
+	checkResourceCount(nt, kinds.ConfigMap(), namespace, 1, map[string]string{metadata.ManagedByKey: metadata.ManagedByValue}, nil)
+	nt.Must(nt.Validate("store-inventory", namespace, &corev1.ConfigMap{},
+		testpredicates.HasAnnotation(metadata.ManagementModeAnnotationKey, metadata.ManagementEnabled.String())))
 	checkResourceCount(nt, kinds.Role(), namespace, 0, nil, nil)
 	checkResourceCount(nt, kinds.RoleBinding(), namespace, 2, nil, nil)
-	checkResourceCount(nt, kinds.RoleBinding(), namespace, 0, nil, map[string]string{"hnc.x-k8s.io/managed-by": "configmanagement.gke.io"})
-	if err := checkResource(nt, &rbacv1.RoleBinding{}, namespace, "alice-rolebinding", nil, map[string]string{"configmanagement.gke.io/managed": "enabled"}); err != nil {
-		nt.T.Fatal(err)
-	}
-	if err := checkResource(nt, &rbacv1.RoleBinding{}, namespace, "sre-admin", nil, map[string]string{"configmanagement.gke.io/managed": "enabled"}); err != nil {
-		nt.T.Fatal(err)
-	}
-	checkResourceCount(nt, kinds.ResourceQuota(), namespace, 1, nil, map[string]string{"configmanagement.gke.io/managed": "enabled"})
-	checkResourceCount(nt, kinds.ResourceQuota(), namespace, 0, nil, map[string]string{"hnc.x-k8s.io/managed-by": "configmanagement.gke.io"})
-	if err := checkResource(nt, &corev1.ResourceQuota{}, namespace, "pod-quota", nil, map[string]string{"configmanagement.gke.io/managed": "enabled"}); err != nil {
-		nt.T.Fatal(err)
-	}
+	checkResourceCount(nt, kinds.RoleBinding(), namespace, 0, nil, map[string]string{metadata.HNCManagedBy: metadata.ManagedByValue})
+	nt.Must(nt.Validate("alice-rolebinding", namespace, &rbacv1.RoleBinding{},
+		testpredicates.HasAnnotation(metadata.ManagementModeAnnotationKey, metadata.ManagementEnabled.String())))
+	nt.Must(nt.Validate("sre-admin", namespace, &rbacv1.RoleBinding{},
+		testpredicates.HasAnnotation(metadata.ManagementModeAnnotationKey, metadata.ManagementEnabled.String())))
+	checkResourceCount(nt, kinds.ResourceQuota(), namespace, 1, nil, map[string]string{metadata.ManagementModeAnnotationKey: metadata.ManagementEnabled.String()})
+	checkResourceCount(nt, kinds.ResourceQuota(), namespace, 0, nil, map[string]string{metadata.HNCManagedBy: metadata.ManagedByValue})
+	nt.Must(nt.Validate("pod-quota", namespace, &corev1.ResourceQuota{},
+		testpredicates.HasAnnotation(metadata.ManagementModeAnnotationKey, metadata.ManagementEnabled.String())))
 
 	namespace = "new-prj"
 	checkResourceCount(nt, kinds.Role(), namespace, 1, nil, nil)
-	checkResourceCount(nt, kinds.Role(), namespace, 0, nil, map[string]string{"hnc.x-k8s.io/managed-by": "configmanagement.gke.io"})
-	if err := checkResource(nt, &rbacv1.Role{}, namespace, "acme-admin", nil, map[string]string{"configmanagement.gke.io/managed": "enabled"}); err != nil {
-		nt.T.Fatal(err)
-	}
+	checkResourceCount(nt, kinds.Role(), namespace, 0, nil, map[string]string{metadata.HNCManagedBy: metadata.ManagedByValue})
+	nt.Must(nt.Validate("acme-admin", namespace, &rbacv1.Role{},
+		testpredicates.HasAnnotation(metadata.ManagementModeAnnotationKey, metadata.ManagementEnabled.String())))
 	checkResourceCount(nt, kinds.RoleBinding(), namespace, 0, nil, nil)
-	checkResourceCount(nt, kinds.ResourceQuota(), namespace, 1, nil, map[string]string{"configmanagement.gke.io/managed": "enabled"})
-	checkResourceCount(nt, kinds.ResourceQuota(), namespace, 0, nil, map[string]string{"hnc.x-k8s.io/managed-by": "configmanagement.gke.io"})
-	if err := checkResource(nt, &corev1.ResourceQuota{}, namespace, "quota", nil, map[string]string{"configmanagement.gke.io/managed": "enabled"}); err != nil {
-		nt.T.Fatal(err)
-	}
+	checkResourceCount(nt, kinds.ResourceQuota(), namespace, 1, nil, map[string]string{metadata.ManagementModeAnnotationKey: metadata.ManagementEnabled.String()})
+	checkResourceCount(nt, kinds.ResourceQuota(), namespace, 0, nil, map[string]string{metadata.HNCManagedBy: metadata.ManagedByValue})
+	nt.Must(nt.Validate("quota", namespace, &corev1.ResourceQuota{},
+		testpredicates.HasAnnotation(metadata.ManagementModeAnnotationKey, metadata.ManagementEnabled.String())))
 
 	namespace = "newer-prj"
 	checkResourceCount(nt, kinds.Role(), namespace, 0, nil, nil)
 	checkResourceCount(nt, kinds.RoleBinding(), namespace, 0, nil, nil)
-	checkResourceCount(nt, kinds.ResourceQuota(), namespace, 1, nil, map[string]string{"configmanagement.gke.io/managed": "enabled"})
-	checkResourceCount(nt, kinds.ResourceQuota(), namespace, 0, nil, map[string]string{"hnc.x-k8s.io/managed-by": "configmanagement.gke.io"})
-	if err := checkResource(nt, &corev1.ResourceQuota{}, namespace, "quota", nil, map[string]string{"configmanagement.gke.io/managed": "enabled"}); err != nil {
-		nt.T.Fatal(err)
-	}
+	checkResourceCount(nt, kinds.ResourceQuota(), namespace, 1, nil, map[string]string{metadata.ManagementModeAnnotationKey: metadata.ManagementEnabled.String()})
+	checkResourceCount(nt, kinds.ResourceQuota(), namespace, 0, nil, map[string]string{metadata.HNCManagedBy: metadata.ManagedByValue})
+	nt.Must(nt.Validate("quota", namespace, &corev1.ResourceQuota{},
+		testpredicates.HasAnnotation(metadata.ManagementModeAnnotationKey, metadata.ManagementEnabled.String())))
 
 	nt.Must(rootSyncGitRepo.Remove("acme/cluster"))
 	// Add back the safety ClusterRole to pass the safety check (KNV2006).
@@ -224,27 +215,6 @@ func checkResourceCount(nt *nomostest.NT, gvk schema.GroupVersionKind, namespace
 	if actualCount != count {
 		nt.T.Fatalf("expected %d resources(gvk: %s), got %d", count, gvk.String(), actualCount)
 	}
-}
-
-func checkResource(nt *nomostest.NT, obj client.Object, namespace, name string, labels, annotations map[string]string) error {
-	if err := nt.KubeClient.Get(name, namespace, obj); err != nil {
-		return err
-	}
-	if !containsSubMap(obj.GetLabels(), labels) {
-		return fmt.Errorf("%s/%s doesn't include all expected labels: object.labels=%v, expected=%v",
-			namespace, name, labels, obj.GetLabels())
-	}
-	if !containsSubMap(obj.GetAnnotations(), annotations) {
-		return fmt.Errorf("%s/%s doesn't include all expected annotations: object.annotations=%v, expected=%v",
-			namespace, name, annotations, obj.GetAnnotations())
-	}
-	return nil
-}
-
-func checkNamespaceExists(nt *nomostest.NT, name string, labels, annotations map[string]string) error {
-	return nomostest.Wait(nt.T, "namespace exists", nt.DefaultWaitTimeout, func() error {
-		return checkResource(nt, &corev1.Namespace{}, "", name, labels, annotations)
-	})
 }
 
 func containsSubMap(m1, m2 map[string]string) bool {

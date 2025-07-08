@@ -56,7 +56,7 @@ var flMaxSyncFailures = flag.Int("max-sync-failures", util.EnvInt("OCI_SYNC_MAX_
 	"the number of consecutive failures allowed before aborting (the first sync must succeed, -1 will retry forever after the initial sync)")
 
 func errorBackoff() wait.Backoff {
-	durationLimit := math.Max(*flWait, float64(util.MinimumSyncContainerBackoffCap))
+	durationLimit := math.Max(*flWait, util.MinimumSyncContainerBackoffCap.Seconds())
 	return util.BackoffWithDurationAndStepLimit(util.WaitTime(durationLimit), math.MaxInt32)
 }
 

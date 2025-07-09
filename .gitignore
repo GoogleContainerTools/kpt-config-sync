@@ -10,6 +10,8 @@
 # IDE
 /.idea
 /.vscode
+
+# AI agent
 /GEMINI.md
 /CLAUDE.md
 

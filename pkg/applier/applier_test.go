@@ -420,6 +420,7 @@ func TestApplyMutationIgnoredObjects(t *testing.T) {
 		serverObjs                 []client.Object
 		declaredObjs               []client.Object
 		cachedIgnoredObjs          []client.Object
+		applyEvents                []event.Event
 		expectedObjsToApply        object.UnstructuredSet
 		expectedItemsInIgnoreCache []client.Object
 	}{
@@ -595,6 +596,54 @@ func TestApplyMutationIgnoredObjects(t *testing.T) {
 					syncertest.IgnoreMutationAnnotation)),
 			},
 		},
+		{
+			name: "mutation-ignored object should be evicted from cache when apply fails",
+			serverObjs: []client.Object{
+				k8sobjects.NamespaceObject("test-ns",
+					syncertest.ManagementEnabled,
+					core.Label("foo", "baz")),
+			},
+			declaredObjs: []client.Object{
+				k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("test-ns"),
+					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
+					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					metadata.WithManagementMode(metadata.ManagementEnabled),
+					core.Annotation(metadata.GitContextKey, gitContextOutput),
+					core.Annotation(metadata.SyncTokenAnnotationKey, testGitCommit),
+					core.Annotation(metadata.OwningInventoryKey, InventoryID(rootSyncName, configmanagement.ControllerNamespace)),
+					difftest.ManagedBy(declared.RootScope, rootSyncName),
+					core.Label("foo", "bar"),
+					syncertest.ManagementEnabled,
+					syncertest.IgnoreMutationAnnotation)},
+			cachedIgnoredObjs: []client.Object{
+				&queue.Deleted{
+					Object: k8sobjects.UnstructuredObject(kinds.Namespace(),
+						core.Name("test-ns"),
+						syncertest.ManagementEnabled,
+						syncertest.IgnoreMutationAnnotation)}},
+			applyEvents: []event.Event{
+				formApplyEvent(event.ApplyFailed,
+					k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("test-ns")),
+					fmt.Errorf("test error")),
+			},
+			// The object should be purged from the ignore cache due to ApplyFailed
+			expectedItemsInIgnoreCache: nil,
+			expectedObjsToApply: object.UnstructuredSet{
+				asUnstructuredSanitizedObj(k8sobjects.UnstructuredObject(kinds.Namespace(), core.Name("test-ns"),
+					core.Label(metadata.ManagedByKey, metadata.ManagedByValue),
+					core.Label(metadata.ApplySetPartOfLabel, applySetID),
+					core.Label(metadata.DeclaredVersionLabel, "v1"),
+					metadata.WithManagementMode(metadata.ManagementEnabled),
+					core.Annotation(metadata.GitContextKey, gitContextOutput),
+					core.Annotation(metadata.SyncTokenAnnotationKey, testGitCommit),
+					core.Annotation(metadata.OwningInventoryKey, InventoryID(rootSyncName, configmanagement.ControllerNamespace)),
+					difftest.ManagedBy(declared.RootScope, rootSyncName),
+					syncertest.ManagementEnabled,
+					syncertest.IgnoreMutationAnnotation,
+					core.Label("foo", "bar"))),
+			},
+		},
 	}
 
 	for _, tc := range testcases {
@@ -608,7 +657,7 @@ func TestApplyMutationIgnoredObjects(t *testing.T) {
 			syncScope := declared.Scope("test-namespace")
 			syncName := "rs"
 			fakeClient := testingfake.NewClient(t, core.Scheme, tc.serverObjs...)
-			fakeKptApplier := newFakeKptApplier([]event.Event{})
+			fakeKptApplier := newFakeKptApplier(tc.applyEvents)
 			cs := &ClientSet{
 				KptApplier: fakeKptApplier,
 				Client:     fakeClient,
@@ -915,6 +964,7 @@ func TestProcessApplyEvent(t *testing.T) {
 	deploymentObj := newDeploymentObj()
 	deploymentObjID := core.IDOf(deploymentObj)
 	testObj1 := newTestObj("test-1")
+	core.SetAnnotation(testObj1, metadata.LifecycleMutationAnnotation, metadata.IgnoreMutation)
 	testObj1ID := core.IDOf(testObj1)
 
 	ctx := context.Background()
@@ -925,10 +975,15 @@ func TestProcessApplyEvent(t *testing.T) {
 
 	resourceMap := make(map[core.ID]client.Object)
 	resourceMap[deploymentObjID] = deploymentObj
+	resourceMap[testObj1ID] = testObj1
 
-	err := s.processApplyEvent(ctx, formApplyEvent(event.ApplyFailed, deploymentObj, fmt.Errorf("test error")).ApplyEvent, syncStats.ApplyEvent, objStatusMap, unknownTypeResources, resourceMap)
+	resources := &declared.Resources{}
+	resources.UpdateIgnored(testObj1)
+
+	// process failed apply of deploymentObj
+	err := s.processApplyEvent(ctx, formApplyEvent(event.ApplyFailed, deploymentObj, fmt.Errorf("test error")).ApplyEvent, syncStats.ApplyEvent, objStatusMap, unknownTypeResources, resourceMap, resources)
 	expectedError := ErrorForResourceWithResource(fmt.Errorf("test error"), deploymentObjID, deploymentObj)
-	testutil.AssertEqual(t, expectedError, err, "expected processPruneEvent to error on apply %s", event.ApplyFailed)
+	testutil.AssertEqual(t, expectedError, err, "expected processApplyEvent to error on apply %s", event.ApplyFailed)
 
 	expectedCSE := v1beta1.ConfigSyncError{
 		Code:         "2009",
@@ -945,8 +1000,10 @@ func TestProcessApplyEvent(t *testing.T) {
 		}},
 	}
 	testutil.AssertEqual(t, expectedCSE, err.ToCSE(), "expected CSEs to match")
+	testutil.AssertEqual(t, 1, len(resources.IgnoredObjects()))
 
-	err = s.processApplyEvent(ctx, formApplyEvent(event.ApplySuccessful, testObj1, nil).ApplyEvent, syncStats.ApplyEvent, objStatusMap, unknownTypeResources, resourceMap)
+	// process successful apply of testObj1
+	err = s.processApplyEvent(ctx, formApplyEvent(event.ApplySuccessful, testObj1, nil).ApplyEvent, syncStats.ApplyEvent, objStatusMap, unknownTypeResources, resourceMap, resources)
 	assert.Nil(t, err, "expected processApplyEvent NOT to error on apply %s", event.ApplySuccessful)
 
 	expectedApplyStatus := stats.NewSyncStats()
@@ -965,6 +1022,39 @@ func TestProcessApplyEvent(t *testing.T) {
 		},
 	}
 	testutil.AssertEqual(t, expectedObjStatusMap, objStatusMap, "expected object status to match")
+	testutil.AssertEqual(t, 1, len(resources.IgnoredObjects()))
+
+	// process failed apply of testObj1 (ignore-mutation object)
+	err = s.processApplyEvent(ctx, formApplyEvent(event.ApplyFailed, testObj1, fmt.Errorf("test error")).ApplyEvent, syncStats.ApplyEvent, objStatusMap, unknownTypeResources, resourceMap, resources)
+	expectedError = ErrorForResourceWithResource(fmt.Errorf("test error"), testObj1ID, testObj1)
+	testutil.AssertEqual(t, expectedError, err, "expected processApplyEvent to error on apply %s", event.ApplyFailed)
+
+	expectedCSE = v1beta1.ConfigSyncError{
+		Code: "2009",
+		ErrorMessage: `KNV2009: failed to apply Test.configsync.test, test-namespace/test-1: test error
+
+source: foo/test.yaml
+namespace: test-namespace
+metadata.name: test-1
+group: configsync.test
+version: v1
+kind: Test
+
+For more information, see https://g.co/cloud/acm-errors#knv2009`,
+		Resources: []v1beta1.ResourceRef{{
+			SourcePath: "foo/test.yaml",
+			Name:       "test-1",
+			Namespace:  "test-namespace",
+			GVK: metav1.GroupVersionKind{
+				Group:   "configsync.test",
+				Version: "v1",
+				Kind:    "Test",
+			},
+		}},
+	}
+	testutil.AssertEqual(t, expectedCSE, err.ToCSE(), "expected CSEs to match")
+	// The object should be removed from the IgnoredObjects cache when ApplyFailed
+	testutil.AssertEqual(t, 0, len(resources.IgnoredObjects()))
 
 	// TODO: test handleMetrics on success
 	// TODO: test unknownTypeResources on UnknownTypeError

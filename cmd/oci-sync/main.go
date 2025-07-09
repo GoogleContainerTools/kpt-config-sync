@@ -18,14 +18,12 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"math"
 	"os"
 	"os/signal"
 	"strings"
 	"time"
 
 	"github.com/google/go-containerregistry/pkg/authn"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2/textlogger"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/auth"
@@ -54,11 +52,6 @@ var flOneTime = flag.Bool("one-time", util.EnvBool("OCI_SYNC_ONE_TIME", false),
 	"exit after the first sync")
 var flMaxSyncFailures = flag.Int("max-sync-failures", util.EnvInt("OCI_SYNC_MAX_SYNC_FAILURES", 0),
 	"the number of consecutive failures allowed before aborting (the first sync must succeed, -1 will retry forever after the initial sync)")
-
-func errorBackoff() wait.Backoff {
-	durationLimit := math.Max(*flWait, float64(util.MinimumSyncContainerBackoffCap))
-	return util.BackoffWithDurationAndStepLimit(util.WaitTime(durationLimit), math.MaxInt32)
-}
 
 func main() {
 	utillog.Setup()
@@ -93,7 +86,8 @@ func main() {
 	initialSync := true
 	imageFromSpecHasDigest := oci.HasDigest(*flImage)
 	failCount := 0
-	backoff := errorBackoff()
+	pollPeriod := util.WaitTime(*flWait)
+	backoff := util.SyncContainerBackoff(pollPeriod)
 
 	var authenticator authn.Authenticator
 	switch configsync.AuthType(*flAuth) {
@@ -160,12 +154,12 @@ func main() {
 			initialSync = false
 		}
 
-		backoff = errorBackoff()
+		backoff = util.SyncContainerBackoff(pollPeriod)
 		failCount = 0
 		log.DeleteErrorFile()
-		log.Info("next sync", "wait_time", util.WaitTime(*flWait))
+		log.Info("next sync", "wait_time", pollPeriod)
 		cancel()
-		time.Sleep(util.WaitTime(*flWait))
+		time.Sleep(pollPeriod)
 	}
 
 }

@@ -109,8 +109,8 @@ func (r *Resources) IgnoredObjects() []client.Object {
 
 // DeleteIgnored deletes an ignore-mutation object from the ignored cache
 func (r *Resources) DeleteIgnored(id core.ID) bool {
-	r.mutex.RLock()
-	defer r.mutex.RUnlock()
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
 	if r.mutationIgnoredObjectsMap == nil || r.mutationIgnoredObjectsMap.Len() == 0 {
 		return false
 	}

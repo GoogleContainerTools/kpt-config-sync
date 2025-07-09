@@ -207,7 +207,7 @@ func (s *supervisor) UpdateStatusMode(ctx context.Context) error {
 	})
 }
 
-func (s *supervisor) processApplyEvent(ctx context.Context, e event.ApplyEvent, syncStats *stats.ApplyEventStats, objectStatusMap ObjectStatusMap, unknownTypeResources map[core.ID]struct{}, resourceMap map[core.ID]client.Object) status.Error {
+func (s *supervisor) processApplyEvent(ctx context.Context, e event.ApplyEvent, syncStats *stats.ApplyEventStats, objectStatusMap ObjectStatusMap, unknownTypeResources map[core.ID]struct{}, resourceMap map[core.ID]client.Object, declaredResources *declared.Resources) status.Error {
 	id := idFrom(e.Identifier)
 	syncStats.Add(e.Status)
 
@@ -231,6 +231,15 @@ func (s *supervisor) processApplyEvent(ctx context.Context, e event.ApplyEvent, 
 	case event.ApplyFailed:
 		objectStatus.Actuation = actuation.ActuationFailed
 		handleMetrics(ctx, "update", e.Error)
+		// If apply failed for an ignore-mutation object, delete it from the ignore cache.
+		// Normally the cached object should be updated by the remediator when it
+		// receives a watch event - This is a fallback to force a live lookup the
+		// next time the applier runs.
+		iObj, found := declaredResources.GetIgnored(id)
+		if found {
+			klog.Infof("Deleting object '%v' from the ignore cache (apply failed)", core.GKNN(iObj))
+			declaredResources.DeleteIgnored(id)
+		}
 		switch e.Error.(type) {
 		case *applyerror.UnknownTypeError:
 			unknownTypeResources[id] = struct{}{}
@@ -604,7 +613,7 @@ func (s *supervisor) applyInner(ctx context.Context, eventHandler func(Event), d
 			} else {
 				klog.V(1).Info(e.ApplyEvent)
 			}
-			if err := s.processApplyEvent(ctx, e.ApplyEvent, syncStats.ApplyEvent, objStatusMap, unknownTypeResources, resourceMap); err != nil {
+			if err := s.processApplyEvent(ctx, e.ApplyEvent, syncStats.ApplyEvent, objStatusMap, unknownTypeResources, resourceMap, declaredResources); err != nil {
 				sendErrorEvent(err, eventHandler)
 			}
 		case event.PruneType:

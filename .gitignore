@@ -11,6 +11,10 @@
 /.idea
 /.vscode
 
+# AI agent
+/GEMINI.md
+/CLAUDE.md
+
 # Ignore unsued pulled-in contrib licenses since dep...
 # "Out of an abundance of caution, dep non-optionally preserves files that may have legal significance".
 vendor/github.com/docker/docker/contrib/

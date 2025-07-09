@@ -16,6 +16,7 @@ package util
 
 import (
 	"errors"
+	"math"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -31,6 +32,18 @@ var (
 	// MinimumSyncContainerBackoffCap is the minimum backoff cap for oci-sync/helm-sync.
 	MinimumSyncContainerBackoffCap = time.Hour
 )
+
+// SyncContainerBackoff returns the backoff function for a *-sync container.
+// the pollPeriod argument is the configurable duration between sync attempts.
+func SyncContainerBackoff(pollPeriod time.Duration) wait.Backoff {
+	backoffCap := MinimumSyncContainerBackoffCap
+	// if the pollPeriod is configured to be greater than the default backoff cap,
+	// use the larger duration as the backoff cap.
+	if pollPeriod > backoffCap {
+		backoffCap = pollPeriod
+	}
+	return BackoffWithDurationAndStepLimit(backoffCap, math.MaxInt32)
+}
 
 // RetriableError represents a transient error that is retriable.
 type RetriableError struct {

@@ -18,12 +18,10 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"math"
 	"os"
 	"strings"
 	"time"
 
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2/textlogger"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/auth"
@@ -77,11 +75,6 @@ var (
 		"the password or personal access token to use for helm authantication")
 )
 
-func errorBackoff() wait.Backoff {
-	durationLimit := math.Max(*flWait, float64(util.MinimumSyncContainerBackoffCap))
-	return util.BackoffWithDurationAndStepLimit(util.WaitTime(durationLimit), math.MaxInt32)
-}
-
 func main() {
 	utillog.Setup()
 	log := utillog.NewLogger(textlogger.NewLogger(textlogger.NewConfig()), *flRoot, *flErrorFile)
@@ -116,7 +109,8 @@ func main() {
 
 	initialSync := true
 	failCount := 0
-	backoff := errorBackoff()
+	pollPeriod := util.WaitTime(*flWait)
+	backoff := util.SyncContainerBackoff(pollPeriod)
 
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*time.Duration(*flSyncTimeout))
@@ -174,11 +168,11 @@ func main() {
 			initialSync = false
 		}
 
-		backoff = errorBackoff()
+		backoff = util.SyncContainerBackoff(pollPeriod)
 		failCount = 0
 		log.DeleteErrorFile()
-		log.Info("next sync", "wait_time", util.WaitTime(*flWait))
+		log.Info("next sync", "wait_time", pollPeriod)
 		cancel()
-		time.Sleep(util.WaitTime(*flWait))
+		time.Sleep(pollPeriod)
 	}
 }

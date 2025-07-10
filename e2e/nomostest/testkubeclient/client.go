@@ -206,15 +206,21 @@ func (tc *KubeClient) GetDeploymentPod(deploymentName, namespace string, retrytT
 		if err != nil {
 			return err
 		}
-		if len(pods.Items) != 1 {
-			return fmt.Errorf("deployment has %d pods, expected 1: %s\n%s",
-				len(pods.Items), deploymentNN, log.AsYAML(pods))
+		numRunning := 0
+		runningPodIdx := -1
+		// There should be exactly one Pod with status.phase: Running.
+		// It is possible there are other pods that are Terminating.
+		for idx, po := range pods.Items {
+			if po.Status.Phase == corev1.PodRunning {
+				numRunning++
+				runningPodIdx = idx
+			}
 		}
-		pod = pods.Items[0].DeepCopy()
-		if pod.Status.Phase != corev1.PodRunning {
-			return fmt.Errorf("pod has status %q, want %q: %s",
-				pod.Status.Phase, corev1.PodRunning, client.ObjectKeyFromObject(pod))
+		if numRunning != 1 {
+			return fmt.Errorf("deployment has %d running pods, expected 1: %s\n%s",
+				numRunning, deploymentNN, log.AsYAML(pods))
 		}
+		pod = pods.Items[runningPodIdx].DeepCopy()
 		return nil
 	})
 	if err != nil {

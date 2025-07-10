@@ -821,6 +821,9 @@ func rootSyncObjectV1Beta1Git(name, repoURL string, branch, revision, syncPath s
 			rs.Spec.Git.Auth = configsync.AuthGCPServiceAccount
 			rs.Spec.Git.GCPServiceAccountEmail = gitproviders.CSRReaderEmail()
 		}
+	case e2e.SSM:
+		rs.Spec.Git.Auth = configsync.AuthGCPServiceAccount
+		rs.Spec.Git.GCPServiceAccountEmail = gitproviders.SSMServiceAccountEmail()
 	default:
 		rs.Spec.Git.Auth = configsync.AuthSSH
 		rs.Spec.Git.SecretRef = &v1beta1.SecretReference{

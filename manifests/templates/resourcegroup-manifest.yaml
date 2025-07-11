@@ -275,6 +275,13 @@ spec:
         - containerPort: 55678
         - containerPort: 8888
         - containerPort: 13133
+        startupProbe:
+          httpGet:
+            path: /
+            port: 13133
+          failureThreshold: 30   # Allow up to 5 minutes (30 * 10s)
+          periodSeconds: 10
+          initialDelaySeconds: 0
         readinessProbe:
           httpGet:
             path: /

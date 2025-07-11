@@ -195,6 +195,13 @@ data:
            volumeMounts:
            - name: otel-agent-config-reconciler-vol
              mountPath: /conf
+           startupProbe:
+             httpGet:
+               path: /
+               port: 13133
+             failureThreshold: 30   # Allow up to 5 minutes (30 * 10s)
+             periodSeconds: 10
+             initialDelaySeconds: 0
            readinessProbe:
              httpGet:
                path: /

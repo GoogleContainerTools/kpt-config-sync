@@ -75,6 +75,7 @@ func TestWorkloadIdentity(t *testing.T) {
 		requireHelmGAR   bool
 		requireOCIGAR    bool
 		requireCSR       bool
+		requireSSM       bool
 		testKSAMigration bool
 		newRootSrcCfg    sourceConfig
 		newNSSrcCfg      sourceConfig
@@ -96,6 +97,15 @@ func TestWorkloadIdentity(t *testing.T) {
 			sourceType:  configsync.GitSource,
 			gsaEmail:    gitproviders.CSRReaderEmail(),
 			requireCSR:  true,
+		},
+		{
+			name:        "Authenticate to Git repo on SSM with GKE WI",
+			fleetWITest: false,
+			rootSrcCfg:  sourceConfig{pkg: "hydration/kustomize-components", dir: "kustomize-components", commitFn: nomostest.RootRepoSha1Fn},
+			nsSrcCfg:    sourceConfig{pkg: "hydration/namespace-repo", dir: "namespace-repo", commitFn: nomostest.NsRepoSha1Fn},
+			sourceType:  configsync.GitSource,
+			gsaEmail:    gitproviders.SSMServiceAccountEmail(),
+			requireSSM:  true,
 		},
 		{
 			name:             "Authenticate to OCI image on AR with GKE WI",
@@ -223,6 +233,10 @@ func TestWorkloadIdentity(t *testing.T) {
 			if tc.requireCSR {
 				opts = append(opts, ntopts.RequireCloudSourceRepository(t))
 			}
+			if tc.requireSSM {
+				opts = append(opts, ntopts.RequireSecureSourceManagerRepository(t))
+			}
+
 			nt := nomostest.New(t, nomostesting.WorkloadIdentity, opts...)
 			if err = workloadidentity.ValidateEnabled(nt); err != nil {
 				nt.T.Fatal(err)
@@ -404,66 +418,6 @@ func TestWorkloadIdentity(t *testing.T) {
 			if tc.testKSAMigration {
 				nt.Must(migrateFromGSAtoKSA(nt, tc.fleetWITest, tc.sourceType, rootSyncID, repoSyncID, tc.newRootSrcCfg, tc.newNSSrcCfg))
 			}
-		})
-	}
-}
-
-// TestWorkloadIdentity_GitSourceSSM tests GKE WI with Secure Source Manager as the git source
-// It has the following requirements:
-// 1. GKE cluster with WI enabled.
-// 2. The provided Google service account exists.
-// 3. SSM instance exists // TODO(camila-b): Needs to not be hardcoded
-// 4. IAM permission and IAM policy bindings are created.
-func TestWorkloadIdentity_GitSourceSSM(t *testing.T) {
-	testCases := []struct {
-		name       string
-		rootSrcCfg sourceConfig
-		gsaEmail   string
-	}{
-		{
-			name:       "Authenticate to Git repo on SSM with GKE WI",
-			rootSrcCfg: sourceConfig{pkg: "hydration/kustomize-components", dir: "kustomize-components", commitFn: nomostest.RemoteRootRepoSha1Fn},
-			gsaEmail:   gitproviders.SSMServiceAccountEmail(),
-		},
-		//TODO: Add additional tests, including ones that use Fleet WI
-	}
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			rootSyncID := nomostest.DefaultRootSyncID
-			opts := []ntopts.Opt{
-				ntopts.RequireGKE(t),
-				ntopts.SyncWithGitSource(rootSyncID, ntopts.Unstructured),
-				ntopts.WithDelegatedControl,
-				ntopts.RequireSecureSourceManagerRepository(t),
-			}
-
-			nt := nomostest.New(t, nomostesting.WorkloadIdentity, opts...)
-			nt.Must(workloadidentity.ValidateEnabled(nt))
-			nt.Must(t, iam.ValidateServiceAccountExists(nt, tc.gsaEmail))
-
-			rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(rootSyncID)
-
-			rootSync := k8sobjects.RootSyncObjectV1Beta1(rootSyncID.Name)
-			nt.T.Logf("Update RootSync to sync from %s", configsync.GitSource)
-			updateRSyncWithGitSourceConfig(nt, rootSync, rootSyncGitRepo, tc.rootSrcCfg)
-
-			rootReconcilerName := core.RootReconcilerName(rootSync.Name)
-
-			nt.T.Log("Validate the GSA annotation is added to the RSync's service accounts")
-			tg := taskgroup.New()
-			tg.Go(func() error {
-				return nt.Watcher.WatchObject(kinds.ServiceAccount(), rootReconcilerName, configsync.ControllerNamespace,
-					testwatcher.WatchPredicates(
-						testpredicates.HasAnnotation(controllers.GCPSAAnnotationKey, tc.gsaEmail),
-					))
-			})
-			nt.Must(t, tg.Wait())
-
-			nomostest.SetExpectedGitCommit(nt, rootSyncID, rootSyncGitRepo.MustHash(t))
-			nomostest.SetExpectedSyncPath(nt, rootSyncID, tc.rootSrcCfg.dir)
-			nt.Must(nt.WatchForAllSyncs())
-
-			kustomizecomponents.ValidateAllTenants(nt, string(declared.RootScope), "base", "tenant-a", "tenant-b", "tenant-c")
 		})
 	}
 }

@@ -1059,6 +1059,13 @@ func RemoteRootRepoSha1Fn(nt *NT, nn types.NamespacedName) (string, error) {
 	return commit, nil
 }
 
+// RootRepoSha1Fn returns the latest commit from a git ReadWriteRepository for the specified RootSync
+func RootRepoSha1Fn(nt *NT, nn types.NamespacedName) (string, error) {
+	rootSyncGitRepo := nt.SyncSourceGitReadWriteRepository(core.RootSyncID(nn.Name))
+	commit := rootSyncGitRepo.MustHash(nt.T)
+	return commit, nil
+}
+
 // RemoteNsRepoSha1Fn returns the latest commit from a RepoSync Git spec.
 func RemoteNsRepoSha1Fn(nt *NT, nn types.NamespacedName) (string, error) {
 	rs := &v1beta1.RepoSync{}
@@ -1069,6 +1076,13 @@ func RemoteNsRepoSha1Fn(nt *NT, nn types.NamespacedName) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to lookup git commit for RepoSync: %w", err)
 	}
+	return commit, nil
+}
+
+// NsRepoSha1Fn returns the latest commit from a git ReadWriteRepository for the specified RepoSync
+func NsRepoSha1Fn(nt *NT, nn types.NamespacedName) (string, error) {
+	repoSyncGitRepo := nt.SyncSourceGitReadWriteRepository(core.RepoSyncID(nn.Name, nn.Namespace))
+	commit := repoSyncGitRepo.MustHash(nt.T)
 	return commit, nil
 }
 

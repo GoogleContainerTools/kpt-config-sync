@@ -84,7 +84,7 @@ resource "google_service_account_iam_member" "k8s_sa_binding" {
 }
 
 resource "google_project_iam_member" "gcp_sa_role" {
-  for_each = toset(var.role)
+  for_each = toset(var.roles)
 
   role    = each.value
   member  = "serviceAccount:${google_service_account.gcp_sa.email}"

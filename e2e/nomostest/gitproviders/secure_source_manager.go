@@ -27,7 +27,7 @@ import (
 // SSMServiceAccountEmail returns the email of the google service account with
 // permission to read from Secure Source Manager.
 func SSMServiceAccountEmail() string {
-	return fmt.Sprintf("e2e-ssm-reader-sa-1@%s.iam.gserviceaccount.com", *e2e.GCPProject)
+	return fmt.Sprintf("e2e-ssm-reader-sa@%s.iam.gserviceaccount.com", *e2e.GCPProject)
 }
 
 // SSMClient is the client that interacts with Google Secure Source Manager.

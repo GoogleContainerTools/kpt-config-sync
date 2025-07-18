@@ -133,10 +133,22 @@ var TestCluster = flag.String("test-cluster", Kind,
 var ShareTestEnv = flag.Bool("share-test-env", false,
 	"Specify that the test is using a shared test environment instead of fresh installation per test case.")
 
+// SSMInstanceID is the ID of the Secure Source Manager instance to be used by SSM tests
+var SSMInstanceID = flag.String("ssm-instance-id", util.EnvString("E2E_SSM_INSTANCE_ID", ""),
+	"The name of the Secure Source Manager instance to be used by SSM tests. Defaults to E2E_SSM_INSTANCE_ID env var")
+
+// SSMInstanceURL is the git URL of the Secure Source Manager instance to be used by SSM tests
+var SSMInstanceURL = flag.String("ssm-instance-url", util.EnvString("E2E_SSM_INSTANCE_URL", ""),
+	"The git URL of the Secure Source Manager instance to be used by SSM tests. It should be of the form https://<INSTANCE_ID>-<PROJECT_NUMBER>-git.<REGION>.sourcemanager.dev. Defaults to E2E_SSM_INSTANCE_URL env var")
+
+// SSMInstanceRegion is the region of the Secure Source Manager instance to be used by SSM tests
+var SSMInstanceRegion = flag.String("ssm-instance-region", util.EnvString("E2E_SSM_INSTANCE_REGION", ""),
+	"The region of the Secure Source Manager instance to be used by SSM tests. Defaults to E2E_SSM_INSTANCE_REGION env var")
+
 // GitProvider is the provider that hosts the Git repositories.
 var GitProvider = newStringEnum("git-provider", util.EnvString("E2E_GIT_PROVIDER", Local),
 	"The git provider that hosts the Git repositories. Defaults to Local.",
-	[]string{Local, Bitbucket, GitLab, CSR})
+	[]string{Local, Bitbucket, GitLab, CSR, SSM})
 
 // OCIProvider is the provider that hosts the OCI repositories.
 var OCIProvider = newStringEnum("oci-provider", util.EnvString("E2E_OCI_PROVIDER", Local),
@@ -300,6 +312,8 @@ const (
 	CSR = "csr"
 	// ArtifactRegistry indicates using Google Artifact Registry to host the repositories.
 	ArtifactRegistry = "gar"
+	// SSM indicates using Secure Source Manager to host the repositories.
+	SSM = "ssm"
 )
 
 // NumParallel returns the number of parallel test threads

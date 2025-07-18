@@ -282,6 +282,12 @@ func (g *ReadWriteRepository) Init() error {
 			// connect securely to CSR using Google Account credentials.
 			[]string{"config", fmt.Sprintf("credential.%s.helper", testing.CSRHost), "gcloud.sh"})
 	}
+	if g.GitProvider.Type() == e2e.SSM {
+		cmds = append(cmds,
+			// Use credential helper script to provide information that Git needs to
+			// connect securely to SSM using Google Account credentials.
+			[]string{"config", "credential.https://*.*.sourcemanager.dev.helper", "gcloud.sh"})
+	}
 	return g.BulkGit(cmds...)
 }
 

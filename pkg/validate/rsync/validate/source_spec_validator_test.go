@@ -388,6 +388,10 @@ func TestValidateRepoSyncSpec(t *testing.T) {
 			obj:  repoSyncWithGit(auth(configsync.AuthToken), secret("token"), proxy("ok proxy")),
 		},
 		{
+			name: "valid proxy with githubapp",
+			obj:  repoSyncWithGit(auth(configsync.AuthGithubApp), secret("githubapp"), proxy("ok proxy")),
+		},
+		{
 			name:    "illegal secret",
 			obj:     repoSyncWithGit(secret("illegal secret")),
 			wantErr: IllegalSecretRef(configsync.GitSource, configsync.RepoSyncKind),

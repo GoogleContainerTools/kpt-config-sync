@@ -366,6 +366,19 @@ func rootSyncWithGit(name string, opts ...func(*v1beta1.RootSync)) *v1beta1.Root
 	return rootSync(name, opts...)
 }
 
+func rootSyncWithGitProxy(name string, opts ...func(*v1beta1.RootSync)) *v1beta1.RootSync {
+	addGit := func(rs *v1beta1.RootSync) {
+		rs.Spec.SourceType = configsync.GitSource
+		rs.Spec.Git = &v1beta1.Git{
+			Repo:  rootsyncRepo,
+			Dir:   rootsyncDir,
+			Proxy: "https://proxy.example.com:8080",
+		}
+	}
+	opts = append([]func(*v1beta1.RootSync){addGit}, opts...)
+	return rootSync(name, opts...)
+}
+
 func rootSyncWithOCI(name string, opts ...func(*v1beta1.RootSync)) *v1beta1.RootSync {
 	addOci := func(rs *v1beta1.RootSync) {
 		rs.Spec.SourceType = configsync.OciSource
@@ -2203,6 +2216,8 @@ func TestRootSyncReconcilerRestart(t *testing.T) {
 // - rs3: "my-rs-3", auth type is gcpserviceaccount
 // - rs4: "my-rs-4", auth type is cookiefile with proxy
 // - rs5: "my-rs-5", auth type is token with proxy
+// - rs6: "my-rs-6", auth type is githubapp with proxy in git spec
+// - rs7: "my-rs-7", auth type is githubapp with proxy
 func TestMultipleRootSyncs(t *testing.T) {
 	// Mock out parseDeployment for testing.
 	parseDeployment = parsedDeployment
@@ -2230,12 +2245,30 @@ func TestMultipleRootSyncs(t *testing.T) {
 	secret5.Data[GitSecretConfigKeyTokenUsername] = []byte("test-user")
 	rg5 := resourceGroup(rs5)
 
+	rs6 := rootSyncWithGitProxy("my-rs-6", rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(configsync.AuthGithubApp), rootsyncSecretRef(githubAppSecretName))
+	reqNamespacedName6 := namespacedName(rs6.Name, rs6.Namespace)
+	secret6 := secretObj(t, githubAppSecretName, configsync.AuthGithubApp, configsync.GitSource, core.Namespace(rs6.Namespace))
+	secret6.Data[GitSecretGithubAppApplicationID] = []byte(GitSecretGithubAppApplicationID)
+	secret6.Data[GitSecretGithubAppInstallationID] = []byte(GitSecretGithubAppInstallationID)
+	secret6.Data[GitSecretGithubAppPrivateKey] = []byte(GitSecretGithubAppPrivateKey)
+	rg6 := resourceGroup(rs6)
+
+	rs7 := rootSyncWithGit("my-rs-7", rootsyncRef(gitRevision), rootsyncBranch(branch), rootsyncSecretType(configsync.AuthGithubApp), rootsyncSecretRef(githubAppSecretNameProxy))
+	reqNamespacedName7 := namespacedName(rs7.Name, rs7.Namespace)
+	secret7 := secretObjWithProxy(t, githubAppSecretNameProxy, configsync.AuthGithubApp, core.Namespace(rs7.Namespace))
+	secret7.Data[GitSecretGithubAppApplicationID] = []byte(GitSecretGithubAppApplicationID)
+	secret7.Data[GitSecretGithubAppInstallationID] = []byte(GitSecretGithubAppInstallationID)
+	secret7.Data[GitSecretGithubAppPrivateKey] = []byte(GitSecretGithubAppPrivateKey)
+	rg7 := resourceGroup(rs7)
+
 	fakeClient, fakeDynamicClient, testReconciler := setupRootReconciler(t, rs1, rg1, secretObj(t, rootsyncSSHKey, configsync.AuthSSH, configsync.GitSource, core.Namespace(rs1.Namespace)))
 
 	rootReconcilerName2 := core.RootReconcilerName(rs2.Name)
 	rootReconcilerName3 := core.RootReconcilerName(rs3.Name)
 	rootReconcilerName4 := core.RootReconcilerName(rs4.Name)
 	rootReconcilerName5 := core.RootReconcilerName(rs5.Name)
+	rootReconcilerName6 := core.RootReconcilerName(rs6.Name)
+	rootReconcilerName7 := core.RootReconcilerName(rs7.Name)
 
 	// Test creating Deployment resources.
 	ctx := context.Background()
@@ -2507,7 +2540,6 @@ func TestMultipleRootSyncs(t *testing.T) {
 	t.Log("Deployments, ServiceAccounts, and ClusterRoleBindings successfully created")
 
 	// Test reconciler rs5: my-rs-5
-	t.Log("Deployments, ServiceAccounts, and ClusterRoleBindings successfully created")
 	if err := fakeClient.Create(ctx, rs5, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
 		t.Fatal(err)
 	}
@@ -2569,6 +2601,173 @@ func TestMultipleRootSyncs(t *testing.T) {
 	crb.Subjects = addSubjectByName(crb.Subjects, rootReconcilerName5)
 	crb.ResourceVersion = "5"
 	crb.Generation = 5
+	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
+		t.Error(err)
+	}
+	if t.Failed() {
+		t.FailNow()
+	}
+	t.Log("Deployments, ServiceAccounts, and ClusterRoleBindings successfully created")
+
+	// Test reconciler rs6: my-rs-6
+	if err := fakeClient.Create(ctx, rs6, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
+		t.Fatal(err)
+	}
+	if err := fakeClient.Create(ctx, secret6, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
+		t.Fatal(err)
+	}
+	if err := fakeClient.Create(ctx, rg6, client.FieldOwner(syncerFake.FieldManager)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName6); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs6), rs6); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
+	}
+
+	wantRs6 := k8sobjects.RootSyncObjectV1Beta1(rs6.Name)
+	wantRs6.Spec = rs6.Spec
+	wantRs6.Status.Reconciler = rootReconcilerName6
+	rootsync.SetReconciling(wantRs6, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", rootReconcilerName6))
+	controllerutil.AddFinalizer(wantRs6, metadata.ReconcilerManagerFinalizer)
+	validateRootSyncStatus(t, wantRs6, fakeClient)
+
+	label6 := map[string]string{
+		metadata.SyncNamespaceLabel:       rs6.Namespace,
+		metadata.SyncNameLabel:            rs6.Name,
+		metadata.SyncKindLabel:            testReconciler.syncGVK.Kind,
+		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
+	}
+
+	rootContainerEnvs6, err := testReconciler.populateContainerEnvs(ctx, rs6, rootReconcilerName6)
+	require.NoError(t, err)
+	rootContainerEnvs6[reconcilermanager.GitSync] = append(
+		rootContainerEnvs6[reconcilermanager.GitSync],
+		corev1.EnvVar{Name: GithubAppApplicationID, Value: GitSecretGithubAppApplicationID},
+		corev1.EnvVar{Name: GithubAppInstallationID, Value: GitSecretGithubAppInstallationID},
+		corev1.EnvVar{
+			Name: "GITSYNC_GITHUB_APP_PRIVATE_KEY",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: githubAppSecretName,
+					},
+					Key: GitSecretGithubAppPrivateKey,
+				},
+			},
+		},
+	)
+	rootDeployment6 := rootSyncDeployment(rootReconcilerName6,
+		setServiceAccountName(rootReconcilerName6),
+		secretMutator(githubAppSecretName),
+		containerResourcesMutator(resourceOverrides),
+		containerEnvMutator(rootContainerEnvs6),
+		setUID("1"), setResourceVersion("1"), setGeneration(1),
+	)
+	wantDeployments[core.IDOf(rootDeployment6)] = rootDeployment6
+	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	serviceAccount6 := k8sobjects.ServiceAccountObject(
+		rootReconcilerName6,
+		core.Namespace(configsync.ControllerNamespace),
+		core.Labels(label6),
+		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
+	)
+	wantServiceAccounts[core.IDOf(serviceAccount6)] = serviceAccount6
+	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
+		t.Error(err)
+	}
+
+	crb.Subjects = addSubjectByName(crb.Subjects, rootReconcilerName6)
+	crb.ResourceVersion = "6"
+	crb.Generation = 6
+	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
+		t.Error(err)
+	}
+	if t.Failed() {
+		t.FailNow()
+	}
+	t.Log("Deployments, ServiceAccounts, and ClusterRoleBindings successfully created")
+
+	// Test reconciler rs7: my-rs-7
+	if err := fakeClient.Create(ctx, rs7, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
+		t.Fatal(err)
+	}
+	if err := fakeClient.Create(ctx, secret7, client.FieldOwner(reconcilermanager.FieldManager)); err != nil {
+		t.Fatal(err)
+	}
+	if err := fakeClient.Create(ctx, rg7, client.FieldOwner(syncerFake.FieldManager)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName7); err != nil {
+		t.Fatalf("unexpected reconciliation error, got error: %q, want error: nil", err)
+	}
+	if err := fakeClient.Get(ctx, client.ObjectKeyFromObject(rs7), rs7); err != nil {
+		t.Fatalf("failed to get the root sync: %v", err)
+	}
+
+	wantRs7 := k8sobjects.RootSyncObjectV1Beta1(rs7.Name)
+	wantRs7.Spec = rs7.Spec
+	wantRs7.Status.Reconciler = rootReconcilerName7
+	rootsync.SetReconciling(wantRs7, "Deployment",
+		fmt.Sprintf("Deployment (config-management-system/%s) InProgress: Replicas: 0/1", rootReconcilerName7))
+	controllerutil.AddFinalizer(wantRs7, metadata.ReconcilerManagerFinalizer)
+	validateRootSyncStatus(t, wantRs7, fakeClient)
+
+	label7 := map[string]string{
+		metadata.SyncNamespaceLabel:       rs7.Namespace,
+		metadata.SyncNameLabel:            rs7.Name,
+		metadata.SyncKindLabel:            testReconciler.syncGVK.Kind,
+		metadata.ConfigSyncManagedByLabel: reconcilermanager.ManagerName,
+	}
+
+	rootContainerEnvs7, err := testReconciler.populateContainerEnvs(ctx, rs7, rootReconcilerName7)
+	require.NoError(t, err)
+	rootContainerEnvs7[reconcilermanager.GitSync] = append(
+		rootContainerEnvs7[reconcilermanager.GitSync],
+		corev1.EnvVar{Name: GithubAppApplicationID, Value: GitSecretGithubAppApplicationID},
+		corev1.EnvVar{Name: GithubAppInstallationID, Value: GitSecretGithubAppInstallationID},
+		corev1.EnvVar{
+			Name: "GITSYNC_GITHUB_APP_PRIVATE_KEY",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: githubAppSecretNameProxy,
+					},
+					Key: GitSecretGithubAppPrivateKey,
+				},
+			},
+		},
+	)
+	rootDeployment7 := rootSyncDeployment(rootReconcilerName7,
+		setServiceAccountName(rootReconcilerName7),
+		secretMutator(githubAppSecretNameProxy),
+		envVarMutator(gitSyncHTTPSProxy, githubAppSecretNameProxy, "https_proxy"),
+		containerResourcesMutator(resourceOverrides),
+		containerEnvMutator(rootContainerEnvs7),
+		setUID("1"), setResourceVersion("1"), setGeneration(1),
+	)
+	wantDeployments[core.IDOf(rootDeployment7)] = rootDeployment7
+	if err := validateDeployments(wantDeployments, fakeDynamicClient); err != nil {
+		t.Errorf("Deployment validation failed. err: %v", err)
+	}
+	serviceAccount7 := k8sobjects.ServiceAccountObject(
+		rootReconcilerName7,
+		core.Namespace(configsync.ControllerNamespace),
+		core.Labels(label7),
+		core.UID("1"), core.ResourceVersion("1"), core.Generation(1),
+	)
+	wantServiceAccounts[core.IDOf(serviceAccount7)] = serviceAccount7
+	if err := validateServiceAccounts(wantServiceAccounts, fakeClient); err != nil {
+		t.Error(err)
+	}
+
+	crb.Subjects = addSubjectByName(crb.Subjects, rootReconcilerName7)
+	crb.ResourceVersion = "7"
+	crb.Generation = 7
 	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
 		t.Error(err)
 	}
@@ -2720,8 +2919,8 @@ func TestMultipleRootSyncs(t *testing.T) {
 
 	// Subject for rs1 is removed from ClusterRoleBinding.Subjects
 	crb.Subjects = deleteSubjectByName(crb.Subjects, rootReconcilerName)
-	crb.ResourceVersion = "6"
-	crb.Generation = 6
+	crb.ResourceVersion = "8"
+	crb.Generation = 8
 	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
 		t.Error(err)
 	}
@@ -2748,8 +2947,8 @@ func TestMultipleRootSyncs(t *testing.T) {
 
 	// Subject for rs2 is removed from ClusterRoleBinding.Subjects
 	crb.Subjects = deleteSubjectByName(crb.Subjects, rootReconcilerName2)
-	crb.ResourceVersion = "7"
-	crb.Generation = 7
+	crb.ResourceVersion = "9"
+	crb.Generation = 9
 	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
 		t.Error(err)
 	}
@@ -2776,8 +2975,8 @@ func TestMultipleRootSyncs(t *testing.T) {
 
 	// Subject for rs3 is removed from ClusterRoleBinding.Subjects
 	crb.Subjects = deleteSubjectByName(crb.Subjects, rootReconcilerName3)
-	crb.ResourceVersion = "8"
-	crb.Generation = 8
+	crb.ResourceVersion = "10"
+	crb.Generation = 10
 	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
 		t.Error(err)
 	}
@@ -2804,8 +3003,8 @@ func TestMultipleRootSyncs(t *testing.T) {
 
 	// Subject for rs4 is removed from ClusterRoleBinding.Subjects
 	crb.Subjects = deleteSubjectByName(crb.Subjects, rootReconcilerName4)
-	crb.ResourceVersion = "9"
-	crb.Generation = 9
+	crb.ResourceVersion = "11"
+	crb.Generation = 11
 	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
 		t.Error(err)
 	}
@@ -2827,6 +3026,63 @@ func TestMultipleRootSyncs(t *testing.T) {
 		t.Error(err)
 	}
 	if err := validateResourceDeleted(core.IDOf(rg5), fakeClient); err != nil {
+		t.Error(err)
+	}
+
+	// Subject for rs5 is removed from ClusterRoleBinding.Subjects
+	crb.Subjects = deleteSubjectByName(crb.Subjects, rootReconcilerName5)
+	crb.ResourceVersion = "12"
+	crb.Generation = 12
+	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
+		t.Error(err)
+	}
+	validateRootGeneratedResourcesDeleted(t, fakeClient, rootReconcilerName5)
+	if t.Failed() {
+		t.FailNow()
+	}
+	t.Log("Deployment successfully deleted")
+
+	rs6.ResourceVersion = "" // Skip ResourceVersion validation
+	if err := fakeClient.Delete(ctx, rs6); err != nil {
+		t.Fatalf("failed to delete the root sync request, got error: %v, want error: nil", err)
+	}
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName6); err != nil {
+		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+
+	if err := validateResourceDeleted(core.IDOf(rs6), fakeClient); err != nil {
+		t.Error(err)
+	}
+	if err := validateResourceDeleted(core.IDOf(rg6), fakeClient); err != nil {
+		t.Error(err)
+	}
+
+	// Subject for rs6 is removed from ClusterRoleBinding.Subjects
+	crb.Subjects = deleteSubjectByName(crb.Subjects, rootReconcilerName6)
+	crb.ResourceVersion = "13"
+	crb.Generation = 13
+	if err := validateClusterRoleBinding(crb, fakeClient); err != nil {
+		t.Error(err)
+	}
+	validateRootGeneratedResourcesDeleted(t, fakeClient, rootReconcilerName6)
+	if t.Failed() {
+		t.FailNow()
+	}
+	t.Log("Deployment successfully deleted")
+
+	// Test garbage collecting ClusterRoleBinding after all RootSyncs are deleted
+	rs7.ResourceVersion = "" // Skip ResourceVersion validation
+	if err := fakeClient.Delete(ctx, rs7); err != nil {
+		t.Fatalf("failed to delete the root sync request, got error: %v, want error: nil", err)
+	}
+	if _, err := testReconciler.Reconcile(ctx, reqNamespacedName7); err != nil {
+		t.Fatalf("unexpected reconciliation error upon request update, got error: %q, want error: nil", err)
+	}
+
+	if err := validateResourceDeleted(core.IDOf(rs7), fakeClient); err != nil {
+		t.Error(err)
+	}
+	if err := validateResourceDeleted(core.IDOf(rg7), fakeClient); err != nil {
 		t.Error(err)
 	}
 

@@ -119,7 +119,7 @@ func GitSpec(git *v1beta1.Git, syncKind string) status.Error {
 	}
 
 	// Check that proxy isn't unnecessarily declared.
-	if git.Proxy != "" && git.Auth != configsync.AuthNone && git.Auth != configsync.AuthCookieFile && git.Auth != configsync.AuthToken {
+	if git.Proxy != "" && git.Auth != configsync.AuthNone && git.Auth != configsync.AuthCookieFile && git.Auth != configsync.AuthToken && git.Auth != configsync.AuthGithubApp {
 		return NoOpProxy(syncKind)
 	}
 
@@ -448,8 +448,8 @@ func InvalidGitAuthType(syncKind string) status.Error {
 // do nothing.
 func NoOpProxy(syncKind string) status.Error {
 	return invalidSyncBuilder.
-		Sprintf("%ss which specify spec.git.proxy must also specify spec.git.auth as one of %q, %q or %q",
-			syncKind, configsync.AuthNone, configsync.AuthCookieFile, configsync.AuthToken).
+		Sprintf("%ss which specify spec.git.proxy must also specify spec.git.auth as one of %q, %q, %q or %q",
+			syncKind, configsync.AuthNone, configsync.AuthCookieFile, configsync.AuthToken, configsync.AuthGithubApp).
 		Build()
 }
 

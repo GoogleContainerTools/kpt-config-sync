@@ -26,9 +26,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/spf13/cobra"
 	"k8s.io/klog/v2"
-	"kpt.dev/configsync/cmd/nomos/flags"
 	"kpt.dev/configsync/cmd/nomos/util"
 	"kpt.dev/configsync/pkg/client/restconfig"
 )
@@ -40,20 +38,46 @@ const (
 	reconcilingMsg = "RECONCILING"
 )
 
-var (
-	pollingInterval time.Duration
-	namespace       string
-	resourceStatus  bool
-	name            string
-)
+// ExecutionParams contains all parameters needed to execute the status command
+// This struct is completely independent of cobra command structures
+type ExecutionParams struct {
+	Contexts        []string
+	ClientTimeout   time.Duration
+	PollingInterval time.Duration
+	Namespace       string
+	ResourceStatus  bool
+	Name            string
+}
 
-func init() {
-	flags.AddContexts(Cmd)
-	Cmd.Flags().DurationVar(&flags.ClientTimeout, "timeout", restconfig.DefaultTimeout, "Sets the timeout for connecting to each cluster. Defaults to 15 seconds. Example: --timeout=30s")
-	Cmd.Flags().DurationVar(&pollingInterval, "poll", 0*time.Second, "Continuously polls for status updates at the specified interval. If not provided, the command runs only once. Example: --poll=30s for polling every 30 seconds")
-	Cmd.Flags().StringVar(&namespace, "namespace", "", "Filters the status output by the specified RootSync or RepoSync namespace. If not provided, displays status for all RootSync and RepoSync objects.")
-	Cmd.Flags().BoolVar(&resourceStatus, "resources", true, "Displays detailed status for individual resources managed by RootSync or RepoSync objects. Defaults to true.")
-	Cmd.Flags().StringVar(&name, "name", "", "Filters the status output by the specified RootSync or RepoSync name.")
+// ExecuteStatus executes the core status command logic without any cobra dependencies
+// This function encapsulates all the business logic for the status command
+func ExecuteStatus(ctx context.Context, params ExecutionParams) error {
+	fmt.Println("Connecting to clusters...")
+
+	clientMap, err := ClusterClients(ctx, params.Contexts)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("failed to create client configs: %w", err)
+		}
+		klog.Fatalf("Failed to get clients: %v", err)
+	}
+	if len(clientMap) == 0 {
+		return errors.New("no clusters found")
+	}
+
+	// Use a sorted order of names to avoid shuffling in the output.
+	names := clusterNames(clientMap)
+
+	writer := util.NewWriter(os.Stdout)
+	if params.PollingInterval > 0 {
+		for {
+			printStatusWithParams(ctx, writer, clientMap, names, params)
+			time.Sleep(params.PollingInterval)
+		}
+	} else {
+		printStatusWithParams(ctx, writer, clientMap, names, params)
+	}
+	return nil
 }
 
 // SaveToTempFile writes the `nomos status` output into a temporary file, and
@@ -74,7 +98,16 @@ func SaveToTempFile(ctx context.Context, contexts []string) (*os.File, error) {
 	}
 	names := clusterNames(clientMap)
 
-	printStatus(ctx, writer, clientMap, names)
+	// Create default execution parameters for temp file generation
+	params := ExecutionParams{
+		Contexts:        contexts,
+		Namespace:       "",
+		ResourceStatus:  true,
+		Name:            "",
+		PollingInterval: 0,
+	}
+
+	printStatusWithParams(ctx, writer, clientMap, names, params)
 	err = tmpFile.Close()
 	if err != nil {
 		return tmpFile, fmt.Errorf("failed to close status file writer with error: %w", err)
@@ -86,46 +119,6 @@ func SaveToTempFile(ctx context.Context, contexts []string) (*os.File, error) {
 	}
 
 	return f, nil
-}
-
-// Cmd runs a loop that fetches ACM objects from all available clusters and prints a summary of the
-// status of Config Management for each cluster.
-var Cmd = &cobra.Command{
-	Use: "status",
-	// TODO: make Configuration Management a constant (for product renaming)
-	Short: `Prints the status of all clusters with Configuration Management installed.`,
-	RunE: func(cmd *cobra.Command, _ []string) error {
-		// Don't show usage on error, as argument validation passed.
-		cmd.SilenceUsage = true
-
-		fmt.Println("Connecting to clusters...")
-
-		clientMap, err := ClusterClients(cmd.Context(), flags.Contexts)
-		if err != nil {
-			if errors.Is(err, os.ErrNotExist) {
-				return fmt.Errorf("failed to create client configs: %w", err)
-			}
-
-			klog.Fatalf("Failed to get clients: %v", err)
-		}
-		if len(clientMap) == 0 {
-			return errors.New("no clusters found")
-		}
-
-		// Use a sorted order of names to avoid shuffling in the output.
-		names := clusterNames(clientMap)
-
-		writer := util.NewWriter(os.Stdout)
-		if pollingInterval > 0 {
-			for {
-				printStatus(cmd.Context(), writer, clientMap, names)
-				time.Sleep(pollingInterval)
-			}
-		} else {
-			printStatus(cmd.Context(), writer, clientMap, names)
-		}
-		return nil
-	},
 }
 
 // clusterNames returns a sorted list of names from the given clientMap.
@@ -140,7 +133,7 @@ func clusterNames(clientMap map[string]*ClusterClient) []string {
 
 // clusterStates returns a map of clusterStates calculated from the given map of
 // clients, and a list of clusters running in the mono-repo mode.
-func clusterStates(ctx context.Context, clientMap map[string]*ClusterClient) (map[string]*ClusterState, []string) {
+func clusterStates(ctx context.Context, clientMap map[string]*ClusterClient, namespace string) (map[string]*ClusterState, []string) {
 	stateMap := make(map[string]*ClusterState)
 	var monoRepoClusters []string
 	for name, client := range clientMap {
@@ -157,13 +150,14 @@ func clusterStates(ctx context.Context, clientMap map[string]*ClusterClient) (ma
 	return stateMap, monoRepoClusters
 }
 
-// printStatus fetches ConfigManagementStatus and/or RepoStatus from each cluster in the given map
+// printStatusWithParams fetches ConfigManagementStatus and/or RepoStatus from each cluster in the given map
 // and then prints a formatted status row for each one. If there are any errors reported by either
 // object, those are printed in a second table under the status table.
+// This function accepts execution parameters instead of relying on global variables
 // nolint:errcheck
-func printStatus(ctx context.Context, writer *tabwriter.Writer, clientMap map[string]*ClusterClient, names []string) {
+func printStatusWithParams(ctx context.Context, writer *tabwriter.Writer, clientMap map[string]*ClusterClient, names []string, params ExecutionParams) {
 	// First build up a map of all the states to display.
-	stateMap, monoRepoClusters := clusterStates(ctx, clientMap)
+	stateMap, monoRepoClusters := clusterStates(ctx, clientMap, params.Namespace)
 
 	// Log a notice for the detected clusters that are running in the mono-repo mode.
 	util.MonoRepoNotice(writer, monoRepoClusters...)
@@ -175,7 +169,7 @@ func printStatus(ctx context.Context, writer *tabwriter.Writer, clientMap map[st
 
 	// Now we write everything at once. Processing and then printing helps avoid screen strobe.
 
-	if pollingInterval > 0 {
+	if params.PollingInterval > 0 {
 		// Clear previous output and flush it to avoid messing up column widths.
 		clearTerminal(writer)
 		writer.Flush()
@@ -188,7 +182,7 @@ func printStatus(ctx context.Context, writer *tabwriter.Writer, clientMap map[st
 			// Prepend an asterisk for the users' current context
 			state.Ref = "*" + name
 		}
-		state.printRows(writer)
+		state.printRows(writer, params.Name, params.ResourceStatus)
 	}
 
 	writer.Flush()

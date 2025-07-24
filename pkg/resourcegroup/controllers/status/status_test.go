@@ -22,7 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
-func TestFixArgoRolloutObservedGeneration(t *testing.T) {
+func TestFixObservedGenerationType(t *testing.T) {
 	tests := []struct {
 		name          string
 		obj           *unstructured.Unstructured
@@ -33,8 +33,8 @@ func TestFixArgoRolloutObservedGeneration(t *testing.T) {
 			name: "ArgoCD Rollout with string observedGeneration should be fixed",
 			obj: &unstructured.Unstructured{
 				Object: map[string]interface{}{
-					"apiVersion": ArgoRolloutAPIVersion,
-					"kind":       ArgoRolloutKind,
+					"apiVersion": "argoproj.io/v1alpha1",
+					"kind":       "Rollout",
 					"metadata": map[string]interface{}{
 						"name":      "test-rollout",
 						"namespace": "test-ns",
@@ -48,13 +48,67 @@ func TestFixArgoRolloutObservedGeneration(t *testing.T) {
 			shouldBeFixed: true,
 		},
 		{
-			name: "ArgoCD Rollout with int64 observedGeneration should not be changed",
+			name: "Deployment with string observedGeneration should be fixed",
 			obj: &unstructured.Unstructured{
 				Object: map[string]interface{}{
-					"apiVersion": ArgoRolloutAPIVersion,
-					"kind":       ArgoRolloutKind,
+					"apiVersion": "apps/v1",
+					"kind":       "Deployment",
 					"metadata": map[string]interface{}{
-						"name":      "test-rollout",
+						"name":      "test-deployment",
+						"namespace": "test-ns",
+					},
+					"status": map[string]interface{}{
+						"observedGeneration": "5",
+					},
+				},
+			},
+			expectedValue: int64(5),
+			shouldBeFixed: true,
+		},
+		{
+			name: "StatefulSet with string observedGeneration should be fixed",
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "apps/v1",
+					"kind":       "StatefulSet",
+					"metadata": map[string]interface{}{
+						"name":      "test-statefulset",
+						"namespace": "test-ns",
+					},
+					"status": map[string]interface{}{
+						"observedGeneration": "10",
+					},
+				},
+			},
+			expectedValue: int64(10),
+			shouldBeFixed: true,
+		},
+		{
+			name: "Custom resource with string observedGeneration should be fixed",
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "custom.example.com/v1",
+					"kind":       "CustomResource",
+					"metadata": map[string]interface{}{
+						"name":      "test-custom",
+						"namespace": "test-ns",
+					},
+					"status": map[string]interface{}{
+						"observedGeneration": "7",
+					},
+				},
+			},
+			expectedValue: int64(7),
+			shouldBeFixed: true,
+		},
+		{
+			name: "Any resource with int64 observedGeneration should not be changed",
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "apps/v1",
+					"kind":       "Deployment",
+					"metadata": map[string]interface{}{
+						"name":      "test-deployment",
 						"namespace": "test-ns",
 					},
 					"status": map[string]interface{}{
@@ -66,13 +120,13 @@ func TestFixArgoRolloutObservedGeneration(t *testing.T) {
 			shouldBeFixed: false,
 		},
 		{
-			name: "ArgoCD Rollout with invalid string observedGeneration should not be changed",
+			name: "Any resource with invalid string observedGeneration should not be changed",
 			obj: &unstructured.Unstructured{
 				Object: map[string]interface{}{
-					"apiVersion": ArgoRolloutAPIVersion,
-					"kind":       ArgoRolloutKind,
+					"apiVersion": "v1",
+					"kind":       "Pod",
 					"metadata": map[string]interface{}{
-						"name":      "test-rollout",
+						"name":      "test-pod",
 						"namespace": "test-ns",
 					},
 					"status": map[string]interface{}{
@@ -84,53 +138,17 @@ func TestFixArgoRolloutObservedGeneration(t *testing.T) {
 			shouldBeFixed: false,
 		},
 		{
-			name: "Non-ArgoCD Rollout should not be changed",
+			name: "Resource without observedGeneration should not be changed",
 			obj: &unstructured.Unstructured{
 				Object: map[string]interface{}{
 					"apiVersion": "apps/v1",
-					"kind":       "Deployment",
+					"kind":       "StatefulSet",
 					"metadata": map[string]interface{}{
-						"name":      "test-deployment",
+						"name":      "test-statefulset",
 						"namespace": "test-ns",
 					},
 					"status": map[string]interface{}{
-						"observedGeneration": "1",
-					},
-				},
-			},
-			expectedValue: "1",
-			shouldBeFixed: false,
-		},
-		{
-			name: "ArgoCD resource that is not a Rollout should not be changed",
-			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"apiVersion": ArgoRolloutAPIVersion,
-					"kind":       "Application",
-					"metadata": map[string]interface{}{
-						"name":      "test-app",
-						"namespace": "test-ns",
-					},
-					"status": map[string]interface{}{
-						"observedGeneration": "1",
-					},
-				},
-			},
-			expectedValue: "1",
-			shouldBeFixed: false,
-		},
-		{
-			name: "ArgoCD Rollout without observedGeneration should not be changed",
-			obj: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"apiVersion": ArgoRolloutAPIVersion,
-					"kind":       ArgoRolloutKind,
-					"metadata": map[string]interface{}{
-						"name":      "test-rollout",
-						"namespace": "test-ns",
-					},
-					"status": map[string]interface{}{
-						"phase": "Progressing",
+						"phase": "Running",
 					},
 				},
 			},
@@ -138,13 +156,13 @@ func TestFixArgoRolloutObservedGeneration(t *testing.T) {
 			shouldBeFixed: false,
 		},
 		{
-			name: "ArgoCD Rollout without status should not be changed",
+			name: "Resource without status should not be changed",
 			obj: &unstructured.Unstructured{
 				Object: map[string]interface{}{
-					"apiVersion": ArgoRolloutAPIVersion,
-					"kind":       ArgoRolloutKind,
+					"apiVersion": "v1",
+					"kind":       "ConfigMap",
 					"metadata": map[string]interface{}{
-						"name":      "test-rollout",
+						"name":      "test-configmap",
 						"namespace": "test-ns",
 					},
 				},
@@ -165,7 +183,7 @@ func TestFixArgoRolloutObservedGeneration(t *testing.T) {
 			}
 
 			// Apply the fix
-			fixArgoRolloutObservedGeneration(tt.obj)
+			fixObservedGenerationType(tt.obj)
 
 			// Check the result
 			var actualValue interface{}
@@ -185,7 +203,7 @@ func TestFixArgoRolloutObservedGeneration(t *testing.T) {
 	}
 }
 
-func TestComputeStatusWithArgoRollout(t *testing.T) {
+func TestComputeStatusWithObservedGenerationFix(t *testing.T) {
 	tests := []struct {
 		name          string
 		obj           *unstructured.Unstructured
@@ -195,8 +213,8 @@ func TestComputeStatusWithArgoRollout(t *testing.T) {
 			name: "ArgoCD Rollout with string observedGeneration should compute status successfully",
 			obj: &unstructured.Unstructured{
 				Object: map[string]interface{}{
-					"apiVersion": ArgoRolloutAPIVersion,
-					"kind":       ArgoRolloutKind,
+					"apiVersion": "argoproj.io/v1alpha1",
+					"kind":       "Rollout",
 					"metadata": map[string]interface{}{
 						"name":       "test-rollout",
 						"namespace":  "test-ns",
@@ -211,19 +229,76 @@ func TestComputeStatusWithArgoRollout(t *testing.T) {
 			expectSuccess: true,
 		},
 		{
-			name: "ArgoCD Rollout with int64 observedGeneration should compute status successfully",
+			name: "Deployment with string observedGeneration should compute status successfully",
 			obj: &unstructured.Unstructured{
 				Object: map[string]interface{}{
-					"apiVersion": ArgoRolloutAPIVersion,
-					"kind":       ArgoRolloutKind,
+					"apiVersion": "apps/v1",
+					"kind":       "Deployment",
 					"metadata": map[string]interface{}{
-						"name":       "test-rollout",
+						"name":       "test-deployment",
+						"namespace":  "test-ns",
+						"generation": int64(5),
+					},
+					"status": map[string]interface{}{
+						"observedGeneration": "5",
+						"phase":              "Available",
+					},
+				},
+			},
+			expectSuccess: true,
+		},
+		{
+			name: "StatefulSet with string observedGeneration should compute status successfully",
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "apps/v1",
+					"kind":       "StatefulSet",
+					"metadata": map[string]interface{}{
+						"name":       "test-statefulset",
+						"namespace":  "test-ns",
+						"generation": int64(10),
+					},
+					"status": map[string]interface{}{
+						"observedGeneration": "10",
+						"phase":              "Running",
+					},
+				},
+			},
+			expectSuccess: true,
+		},
+		{
+			name: "Custom resource with string observedGeneration should compute status successfully",
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "custom.example.com/v1",
+					"kind":       "CustomResource",
+					"metadata": map[string]interface{}{
+						"name":       "test-custom",
+						"namespace":  "test-ns",
+						"generation": int64(7),
+					},
+					"status": map[string]interface{}{
+						"observedGeneration": "7",
+						"phase":              "Ready",
+					},
+				},
+			},
+			expectSuccess: true,
+		},
+		{
+			name: "Resource with int64 observedGeneration should compute status successfully",
+			obj: &unstructured.Unstructured{
+				Object: map[string]interface{}{
+					"apiVersion": "apps/v1",
+					"kind":       "Deployment",
+					"metadata": map[string]interface{}{
+						"name":       "test-deployment",
 						"namespace":  "test-ns",
 						"generation": int64(3),
 					},
 					"status": map[string]interface{}{
 						"observedGeneration": int64(3),
-						"phase":              "Progressing",
+						"phase":              "Available",
 					},
 				},
 			},
@@ -251,8 +326,6 @@ func TestComputeStatusWithArgoRollout(t *testing.T) {
 
 func TestConstants(t *testing.T) {
 	// Test that constants are properly defined
-	assert.Equal(t, "argoproj.io/v1alpha1", ArgoRolloutAPIVersion)
-	assert.Equal(t, "Rollout", ArgoRolloutKind)
 	assert.Equal(t, "status", StatusField)
 	assert.Equal(t, "observedGeneration", ObservedGenerationField)
 }

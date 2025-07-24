@@ -32,29 +32,24 @@ import (
 )
 
 const (
-	// ArgoRolloutAPIVersion is the API version for ArgoCD Rollouts
-	ArgoRolloutAPIVersion = "argoproj.io/v1alpha1"
-	// ArgoRolloutKind is the kind for ArgoCD Rollouts
-	ArgoRolloutKind = "Rollout"
 	// StatusField is the field name for status
 	StatusField = "status"
 	// ObservedGenerationField is the field name for observedGeneration
 	ObservedGenerationField = "observedGeneration"
 )
 
-// fixArgoRolloutObservedGeneration fixes the ArgoCD Rollout observedGeneration type issue.
-// ArgoCD Rollouts sets status.observedGeneration as a string instead of int64,
-// which causes kstatus library to fail. This has a known upstream bug:
-// https://github.com/argoproj/argo-rollouts/issues/3402
-func fixArgoRolloutObservedGeneration(obj *unstructured.Unstructured) {
-	if obj.GetAPIVersion() == ArgoRolloutAPIVersion && obj.GetKind() == ArgoRolloutKind {
-		if observedGen, found, err := unstructured.NestedString(obj.Object, StatusField, ObservedGenerationField); found && err == nil {
-			if intVal, err := strconv.ParseInt(observedGen, 10, 64); err == nil {
-				if err := unstructured.SetNestedField(obj.Object, intVal, StatusField, ObservedGenerationField); err != nil {
-					klog.V(4).Infof("Failed to fix observedGeneration for ArgoCD Rollout %s/%s: %v", obj.GetNamespace(), obj.GetName(), err)
-				} else {
-					klog.V(4).Infof("Fixed observedGeneration type for ArgoCD Rollout %s/%s: %s -> %d", obj.GetNamespace(), obj.GetName(), observedGen, intVal)
-				}
+// fixObservedGenerationType fixes the observedGeneration type issue for any resource.
+// Some controllers (like ArgoCD Rollouts) set status.observedGeneration as a string
+// instead of int64, which causes kstatus library to fail. This function converts
+// string observedGeneration values to int64 for any resource type.
+// Known upstream bug: https://github.com/argoproj/argo-rollouts/issues/3402
+func fixObservedGenerationType(obj *unstructured.Unstructured) {
+	if observedGen, found, err := unstructured.NestedString(obj.Object, StatusField, ObservedGenerationField); found && err == nil {
+		if intVal, err := strconv.ParseInt(observedGen, 10, 64); err == nil {
+			if err := unstructured.SetNestedField(obj.Object, intVal, StatusField, ObservedGenerationField); err != nil {
+				klog.V(4).Infof("Failed to fix observedGeneration for %s %s/%s: %v", obj.GetKind(), obj.GetNamespace(), obj.GetName(), err)
+			} else {
+				klog.V(4).Infof("Fixed observedGeneration type for %s %s/%s: %s -> %d", obj.GetKind(), obj.GetNamespace(), obj.GetName(), observedGen, intVal)
 			}
 		}
 	}
@@ -66,7 +61,7 @@ func ComputeStatus(obj *unstructured.Unstructured) *resourcemap.CachedStatus {
 	resStatus := &resourcemap.CachedStatus{}
 
 	// Fix ArgoCD Rollout observedGeneration type issue before computing status
-	fixArgoRolloutObservedGeneration(obj)
+	fixObservedGenerationType(obj)
 
 	// get the resource status using the kstatus library
 	result, err := kstatus.Compute(obj)

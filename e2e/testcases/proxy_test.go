@@ -64,7 +64,6 @@ func TestSyncingThroughAProxy(t *testing.T) {
 	nt.T.Log("Set auth type to githubapp")
 	nt.MustMergePatch(rs, `{"spec": {"git": {"auth": "githubapp"}}}`)
 	nt.T.Log("Verify the secretRef error")
-	nt.Must(nomostest.SetupFakeGithubAppCreds(nt, rootSyncID.Kind, rootSyncID.ObjectKey, configsync.AuthGithubApp, controllers.GitCredentialVolume))
 	nt.Must(nt.Watcher.WatchForRootSyncStalledError(rs.Name, "Validation",
 		validate.MissingKeyInAuthSecret(configsync.AuthGithubApp, "github-app-private-key", "git-creds").Error()))
 	nt.T.Log("Set auth type to none")

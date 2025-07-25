@@ -167,11 +167,7 @@ data:
       # the GCE metadata service, if available.
       resourcedetection:
         detectors: [env, gcp]
-    extensions:
-      health_check:
-        endpoint: 0.0.0.0:13133
     service:
-      extensions: [health_check]
       pipelines:
         metrics:
           receivers: [opencensus]
@@ -274,11 +270,6 @@ spec:
         ports:
         - containerPort: 55678
         - containerPort: 8888
-        - containerPort: 13133
-        readinessProbe:
-          httpGet:
-            path: /
-            port: 13133
         resources:
           requests:
             cpu: 10m

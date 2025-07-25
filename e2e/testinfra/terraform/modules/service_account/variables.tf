@@ -29,7 +29,7 @@ variable "gcp_sa_description" {
   description = "The description of the GCP service account"
 }
 
-variable "role" {
-  type = string
-  description = "The GCP project role to grant to the GCP service account"
+variable "roles" {
+  type = list(string)
+  description = "The GCP project roles to grant to the GCP service account"
 }

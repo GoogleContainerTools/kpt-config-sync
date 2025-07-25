@@ -32,3 +32,13 @@ resource "google_artifact_registry_repository" "gar" {
   description   = "A private AR repository used for Config Sync e2e tests"
   format        = "DOCKER"
 }
+
+resource "google_secure_source_manager_instance" "configsync-test-ssm-instance" {
+    location = "us-central1"
+    instance_id = "configsync-test"
+
+    # Prevent accidental deletions.
+    lifecycle {
+      prevent_destroy = true
+    }
+}

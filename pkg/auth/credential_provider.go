@@ -26,7 +26,10 @@ import (
 
 // GitSourceScopes returns the scopes needed to fetch source from CSR and SSM.
 func GitSourceScopes() []string {
-	return []string{"https://www.googleapis.com/auth/cloud-platform"}
+	return []string{
+		"https://www.googleapis.com/auth/cloud-platform",
+		"https://www.googleapis.com/auth/userinfo.email", // Required by SSM to perform git operations
+	}
 }
 
 // OCISourceScopes returns the scopes needed to fetch OCI source from GCR & GAR.

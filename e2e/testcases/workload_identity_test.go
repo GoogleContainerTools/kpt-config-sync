@@ -75,6 +75,7 @@ func TestWorkloadIdentity(t *testing.T) {
 		requireHelmGAR   bool
 		requireOCIGAR    bool
 		requireCSR       bool
+		requireSSM       bool
 		testKSAMigration bool
 		newRootSrcCfg    sourceConfig
 		newNSSrcCfg      sourceConfig
@@ -96,6 +97,24 @@ func TestWorkloadIdentity(t *testing.T) {
 			sourceType:  configsync.GitSource,
 			gsaEmail:    gitproviders.CSRReaderEmail(),
 			requireCSR:  true,
+		},
+		{
+			name:        "Authenticate to Git repo on SSM with GKE WI",
+			fleetWITest: false,
+			rootSrcCfg:  sourceConfig{pkg: "hydration/kustomize-components", dir: "kustomize-components", commitFn: nomostest.DefaultRootSha1Fn},
+			nsSrcCfg:    sourceConfig{pkg: "hydration/namespace-repo", dir: "namespace-repo", commitFn: nomostest.DefaultRepoSha1Fn},
+			sourceType:  configsync.GitSource,
+			gsaEmail:    gitproviders.SSMServiceAccountEmail(),
+			requireSSM:  true,
+		},
+		{
+			name:        "Authenticate to Git repo on SSM with Fleet WI in the same project",
+			fleetWITest: true,
+			rootSrcCfg:  sourceConfig{pkg: "hydration/kustomize-components", dir: "kustomize-components", commitFn: nomostest.DefaultRootSha1Fn},
+			nsSrcCfg:    sourceConfig{pkg: "hydration/namespace-repo", dir: "namespace-repo", commitFn: nomostest.DefaultRepoSha1Fn},
+			sourceType:  configsync.GitSource,
+			gsaEmail:    gitproviders.SSMServiceAccountEmail(),
+			requireSSM:  true,
 		},
 		{
 			name:             "Authenticate to OCI image on AR with GKE WI",
@@ -223,6 +242,10 @@ func TestWorkloadIdentity(t *testing.T) {
 			if tc.requireCSR {
 				opts = append(opts, ntopts.RequireCloudSourceRepository(t))
 			}
+			if tc.requireSSM {
+				opts = append(opts, ntopts.RequireSecureSourceManagerRepository(t))
+			}
+
 			nt := nomostest.New(t, nomostesting.WorkloadIdentity, opts...)
 			if err = workloadidentity.ValidateEnabled(nt); err != nil {
 				nt.T.Fatal(err)

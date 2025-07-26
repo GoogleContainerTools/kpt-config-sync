@@ -151,6 +151,11 @@ func validateArgs() error {
 			errs = multierr.Append(errs, fmt.Errorf("Cannot run gcenode tests on autopilot clusters"))
 		}
 	}
+	if *e2e.GitProvider == e2e.SSM { // required variables for SSM
+		if *e2e.SSMInstanceRegion == "" {
+			errs = multierr.Append(errs, fmt.Errorf("Environment variable E2E_SSM_INSTANCE_REGION is required for SSM"))
+		}
+	}
 	return errs
 }
 

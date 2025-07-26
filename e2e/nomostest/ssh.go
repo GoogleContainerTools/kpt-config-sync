@@ -376,7 +376,7 @@ func downloadSSHKey(nt *NT) (string, error) {
 // It skips creating the Secret if the GitProvider is CSR because CSR uses either
 // 'gcenode' or 'gcpserviceaccount' for authentication, which doesn't require a Secret.
 func CreateNamespaceSecrets(nt *NT, ns string) error {
-	if nt.GitProvider.Type() != e2e.CSR {
+	if nt.GitProvider.Type() != e2e.CSR && nt.GitProvider.Type() != e2e.SSM {
 		privateKeypath := nt.gitPrivateKeyPath
 		if len(privateKeypath) == 0 {
 			privateKeypath = privateKeyPath(nt)

@@ -283,10 +283,11 @@ func (g *ReadWriteRepository) Init() error {
 			[]string{"config", fmt.Sprintf("credential.%s.helper", testing.CSRHost), "gcloud.sh"})
 	}
 	if g.GitProvider.Type() == e2e.SSM {
+		hostName := g.GitProvider.(*SSMClient).hostName()
 		cmds = append(cmds,
 			// Use credential helper script to provide information that Git needs to
 			// connect securely to SSM using Google Account credentials.
-			[]string{"config", "credential.https://*.*.sourcemanager.dev.helper", "gcloud.sh"})
+			[]string{"config", fmt.Sprintf("credential.%s.helper", hostName), "gcloud.sh"})
 	}
 	return g.BulkGit(cmds...)
 }

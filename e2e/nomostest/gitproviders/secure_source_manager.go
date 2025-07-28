@@ -77,7 +77,11 @@ func (c *SSMClient) RemoteURL(name string) (string, error) {
 
 // SyncURL returns a URL for Config Sync to sync from.
 func (c *SSMClient) SyncURL(name string) string {
-	return fmt.Sprintf("https://%s-%s-git.%s.sourcemanager.dev/%s/%s", c.instanceID, c.projectNumber, c.region, c.project, name)
+	return fmt.Sprintf("%s/%s/%s", c.hostName(), c.project, name)
+}
+
+func (c *SSMClient) hostName() string {
+	return fmt.Sprintf("https://%s-%s-git.%s.sourcemanager.dev", c.instanceID, c.projectNumber, c.region)
 }
 
 func (c *SSMClient) login() error {

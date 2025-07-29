@@ -224,8 +224,8 @@ func TestMultiSyncs_Unstructured_MixedControl(t *testing.T) {
 
 	// Reconciler-manager doesn't copy the secret of RootSync's secretRef.
 	validateReconcilerResource(nt, kinds.Secret(), map[string]string{metadata.SyncNamespaceLabel: configsync.ControllerNamespace}, 0)
-	// CSR auth type doesn't need to copy the secret
-	if nt.GitProvider.Type() != e2e.CSR {
+	// CSR and SSM auth type doesn't need to copy the secret
+	if nt.GitProvider.Type() != e2e.CSR && nt.GitProvider.Type() != e2e.SSM {
 		validateReconcilerResource(nt, kinds.Secret(), map[string]string{metadata.SyncNamespaceLabel: testNs}, 5)
 		validateReconcilerResource(nt, kinds.Secret(), map[string]string{metadata.SyncNamespaceLabel: testNs2}, 1)
 		validateReconcilerResource(nt, kinds.Secret(), map[string]string{metadata.SyncNameLabel: repoSync1ID.Name}, 2)

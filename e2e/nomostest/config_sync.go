@@ -1410,6 +1410,23 @@ func podHasReadyCondition(conditions []corev1.PodCondition) bool {
 	return false
 }
 
+// ValidatePodByLabel validates that all Pods matching the provided label pass the
+// provided list of predicates.
+func ValidatePodByLabel(nt *NT, label, value string, predicates ...testpredicates.Predicate) error {
+	newPods := &corev1.PodList{}
+	if err := nt.KubeClient.List(newPods, client.InNamespace(configmanagement.ControllerNamespace), client.MatchingLabels{label: value}); err != nil {
+		return err
+	}
+	tg := taskgroup.New()
+	for _, pod := range newPods.Items {
+		po := pod
+		tg.Go(func() error {
+			return nt.Validate(po.Name, po.Namespace, &corev1.Pod{}, predicates...)
+		})
+	}
+	return tg.Wait()
+}
+
 // NewPodReady checks if the new created pods are ready.
 // It also checks if the new children pods that are managed by the pods are ready.
 func NewPodReady(nt *NT, labelName, currentLabel, childLabel string, oldCurrentPods, oldChildPods []corev1.Pod) error {

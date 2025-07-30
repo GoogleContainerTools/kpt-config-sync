@@ -445,7 +445,7 @@ func validateRepoSyncDependencies(nt *nomostest.NT, ns, rsName string) []client.
 
 	// See nomostest.CreateNamespaceSecrets for creation of user secrets.
 	// The Secret is neither needed nor created when using CSR or SSM as the Git provider.
-	if nt.GitProvider.Type() != e2e.CSR && nt.GitProvider.Type() != e2e.SSM {
+	if !gitproviders.IsGoogleGitProvider(nt.GitProvider) {
 		repoSyncAuthSecret := &corev1.Secret{}
 		setNN(repoSyncAuthSecret, client.ObjectKey{
 			Name:      controllers.ReconcilerResourceName(repoSyncReconciler.Name, nomostest.NamespaceAuthSecretName),
@@ -941,7 +941,7 @@ func TestAutopilotReconcilerAdjustment(t *testing.T) {
 	}
 	// Filter container map down to just expected containers
 	filteredContainers := []string{reconcilermanager.Reconciler, reconcilermanager.GitSync, metrics.OtelAgentName}
-	if nt.GitProvider.Type() == e2e.CSR || nt.GitProvider.Type() == e2e.SSM {
+	if gitproviders.IsGoogleGitProvider(nt.GitProvider) {
 		filteredContainers = append(filteredContainers, reconcilermanager.GCENodeAskpassSidecar)
 	}
 	expectedResources = filterResourceMap(expectedResources, filteredContainers...)

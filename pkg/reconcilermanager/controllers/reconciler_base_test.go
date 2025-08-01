@@ -398,16 +398,6 @@ spec:
         volumeMounts:
         - name: otel-agent-config-vol
           mountPath: /conf
-        livenessProbe:
-          httpGet:
-            path: /
-            port: 13133 # Health Check extension default port.
-            scheme: HTTP
-        readinessProbe:
-          httpGet:
-            path: /
-            port: 13133 # Health Check extension default port.
-            scheme: HTTP 
         imagePullPolicy: IfNotPresent
       dnsPolicy: ClusterFirst
       schedulerName: default-scheduler
@@ -478,24 +468,6 @@ spec:
         volumeMounts:
         - name: otel-agent-config-vol
           mountPath: /conf
-        livenessProbe:
-          httpGet:
-            path: /
-            port: 13133 # Health Check extension default port.
-            scheme: HTTP
-          timeoutSeconds: 1 # different from declared 
-          periodSeconds: 10 # different from declared
-          successThreshold: 1 # different from declared
-          failureThreshold: 3 # different from declared
-        readinessProbe:
-          httpGet:
-            path: /
-            port: 13133 # Health Check extension default port.
-            scheme: HTTP
-          timeoutSeconds: 1 # different from declared
-          periodSeconds: 10 # different from declared
-          successThreshold: 1 # different from declared
-          failureThreshold: 3 # different from declared
         terminationMessagePath: "/dev/termination" # different from declared
         terminationMessagePolicy: FallbackToLogsOnError # different from declared
         imagePullPolicy: IfNotPresent
@@ -548,7 +520,7 @@ func TestCompareDeploymentsToCreatePatchData(t *testing.T) {
 			current:       currentDeploymentUnstructured,
 			isAutopilot:   false,
 			expectedSame:  false,
-			expectedPatch: `{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"creationTimestamp":null,"labels":{"app":"reconciler","configmanagement.gke.io/arch":"csmr","configmanagement.gke.io/system":"true","test-data":"true"},"namespace":"config-management-system"},"spec":{"minReadySeconds":10,"replicas":1,"selector":{"matchLabels":{"app":"reconciler","configsync.gke.io/deployment-name":""}},"strategy":{"type":"Recreate"},"template":{"metadata":{"creationTimestamp":null},"spec":{"containers":[{"args":["--config=/conf/otel-agent-config.yaml","--feature-gates=-exporter.googlecloud.OTLPDirect"],"command":["/otelcol-contrib"],"image":"gcr.io/config-management-release/otelcontribcol:v0.54.0","imagePullPolicy":"IfNotPresent","livenessProbe":{"httpGet":{"path":"/","port":13133,"scheme":"HTTP"}},"name":"otel-agent","ports":[{"containerPort":55678,"protocol":"TCP"},{"containerPort":8888,"protocol":"TCP"}],"readinessProbe":{"httpGet":{"path":"/","port":13133,"scheme":"HTTP"}},"resources":{"requests":{"cpu":"10m","memory":"100Mi"}},"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["NET_RAW"]},"readOnlyRootFilesystem":true},"volumeMounts":[{"mountPath":"/conf","name":"otel-agent-config-vol"}]}],"dnsPolicy":"ClusterFirst","schedulerName":"default-scheduler","securityContext":{"fsGroup":65533,"runAsNonRoot":true,"runAsUser":1000,"seccompProfile":{"type":"RuntimeDefault"}},"tolerations":[{"key":"foo"}],"volumes":[{"emptyDir":{},"name":"repo"},{"emptyDir":{},"name":"kube"}]}}},"status":{}}`,
+			expectedPatch: `{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"creationTimestamp":null,"labels":{"app":"reconciler","configmanagement.gke.io/arch":"csmr","configmanagement.gke.io/system":"true","test-data":"true"},"namespace":"config-management-system"},"spec":{"minReadySeconds":10,"replicas":1,"selector":{"matchLabels":{"app":"reconciler","configsync.gke.io/deployment-name":""}},"strategy":{"type":"Recreate"},"template":{"metadata":{"creationTimestamp":null},"spec":{"containers":[{"args":["--config=/conf/otel-agent-config.yaml","--feature-gates=-exporter.googlecloud.OTLPDirect"],"command":["/otelcol-contrib"],"image":"gcr.io/config-management-release/otelcontribcol:v0.54.0","imagePullPolicy":"IfNotPresent","name":"otel-agent","ports":[{"containerPort":55678,"protocol":"TCP"},{"containerPort":8888,"protocol":"TCP"}],"resources":{"requests":{"cpu":"10m","memory":"100Mi"}},"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["NET_RAW"]},"readOnlyRootFilesystem":true},"volumeMounts":[{"mountPath":"/conf","name":"otel-agent-config-vol"}]}],"dnsPolicy":"ClusterFirst","schedulerName":"default-scheduler","securityContext":{"fsGroup":65533,"runAsNonRoot":true,"runAsUser":1000,"seccompProfile":{"type":"RuntimeDefault"}},"tolerations":[{"key":"foo"}],"volumes":[{"emptyDir":{},"name":"repo"},{"emptyDir":{},"name":"kube"}]}}},"status":{}}`,
 		},
 		"Deployment should preserve custom tolerations for Autopilot": {
 			declared: func() *appsv1.Deployment {
@@ -570,7 +542,7 @@ func TestCompareDeploymentsToCreatePatchData(t *testing.T) {
 			current:       currentDeploymentUnstructured,
 			isAutopilot:   true,
 			expectedSame:  false,
-			expectedPatch: `{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"creationTimestamp":null,"labels":{"app":"reconciler","configmanagement.gke.io/arch":"csmr","configmanagement.gke.io/system":"true","test-data":"true"},"namespace":"config-management-system"},"spec":{"minReadySeconds":10,"replicas":1,"selector":{"matchLabels":{"app":"reconciler","configsync.gke.io/deployment-name":""}},"strategy":{"type":"Recreate"},"template":{"metadata":{"creationTimestamp":null},"spec":{"containers":[{"args":["--config=/conf/otel-agent-config.yaml","--feature-gates=-exporter.googlecloud.OTLPDirect"],"command":["/otelcol-contrib"],"image":"gcr.io/config-management-release/otelcontribcol:v0.54.0","imagePullPolicy":"IfNotPresent","livenessProbe":{"httpGet":{"path":"/","port":13133,"scheme":"HTTP"}},"name":"otel-agent","ports":[{"containerPort":55678,"protocol":"TCP"},{"containerPort":8888,"protocol":"TCP"}],"readinessProbe":{"httpGet":{"path":"/","port":13133,"scheme":"HTTP"}},"resources":{"requests":{"cpu":"10m","memory":"100Mi"}},"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["NET_RAW"]},"readOnlyRootFilesystem":true},"volumeMounts":[{"mountPath":"/conf","name":"otel-agent-config-vol"}]}],"dnsPolicy":"ClusterFirst","schedulerName":"default-scheduler","securityContext":{"fsGroup":65533,"runAsNonRoot":true,"runAsUser":1000,"seccompProfile":{"type":"RuntimeDefault"}},"tolerations":[{"key":"foo"}],"volumes":[{"emptyDir":{},"name":"repo"},{"emptyDir":{},"name":"kube"}]}}},"status":{}}`,
+			expectedPatch: `{"apiVersion":"apps/v1","kind":"Deployment","metadata":{"creationTimestamp":null,"labels":{"app":"reconciler","configmanagement.gke.io/arch":"csmr","configmanagement.gke.io/system":"true","test-data":"true"},"namespace":"config-management-system"},"spec":{"minReadySeconds":10,"replicas":1,"selector":{"matchLabels":{"app":"reconciler","configsync.gke.io/deployment-name":""}},"strategy":{"type":"Recreate"},"template":{"metadata":{"creationTimestamp":null},"spec":{"containers":[{"args":["--config=/conf/otel-agent-config.yaml","--feature-gates=-exporter.googlecloud.OTLPDirect"],"command":["/otelcol-contrib"],"image":"gcr.io/config-management-release/otelcontribcol:v0.54.0","imagePullPolicy":"IfNotPresent","name":"otel-agent","ports":[{"containerPort":55678,"protocol":"TCP"},{"containerPort":8888,"protocol":"TCP"}],"resources":{"requests":{"cpu":"10m","memory":"100Mi"}},"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["NET_RAW"]},"readOnlyRootFilesystem":true},"volumeMounts":[{"mountPath":"/conf","name":"otel-agent-config-vol"}]}],"dnsPolicy":"ClusterFirst","schedulerName":"default-scheduler","securityContext":{"fsGroup":65533,"runAsNonRoot":true,"runAsUser":1000,"seccompProfile":{"type":"RuntimeDefault"}},"tolerations":[{"key":"foo"}],"volumes":[{"emptyDir":{},"name":"repo"},{"emptyDir":{},"name":"kube"}]}}},"status":{}}`,
 		},
 	}
 

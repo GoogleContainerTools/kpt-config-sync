@@ -77,3 +77,8 @@ func NewGitProvider(t testing.NTB, provider, clusterName string, logger *testlog
 		return &LocalProvider{}
 	}
 }
+
+// IsGoogleGitProvider returns true if the GitProvider is a Google-hosted Git service.
+func IsGoogleGitProvider(provider GitProvider) bool {
+	return provider.Type() == e2e.CSR || provider.Type() == e2e.SSM
+}

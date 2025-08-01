@@ -373,10 +373,9 @@ func downloadSSHKey(nt *NT) (string, error) {
 }
 
 // CreateNamespaceSecrets creates secrets in a given namespace using local paths.
-// It skips creating the Secret if the GitProvider is CSR because CSR uses either
-// 'gcenode' or 'gcpserviceaccount' for authentication, which doesn't require a Secret.
+// It skips creating the Secret if the GitProvider is CSR or SSM because neither require a Secret.
 func CreateNamespaceSecrets(nt *NT, ns string) error {
-	if nt.GitProvider.Type() != e2e.CSR && nt.GitProvider.Type() != e2e.SSM {
+	if !gitproviders.IsGoogleGitProvider(nt.GitProvider) {
 		privateKeypath := nt.gitPrivateKeyPath
 		if len(privateKeypath) == 0 {
 			privateKeypath = privateKeyPath(nt)

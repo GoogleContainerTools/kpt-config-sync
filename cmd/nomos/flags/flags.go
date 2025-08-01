@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package flags contains flags used by several CLI commands.
+// The local flags will be found in the command folder in the flags.go file.
 package flags
 
 import (
@@ -117,6 +119,12 @@ func AddSourceFormat(cmd *cobra.Command) {
 func AddOutputFormat(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&OutputFormat, "format", "yaml",
 		`Output format. Accepts 'yaml' and 'json'.`)
+}
+
+// AddClientTimeout adds the --timeout flag
+func AddClientTimeout(cmd *cobra.Command) {
+	cmd.Flags().DurationVar(&ClientTimeout, "timeout", restconfig.DefaultTimeout,
+		fmt.Sprintf("Timeout for client connections; defaults to %s", restconfig.DefaultTimeout))
 }
 
 // AddAPIServerTimeout adds the --api-server-timeout flag

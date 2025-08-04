@@ -15,6 +15,7 @@
 package e2e
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -45,17 +46,28 @@ func TestSurfaceFightError(t *testing.T) {
 	nt.Must(nt.WatchForAllSyncs())
 
 	// Make the # of updates exceed the fightThreshold defined in pkg/syncer/reconcile/fight_detector.go
+	ctx, cancel := context.WithCancel(t.Context())
 	go func() {
-		for i := 0; i <= 5; i++ {
-			nt.MustMergePatch(ns, `{"metadata": {"annotations": {"foo": "baz"}}}`)
-			nt.MustMergePatch(rb, `{"metadata": {"annotations": {"foo": "baz"}}}`)
-			time.Sleep(time.Second)
+		for {
+			select {
+			case <-ctx.Done():
+				nt.T.Log("Stopping async status updates")
+				return
+			default:
+				nt.T.Log("async status update")
+				nt.MustMergePatch(ns, `{"metadata": {"annotations": {"foo": "baz"}}}`)
+				time.Sleep(time.Second)
+			}
 		}
 	}()
 
 	nt.T.Log("The RootSync reports a fight error")
-	nt.Must(nt.Watcher.WatchForRootSyncSyncError(configsync.RootSyncName, status.FightErrorCode,
-		"This may indicate Config Sync is fighting with another controller over the object.", nil))
+	err := nt.Watcher.WatchForRootSyncSyncError(configsync.RootSyncName, status.FightErrorCode,
+		"This may indicate Config Sync is fighting with another controller over the object.", nil)
+	cancel()
+	if err != nil {
+		nt.T.Fatal(err)
+	}
 
 	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
 	rootSyncLabels, err := nomostest.MetricLabelsForRootSync(nt, rootSyncNN)

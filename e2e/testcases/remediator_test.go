@@ -22,6 +22,7 @@ import (
 
 	"kpt.dev/configsync/e2e/nomostest"
 	"kpt.dev/configsync/e2e/nomostest/metrics"
+	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/core"
@@ -45,9 +46,23 @@ func TestSurfaceFightError(t *testing.T) {
 	nt.Must(rootSyncGitRepo.CommitAndPush("Add Namespace and RoleBinding"))
 	nt.Must(nt.WatchForAllSyncs())
 
+	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
+	rootSyncLabels, err := nomostest.MetricLabelsForRootSync(nt, rootSyncNN)
+	if err != nil {
+		nt.T.Fatal(err)
+	}
+	commitHash := rootSyncGitRepo.MustHash(nt.T)
+	nt.T.Log("Validate there are no error metrics initially")
+	nt.Must(nomostest.ValidateMetrics(nt,
+		nomostest.ReconcilerErrorMetrics(nt, rootSyncLabels, commitHash, metrics.ErrorSummary{})))
+
 	// Make the # of updates exceed the fightThreshold defined in pkg/syncer/reconcile/fight_detector.go
 	ctx, cancel := context.WithCancel(t.Context())
+	nt.T.Cleanup(func() {
+		cancel() // cancel in case an assertion failed early
+	})
 	go func() {
+		nt.T.Log("Initialize async status updates")
 		for {
 			select {
 			case <-ctx.Done():
@@ -62,28 +77,20 @@ func TestSurfaceFightError(t *testing.T) {
 	}()
 
 	nt.T.Log("The RootSync reports a fight error")
-	err := nt.Watcher.WatchForRootSyncSyncError(configsync.RootSyncName, status.FightErrorCode,
-		"This may indicate Config Sync is fighting with another controller over the object.", nil)
-	cancel()
-	if err != nil {
-		nt.T.Fatal(err)
-	}
+	tg := taskgroup.New()
+	tg.Go(func() error {
+		return nt.Watcher.WatchForRootSyncSyncError(configsync.RootSyncName, status.FightErrorCode,
+			"This may indicate Config Sync is fighting with another controller over the object.", nil)
+	})
+	tg.Go(func() error {
+		return nomostest.ValidateMetrics(nt,
+			nomostest.ReconcilerErrorMetrics(nt, rootSyncLabels, commitHash, metrics.ErrorSummary{
+				Fights: 5, // Validate at least 5 - increases with remediation attempts
+			}))
+	})
+	nt.Must(tg.Wait())
 
-	rootSyncNN := nomostest.RootSyncNN(configsync.RootSyncName)
-	rootSyncLabels, err := nomostest.MetricLabelsForRootSync(nt, rootSyncNN)
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-	commitHash := rootSyncGitRepo.MustHash(nt.T)
-
-	err = nomostest.ValidateMetrics(nt,
-		nomostest.ReconcilerErrorMetrics(nt, rootSyncLabels, commitHash, metrics.ErrorSummary{
-			Fights: 5,
-		}))
-	if err != nil {
-		nt.T.Fatal(err)
-	}
-
+	cancel() // Stop async status updates
 	nt.T.Log("The fight error should be auto-resolved if no more fights")
 	nt.Must(nt.WatchForAllSyncs())
 }

@@ -56,7 +56,7 @@ func TestSurfaceFightError(t *testing.T) {
 	nt.Must(nomostest.ValidateMetrics(nt,
 		nomostest.ReconcilerErrorMetrics(nt, rootSyncLabels, commitHash, metrics.ErrorSummary{})))
 
-	// Make the # of updates exceed the fightThreshold defined in pkg/syncer/reconcile/fight_detector.go
+	// Make the # of updates exceed the DefaultFightThreshold defined in pkg/api/configsync/register.go
 	ctx, cancel := context.WithCancel(t.Context())
 	nt.T.Cleanup(func() {
 		cancel() // cancel in case an assertion failed early

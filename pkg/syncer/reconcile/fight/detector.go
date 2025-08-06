@@ -24,20 +24,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// fightThreshold is the threshold of updates per minute at which we log to Info
-// that the Syncer is fighting over a resource on the API Server with some
-// other process.
-//
-// This value was chosen arbitrarily as updates occurring more frequently are
-// obviously problems, and we don't really care about less frequent updates.
-var fightThreshold = 5.0
-
-// SetFightThreshold updates the maximum allowed rate of updates to a resource
-// per minute before we begin logging errors to the user.
-func SetFightThreshold(updatesPerMinute float64) {
-	fightThreshold = updatesPerMinute
-}
-
 // Detector uses a linear differential equation to estimate the frequency
 // of updates to resources, then logs to klog.Warning when it detects resources
 // needing updates too frequently.
@@ -59,13 +45,18 @@ type Detector struct {
 	fights map[core.ID]*fight
 
 	fLogger *logger
+
+	// fightThreshold is the maximum allowed rate of updates to a resource
+	// per minute before errors are logged to the user, surfaced on the RSync status and emitted as a metric
+	fightThreshold float64
 }
 
 // NewDetector instantiates a fight detector.
-func NewDetector() Detector {
+func NewDetector(threshold float64) Detector {
 	return Detector{
-		fights:  make(map[core.ID]*fight),
-		fLogger: newLogger(),
+		fights:         make(map[core.ID]*fight),
+		fLogger:        newLogger(),
+		fightThreshold: threshold,
 	}
 }
 
@@ -79,14 +70,14 @@ func (d *Detector) DetectFight(now time.Time, obj client.Object) (bool, status.R
 	if d.fights[id] == nil {
 		d.fights[id] = &fight{}
 	}
-	if frequency := d.fights[id].refreshUpdateFrequency(now); frequency >= fightThreshold {
+	if frequency := d.fights[id].refreshUpdateFrequency(now); frequency >= d.fightThreshold {
 		fightErr := status.FightError(frequency, obj)
 		return d.fLogger.logFight(now, fightErr), fightErr
 	}
 	return false, nil
 }
 
-// fight estimates how often a specific API resource is updated by the Syncer.
+// fight estimates how often a specific API resource is updated by the Remediator.
 type fight struct {
 	// heat is an estimate of the number of times a resource is updated per minute.
 	// It decays exponentially with time when there are no updates to a resource.

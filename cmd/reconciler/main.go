@@ -71,7 +71,7 @@ var (
 	hydratedLinkDir = flag.String("hydrated-link", "rev",
 		"The name of (a symlink to) the source directory under --hydrated-root, which contains the hydrated configs")
 	fightDetectionThreshold = flag.Float64(
-		"fight-detection-threshold", 5.0,
+		"fight-detection-threshold", configsync.DefaultFightThreshold,
 		"The rate of updates per minute to an API Resource at which the Syncer logs warnings about too many updates to the resource.")
 	fullSyncPeriod = flag.Duration("full-sync-period", configsync.DefaultReconcilerFullSyncPeriod,
 		"Period of time between forced re-syncs from source (even without a new commit).")

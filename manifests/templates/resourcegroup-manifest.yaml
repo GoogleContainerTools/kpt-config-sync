@@ -275,10 +275,6 @@ spec:
         - containerPort: 55678
         - containerPort: 8888
         - containerPort: 13133
-        readinessProbe:
-          httpGet:
-            path: /
-            port: 13133
         resources:
           requests:
             cpu: 10m

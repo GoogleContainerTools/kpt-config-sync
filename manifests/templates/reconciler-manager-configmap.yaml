@@ -195,11 +195,6 @@ data:
            volumeMounts:
            - name: otel-agent-config-reconciler-vol
              mountPath: /conf
-           readinessProbe:
-             httpGet:
-               path: /
-               port: 13133 # Health Check extension default port.
-               scheme: HTTP
            imagePullPolicy: IfNotPresent
            # These KUBE env vars help populate OTEL_RESOURCE_ATTRIBUTES which
            # is used by the otel-agent to populate resource attributes when

@@ -5650,11 +5650,7 @@ data:
       batch:
       resourcedetection:
         detectors: [env, gcp]
-    extensions:
-      health_check:
-        endpoint: 0.0.0.0:13133
     service:
-      extensions: [health_check]
       pipelines:
         metrics:
           receivers: [opencensus]
@@ -5708,11 +5704,7 @@ data:
       # the GCE metadata service, if available.
       resourcedetection:
         detectors: [env, gcp]
-    extensions:
-      health_check:
-        endpoint: 0.0.0.0:13133
     service:
-      extensions: [health_check]
       pipelines:
         metrics:
           receivers: [opencensus]
@@ -5902,8 +5894,6 @@ data:
               protocol: TCP
             - containerPort: 8888  # Metrics.
               protocol: TCP
-            - containerPort: 13133 # Health check
-              protocol: TCP
             volumeMounts:
             - name: otel-agent-config-reconciler-vol
               mountPath: /conf
@@ -6029,11 +6019,7 @@ data:
       # the GCE metadata service, if available.
       resourcedetection:
         detectors: [env, gcp]
-    extensions:
-      health_check:
-        endpoint: 0.0.0.0:13133
     service:
-      extensions: [health_check]
       pipelines:
         metrics:
           receivers: [opencensus]
@@ -6364,7 +6350,6 @@ spec:
         ports:
         - containerPort: 55678
         - containerPort: 8888
-        - containerPort: 13133
         resources:
           limits:
             cpu: 1
@@ -6484,7 +6469,6 @@ spec:
         ports:
         - containerPort: 55678
         - containerPort: 8888
-        - containerPort: 13133
         resources:
           requests:
             cpu: 10m

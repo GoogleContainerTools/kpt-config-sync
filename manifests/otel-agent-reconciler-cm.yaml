@@ -59,11 +59,7 @@ data:
       # the GCE metadata service, if available.
       resourcedetection:
         detectors: [env, gcp]
-    extensions:
-      health_check:
-        endpoint: 0.0.0.0:13133
     service:
-      extensions: [health_check]
       pipelines:
         metrics:
           receivers: [opencensus]

@@ -4,7 +4,7 @@ go 1.24.0
 
 require (
 	cloud.google.com/go/auth v0.16.3
-	cloud.google.com/go/compute/metadata v0.7.0
+	cloud.google.com/go/compute/metadata v0.8.0
 	cloud.google.com/go/logging v1.13.0
 	cloud.google.com/go/monitoring v1.24.2
 	cloud.google.com/go/trace v1.11.6

@@ -4,7 +4,7 @@ al.essio.dev/pkg/shellescape
 # cloud.google.com/go v0.120.0
 ## explicit; go 1.23.0
 cloud.google.com/go
-# cloud.google.com/go/auth v0.16.3
+# cloud.google.com/go/auth v0.16.4
 ## explicit; go 1.23.0
 cloud.google.com/go/auth
 cloud.google.com/go/auth/credentials

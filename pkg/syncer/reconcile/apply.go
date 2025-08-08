@@ -75,11 +75,11 @@ type clientApplier struct {
 var _ Applier = &clientApplier{}
 
 // NewApplierForMultiRepo returns a new clientApplier for callers with multi repo feature enabled.
-func NewApplierForMultiRepo(cfg *rest.Config, client *syncerclient.Client, applySetID string) (Applier, error) {
-	return newApplier(cfg, client, applySetID)
+func NewApplierForMultiRepo(cfg *rest.Config, client *syncerclient.Client, applySetID string, fightThreshold float64) (Applier, error) {
+	return newApplier(cfg, client, applySetID, fightThreshold)
 }
 
-func newApplier(cfg *rest.Config, client *syncerclient.Client, applySetID string) (Applier, error) {
+func newApplier(cfg *rest.Config, client *syncerclient.Client, applySetID string, fightThreshold float64) (Applier, error) {
 	c, err := dynamic.NewForConfig(cfg)
 	if err != nil {
 		return nil, err
@@ -100,7 +100,7 @@ func newApplier(cfg *rest.Config, client *syncerclient.Client, applySetID string
 		discoveryClient:  dc,
 		openAPIResources: oa,
 		client:           client,
-		fights:           fight.NewDetector(),
+		fights:           fight.NewDetector(fightThreshold),
 		applySetID:       applySetID,
 	}, nil
 }

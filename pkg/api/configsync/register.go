@@ -90,6 +90,17 @@ const (
 
 	// DefaultHelmReleaseNamespace is the default namespace for a Helm Release which does not have a namespace specified
 	DefaultHelmReleaseNamespace = "default"
+
+	// DefaultFightThreshold is the default threshold of updates per minute to a
+	// resource before Config Sync reports a fight. A fight occurs when the
+	// Remediator and another process are both trying to manage the same
+	// resource.
+	// When a fight is detected, an error is logged, surfaced in the
+	// RSync status, and emitted as a metric.
+	// This value was chosen because a resource being updated more than 5 times
+	// per minute is a clear sign of a problem, while less frequent updates are
+	// unlikely to be fights.
+	DefaultFightThreshold = 5.0
 )
 
 // SourceFormat specifies how the Importer should parse the repository.

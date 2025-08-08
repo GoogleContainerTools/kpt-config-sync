@@ -149,7 +149,6 @@ type RootOptions struct {
 func Run(opts Options) {
 	// Start listening to signals
 	signalCtx := signals.SetupSignalHandler()
-	fight.SetFightThreshold(opts.FightDetectionThreshold)
 
 	// Get a config to talk to the apiserver.
 	apiServerTimeout, err := time.ParseDuration(opts.APIServerTimeout)
@@ -190,7 +189,7 @@ func Run(opts Options) {
 	// Configure the Applier.
 	applySetID := applyset.IDFromSync(opts.SyncName, opts.ReconcilerScope)
 	genericClient := syncerclient.New(cl, metrics.APICallDuration)
-	baseApplier, err := reconcile.NewApplierForMultiRepo(cfg, genericClient, applySetID)
+	baseApplier, err := reconcile.NewApplierForMultiRepo(cfg, genericClient, applySetID, opts.FightDetectionThreshold)
 	if err != nil {
 		klog.Fatalf("Instantiating Applier: %v", err)
 	}

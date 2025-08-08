@@ -110,6 +110,7 @@ func TestFight(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			fightThreshold := 5.0
 			now := time.Now()
 			f := fight{
 				heat: tc.startHeat,
@@ -185,7 +186,7 @@ func TestFightDetector(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			fd := NewDetector()
+			fd := NewDetector(5.0)
 
 			now := time.Now()
 			for id, updates := range tc.updates {
@@ -195,7 +196,7 @@ func TestFightDetector(t *testing.T) {
 				logged := false
 				for i, update := range updates {
 					logErr, fightErr := fd.DetectFight(now.Add(update), u)
-					if i+1 >= int(fightThreshold) {
+					if i+1 >= int(fd.fightThreshold) {
 						require.Error(t, fightErr)
 						aboveThreshold = true
 						if logged {

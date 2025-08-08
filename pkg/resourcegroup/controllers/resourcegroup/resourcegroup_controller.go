@@ -283,7 +283,7 @@ func (r *reconciler) computeStatus(
 		switch {
 		case cachedStatus != nil:
 			log.V(4).Info("Resource object status found in the cache")
-            if cachedStatus.Status == v1alpha1.NotFound {
+			if cachedStatus.Status == v1alpha1.NotFound {
 				resStatus.Status = v1alpha1.NotFound
 				break
 			}

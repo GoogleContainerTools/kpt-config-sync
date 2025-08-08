@@ -30,10 +30,12 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
+	discoveryfake "k8s.io/client-go/discovery/fake"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/metadata"
+	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/resourcemap"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/typeresolver"
 	"kpt.dev/configsync/pkg/syncer/syncertest/fake"
@@ -802,4 +804,44 @@ func TestUpdateStatusToReflectActuation(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestComputeStatus_CachedNotFoundSkipsOwnership(t *testing.T) {
+	testLogger := testcontroller.NewTestLogger(t)
+	controllerruntime.SetLogger(testLogger)
+
+	resMap := resourcemap.NewResourceMap()
+	r := &reconciler{
+		LoggingController: controllers.NewLoggingController(testLogger),
+		resolver:          typeresolver.NewTypeResolver(&discoveryfake.FakeDiscovery{}, testLogger),
+		resMap:            resMap,
+	}
+
+	// 1. Define the object metadata for the resource.
+	objMeta := v1alpha1.ObjMetadata{
+		Name:      "pod-abc",
+		Namespace: "default",
+		GroupKind: v1alpha1.GroupKind{Kind: "Pod", Group: ""},
+	}
+
+	// 2. Pre-populate the resource map with a cached "NotFound" status.
+	// This simulates the scenario where the FilteredWatcher has already determined
+	// the object does not exist.
+	cachedStatus := &resourcemap.CachedStatus{
+		Status: v1alpha1.NotFound,
+	}
+	resMap.SetStatus(objMeta, cachedStatus)
+
+	// 3. Call computeStatus.
+	// This is the "Act" step of the test.
+	resultStatuses := r.computeStatus(context.Background(), inventoryID, v1alpha1.ResourceGroupStatus{}, []v1alpha1.ObjMetadata{objMeta}, types.NamespacedName{}, true)
+
+	// 4. Assert the results.
+	require.Len(t, resultStatuses, 1, "Expected exactly one resource status to be returned")
+	resultStatus := resultStatuses[0]
+
+	assert.Equal(t, v1alpha1.NotFound, resultStatus.Status, "Expected the final status to be NotFound")
+	// This is the key assertion for the bug fix.
+	// If the `break` is missing, `setResStatus` gets called, which adds an ownership condition.
+	assert.Empty(t, resultStatus.Conditions, "Expected conditions to be empty for a NotFound resource from cache")
 }

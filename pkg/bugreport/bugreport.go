@@ -39,12 +39,12 @@ import (
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/cmd/nomos/status"
 	"kpt.dev/configsync/cmd/nomos/util"
-	"kpt.dev/configsync/cmd/nomos/version"
 	"kpt.dev/configsync/pkg/api/configmanagement"
 	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/client/restconfig"
+	"kpt.dev/configsync/pkg/version"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 )

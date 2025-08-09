@@ -81,7 +81,6 @@ spec:
         ports:
         - containerPort: 55678 # Default OpenCensus receiver port.
         - containerPort: 8888  # Metrics.
-        - containerPort: 13133 # Health check
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true

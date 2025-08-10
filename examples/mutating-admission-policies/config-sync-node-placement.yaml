@@ -1,0 +1,56 @@
+apiVersion: admissionregistration.k8s.io/v1alpha1
+kind: MutatingAdmissionPolicy
+metadata:
+  name: "configsync-nodeplacement"
+spec:
+  # This example uniformly applies the nodeAffinity to *all* Pods in config-management-system.
+  # Different matchConstraints can be used for more granular mutation.
+  matchConstraints:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: config-management-system
+    resourceRules:
+    - apiGroups:   [""]
+      apiVersions: ["v1"]
+      operations:  ["CREATE", "UPDATE"]
+      resources:   ["pods"]
+  failurePolicy: Fail
+  reinvocationPolicy: IfNeeded
+  mutations:
+  # Simple example of adding nodeAffinity: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
+  # Similar mutations can be applied for nodeSelector/tolerations/etc
+  - patchType: "JSONPatch"
+    jsonPatch:
+      expression: >
+        [
+          JSONPatch{
+            op: "add", path: "/spec/affinity",
+            value: Object.spec.affinity{
+              nodeAffinity: Object.spec.affinity.nodeAffinity{
+                preferredDuringSchedulingIgnoredDuringExecution: [
+                  Object.spec.affinity.nodeAffinity.preferredDuringSchedulingIgnoredDuringExecution{
+                    weight: 1,
+                    preference: Object.spec.affinity.nodeAffinity.preferredDuringSchedulingIgnoredDuringExecution.preference{
+                      matchExpressions: [
+                        Object.spec.affinity.nodeAffinity.preferredDuringSchedulingIgnoredDuringExecution.preference.matchExpressions{
+                          key: "another-node-label-key",
+                          operator: "In",
+                          values: [
+                            "another-node-label-value"
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+---
+apiVersion: admissionregistration.k8s.io/v1alpha1
+kind: MutatingAdmissionPolicyBinding
+metadata:
+  name: "configsync-nodeplacement"
+spec:
+  policyName: "configsync-nodeplacement"

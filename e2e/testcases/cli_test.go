@@ -43,6 +43,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/policy"
 	"kpt.dev/configsync/e2e/nomostest/syncsource"
+
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
@@ -1301,6 +1302,23 @@ func TestNomosMigrate(t *testing.T) {
 
 	nt.T.Cleanup(func() {
 		// Restore state of Config Sync installation after test
+		// Legacy ConfigManagement sets readiness on reconciler-manager and resource-group-controller,
+		// which isn't reliably cleaned up after tests. Delete both to ensure a fresh
+		// install instead of patching.
+		rmDeployment := k8sobjects.DeploymentObject(
+			core.Name(reconcilermanager.ManagerName),
+			core.Namespace(configsync.ControllerNamespace),
+		)
+		rgDeployment := k8sobjects.DeploymentObject(
+			core.Name(configmanagement.RGControllerName),
+			core.Namespace(configmanagement.RGControllerNamespace),
+		)
+		if err := nt.KubeClient.Delete(rmDeployment); err != nil && !apierrors.IsNotFound(err) {
+			nt.T.Error(err)
+		}
+		if err := nt.KubeClient.Delete(rgDeployment); err != nil && !apierrors.IsNotFound(err) {
+			nt.T.Error(err)
+		}
 		if err := nomostest.InstallConfigSync(nt); err != nil {
 			nt.T.Fatal(err)
 		}
@@ -1469,6 +1487,23 @@ func TestNomosMigrateMonoRepo(t *testing.T) {
 	nt.T.Cleanup(func() {
 		// Restore state of Config Sync installation after test.
 		// This also emulates upgrading to the current version after migrating
+		// Legacy ConfigManagement sets readiness on reconciler-manager and resource-group-controller,
+		// which isn’t reliably cleaned up after tests. Delete both to ensure a fresh
+		// install instead of patching.
+		rmDeployment := k8sobjects.DeploymentObject(
+			core.Name(reconcilermanager.ManagerName),
+			core.Namespace(configsync.ControllerNamespace),
+		)
+		rgDeployment := k8sobjects.DeploymentObject(
+			core.Name(configmanagement.RGControllerName),
+			core.Namespace(configmanagement.RGControllerNamespace),
+		)
+		if err := nt.KubeClient.Delete(rmDeployment); err != nil && !apierrors.IsNotFound(err) {
+			nt.T.Error(err)
+		}
+		if err := nt.KubeClient.Delete(rgDeployment); err != nil && !apierrors.IsNotFound(err) {
+			nt.T.Error(err)
+		}
 		if err := nomostest.InstallConfigSync(nt); err != nil {
 			nt.T.Fatal(err)
 		}
@@ -1711,6 +1746,23 @@ func TestACMUninstallScript(t *testing.T) {
 
 	nt.T.Cleanup(func() {
 		// Restore state of Config Sync installation after test
+		// Legacy ConfigManagement sets readiness on reconciler-manager and resource-group-controller,
+		// which isn’t reliably cleaned up after tests. Delete both to ensure a fresh
+		// install instead of patching.
+		rmDeployment := k8sobjects.DeploymentObject(
+			core.Name(reconcilermanager.ManagerName),
+			core.Namespace(configsync.ControllerNamespace),
+		)
+		rgDeployment := k8sobjects.DeploymentObject(
+			core.Name(configmanagement.RGControllerName),
+			core.Namespace(configmanagement.RGControllerNamespace),
+		)
+		if err := nt.KubeClient.Delete(rmDeployment); err != nil && !apierrors.IsNotFound(err) {
+			nt.T.Error(err)
+		}
+		if err := nt.KubeClient.Delete(rgDeployment); err != nil && !apierrors.IsNotFound(err) {
+			nt.T.Error(err)
+		}
 		if err := nomostest.InstallConfigSync(nt); err != nil {
 			nt.T.Fatal(err)
 		}

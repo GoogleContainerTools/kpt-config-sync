@@ -155,9 +155,17 @@ func (g *GitlabClient) DeleteRepositories(names ...string) error {
 				errs = multierr.Append(errs, fmt.Errorf("%s: %w", string(out), err))
 			}
 
-			if !strings.Contains(string(out), "\"message\":\"202 Accepted\"") {
-				return errors.New(string(out))
+			response := string(out)
+			// Check for successful deletion (202 Accepted)
+			if strings.Contains(response, "\"message\":\"202 Accepted\"") {
+				continue
 			}
+			// Check if project is already marked for deletion (this is also a success case)
+			if strings.Contains(response, "Project has been already marked for deletion") {
+				continue
+			}
+			// Any other response is treated as an error
+			return errors.New(response)
 		}
 	}
 	return errs
@@ -184,9 +192,17 @@ func (g *GitlabClient) DeleteRepoByID(ids ...string) error {
 			errs = multierr.Append(errs, fmt.Errorf("%s: %w", string(out), err))
 		}
 
-		if !strings.Contains(string(out), "\"message\":\"202 Accepted\"") {
-			return fmt.Errorf("unexpected response in DeleteRepoByID: %s", string(out))
+		response := string(out)
+		// Check for successful deletion (202 Accepted)
+		if strings.Contains(response, "\"message\":\"202 Accepted\"") {
+			continue
 		}
+		// Check if project is already marked for deletion (this is also a success case)
+		if strings.Contains(response, "Project has been already marked for deletion") {
+			continue
+		}
+		// Any other response is treated as an error
+		return fmt.Errorf("unexpected response in DeleteRepoByID: %s", response)
 	}
 	return errs
 }

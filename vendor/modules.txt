@@ -202,7 +202,7 @@ github.com/golang/groupcache/lru
 ## explicit; go 1.17
 github.com/golang/protobuf/proto
 github.com/golang/protobuf/ptypes/timestamp
-# github.com/google/addlicense v1.1.1
+# github.com/google/addlicense v1.2.0
 ## explicit; go 1.13
 github.com/google/addlicense
 # github.com/google/btree v1.1.3

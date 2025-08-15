@@ -283,7 +283,11 @@ func (r *reconciler) computeStatus(
 		switch {
 		case cachedStatus != nil:
 			log.V(4).Info("Resource object status found in the cache")
-			setResStatus(id, &resStatus, cachedStatus)
+			if cachedStatus.Status == v1alpha1.NotFound {
+				resStatus.Status = v1alpha1.NotFound
+			} else {
+				setResStatus(id, &resStatus, cachedStatus)
+			}
 		default:
 			log.V(4).Info("Resource object status not found in the cache")
 			resObj := new(unstructured.Unstructured)

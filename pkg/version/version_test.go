@@ -110,9 +110,7 @@ func TestVersion(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			clientVersion = func() string {
-				return test.version
-			}
+			VERSION = test.version
 			util.DynamicClient = func(_ *rest.Config) (dynamic.Interface, error) {
 				return fake.NewSimpleDynamicClient(core.Scheme, test.objects...), nil
 			}
@@ -121,7 +119,7 @@ func TestVersion(t *testing.T) {
 			}
 			var b strings.Builder
 			ctx := context.Background()
-			versionInternal(ctx, test.configs, &b)
+			Print(ctx, test.configs, &b)
 			actuals := strings.Split(b.String(), "\n")
 			if diff := cmp.Diff(test.expected, actuals); diff != "" {
 				t.Error(diff)

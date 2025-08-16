@@ -17,7 +17,6 @@ package util
 import (
 	"fmt"
 	"io"
-	"strings"
 )
 
 const (
@@ -39,21 +38,6 @@ const (
 	// ColorCyan is the cyan color code
 	ColorCyan = "\033[36m"
 )
-
-// MonoRepoNotice logs a notice for the clusters that are running in the legacy mode.
-func MonoRepoNotice(writer io.Writer, monoRepoClusters ...string) {
-	clusterCount := len(monoRepoClusters)
-	if clusterCount != 0 {
-		if clusterCount == 1 {
-			MustFprintf(writer, "%sNotice: The cluster %q is still running in the legacy mode.\n",
-				ColorYellow, monoRepoClusters[0])
-		} else {
-			MustFprintf(writer, "%sNotice: The following clusters are still running in the legacy mode:\n%s%s\n",
-				ColorYellow, Bullet, strings.Join(monoRepoClusters, "\n"+Bullet))
-		}
-		MustFprintf(writer, "Run `nomos migrate` to enable multi-repo mode. It provides you with additional features and gives you the flexibility to sync to a single repository, or multiple repositories.%s\n", ColorDefault)
-	}
-}
 
 // MustFprintf prints a formatted string to the writer and panics on error.
 func MustFprintf(w io.Writer, format string, a ...any) {

@@ -104,14 +104,6 @@ func New(ctx context.Context, c client.Client, cs *kubernetes.Clientset) (*BugRe
 		}
 	}
 
-	isMulti, _, err := unstructured.NestedBool(cm.UnstructuredContent(), "spec", "enableMultiRepo")
-	if err != nil {
-		fmt.Println("ConfigManagement parsing error", err)
-	}
-	if !isMulti {
-		util.MonoRepoNotice(os.Stdout, currentk8sContext)
-	}
-
 	return &BugReporter{
 		client:        c,
 		clientSet:     cs,

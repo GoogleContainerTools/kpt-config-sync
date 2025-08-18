@@ -96,7 +96,7 @@ func runVet(ctx context.Context, out io.Writer, opts vetOptions) error {
 
 	parser := filesystem.NewParser(&reader.File{})
 
-	validateOpts, err := hydrate.ValidateOptions(ctx, rootDir, opts.APIServerTimeout)
+	validateOpts, err := hydrate.ValidateOptions(rootDir, opts.APIServerTimeout)
 	if err != nil {
 		return err
 	}

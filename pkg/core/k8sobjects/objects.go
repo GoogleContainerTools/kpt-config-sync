@@ -16,7 +16,6 @@ package k8sobjects
 
 import (
 	"fmt"
-	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -256,18 +255,6 @@ func AnvilAtPath(path string, opts ...core.MetaMutator) ast.FileObject {
 	obj.SetName("anvil")
 	mutate(obj, opts...)
 	return FileObject(obj, path)
-}
-
-// SyncObject returns a Sync configured for a particular
-func SyncObject(gk schema.GroupKind, opts ...core.MetaMutator) *v1.Sync {
-	obj := &v1.Sync{TypeMeta: ToTypeMeta(kinds.Sync())}
-	obj.Name = strings.ToLower(gk.String())
-	obj.ObjectMeta.Finalizers = append(obj.ObjectMeta.Finalizers, v1.SyncFinalizer)
-	obj.Spec.Group = gk.Group
-	obj.Spec.Kind = gk.Kind
-
-	mutate(obj, opts...)
-	return obj
 }
 
 // PersistentVolumeObject returns a PersistentVolume Object.

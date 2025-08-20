@@ -30,10 +30,13 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
+	discoveryfake "k8s.io/client-go/discovery/fake"
 	"k8s.io/client-go/rest"
+	clientgotesting "k8s.io/client-go/testing"
 	"k8s.io/klog/v2"
 	"kpt.dev/configsync/pkg/api/kpt.dev/v1alpha1"
 	"kpt.dev/configsync/pkg/metadata"
+	"kpt.dev/configsync/pkg/reconcilermanager/controllers"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/resourcemap"
 	"kpt.dev/configsync/pkg/resourcegroup/controllers/typeresolver"
 	"kpt.dev/configsync/pkg/syncer/syncertest/fake"
@@ -799,6 +802,163 @@ func TestUpdateStatusToReflectActuation(t *testing.T) {
 			t.Parallel()
 			if got := UpdateStatusToReflectActuation(tc.resStatus); got != tc.want {
 				t.Errorf("ActuationStatusToLegacy() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestComputeStatus(t *testing.T) {
+	testLogger := testcontroller.NewTestLogger(t)
+	controllerruntime.SetLogger(testLogger)
+
+	scheme := runtime.NewScheme()
+	require.NoError(t, corev1.AddToScheme(scheme))
+
+	podRunning := &corev1.Pod{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Pod",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "pod-abc",
+			Namespace: "default",
+			Annotations: map[string]string{
+				metadata.OwningInventoryKey: inventoryID,
+			},
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+		},
+	}
+	podSucceeded := &corev1.Pod{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Pod",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "pod-abc",
+			Namespace: "default",
+			Annotations: map[string]string{
+				metadata.OwningInventoryKey: inventoryID,
+			},
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodSucceeded,
+		},
+	}
+
+	objMetaPodABC := v1alpha1.ObjMetadata{
+		Name:      "pod-abc",
+		Namespace: "default",
+		GroupKind: v1alpha1.GroupKind{Kind: "Pod", Group: ""},
+	}
+	objMetaPodXYZ := v1alpha1.ObjMetadata{
+		Name:      "pod-xyz",
+		Namespace: "default",
+		GroupKind: v1alpha1.GroupKind{Kind: "Pod", Group: ""},
+	}
+
+	testCases := []struct {
+		name               string
+		initialObjects     []client.Object
+		objMetas           []v1alpha1.ObjMetadata
+		cachedStatuses     map[v1alpha1.ObjMetadata]*resourcemap.CachedStatus
+		discoveryResources []*metav1.APIResourceList
+		expectedStatuses   []v1alpha1.ResourceStatus
+	}{
+		{
+			name:           "cached status is NotFound, should skip client GET and return NotFound",
+			initialObjects: nil,
+			objMetas:       []v1alpha1.ObjMetadata{objMetaPodABC},
+			cachedStatuses: map[v1alpha1.ObjMetadata]*resourcemap.CachedStatus{
+				objMetaPodABC: {Status: v1alpha1.NotFound},
+			},
+			expectedStatuses: []v1alpha1.ResourceStatus{
+				{
+					ObjMetadata: objMetaPodABC,
+					Status:      v1alpha1.NotFound,
+				},
+			},
+		},
+		{
+			name:           "cached status is Current, should use cache and return Current",
+			initialObjects: []client.Object{podRunning},
+			objMetas:       []v1alpha1.ObjMetadata{objMetaPodABC},
+			cachedStatuses: map[v1alpha1.ObjMetadata]*resourcemap.CachedStatus{
+				objMetaPodABC: {Status: v1alpha1.Current, InventoryID: inventoryID},
+			},
+			expectedStatuses: []v1alpha1.ResourceStatus{
+				{
+					ObjMetadata: objMetaPodABC,
+					Status:      v1alpha1.Current,
+					Conditions:  []v1alpha1.Condition{},
+				},
+			},
+		},
+		{
+			name:           "not cached and object not found, should GET from client and return NotFound",
+			initialObjects: nil,
+			objMetas:       []v1alpha1.ObjMetadata{objMetaPodXYZ},
+			cachedStatuses: nil,
+			expectedStatuses: []v1alpha1.ResourceStatus{
+				{
+					ObjMetadata: objMetaPodXYZ,
+					Status:      v1alpha1.NotFound,
+				},
+			},
+		},
+		{
+			name:           "not cached and object exists, should GET from client and return Current",
+			initialObjects: []client.Object{podSucceeded},
+			objMetas:       []v1alpha1.ObjMetadata{objMetaPodABC},
+			cachedStatuses: nil,
+			discoveryResources: []*metav1.APIResourceList{
+				{
+					GroupVersion: "v1",
+					APIResources: []metav1.APIResource{
+						{Name: "pods", SingularName: "pod", Namespaced: true, Kind: "Pod"},
+					},
+				},
+			},
+			expectedStatuses: []v1alpha1.ResourceStatus{
+				{
+					ObjMetadata: objMetaPodABC,
+					Status:      v1alpha1.Current,
+					Conditions:  []v1alpha1.Condition{},
+				},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeClient := fake.NewClient(t, scheme, tc.initialObjects...)
+			resMap := resourcemap.NewResourceMap()
+			for objMeta, cachedStatus := range tc.cachedStatuses {
+				resMap.SetStatus(objMeta, cachedStatus)
+			}
+
+			discoveryClient := &discoveryfake.FakeDiscovery{Fake: &clientgotesting.Fake{}}
+			discoveryClient.Resources = tc.discoveryResources
+			resolver := typeresolver.NewTypeResolver(discoveryClient, testLogger)
+			if tc.discoveryResources != nil {
+				require.NoError(t, resolver.Refresh(t.Context()))
+			}
+
+			r := &reconciler{
+				LoggingController: controllers.NewLoggingController(testLogger),
+				client:            fakeClient,
+				resolver:          resolver,
+				resMap:            resMap,
+			}
+
+			resultStatuses := r.computeStatus(t.Context(), inventoryID, v1alpha1.ResourceGroupStatus{}, tc.objMetas, types.NamespacedName{}, true)
+
+			opts := []cmp.Option{
+				cmpopts.IgnoreFields(v1alpha1.Condition{}, "LastTransitionTime"),
+			}
+			if diff := cmp.Diff(tc.expectedStatuses, resultStatuses, opts...); diff != "" {
+				t.Errorf("computeStatus returned diff (-want +got):\n%s", diff)
 			}
 		})
 	}

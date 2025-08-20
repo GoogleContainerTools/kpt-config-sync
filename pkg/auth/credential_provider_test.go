@@ -109,7 +109,7 @@ func TestIsCredentialsNotFoundError(t *testing.T) {
 			opts: &credentials.DetectOptions{
 				CredentialsJSON: []byte(`{}`),
 			},
-			expectedError:    errors.New("credentials: unsupported filetype '\\x00'"),
+			expectedError:    errors.New("credentials: unsupported unidentified file type"),
 			expectedNotFound: false,
 		},
 		{
@@ -119,7 +119,7 @@ func TestIsCredentialsNotFoundError(t *testing.T) {
 			opts: &credentials.DetectOptions{
 				CredentialsJSON: []byte(`{"invalid-type":{}}`),
 			},
-			expectedError:    errors.New("credentials: unsupported filetype '\\x00'"),
+			expectedError:    errors.New("credentials: unsupported unidentified file type"),
 			expectedNotFound: false,
 		},
 		{

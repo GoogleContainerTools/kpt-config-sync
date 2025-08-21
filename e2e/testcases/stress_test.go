@@ -677,14 +677,6 @@ func TestStressResourceGroup(t *testing.T) {
 	expectedStatus.ResourceStatuses[index] = v1alpha1.ResourceStatus{
 		Status:      v1alpha1.NotFound,
 		ObjMetadata: resources[index],
-		Conditions: []v1alpha1.Condition{
-			{
-				Message: testresourcegroup.NotOwnedMessage,
-				Reason:  v1alpha1.OwnershipEmpty,
-				Status:  v1alpha1.UnknownConditionStatus,
-				Type:    v1alpha1.Ownership,
-			},
-		},
 	}
 	nt.Must(nt.Watcher.WatchObject(kinds.ResourceGroup(), rgNN.Name, rgNN.Namespace,
 		testwatcher.WatchPredicates(

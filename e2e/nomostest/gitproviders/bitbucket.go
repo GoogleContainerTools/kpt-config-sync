@@ -27,6 +27,7 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/multierr"
 	"kpt.dev/configsync/e2e"
+	"kpt.dev/configsync/e2e/nomostest/retry"
 	"kpt.dev/configsync/e2e/nomostest/testlogger"
 )
 
@@ -140,22 +141,41 @@ func (b *BitbucketClient) DeleteRepositories(names ...string) error {
 	return deleteRepos(accessToken, names...)
 }
 
+// TODO: This is a temporary workaround for the known issue
+// go/acm-e2e-testing#bitbucket-repository-deletion-failure
+// Until this is fixed, we are skipping removal of repos stuck in bad state
 func deleteRepos(accessToken string, names ...string) error {
 	var errs error
 	for _, name := range names {
-		out, err := exec.Command("curl", "-sX", "DELETE",
-			"-H", fmt.Sprintf("Authorization:Bearer %s", accessToken),
-			fmt.Sprintf("https://api.bitbucket.org/2.0/repositories/%s/%s",
-				bitbucketWorkspace, name)).CombinedOutput()
-
+		_, err := retry.Retry(30*time.Second, func() error {
+			return deleteSingleRepo(accessToken, name)
+		})
 		if err != nil {
-			errs = multierr.Append(errs, fmt.Errorf("%s: %w", string(out), err))
-		}
-		if len(out) != 0 {
-			errs = multierr.Append(errs, errors.New(string(out)))
+			// Skip repositories that are currently unavailable
+			if strings.Contains(err.Error(), "Repository currently not available") {
+				fmt.Printf("[BITBUCKET] Skipping repository %s: %v\n", name, err)
+				continue
+			}
+			errs = multierr.Append(errs, err)
 		}
 	}
 	return errs
+}
+
+// deleteSingleRepo deletes a single repository
+func deleteSingleRepo(accessToken, name string) error {
+	out, err := exec.Command("curl", "-sX", "DELETE",
+		"-H", fmt.Sprintf("Authorization:Bearer %s", accessToken),
+		fmt.Sprintf("https://api.bitbucket.org/2.0/repositories/%s/%s",
+			bitbucketWorkspace, name)).CombinedOutput()
+
+	if err != nil {
+		return fmt.Errorf("%s: %w", string(out), err)
+	}
+	if len(out) != 0 {
+		return errors.New(string(out))
+	}
+	return nil
 }
 
 // DeleteObsoleteRepos deletes all repos that were created more than 24 hours ago.
@@ -165,6 +185,25 @@ func (b *BitbucketClient) DeleteObsoleteRepos() error {
 		return err
 	}
 
+	// Count total obsolete repos first
+	totalObsoleteRepos, err := b.countObsoleteRepos(accessToken)
+	if err != nil {
+		return err
+	}
+
+	// TODO: This is a temporary workaround for the known issue
+	// go/acm-e2e-testing#bitbucket-repository-deletion-failure
+	// Until this is fixed, we are skipping removal of repos stuck in bad state.
+	//
+	// The 1000 limit is a guestimation that does not exceed the 1GB limit of
+	// workspace for a free account. If that number is exceeded, engineer
+	// will need to replace the workspace until the root cause of unresponsive
+	// repo is known.
+	if totalObsoleteRepos > 1000 {
+		return fmt.Errorf("total number of obsolete repositories (%d) exceeds 1000, manual cleanup required", totalObsoleteRepos)
+	}
+
+	// Now delete the obsolete repos
 	page := 1
 	for page != -1 {
 		page, err = b.deleteObsoleteReposByPage(accessToken, page)
@@ -214,21 +253,41 @@ func FetchCloudSecret(name string) (string, error) {
 }
 
 func (b *BitbucketClient) deleteObsoleteReposByPage(accessToken string, page int) (int, error) {
-	out, err := exec.Command("curl", "-sX", "GET",
-		"-H", fmt.Sprintf("Authorization:Bearer %s", accessToken),
-		fmt.Sprintf(`https://api.bitbucket.org/2.0/repositories/%s?q=project.key="%s"&page=%d`,
-			bitbucketWorkspace, bitbucketProject, page)).CombinedOutput()
-	if err != nil {
-		return -1, fmt.Errorf("%s: %w", string(out), err)
-	}
-	repos, page, err := b.filterObsoleteRepos(out)
+	repos, nextPage, err := b.getObsoleteReposByPage(accessToken, page)
 	if err != nil {
 		return -1, err
 	}
 
 	b.logger.Infof("Deleting the following repos: %s", strings.Join(repos, ", "))
 	err = deleteRepos(accessToken, repos...)
-	return page, err
+	return nextPage, err
+}
+
+// countObsoleteRepos counts all obsolete repositories across all pages
+func (b *BitbucketClient) countObsoleteRepos(accessToken string) (int, error) {
+	totalObsoleteRepos := 0
+	page := 1
+	for page != -1 {
+		repos, nextPage, err := b.getObsoleteReposByPage(accessToken, page)
+		if err != nil {
+			return 0, err
+		}
+		totalObsoleteRepos += len(repos)
+		page = nextPage
+	}
+	return totalObsoleteRepos, nil
+}
+
+// getObsoleteReposByPage fetches obsolete repos for a given page
+func (b *BitbucketClient) getObsoleteReposByPage(accessToken string, page int) ([]string, int, error) {
+	out, err := exec.Command("curl", "-sX", "GET",
+		"-H", fmt.Sprintf("Authorization:Bearer %s", accessToken),
+		fmt.Sprintf(`https://api.bitbucket.org/2.0/repositories/%s?q=project.key="%s"&page=%d`,
+			bitbucketWorkspace, bitbucketProject, page)).CombinedOutput()
+	if err != nil {
+		return nil, -1, fmt.Errorf("%s: %w", string(out), err)
+	}
+	return b.filterObsoleteRepos(out)
 }
 
 // filterObsoleteRepos extracts the names of the repos that were created more than 24 hours ago.

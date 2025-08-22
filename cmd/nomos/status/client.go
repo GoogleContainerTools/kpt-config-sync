@@ -164,65 +164,8 @@ func (c *ClusterClient) clusterStatus(ctx context.Context, cluster, namespace st
 		cs.Error = c.namespaceRepoClusterStatus(ctx, cs, namespace)
 	} else if isOss || (cs.isMulti != nil && *cs.isMulti) {
 		c.multiRepoClusterStatus(ctx, cs)
-	} else {
-		c.monoRepoClusterStatus(ctx, cs)
 	}
 	return cs
-}
-
-// monoRepoClusterStatus populates the given ClusterState with the sync status of
-// the mono repo on the ClusterClient's cluster.
-func (c *ClusterClient) monoRepoClusterStatus(ctx context.Context, cs *ClusterState) {
-	git, err := c.monoRepoGit(ctx)
-	if err != nil {
-		cs.status = util.ErrorMsg
-		cs.Error = err.Error()
-		return
-	}
-
-	repoList, err := c.repos.List(ctx, metav1.ListOptions{})
-	if err != nil {
-		cs.status = util.ErrorMsg
-		cs.Error = err.Error()
-		return
-	}
-
-	if len(repoList.Items) == 0 {
-		cs.status = util.UnknownMsg
-		cs.Error = "Repo resource is missing"
-		return
-	}
-
-	repoStatus := repoList.Items[0].Status
-	cs.repos = append(cs.repos, monoRepoStatus(git, repoStatus))
-}
-
-// monoRepoGit fetches the mono repo ConfigManagement resource from the cluster
-// and builds a Git config out of it.
-func (c *ClusterClient) monoRepoGit(ctx context.Context) (*v1beta1.Git, error) {
-	syncRepo, err := c.ConfigManagement.NestedString(ctx, "spec", "git", "syncRepo")
-	if err != nil {
-		return nil, err
-	}
-	syncBranch, err := c.ConfigManagement.NestedString(ctx, "spec", "git", "syncBranch")
-	if err != nil {
-		return nil, err
-	}
-	syncRev, err := c.ConfigManagement.NestedString(ctx, "spec", "git", "syncRev")
-	if err != nil {
-		return nil, err
-	}
-	policyDir, err := c.ConfigManagement.NestedString(ctx, "spec", "git", "policyDir")
-	if err != nil {
-		return nil, err
-	}
-
-	return &v1beta1.Git{
-		Repo:     syncRepo,
-		Branch:   syncBranch,
-		Revision: syncRev,
-		Dir:      policyDir,
-	}, nil
 }
 
 // syncingConditionSupported checks if the ACM version is v1.9.2 or later, which

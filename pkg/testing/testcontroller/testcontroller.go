@@ -64,8 +64,7 @@ func NewTestLogger(t *testing.T) logr.Logger {
 // This avoids async error logs from the test environment stopping before the
 // controller-manager.
 func StartTestManager(t *testing.T, mgr manager.Manager) func() {
-	// TODO: replace with `ctx := t.Context()` in Go 1.24.0+
-	ctx := context.Background()
+	ctx := t.Context()
 
 	ctx, cancel := context.WithCancel(ctx)
 	doneCh := make(chan struct{})

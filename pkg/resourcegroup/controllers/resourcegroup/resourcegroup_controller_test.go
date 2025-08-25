@@ -79,9 +79,7 @@ func TestReconcile(t *testing.T) {
 	// Get the watch client built by the manager
 	c := mgr.GetClient().(client.WithWatch)
 
-	// TODO: replace with `ctx := t.Context()` in Go 1.24.0+
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	// Setup the controllers
 	logger := testLogger.WithName("controllers")

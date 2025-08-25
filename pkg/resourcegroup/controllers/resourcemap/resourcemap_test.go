@@ -15,7 +15,6 @@
 package resourcemap
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -67,9 +66,7 @@ func TestResourceMapReconcile(t *testing.T) {
 		Name:      "group2",
 	}
 
-	// TODO: replace with `ctx := t.Context()` in Go 1.24.0+
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	var gks []schema.GroupKind
 

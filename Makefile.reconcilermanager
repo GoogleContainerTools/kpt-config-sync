@@ -38,10 +38,7 @@ configsync-crds: "$(CONTROLLER_GEN)" "$(KUSTOMIZE)" "$(ADDLICENSE)"
 	&& rm ./manifests/patch/hierarchyconfig-crd.yaml \
 	&& rm ./manifests/patch/namespace-selector-crd.yaml \
 	&& rm ./manifests/patch/resourcegroup-crd.yaml \
-	&& rm ./manifests/configmanagement.gke.io_clusterconfigs.yaml \
-	&& rm ./manifests/configmanagement.gke.io_namespaceconfigs.yaml \
 	&& rm ./manifests/configmanagement.gke.io_repoes.yaml \
-	&& rm ./manifests/configmanagement.gke.io_syncs.yaml \
 	&& "$(ADDLICENSE)" ./manifests
 
 "$(CONTROLLER_GEN)": buildenv-dirs

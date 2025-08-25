@@ -2,16 +2,10 @@
 
 package v1
 
-type ClusterConfigExpansion interface{}
-
 type ClusterSelectorExpansion interface{}
 
 type HierarchyConfigExpansion interface{}
 
-type NamespaceConfigExpansion interface{}
-
 type NamespaceSelectorExpansion interface{}
 
 type RepoExpansion interface{}
-
-type SyncExpansion interface{}

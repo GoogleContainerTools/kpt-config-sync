@@ -25,8 +25,6 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	clientdiscovery "k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
@@ -39,14 +37,9 @@ import (
 	"kpt.dev/configsync/pkg/kmetrics"
 	"kpt.dev/configsync/pkg/reconcilermanager"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/syncer/decode"
-	"kpt.dev/configsync/pkg/util/clusterconfig"
 	"kpt.dev/configsync/pkg/util/discovery"
-	"kpt.dev/configsync/pkg/util/namespaceconfig"
 	"kpt.dev/configsync/pkg/validate"
 	"kpt.dev/configsync/pkg/vet"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
 const (
@@ -291,7 +284,7 @@ func ValidateHydrateFlags(sourceFormat configsync.SourceFormat) (cmpath.Absolute
 }
 
 // ValidateOptions returns the validate options for nomos hydrate and vet commands.
-func ValidateOptions(ctx context.Context, rootDir cmpath.Absolute, apiServerTimeout time.Duration) (validate.Options, error) {
+func ValidateOptions(rootDir cmpath.Absolute, apiServerTimeout time.Duration) (validate.Options, error) {
 	options := validate.Options{}
 
 	var serverResourcer discovery.ServerResourcer = discovery.NoOpServerResourcer{}
@@ -302,14 +295,6 @@ func ValidateOptions(ctx context.Context, rootDir cmpath.Absolute, apiServerTime
 		cfg, err := restconfig.NewRestConfig(apiServerTimeout)
 		if err != nil {
 			return options, apiServerCheckError(err, "failed to create rest config")
-		}
-		c, err := newClientClient(cfg, options.Scheme)
-		if err != nil {
-			return options, err
-		}
-		options.PreviousCRDs, err = getSyncedCRDs(ctx, c)
-		if err != nil {
-			return options, err
 		}
 		dc, err := newDiscoveryClient(cfg)
 		if err != nil {
@@ -329,25 +314,6 @@ func ValidateOptions(ctx context.Context, rootDir cmpath.Absolute, apiServerTime
 	return options, nil
 }
 
-func newClientClient(cfg *rest.Config, scheme *runtime.Scheme) (client.Client, error) {
-	httpClient, err := rest.HTTPClientFor(cfg)
-	if err != nil {
-		return nil, apiServerCheckError(err, "failed to create HTTPClient")
-	}
-	mapper, err := apiutil.NewDynamicRESTMapper(cfg, httpClient)
-	if err != nil {
-		return nil, apiServerCheckError(err, "failed to create mapper")
-	}
-	c, err := client.New(cfg, client.Options{
-		Scheme: scheme,
-		Mapper: mapper,
-	})
-	if err != nil {
-		return nil, apiServerCheckError(err, "failed to create client")
-	}
-	return c, nil
-}
-
 func newDiscoveryClient(cfg *rest.Config) (clientdiscovery.CachedDiscoveryInterface, error) {
 	cf, err := restconfig.NewConfigFlags(cfg)
 	if err != nil {
@@ -362,27 +328,4 @@ func newDiscoveryClient(cfg *rest.Config) (clientdiscovery.CachedDiscoveryInterf
 
 func apiServerCheckError(err error, message string) status.Error {
 	return status.APIServerError(err, message+". Did you mean to run with --no-api-server-check?")
-}
-
-// getSyncedCRDs returns the CRDs synced to the cluster in the current context.
-//
-// Times out after 15 seconds.
-func getSyncedCRDs(ctx context.Context, c client.Client) ([]*apiextensionsv1.CustomResourceDefinition, status.MultiError) {
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
-
-	configs := &namespaceconfig.AllConfigs{}
-	decorateErr := namespaceconfig.DecorateWithClusterConfigs(ctx, c, configs)
-	if decorateErr != nil {
-		return nil, decorateErr
-	}
-
-	decoder := decode.NewGenericResourceDecoder(core.Scheme)
-	syncedCRDs, crdErr := clusterconfig.GetCRDs(decoder, configs.ClusterConfig)
-	if crdErr != nil {
-		// We were unable to parse the CRDs from the current ClusterConfig, so bail out.
-		// TODO: Make error message more user-friendly when this happens.
-		return nil, crdErr
-	}
-	return syncedCRDs, nil
 }

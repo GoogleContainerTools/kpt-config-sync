@@ -24,7 +24,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"kpt.dev/configsync/cmd/nomos/util"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/api/configsync"
 	"kpt.dev/configsync/pkg/api/configsync/v1beta1"
 	"kpt.dev/configsync/pkg/reposync"
@@ -195,112 +194,6 @@ func helmString(helm *v1beta1.HelmBase) string {
 		helmStr = fmt.Sprintf("%s:latest", helmStr)
 	}
 	return helmStr
-}
-
-// monoRepoStatus converts the given Git config and mono-repo status into a RepoState.
-func monoRepoStatus(git *v1beta1.Git, status v1.RepoStatus) *RepoState {
-	errors := syncStatusErrors(status)
-	totalErrorCount := len(errors)
-
-	result := &RepoState{
-		scope:  "<root>",
-		git:    git,
-		status: getSyncStatus(status),
-		commit: commitHash(status.Sync.LatestToken),
-		errors: errors,
-	}
-
-	if totalErrorCount > 0 {
-		result.errorSummary = &v1beta1.ErrorSummary{
-			TotalCount:                totalErrorCount,
-			Truncated:                 false,
-			ErrorCountAfterTruncation: totalErrorCount,
-		}
-	}
-	return result
-}
-
-// getSyncStatus returns the given RepoStatus formatted as a short summary string.
-func getSyncStatus(status v1.RepoStatus) string {
-	if hasErrors(status) {
-		return util.ErrorMsg
-	}
-	if len(status.Sync.LatestToken) == 0 {
-		return pendingMsg
-	}
-	if status.Sync.LatestToken == status.Source.Token && len(status.Sync.InProgress) == 0 {
-		return syncedMsg
-	}
-	return pendingMsg
-}
-
-// hasErrors returns true if there are any config management errors present in the given RepoStatus.
-func hasErrors(status v1.RepoStatus) bool {
-	if len(status.Import.Errors) > 0 {
-		return true
-	}
-	for _, syncStatus := range status.Sync.InProgress {
-		if len(syncStatus.Errors) > 0 {
-			return true
-		}
-	}
-	return false
-}
-
-// syncStatusErrors returns all errors reported in the given RepoStatus as a single array.
-func syncStatusErrors(status v1.RepoStatus) []string {
-	var errs []string
-	for _, err := range status.Source.Errors {
-		errs = append(errs, err.ErrorMessage)
-	}
-	for _, err := range status.Import.Errors {
-		errs = append(errs, err.ErrorMessage)
-	}
-	for _, syncStatus := range status.Sync.InProgress {
-		for _, err := range syncStatus.Errors {
-			errs = append(errs, err.ErrorMessage)
-		}
-	}
-
-	if getResourceStatus(status.Sync.ResourceConditions) != v1.ResourceStateHealthy {
-		errs = append(errs, getResourceStatusErrors(status.Sync.ResourceConditions)...)
-	}
-
-	return errs
-}
-
-func getResourceStatus(resourceConditions []v1.ResourceCondition) v1.ResourceConditionState {
-	resourceStatus := v1.ResourceStateHealthy
-
-	for _, resourceCondition := range resourceConditions {
-
-		if resourceCondition.ResourceState.IsError() {
-			return v1.ResourceStateError
-		} else if resourceCondition.ResourceState.IsReconciling() {
-			resourceStatus = v1.ResourceStateReconciling
-		}
-	}
-
-	return resourceStatus
-}
-
-func getResourceStatusErrors(resourceConditions []v1.ResourceCondition) []string {
-	if len(resourceConditions) == 0 {
-		return nil
-	}
-
-	var syncErrors []string
-
-	for _, resourceCondition := range resourceConditions {
-		for _, rcError := range resourceCondition.Errors {
-			syncErrors = append(syncErrors, fmt.Sprintf("%v\t%v\tError: %v", resourceCondition.Kind, resourceCondition.NamespacedName, rcError))
-		}
-		for _, rcReconciling := range resourceCondition.ReconcilingReasons {
-			syncErrors = append(syncErrors, fmt.Sprintf("%v\t%v\tReconciling: %v", resourceCondition.Kind, resourceCondition.NamespacedName, rcReconciling))
-		}
-	}
-
-	return syncErrors
 }
 
 // namespaceRepoStatus converts the given RepoSync into a RepoState.

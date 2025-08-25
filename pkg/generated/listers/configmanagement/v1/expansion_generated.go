@@ -2,10 +2,6 @@
 
 package v1
 
-// ClusterConfigListerExpansion allows custom methods to be added to
-// ClusterConfigLister.
-type ClusterConfigListerExpansion interface{}
-
 // ClusterSelectorListerExpansion allows custom methods to be added to
 // ClusterSelectorLister.
 type ClusterSelectorListerExpansion interface{}
@@ -14,10 +10,6 @@ type ClusterSelectorListerExpansion interface{}
 // HierarchyConfigLister.
 type HierarchyConfigListerExpansion interface{}
 
-// NamespaceConfigListerExpansion allows custom methods to be added to
-// NamespaceConfigLister.
-type NamespaceConfigListerExpansion interface{}
-
 // NamespaceSelectorListerExpansion allows custom methods to be added to
 // NamespaceSelectorLister.
 type NamespaceSelectorListerExpansion interface{}
@@ -25,7 +17,3 @@ type NamespaceSelectorListerExpansion interface{}
 // RepoListerExpansion allows custom methods to be added to
 // RepoLister.
 type RepoListerExpansion interface{}
-
-// SyncListerExpansion allows custom methods to be added to
-// SyncLister.
-type SyncListerExpansion interface{}

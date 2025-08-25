@@ -27,7 +27,6 @@ import (
 	"github.com/spf13/cobra"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -115,9 +114,8 @@ func versionInternal(ctx context.Context, configs map[string]*rest.Config, w io.
 		fmt.Print("No clusters match the specified context.\n")
 	}
 
-	vs, monoRepoClusters := versions(ctx, configs)
-	// Log a notice for the detected clusters that are running in the mono-repo mode.
-	util.MonoRepoNotice(w, monoRepoClusters...)
+	vs := versions(ctx, configs)
+
 	es := entries(vs)
 	tabulate(es, w)
 }
@@ -139,48 +137,44 @@ func getImageVersion(deployment *v1.Deployment) (string, error) {
 }
 
 // lookupVersionAndMode will check for installation type (oss or operator)
-// and will return ACM version, isMultiRepo state, installation type, and error if needed
+// and will return ACM version, installation type, and error if needed
 // OSS installation will check version from image used, while operator will check from ConfigManagement
-func lookupVersionAndMode(ctx context.Context, cfg *rest.Config) (string, *bool, string, error) {
+func lookupVersionAndMode(ctx context.Context, cfg *rest.Config) (string, string, error) {
 	cmClient, err := util.NewConfigManagementClient(cfg)
 	if err != nil {
-		return util.ErrorMsg, nil, "", err
+		return util.ErrorMsg, "", err
 	}
 	if cfg != nil {
 		cl, err := ctrl.New(cfg, ctrl.Options{})
 		if err != nil {
-			return util.ErrorMsg, nil, "", err
+			return util.ErrorMsg, "", err
 		}
 		ck, err := kubernetes.NewForConfig(cfg)
 		if err != nil {
-			return util.ErrorMsg, nil, "", err
+			return util.ErrorMsg, "", err
 		}
 		isOss, err := util.IsOssInstallation(ctx, cmClient, cl, ck)
 		if err != nil {
-			return util.ErrorMsg, nil, "", err
+			return util.ErrorMsg, "", err
 		}
 		if isOss {
 			reconcilerDeployment, err := ck.AppsV1().Deployments(configmanagement.ControllerNamespace).Get(ctx, util.ReconcilerManagerName, metav1.GetOptions{})
 			if err != nil {
-				return util.ErrorMsg, nil, "", err
+				return util.ErrorMsg, "", err
 			}
 			imageVersion, err := getImageVersion(reconcilerDeployment)
 			if err != nil {
-				return util.ErrorMsg, nil, "", err
+				return util.ErrorMsg, "", err
 			}
-			return imageVersion, &isOss, util.ConfigSyncName, nil
+			return imageVersion, util.ConfigSyncName, nil
 		}
 	}
 
 	v, err := cmClient.Version(ctx)
 	if err != nil {
-		return util.ErrorMsg, nil, "", err
+		return util.ErrorMsg, "", err
 	}
-	isMulti, err := cmClient.IsMultiRepo(ctx)
-	if apierrors.IsNotFound(err) {
-		return v, isMulti, util.ConfigManagementName, nil
-	}
-	return v, isMulti, util.ConfigManagementName, err
+	return v, util.ConfigManagementName, err
 }
 
 // vErr is either a version or an error.
@@ -190,12 +184,11 @@ type vErr struct {
 	err       error
 }
 
-// versions obtains the versions of all configmanagements from the contexts
-// supplied in the named configs, and a list of clusters running in the mono-repo mode.
-func versions(ctx context.Context, cfgs map[string]*rest.Config) (map[string]vErr, []string) {
-	var monoRepoClusters []string
+// versions obtains the versions of all configmanagements from the contexts supplied in
+// the named configs
+func versions(ctx context.Context, cfgs map[string]*rest.Config) map[string]vErr {
 	if len(cfgs) == 0 {
-		return nil, nil
+		return nil
 	}
 	vs := make(map[string]vErr, len(cfgs))
 	var (
@@ -207,18 +200,14 @@ func versions(ctx context.Context, cfgs map[string]*rest.Config) (map[string]vEr
 		go func(n string, c *rest.Config) {
 			defer g.Done()
 			var ve vErr
-			var isMulti *bool
-			ve.version, isMulti, ve.component, ve.err = lookupVersionAndMode(ctx, c)
-			if isMulti != nil && !*isMulti {
-				monoRepoClusters = append(monoRepoClusters, n)
-			}
+			ve.version, ve.component, ve.err = lookupVersionAndMode(ctx, c)
 			m.Lock()
 			vs[n] = ve
 			m.Unlock()
 		}(n, c)
 	}
 	g.Wait()
-	return vs, monoRepoClusters
+	return vs
 }
 
 // entry is one entry of the output

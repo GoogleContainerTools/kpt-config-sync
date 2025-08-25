@@ -38,17 +38,11 @@ var (
 
 func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
-		&NamespaceConfig{},
-		&NamespaceConfigList{},
-		&ClusterConfig{},
-		&ClusterConfigList{},
 		&ClusterSelector{},
 		&NamespaceSelector{},
 		&NamespaceSelectorList{},
 		&Repo{},
 		&RepoList{},
-		&Sync{},
-		&SyncList{},
 		&HierarchyConfig{},
 		&HierarchyConfigList{},
 	)

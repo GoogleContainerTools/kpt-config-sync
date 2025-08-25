@@ -100,7 +100,7 @@ which you could kubectl apply -fR to the cluster, or have Config Sync sync to th
 
 		parser := filesystem.NewParser(&reader.File{})
 
-		validateOpts, err := hydrate.ValidateOptions(cmd.Context(), rootDir, flags.APIServerTimeout)
+		validateOpts, err := hydrate.ValidateOptions(rootDir, flags.APIServerTimeout)
 		if err != nil {
 			return err
 		}

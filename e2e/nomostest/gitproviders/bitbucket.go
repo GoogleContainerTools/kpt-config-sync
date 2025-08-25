@@ -32,8 +32,7 @@ import (
 )
 
 const (
-	bitbucketWorkspace = "config-sync-ci-20250814"
-	bitbucketProject   = "CSCI"
+	bitbucketProject = "CSCI"
 
 	// PrivateSSHKey is secret name of the private SSH key stored in the Cloud Secret Manager.
 	PrivateSSHKey = "config-sync-ci-ssh-private-key"
@@ -48,12 +47,17 @@ type BitbucketClient struct {
 	oauthSecret  string
 	refreshToken string
 	logger       *testlogger.TestLogger
+	workspace    string
 }
 
 // newBitbucketClient instantiates a new Bitbucket client.
 func newBitbucketClient(logger *testlogger.TestLogger) (*BitbucketClient, error) {
+	if *e2e.BitbucketWorkspace == "" {
+		return nil, errors.New("bitbucket workspace cannot be empty; set with -bitbucket-workspace flag or E2E_BITBUCKET_WORKSPACE env var")
+	}
 	client := &BitbucketClient{
-		logger: logger,
+		logger:    logger,
+		workspace: *e2e.BitbucketWorkspace,
 	}
 
 	var err error
@@ -84,7 +88,7 @@ func (b *BitbucketClient) RemoteURL(name string) (string, error) {
 // name refers to the repo name in the format of <NAMESPACE>/<NAME> of RootSync|RepoSync.
 // The Bitbucket Rest API doesn't allow slash in the repository name, so slash has to be replaced with dash in the name.
 func (b *BitbucketClient) SyncURL(name string) string {
-	return fmt.Sprintf("git@bitbucket.org:%s/%s", bitbucketWorkspace, strings.ReplaceAll(name, "/", "-"))
+	return fmt.Sprintf("git@bitbucket.org:%s/%s", b.workspace, strings.ReplaceAll(name, "/", "-"))
 }
 
 // CreateRepository calls the POST API to create a remote repository on Bitbucket.
@@ -119,7 +123,7 @@ func (b *BitbucketClient) CreateRepository(localName string) (string, error) {
 		"-H", "Content-Type: application/json",
 		"-H", fmt.Sprintf("Authorization:Bearer %s", accessToken),
 		"-d", fmt.Sprintf("{\"scm\": \"git\",\"project\": {\"key\": \"%s\"},\"is_private\": \"true\"}", bitbucketProject),
-		fmt.Sprintf("https://api.bitbucket.org/2.0/repositories/%s/%s", bitbucketWorkspace, repoName)).CombinedOutput()
+		fmt.Sprintf("https://api.bitbucket.org/2.0/repositories/%s/%s", b.workspace, repoName)).CombinedOutput()
 
 	if err != nil {
 		return "", fmt.Errorf("%s: %w", string(out), err)
@@ -138,17 +142,17 @@ func (b *BitbucketClient) DeleteRepositories(names ...string) error {
 		return err
 	}
 
-	return deleteRepos(accessToken, names...)
+	return b.deleteRepos(accessToken, names...)
 }
 
 // TODO: This is a temporary workaround for the known issue
 // go/acm-e2e-testing#bitbucket-repository-deletion-failure
 // Until this is fixed, we are skipping removal of repos stuck in bad state
-func deleteRepos(accessToken string, names ...string) error {
+func (b *BitbucketClient) deleteRepos(accessToken string, names ...string) error {
 	var errs error
 	for _, name := range names {
 		_, err := retry.Retry(30*time.Second, func() error {
-			return deleteSingleRepo(accessToken, name)
+			return b.deleteSingleRepo(accessToken, name)
 		})
 		if err != nil {
 			// Skip repositories that are currently unavailable
@@ -163,11 +167,11 @@ func deleteRepos(accessToken string, names ...string) error {
 }
 
 // deleteSingleRepo deletes a single repository
-func deleteSingleRepo(accessToken, name string) error {
+func (b *BitbucketClient) deleteSingleRepo(accessToken, name string) error {
 	out, err := exec.Command("curl", "-sX", "DELETE",
 		"-H", fmt.Sprintf("Authorization:Bearer %s", accessToken),
 		fmt.Sprintf("https://api.bitbucket.org/2.0/repositories/%s/%s",
-			bitbucketWorkspace, name)).CombinedOutput()
+			b.workspace, name)).CombinedOutput()
 
 	if err != nil {
 		return fmt.Errorf("%s: %w", string(out), err)
@@ -259,7 +263,7 @@ func (b *BitbucketClient) deleteObsoleteReposByPage(accessToken string, page int
 	}
 
 	b.logger.Infof("Deleting the following repos: %s", strings.Join(repos, ", "))
-	err = deleteRepos(accessToken, repos...)
+	err = b.deleteRepos(accessToken, repos...)
 	return nextPage, err
 }
 
@@ -283,7 +287,7 @@ func (b *BitbucketClient) getObsoleteReposByPage(accessToken string, page int) (
 	out, err := exec.Command("curl", "-sX", "GET",
 		"-H", fmt.Sprintf("Authorization:Bearer %s", accessToken),
 		fmt.Sprintf(`https://api.bitbucket.org/2.0/repositories/%s?q=project.key="%s"&page=%d`,
-			bitbucketWorkspace, bitbucketProject, page)).CombinedOutput()
+			b.workspace, bitbucketProject, page)).CombinedOutput()
 	if err != nil {
 		return nil, -1, fmt.Errorf("%s: %w", string(out), err)
 	}

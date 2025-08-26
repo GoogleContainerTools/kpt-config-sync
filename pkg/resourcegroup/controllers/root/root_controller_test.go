@@ -15,7 +15,6 @@
 package root
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -62,9 +61,7 @@ func TestRootReconciler(t *testing.T) {
 	require.NoError(t, err)
 	c := mgr.GetClient()
 
-	// TODO: replace with `ctx := t.Context()` in Go 1.24.0+
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	logger := testLogger.WithName("controllers")
 	reconcilerKpt, err = NewReconciler(mgr, logger.WithName("root"))

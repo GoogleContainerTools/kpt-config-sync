@@ -148,9 +148,10 @@ func clusterStates(ctx context.Context, clientMap map[string]*ClusterClient) (ma
 			stateMap[name] = unavailableCluster(name)
 		} else {
 			cs := client.clusterStatus(ctx, name, namespace)
-			stateMap[name] = cs
 			if cs.isMulti != nil && !*cs.isMulti {
 				monoRepoClusters = append(monoRepoClusters, name)
+			} else {
+				stateMap[name] = cs
 			}
 		}
 	}

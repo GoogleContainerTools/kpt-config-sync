@@ -20,44 +20,10 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	v1 "kpt.dev/configsync/pkg/api/configmanagement/v1"
 	"kpt.dev/configsync/pkg/kinds"
 	"kpt.dev/configsync/pkg/status"
-	"kpt.dev/configsync/pkg/syncer/decode"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-// GetCRDs returns the names and CustomResourceDefinitions of the CRDs in ClusterConfig.
-func GetCRDs(decoder decode.Decoder, clusterConfig *v1.ClusterConfig) ([]*apiextensionsv1.CustomResourceDefinition, status.Error) {
-	if clusterConfig == nil {
-		return nil, nil
-	}
-
-	gvkrs, err := decoder.DecodeResources(clusterConfig.Spec.Resources)
-	if err != nil {
-		return nil, status.APIServerErrorf(err, "could not deserialize CRD in %s", v1.CRDClusterConfigName)
-	}
-
-	crdMap := make(map[string]*apiextensionsv1.CustomResourceDefinition)
-	for gvk, unstructureds := range gvkrs {
-		if gvk.GroupKind() != kinds.CustomResourceDefinition() {
-			return nil, status.APIServerErrorf(err, "%s contains non-CRD resources: %v", v1.CRDClusterConfigName, gvk)
-		}
-		for _, u := range unstructureds {
-			crd, err := ToCRD(u, decoder.Scheme())
-			if err != nil {
-				return nil, err
-			}
-			crdMap[crd.GetName()] = crd
-		}
-	}
-
-	var crds []*apiextensionsv1.CustomResourceDefinition
-	for _, crd := range crdMap {
-		crds = append(crds, crd)
-	}
-	return crds, nil
-}
 
 // MalformedCRDErrorCode is the error code for MalformedCRDError.
 const MalformedCRDErrorCode = "1065"

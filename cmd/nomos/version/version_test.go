@@ -96,8 +96,6 @@ func TestVersion(t *testing.T) {
 				},
 			},
 			expected: []string{
-				util.ColorYellow + "Notice: The cluster \"config\" is still running in the legacy mode.",
-				"Run `nomos migrate` to enable multi-repo mode. It provides you with additional features and gives you the flexibility to sync to a single repository, or multiple repositories." + util.ColorDefault,
 				"CURRENT   CLUSTER_CONTEXT_NAME   COMPONENT           VERSION",
 				"                                 <nomos CLI>         v3.4.5-rc.6",
 				"*         config                 config-management   v1.2.3-rc.42",

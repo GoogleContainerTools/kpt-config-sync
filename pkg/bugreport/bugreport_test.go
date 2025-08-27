@@ -15,16 +15,200 @@
 package bugreport
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"os"
 	"sort"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	k8sfake "k8s.io/client-go/kubernetes/fake"
+	"kpt.dev/configsync/cmd/nomos/util"
+	"kpt.dev/configsync/pkg/api/configmanagement"
+	"kpt.dev/configsync/pkg/client/restconfig"
+	"kpt.dev/configsync/pkg/core"
 	"kpt.dev/configsync/pkg/core/k8sobjects"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
+
+func configManagementObject(multiRepo bool) *unstructured.Unstructured {
+	u := &unstructured.Unstructured{}
+	u.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   configmanagement.GroupName,
+		Version: "v1",
+		Kind:    configmanagement.OperatorKind,
+	})
+	u.SetName(util.ConfigManagementName)
+	_ = unstructured.SetNestedField(u.Object, multiRepo, "spec", "enableMultiRepo")
+
+	return u
+}
+
+func captureOutput(t *testing.T, f func()) string {
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	f()
+	assert.NoError(t, w.Close())
+
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+	os.Stdout = old
+	return buf.String()
+}
+
+func TestNew(t *testing.T) {
+	cmMultiRepo := configManagementObject(true)
+	cmMonoRepo := configManagementObject(false)
+
+	testCases := []struct {
+		name             string
+		client           client.Client
+		clientset        *k8sfake.Clientset
+		expectedErrCount int
+		contextErr       error
+		expectedOutput   string
+		checkFn          func(t *testing.T, br *BugReporter)
+	}{
+		{
+			name:             "no configmanagement object",
+			client:           fake.NewClientBuilder().WithScheme(core.Scheme).WithObjects().Build(),
+			clientset:        k8sfake.NewSimpleClientset(),
+			expectedErrCount: 0,
+			expectedOutput:   "ConfigManagement object not found\n",
+			checkFn: func(t *testing.T, br *BugReporter) {
+				if br.cm.GetName() != "" {
+					t.Errorf("expected empty cm object, got %v", br.cm)
+				}
+			},
+		},
+		{
+			name:             "multi-repo",
+			client:           fake.NewClientBuilder().WithObjects(cmMultiRepo).Build(),
+			clientset:        k8sfake.NewSimpleClientset(),
+			expectedErrCount: 0,
+			expectedOutput:   "",
+			checkFn: func(t *testing.T, br *BugReporter) {
+				if br.cm.GetName() != util.ConfigManagementName {
+					t.Errorf("expected cm object, got empty")
+				}
+				enabled := br.EnabledServices()
+				if !enabled[ConfigSync] {
+					t.Error("ConfigSync should be enabled for multi-repo")
+				}
+				if !enabled[ResourceGroup] {
+					t.Error("ResourceGroup should be enabled for multi-repo")
+				}
+			},
+		},
+		{
+			name:             "mono-repo",
+			client:           fake.NewClientBuilder().WithObjects(cmMonoRepo).Build(),
+			clientset:        k8sfake.NewSimpleClientset(),
+			expectedErrCount: 0,
+			expectedOutput: "\x1b[33mNotice: The cluster \"context\" is still running in the legacy mode.\n" +
+				"Run `nomos migrate` to enable multi-repo mode. " +
+				"It provides you with additional features and gives you the flexibility to sync to a single repository, " +
+				"or multiple repositories.\x1b[0m\n",
+			checkFn: func(t *testing.T, br *BugReporter) {
+				if br.cm.GetName() != util.ConfigManagementName {
+					t.Errorf("expected cm object, got empty")
+				}
+			},
+		},
+		{
+			name: "kubeconfig error",
+
+			client:           fake.NewClientBuilder().Build(),
+			clientset:        k8sfake.NewSimpleClientset(),
+			expectedErrCount: 1,
+			expectedOutput:   "ConfigManagement object not found\n",
+			contextErr:       errors.New("context error"),
+			checkFn: func(t *testing.T, br *BugReporter) {
+				if br.k8sContext != "" {
+					t.Errorf("expected empty k8sContext, got %q", br.k8sContext)
+				}
+				if len(br.ErrorList) != 1 {
+					t.Fatalf("expected 1 error, got %d", len(br.ErrorList))
+				}
+			},
+		},
+		{
+			name: "no kind match error",
+			client: fake.NewClientBuilder().WithScheme(core.Scheme).WithInterceptorFuncs(
+				interceptor.Funcs{
+					Get: func(_ context.Context, _ client.WithWatch, _ client.ObjectKey, _ client.Object, _ ...client.GetOption) error {
+						return &meta.NoKindMatchError{
+							GroupKind: schema.GroupKind{
+								Group: configmanagement.GroupName,
+								Kind:  configmanagement.OperatorKind,
+							},
+							SearchedVersions: []string{"v1"},
+						}
+					},
+				}).Build(),
+			clientset:        k8sfake.NewSimpleClientset(),
+			expectedErrCount: 0,
+			expectedOutput:   "kind <<ConfigManagement>> is not registered with the cluster\n",
+		},
+		{
+			name: "generic get error",
+			client: fake.NewClientBuilder().WithScheme(core.Scheme).WithInterceptorFuncs(
+				interceptor.Funcs{
+					Get: func(_ context.Context, _ client.WithWatch, _ client.ObjectKey, _ client.Object, _ ...client.GetOption) error {
+						return errors.New("generic get error")
+					},
+				}).Build(),
+			clientset:        k8sfake.NewSimpleClientset(),
+			expectedErrCount: 1,
+			expectedOutput:   "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			restconfig.CurrentContextName = func() (string, error) {
+				if tc.contextErr != nil {
+					return "", tc.contextErr
+				}
+				return "context", nil
+			}
+
+			var br *BugReporter
+			var err error
+			output := captureOutput(t, func() {
+				br, err = New(context.Background(), tc.client, tc.clientset)
+			})
+
+			if err != nil {
+				t.Fatalf("New() returned an unexpected error: %v", err)
+			}
+
+			if len(br.ErrorList) != tc.expectedErrCount {
+				t.Errorf("got %d errors, want %d. Errors: %v", len(br.ErrorList), tc.expectedErrCount, br.ErrorList)
+			}
+
+			if diff := cmp.Diff(tc.expectedOutput, output); diff != "" {
+				t.Errorf("unexpected output (-want +got):\n%s", diff)
+			}
+
+			if tc.checkFn != nil {
+				tc.checkFn(t, br)
+			}
+		})
+	}
+}
 
 func TestAssembleLogSources(t *testing.T) {
 	tests := []struct {

@@ -166,8 +166,7 @@ func Generate() AllExamples {
 	result.add(system.UnsupportedRepoSpecVersion(k8sobjects.Repo(k8sobjects.RepoVersion("")), "0.0.0"))
 
 	// 1028
-	result.add(syntax.ReservedDirectoryNameError(cmpath.RelativeSlash("namespaces/" + configmanagement.ControllerNamespace)))
-	result.add(syntax.InvalidDirectoryNameError(cmpath.RelativeSlash("namespaces/ABC")))
+	result.markDeprecated("1028")
 
 	// 1029
 	result.add(nonhierarchical.NamespaceCollisionError("qux",
@@ -186,7 +185,7 @@ func Generate() AllExamples {
 	))
 
 	// 1030
-	result.add(semantic.MultipleSingletonsError(k8sobjects.Namespace("namespaces/foo"), k8sobjects.Namespace("namespaces/foo")))
+	result.markDeprecated("1030")
 
 	// 1031
 	result.add(nonhierarchical.MissingObjectNameError(k8sobjects.Role(core.Name(""))))
@@ -195,8 +194,7 @@ func Generate() AllExamples {
 	result.add(nonhierarchical.IllegalHierarchicalKind(k8sobjects.Repo()))
 
 	// 1033
-	result.add(syntax.IllegalSystemResourcePlacementError(k8sobjects.RepoAtPath("namespaces/repo.yaml")))
-	result.add(syntax.IllegalSystemResourcePlacementError(k8sobjects.HierarchyConfigAtPath("system/hierarchy-config.yaml")))
+	result.markDeprecated("1033")
 
 	// 1034
 	result.add(nonhierarchical.IllegalNamespace(k8sobjects.Namespace("namespaces/" + configmanagement.ControllerNamespace)))
@@ -361,8 +359,7 @@ func Generate() AllExamples {
 	result.add(status.ResourceWrap(errors.New("specific problem with resource"), "general message", k8sobjects.Role()))
 
 	// 2011
-	result.add(status.MissingResourceWrap(errors.New("the Role 'foo' in Namespace 'bar' was not found"),
-		"unable to update resource", k8sobjects.Role(core.Name("foo"), core.Namespace("bar"))))
+	result.markDeprecated("2011")
 
 	// 2012
 	result.add(status.MultipleSingletonsError(k8sobjects.Repo(), k8sobjects.Repo()))

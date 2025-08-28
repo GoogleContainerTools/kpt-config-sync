@@ -185,6 +185,10 @@ func printStatus(ctx context.Context, writer *tabwriter.Writer, clientMap map[st
 	// Print status for each cluster.
 	for _, name := range names {
 		state := stateMap[name]
+		if state == nil {
+			// This can happen for mono-repo clusters, which are handled by the notice above.
+			continue
+		}
 		if name == currentContext {
 			// Prepend an asterisk for the users' current context
 			state.Ref = "*" + name

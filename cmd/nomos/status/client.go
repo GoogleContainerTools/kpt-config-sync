@@ -61,7 +61,7 @@ type ClusterClient struct {
 	Client client.Client
 	repos  typedv1.RepoInterface
 	// K8sClient contains the clients for groups.
-	K8sClient        *kubernetes.Clientset
+	K8sClient        kubernetes.Interface
 	ConfigManagement *util.ConfigManagementClient
 }
 

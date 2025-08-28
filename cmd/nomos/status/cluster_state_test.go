@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -66,7 +67,7 @@ var (
 		ErrorCountAfterTruncation: 2,
 	}
 
-	lastSyncTimestamp = metav1.Now()
+	lastSyncTimestamp = metav1.Time{Time: time.Date(2022, 8, 15, 12, 0, 0, 0, time.UTC)}
 )
 
 func TestRepoState_PrintRows(t *testing.T) {

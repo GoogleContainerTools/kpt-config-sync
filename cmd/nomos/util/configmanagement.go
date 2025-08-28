@@ -213,7 +213,7 @@ func (c *ConfigManagementClient) IsHNCEnabled(ctx context.Context) (bool, error)
 
 // IsOssInstallation will check for the existence of ConfigManagement object, Operator deployment, and RootSync CRD
 // If RootSync CRD exist but ConfigManagement and Operator doesn't, it indicates an OSS installation
-func IsOssInstallation(ctx context.Context, c *ConfigManagementClient, cl client.Client, ck *kubernetes.Clientset) (bool, error) {
+func IsOssInstallation(ctx context.Context, c *ConfigManagementClient, cl client.Client, ck kubernetes.Interface) (bool, error) {
 	v, cmErr := c.Version(ctx)
 	if cmErr != nil {
 		return false, fmt.Errorf("Failed to get the ConfigManagment version: %v", cmErr)

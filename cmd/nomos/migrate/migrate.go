@@ -231,7 +231,7 @@ func backoff() wait.Backoff {
 	}
 }
 
-func waitForPodToBeRunning(ctx context.Context, k8sclient *kubernetes.Clientset, ns string, labelSelector string) error {
+func waitForPodToBeRunning(ctx context.Context, k8sclient kubernetes.Interface, ns string, labelSelector string) error {
 	return recheck(func() error {
 		pods, err := k8sclient.CoreV1().Pods(ns).List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
 		if err != nil {

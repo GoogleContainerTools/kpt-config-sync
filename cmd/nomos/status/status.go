@@ -148,9 +148,10 @@ func clusterStates(ctx context.Context, clientMap map[string]*ClusterClient) (ma
 			stateMap[name] = unavailableCluster(name)
 		} else {
 			cs := client.clusterStatus(ctx, name, namespace)
-			stateMap[name] = cs
 			if cs.isMulti != nil && !*cs.isMulti {
 				monoRepoClusters = append(monoRepoClusters, name)
+			} else {
+				stateMap[name] = cs
 			}
 		}
 	}
@@ -184,6 +185,10 @@ func printStatus(ctx context.Context, writer *tabwriter.Writer, clientMap map[st
 	// Print status for each cluster.
 	for _, name := range names {
 		state := stateMap[name]
+		if state == nil {
+			// This can happen for mono-repo clusters, which are handled by the notice above.
+			continue
+		}
 		if name == currentContext {
 			// Prepend an asterisk for the users' current context
 			state.Ref = "*" + name

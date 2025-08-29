@@ -43,6 +43,7 @@ import (
 	"kpt.dev/configsync/e2e/nomostest/ntopts"
 	"kpt.dev/configsync/e2e/nomostest/policy"
 	"kpt.dev/configsync/e2e/nomostest/syncsource"
+
 	"kpt.dev/configsync/e2e/nomostest/taskgroup"
 	nomostesting "kpt.dev/configsync/e2e/nomostest/testing"
 	"kpt.dev/configsync/e2e/nomostest/testpredicates"
@@ -1301,7 +1302,7 @@ func TestNomosMigrate(t *testing.T) {
 
 	nt.T.Cleanup(func() {
 		// Restore state of Config Sync installation after test
-		if err := nomostest.InstallConfigSync(nt); err != nil {
+		if err := nomostest.InstallConfigSyncFromManifest(nt); err != nil {
 			nt.T.Fatal(err)
 		}
 	})
@@ -1468,8 +1469,7 @@ func TestNomosMigrateMonoRepo(t *testing.T) {
 
 	nt.T.Cleanup(func() {
 		// Restore state of Config Sync installation after test.
-		// This also emulates upgrading to the current version after migrating
-		if err := nomostest.InstallConfigSync(nt); err != nil {
+		if err := nomostest.InstallConfigSyncFromManifest(nt); err != nil {
 			nt.T.Fatal(err)
 		}
 	})
@@ -1711,7 +1711,7 @@ func TestACMUninstallScript(t *testing.T) {
 
 	nt.T.Cleanup(func() {
 		// Restore state of Config Sync installation after test
-		if err := nomostest.InstallConfigSync(nt); err != nil {
+		if err := nomostest.InstallConfigSyncFromManifest(nt); err != nil {
 			nt.T.Fatal(err)
 		}
 	})

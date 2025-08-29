@@ -245,6 +245,21 @@ func InstallConfigSync(nt *NT) error {
 	return nil
 }
 
+// InstallConfigSyncFromManifest installs ConfigSync on the test cluster by directly
+// applying the manifest file using kubectl client-side apply
+func InstallConfigSyncFromManifest(nt *NT) error {
+	nt.T.Log("[SETUP] Installing Config Sync directly from manifest file")
+
+	nt.T.Logf("Applying Config Sync manifest directly from %s", configSyncManifest)
+
+	out, err := nt.Shell.Kubectl("apply", "-f", configSyncManifest)
+	if err != nil {
+		return fmt.Errorf("failed to apply Config Sync manifest: %v\n%s", err, out)
+	}
+
+	return nil
+}
+
 // uninstallConfigSync uninstalls ConfigSync on the test cluster
 func uninstallConfigSync(nt *NT) error {
 	nt.T.Log("[CLEANUP] Uninstalling Config Sync")

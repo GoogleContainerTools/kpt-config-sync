@@ -1,8 +1,16 @@
-# ACM Custom Metric Filtering
+# Config Sync Custom Monitoring
 
 This guide explains how to adjust the custom metrics that Config Sync
-exports to Prometheus, Cloud Monitoring (formerly known as Stackdriver), and
+exports to Prometheus, Cloud Monitoring (formerly known as Stackdriver), and Cloud
 Monarch (Google's internal metrics aggregator).
+
+## ⚠️ Important Warning
+
+**This solution is provided for convenience and is not maintained by Config Sync.**
+
+Custom configurations override the default settings and persist between upgrades. Config Sync tries to maintain the consistency of metrics. When you upgrade Config Sync to a new version, if you created a `otel-collector-custom` ConfigMap for a previous version, your custom settings might not be compatible with the new version of Config Sync. For example, metrics names, labels, and attributes can change between Config Sync versions.
+
+When changes are made to Config Sync metrics, they are announced in the [release notes](https://cloud.google.com/kubernetes-engine/enterprise/config-sync/docs/release-notes). These changes might require you to update your custom otel-collector configuration.
 
 ## Background
 
@@ -24,7 +32,7 @@ when configuring pipelines:
 1. `otel-collector`
 
    This is the default configuration that Config Sync deploys in a non-GKE environment, which only exports the metrics through Prometheus exporter
-2. `otel-collector-googlecloud` (or `otel-collector-stackdriver` before Config Sync v1.12.0)
+2. `otel-collector-googlecloud`
 
    Config Sync automatically deploys this configuration when Workload Identity is configured, usually on a GKE cluster. 
 3. `otel-collector-custom`
@@ -37,10 +45,7 @@ For more details on the ConfigMaps and instructions, please refer to the [monito
 This guide includes instructions for how to adjust filters, modify exporters, 
 or opt out of exporting metrics all together.
 
-Note: This workaround applies to Config Sync v1.8+, when custom monitoring
-was integrated.
-
-## Default metrics pipeline config (v1.12+)
+## Default metrics pipeline config
 
 Config Sync will check for the default credential in the environment when
 starting up. For a GKE cluster which always have a default service account,
@@ -67,100 +72,239 @@ Cloud Monarch backend
 - `prometheus` stands for the configuration that exports metrics in Prometheus
 format and later can be scraped by a prometheus server following [this guide](http://cloud/anthos-config-management/docs/how-to/monitoring-config-sync#prometheus)
 
-Here is [the current configuration](https://github.com/GoogleContainerTools/kpt-config-sync/blob/main/pkg/metrics/otel.go#L38) of Open Telemetry Collector
-in Config Sync.
+## Available Metrics
 
-## Patch the otel collector deployment with ConfigMap
+Config Sync exports the following metrics that can be customized:
 
-1. **Get the current ConfigMap as template**
+### Core Metrics
+- `reconciler_errors` - Number of reconciler errors
+- `pipeline_error_observed` - Pipeline errors observed
+- `declared_resources` - Number of declared resources
+- `apply_operations_total` - Total apply operations
+- `resource_fights_total` - Total resource fights
+- `internal_errors_total` - Total internal errors
+- `kcc_resource_count` - KCC resource count
+- `resource_count` - Total resource count
+- `ready_resource_count` - Ready resource count
+- `cluster_scoped_resource_count` - Cluster-scoped resource count
+- `resource_ns_count` - Resource namespace count
+- `api_duration_seconds` - API call duration
+- `apply_duration_seconds` - Apply operation duration
+- `reconcile_duration_seconds` - Reconcile duration
+- `rg_reconcile_duration_seconds` - Resource group reconcile duration
+- `last_sync_timestamp` - Last sync timestamp
 
-    ```
-    kubectl get cm otel-collector-googlecloud -n config-management-monitoring -o yaml > otel-collector-config.yaml
-    ```
-    
-    Or in Config Sync with version prior to `v1.11.1`, use
-    
-    ```
-    kubectl get cm otel-collector-stackdriver -n config-management-monitoring -o yaml > otel-collector-config.yaml
-    ```
-1. Change the `.metadata.name` to `otel-collector-custom`
+### Kustomize Metrics
+- `kustomize_resource_count` - Kustomize resource count
+- `kustomize_field_count` - Kustomize field count
+- `kustomize_deprecating_field_count` - Kustomize deprecating field count
+- `kustomize_simplification_adoption_count` - Kustomize simplification adoption count
+- `kustomize_builtin_transformers` - Kustomize builtin transformers
+- `kustomize_helm_inflator_count` - Kustomize Helm inflator count
+- `kustomize_base_count` - Kustomize base count
+- `kustomize_patch_count` - Kustomize patch count
+- `kustomize_ordered_top_tier_metrics` - Kustomize ordered top tier metrics
+- `kustomize_build_latency` - Kustomize build latency
 
-    This step spawns a new ConfigMap with name `otel-collector-custom` that is recognized by Config Sync, which overrides the `otel-collector-googlecloud` ConfigMap. Documents of the custom collector can be found [here](http://cloud/anthos-config-management/docs/how-to/monitoring-config-sync#custom-exporter). 
+### Additional Metrics
+- `parser_duration_seconds` - Parser duration
+- `remediate_duration_seconds` - Remediate duration
+- `resource_conflicts_total` - Resource conflicts total
 
-1. **Modify the otel-collector-config.yaml file**
+## Custom Monitoring Configuration
 
-    - To **add or drop metrics** from the
-       [available metrics](http://cloud/anthos-config-management/docs/how-to/monitoring-config-sync#metrics),
-       modify the `include` section under the
-       [filter processor](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/filterprocessor)
-       configuration
+### Step 1: Get the current ConfigMap as template
 
-       > Note: If running Config Sycn version prior to 1.11.x, use the
-       [default config](https://github.com/tiffanny29631/kpt-config-sync/blob/main/pkg/metrics/otel.go#L38)
+```bash
+kubectl get cm otel-collector-googlecloud -n config-management-monitoring -o yaml > otel-collector-config.yaml
+```
 
-       ```
-       # This is an example adding crd_count metric
-       # Make sure you are modifying the `filter/cloudmonitoring`
-       ...
-       processors:
-         ...
-         filter/cloudmonitoring:
-           metrics:
-             include:
-               match_type: regexp
-               metric_names:
-                 - reconciler_errors
-                 - pipeline_error_observed
-                 - declared_resources
-                 - apply_operations_total
-                 - resource_fights_total
-                 - internal_errors_total
-                 - kcc_resource_count
-                 - resource_count
-                 - ready_resource_count
-                 - cluster_scoped_resource_count
-                 - resource_ns_count
-                 - api_duration_seconds
-                 - crd_count         <----- Here
-       ```
+### Step 2: Change the ConfigMap name
 
-    - To **turn off the custom metrics** in Cloud Monitoring, remove this section
+Change the `.metadata.name` to `otel-collector-custom`:
 
-      > The stackdriver exporter was renamed to googlecloud after otel-collector was upgraded in Config Sync 1.12.0.
+```yaml
+metadata:
+  name: otel-collector-custom
+  namespace: config-management-monitoring
+```
 
-        ```
-        metrics/cloudmonitoring:
+### Step 3: Modify the configuration
+
+#### Adding or Removing Metrics
+
+To **add or drop metrics** from the available metrics list, modify the `include` section under the
+[filter processor](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/filterprocessor)
+configuration:
+
+```yaml
+processors:
+  filter/cloudmonitoring:
+    metrics:
+      include:
+        match_type: strict
+        metric_names:
+          - reconciler_errors
+          ...
+          - api_duration_seconds
+          - crd_count  # <-- Add your custom metric here
+```
+
+#### Using Exclude Filters
+
+You can also use exclude filters to remove specific metrics:
+
+```yaml
+processors:
+  filter/cloudmonitoring:
+    metrics:
+      exclude:
+        match_type: regexp
+        metric_names:
+          - kustomize.*  # Exclude all Kustomize metrics
+```
+
+#### Disabling Cloud Monitoring Export
+
+To **turn off the custom metrics** in Cloud Monitoring, remove this section:
+
+```yaml
+# Remove this entire section
+metrics/cloudmonitoring:
+  receivers: [opencensus]
+  processors: [batch, filter/cloudmonitoring, metricstransform/cloudmonitoring, resourcedetection]
+  exporters: [googlecloud]
+```
+
+#### Disabling Cloud Monarch Export
+
+To **turn off the report to Cloud Monarch**, remove this section:
+
+```yaml
+# Remove this entire section
+metrics/kubernetes:
+  receivers: [opencensus]
+  processors: [batch, filter/kubernetes, metricstransform/kubernetes, resourcedetection]
+  exporters: [googlecloud/kubernetes]
+```
+
+### Step 4: Apply the ConfigMap
+
+```bash
+kubectl apply -f otel-collector-config.yaml
+```
+This step spawns a new ConfigMap with name `otel-collector-custom` that is recognized by Config Sync, which overrides the `otel-collector-googlecloud` ConfigMap.
+
+### Step 5: Optional: Restart the OpenTelemetry Collector
+
+The otel-collector Pod should automatically restart when the ConfigMap is updated. If the `otel-collector` deployment does not restart automatically, manually restart the OpenTelemetry Collector Pod to apply the new configuration:
+
+```bash
+kubectl rollout restart deployment otel-collector -n config-management-monitoring
+```
+
+### Step 6: Verify the configuration
+
+Check that everything is running correctly:
+
+```bash
+# Check all objects are running
+kubectl get all -n config-management-monitoring
+
+# Verify the custom ConfigMap exists
+kubectl get cm -n config-management-monitoring | grep otel-collector-custom
+
+# Check the collector logs for any errors
+kubectl logs -n config-management-monitoring deployment/otel-collector
+```
+
+## Minimal Custom Configuration Example
+
+Here is a bare minimum custom ConfigMap example:
+
+```yaml
+# otel-collector-custom-cm.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-custom
+  namespace: config-management-monitoring
+  labels:
+    app: opentelemetry
+    component: otel-collector
+data:
+  otel-collector-config.yaml: |
+    receivers:
+      opencensus:
+    exporters:
+      debug:
+        verbosity: detailed
+        sampling_initial: 5
+        sampling_thereafter: 200
+    processors:
+      batch:
+      pipelines:
+        metrics:
           receivers: [opencensus]
-          processors: [batch, filter/cloudmonitoring]
-          exporters: [googlecloud]
-        ```
+          processors: [batch]
+          exporters: [debug]
+```
 
-    - To **turn off the report to Cloud Monarch**, remove this section
+## Troubleshooting
 
-         > Note: In Config Sync version prior to 1.12.0, the exporter name was `stackdriver`
-         instead of `googlecloud`. This is not supported when using ACM.
+### Common Issues
 
-         ```
-         metrics/kubernetes:
-           receivers: [opencensus]
-           processors: [batch, filter/kubernetes, metricstransform/kubernetes]
-           exporters: [googlecloud/kubernetes]
-         ```
-
-1. Apply the config map
-
+1. **Collector not restarting**: 
+    Ensure there is exactly one Pod with status `Running` in the `config-management-monitoring` namespace. If not, investigate and resolve issues such as resource constraints or ConfigMap configuration errors.
     ```
-    kubectl apply -f otel-collector-config.yaml
+    kubectl get pods -n config-management-monitoring
     ```
-
-1. Restart the Otel Collector Pod to pick up the new version of ConfigMap.
-This can be done by deleting the Otel Collector deployment.
-
+    Expected output like
     ```
-    kubectl delete deployment/otel-collector -n config-management-monitoring
+    NAME                              READY   STATUS    RESTARTS   AGE
+    otel-collector-54c688bff8-swn7s   1/1     Running   0          18h
     ```
+    If a new Pod is stuck in an error state, review its logs to diagnose the issue.
+    ```
+    kubectl logs deployment/otel-collector -n config-management-monitoring
+    ```
+2. **Metrics not appearing**: 
+    a. Check the collector logs for configuration errors
+    ```
+    kubectl logs deployment/otel-collector -n config-management-monitoring"
+    ```
+    b. Use the [debug exporter](https://github.com/open-telemetry/opentelemetry-collector/tree/main/exporter/debugexporter) to output detailed metric logs within the container, which can help diagnose issues.
+3. **Permission issues**: Verify [permission](https://cloud.google.com/kubernetes-engine/enterprise/config-sync/docs/how-to/monitor-config-sync-cloud-monitoring#metric-permission) is properly configured
 
-1. Check everything is up an running
-    
-    - `kubectl get all -n config-management-monitoring` should show all objects running with no error.
-    - `kubectl get cm -n config-management-monitoring` should include a new ConfigMap named `otel-collector-custom`
+### Verification Commands
+
+```bash
+# Check if the custom ConfigMap exists
+kubectl get cm otel-collector-custom -n config-management-monitoring
+
+# View the ConfigMap content
+kubectl get cm otel-collector-custom -n config-management-monitoring -o yaml
+
+# Check collector logs
+kubectl logs -n config-management-monitoring deployment/otel-collector
+
+# Check collector status
+kubectl get pods -n config-management-monitoring -l app=opentelemetry
+
+# Test metrics endpoint
+kubectl port-forward -n config-management-monitoring svc/otel-collector 8675:8675
+curl http://localhost:8675/metrics
+```
+
+### Version Compatibility Notes
+
+- **Config Sync v1.12.0+**: Uses `googlecloud` exporter (recommended)
+- **Config Sync v1.11.x and earlier**: Uses `stackdriver` exporter (deprecated)
+- **Config Sync v1.8+**: Custom monitoring support available
+
+## Additional Resources
+
+- [OpenTelemetry Collector Documentation](https://opentelemetry.io/docs/collector/)
+- [Google Cloud Monitoring Documentation](https://cloud.google.com/monitoring)
+- [Config Sync Monitoring Guide](http://cloud/anthos-config-management/docs/how-to/monitoring-config-sync)
+- [Available Config Sync Metrics](http://cloud/anthos-config-management/docs/how-to/monitoring-config-sync#metrics)

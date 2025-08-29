@@ -18,11 +18,13 @@ helmCharts:
   namespace: coredns
   valuesFile: https://raw.githubusercontent.com/config-sync-examples/helm-components/main/coredns-values.yaml
 - name: wordpress
-  repo: https://charts.bitnami.com/bitnami
-  version: 15.2.35
   releaseName: my-wordpress
   namespace: wordpress
   valuesInline:
+    image:
+      registry: docker.io
+      repository: bitnamilegacy/wordpress
+      tag: "6.1.1-debian-11-r34"
     service:
       type: ClusterIP
 

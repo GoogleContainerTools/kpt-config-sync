@@ -17,8 +17,6 @@ helmCharts:
   releaseName: my-coredns
   namespace: coredns
 - name: wordpress
-  repo: https://charts.bitnami.com/bitnami
-  version: 15.2.35
   releaseName: my-wordpress
   namespace: wordpress
   valuesInline:
@@ -27,6 +25,10 @@ helmCharts:
       auth:
         rootPassword: abcdefg
         password: abcdefg
+    image:
+      registry: docker.io
+      repository: bitnamilegacy/wordpress
+      tag: "6.1.1-debian-11-r34"
     service:
       type: ClusterIP
 

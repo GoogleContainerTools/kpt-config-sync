@@ -166,7 +166,7 @@
 									}
 								],
 								"envFrom": null,
-								"image": "docker.io/bitnami/wordpress:6.1.1-debian-11-r34",
+								"image": "docker.io/bitnamilegacy/wordpress:6.1.1-debian-11-r34",
 								"imagePullPolicy": "IfNotPresent",
 								"livenessProbe": {
 									"failureThreshold": 6,

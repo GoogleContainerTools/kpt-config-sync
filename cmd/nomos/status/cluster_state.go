@@ -41,9 +41,48 @@ type ClusterState struct {
 	Ref    string
 	status string
 	// Error represents the sync errors
-	Error   string
-	repos   []*RepoState
-	isMulti *bool
+	Error         string
+	noSyncObjects bool
+	repos         []*RepoState
+	isMulti       *bool
+}
+
+// pollUntilReached checks the selected repositories against the requested sync
+// or resource-readiness target. Empty clusters do not block polling, but a
+// requested name must appear before it can be considered complete.
+func pollUntilReached(states map[string]*ClusterState, syncName, target string) (bool, error) {
+	matchedRepo := false
+	for _, state := range states {
+		if state == nil || (state.Error != "" && !state.noSyncObjects) {
+			return false, nil
+		}
+		if state.noSyncObjects {
+			continue
+		}
+		for _, repo := range state.repos {
+			if repo == nil {
+				return false, nil
+			}
+			if syncName != "" && repo.syncName != syncName {
+				continue
+			}
+			matchedRepo = true
+			if repo.status != syncedMsg || len(repo.errors) > 0 {
+				return false, nil
+			}
+			if target != pollUntilSynced {
+				for _, resource := range repo.resources {
+					if resource.Status == kptv1alpha1.Failed {
+						return false, fmt.Errorf("resource %s managed by %s:%s has status %q", resourceStatusToString(resource), repo.scope, repo.syncName, resource.Status)
+					}
+					if resource.Status != kptv1alpha1.Current {
+						return false, nil
+					}
+				}
+			}
+		}
+	}
+	return syncName == "" || matchedRepo, nil
 }
 
 func (c *ClusterState) printRows(writer io.Writer) {

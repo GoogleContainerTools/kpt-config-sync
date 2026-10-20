@@ -168,15 +168,18 @@ func (c *ClusterClient) clusterStatus(ctx context.Context, cluster, namespace st
 
 	if namespace == configsync.ControllerNamespace {
 		if err := c.rootRepoClusterStatus(ctx, cs); err != nil {
+			cs.noSyncObjects = errors.Is(err, ErrNoRootSyncsFound)
 			cs.Error = err.Error()
 		}
 
 	} else if namespace != "" {
 		if err := c.namespaceRepoClusterStatus(ctx, cs, namespace); err != nil {
+			cs.noSyncObjects = errors.Is(err, ErrNoRepoSyncsFound)
 			cs.Error = err.Error()
 		}
 	} else if isOss || (cs.isMulti != nil && *cs.isMulti) {
 		if err := c.multiRepoClusterStatus(ctx, cs); err != nil {
+			cs.noSyncObjects = errors.Is(err, ErrNoRootSyncsFound) && errors.Is(err, ErrNoRepoSyncsFound)
 			cs.Error = err.Error()
 		}
 	} else {

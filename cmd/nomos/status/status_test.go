@@ -361,8 +361,9 @@ func TestClusterStates(t *testing.T) {
 			},
 			wantStateMap: map[string]*ClusterState{
 				"multi-repo-cluster": {
-					Ref:   "multi-repo-cluster",
-					Error: "No RootSync resources found; No RepoSync resources found",
+					Ref:           "multi-repo-cluster",
+					Error:         "No RootSync resources found; No RepoSync resources found",
+					noSyncObjects: true,
 				},
 			},
 			wantMonoRepoClusters: nil,
@@ -572,7 +573,8 @@ func TestPrintStatus(t *testing.T) {
 			var buf bytes.Buffer
 			writer := tabwriter.NewWriter(&buf, 0, 0, 5, ' ', 0)
 
-			printStatus(context.Background(), writer, tc.clientMap, tc.names)
+			stateMap, monoRepoClusters := clusterStates(context.Background(), tc.clientMap)
+			printStatus(writer, stateMap, monoRepoClusters, tc.names)
 
 			got := buf.String()
 			if diff := cmp.Diff(tc.want, got); diff != "" {

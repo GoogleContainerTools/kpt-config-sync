@@ -80,13 +80,13 @@ GOLANGCI_LINT := $(BIN_DIR)/golangci-lint
 
 # To automatically update, run this command:
 # UPDATE_TYPE=<latest-version|latest-build> make update-kustomize-image
-KUSTOMIZE_VERSION := v5.4.2-gke.11
+KUSTOMIZE_VERSION := v5.8.2-gke.0
 KUSTOMIZE := $(BIN_DIR)/kustomize
 KUSTOMIZE_STAGING_DIR := $(OUTPUT_DIR)/third_party/kustomize
 
 # To automatically update, run this command:
 # UPDATE_TYPE=<latest-version|latest-build> make update-helm-image
-HELM_VERSION := v3.21.1-gke.11
+HELM_VERSION := v3.21.1-gke.13
 HELM := $(BIN_DIR)/helm
 HELM_STAGING_DIR := $(OUTPUT_DIR)/third_party/helm
 
@@ -95,12 +95,12 @@ COSIGN := $(BIN_DIR)/cosign
 
 # To automatically update, run this command:
 # UPDATE_TYPE=<latest-version|latest-build> make update-git-sync-image
-GIT_SYNC_VERSION := v4.5.0-gke.3__linux_amd64
+GIT_SYNC_VERSION := v4.5.0-gke.5__linux_amd64
 GIT_SYNC_IMAGE_NAME := gcr.io/config-management-release/git-sync:$(GIT_SYNC_VERSION)
 
 # To automatically update, run this command:
 # UPDATE_TYPE=<latest-version|latest-build> make update-otelcontribcol-image
-OTELCONTRIBCOL_VERSION := v0.159.0-gke.4
+OTELCONTRIBCOL_VERSION := v0.159.0-gke.6
 OTELCONTRIBCOL_IMAGE_NAME := gcr.io/config-management-release/otelcontribcol:$(OTELCONTRIBCOL_VERSION)
 
 # Directory used for staging Docker contexts.
